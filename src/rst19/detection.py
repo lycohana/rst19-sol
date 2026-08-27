@@ -47,6 +47,7 @@ class DetectionResult:
     background: float
     noise: float
     threshold: float
+    candidate_count: int
     sources: tuple[Detection, ...]
     parameters: dict[str, float | int]
 
@@ -60,7 +61,9 @@ class DetectionResult:
             "background": self.background,
             "noise": self.noise,
             "threshold": self.threshold,
-            "star_count": self.star_count,
+            "candidate_count": self.candidate_count,
+            "returned_count": self.star_count,
+            "truncated": self.candidate_count > self.star_count,
             "parameters": self.parameters,
             "sources": [source.as_dict() for source in self.sources],
         }
@@ -230,6 +233,7 @@ def detect_sources(
     yy, xx = np.nonzero(candidate_mask & local_max)
     candidates = sorted(((int(x), int(y), float(numeric[y, x])) for x, y in zip(xx, yy, strict=True)), key=lambda item: item[2], reverse=True)
     selected = _suppress_close_candidates(candidates, min_distance)
+    candidate_count = len(selected)
     if max_sources is not None:
         if max_sources < 1:
             raise ValueError("max_sources must be positive when provided")
@@ -269,6 +273,7 @@ def detect_sources(
         background=background,
         noise=noise,
         threshold=threshold,
+        candidate_count=candidate_count,
         sources=tuple(numbered),
         parameters={
             "threshold_sigma": float(threshold_sigma),

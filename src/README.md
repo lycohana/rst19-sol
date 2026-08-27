@@ -11,6 +11,7 @@
 - 局部峰值星点候选检测、简单通量、质心、SNR 和形状摘要；
 - 基于切平面先验 WCS 的星表一对一匹配；
 - CSV 离线任务星表读取、自行传播和 JSON CLI 输出。
+- 本地浏览器工作台：选择 FITS、调整参数、查看预览叠加和实验日志。
 
 模块当前不声称已经完成：
 
@@ -26,7 +27,7 @@
 python -m pip install -e ".[dev]"
 ```
 
-核心依赖是 NumPy 和 SciPy。当前 FITS 读取器不要求联网或 Astropy，后续若使用标准 WCS/SIP 工具可以再增加可选依赖。
+核心依赖是 NumPy、SciPy 和 Pillow（用于本地预览 PNG）。当前 FITS 读取器不要求联网或 Astropy，后续若使用标准 WCS/SIP 工具可以再增加可选依赖。
 
 ## 快速使用
 
@@ -59,6 +60,14 @@ source_id,ra_deg,dec_deg,magnitude,pmra,pmdec,ref_epoch
 ```
 
 `--pixel-scale-arcsec`、旋转角和 parity 是相机参数假设，不是当前数据已经核验的事实；应通过稳定匹配星、残差和留出星验证后再固定。
+
+启动本地浏览器界面：
+
+```powershell
+rst19-ui
+```
+
+然后打开 <http://127.0.0.1:8765>。界面默认读取 `doc/00-项目资料/原始数据/`，只在本机处理；可以通过 `--data-dir` 指定其他获授权的 FITS 目录。
 
 ## 测试
 

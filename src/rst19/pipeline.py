@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Sequence
 
 from .catalog import CatalogSource
@@ -39,7 +40,7 @@ class FrameAnalysis:
 
 
 def analyze_frame(
-    path: str,
+    path: str | Path | FitsFrame,
     *,
     catalog: Sequence[CatalogSource] | None = None,
     wcs: TangentPlaneWCS | None = None,
@@ -54,7 +55,7 @@ def analyze_frame(
 
     if catalog is not None and wcs is None:
         raise ValueError("catalog matching requires a TangentPlaneWCS")
-    frame = read_fits(path)
+    frame = path if isinstance(path, FitsFrame) else read_fits(path)
     detection = detect_sources(
         frame.data,
         mask=auxiliary_mask(frame.data.shape),
