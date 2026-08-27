@@ -16,3 +16,6 @@ results/
 tmp/
 temp/
 *.log
+
+# 本地编辑器工作区配置
+.obsidian/
