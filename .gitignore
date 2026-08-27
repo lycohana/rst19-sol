@@ -1,0 +1,18 @@
+# 原始比赛 FITS 数据较大，首次提交不上传
+*.fits
+*.fit
+*.fts
+
+# Python / notebook 运行产物
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# 本地分析输出与临时文件
+output/
+results/
+tmp/
+temp/
+*.log
