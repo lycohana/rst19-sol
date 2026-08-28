@@ -1,4 +1,14 @@
-"""鲁棒背景估计和星点候选检测。"""
+"""可解释的点源检测、局部噪声估计和候选质量判定。
+
+检测结果明确分成两层：``candidate_count`` 是匹配滤波后经过非极大值
+抑制的候选峰数量，``quality_count`` 是通过局部测光、信噪比、点源形状、
+边缘、掩膜和饱和检查的数量。两者都保留，避免把“算法产生的候选数”
+误写成未经验证的物理恒星真值。
+
+本模块不依赖 Photutils，方便比赛现场离线复现。默认检测核是圆对称
+Gaussian，适合作为当前数据的可解释基线；若数据证明存在拖影、畸变或
+明显非高斯 PSF，应替换成实测 PSF，而不是继续调一个数量目标。
+"""
 
 from __future__ import annotations
 
@@ -11,7 +21,12 @@ from scipy import ndimage
 
 @dataclass(frozen=True, slots=True)
 class Detection:
-    """单个检测源的可解释属性。坐标以图像左上角为原点，x 向右、y 向下。"""
+    """单个检测源的可解释属性。
+
+    坐标以图像左上角为原点，x 向右、y 向下。``snr`` 是峰值相对局部
+    背景的 SNR，``flux_snr`` 是孔径净通量的 SNR；两者不能混用。旧版
+    结果只有峰值 SNR 时，``flux_snr`` 可以为 ``None``。
+    """
 
     detection_id: int
     x: float
@@ -23,6 +38,15 @@ class Detection:
     snr: float
     fwhm: float | None
     flags: tuple[str, ...]
+    flux_error: float | None = None
+    flux_snr: float | None = None
+    filter_snr: float | None = None
+    fwhm_x: float | None = None
+    fwhm_y: float | None = None
+    ellipticity: float | None = None
+    sharpness: float | None = None
+    footprint_pixels: int | None = None
+    quality_passed: bool = True
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -34,7 +58,16 @@ class Detection:
             "background": self.background,
             "noise": self.noise,
             "snr": self.snr,
+            "flux_error": self.flux_error,
+            "flux_snr": self.flux_snr,
+            "filter_snr": self.filter_snr,
             "fwhm": self.fwhm,
+            "fwhm_x": self.fwhm_x,
+            "fwhm_y": self.fwhm_y,
+            "ellipticity": self.ellipticity,
+            "sharpness": self.sharpness,
+            "footprint_pixels": self.footprint_pixels,
+            "quality_passed": self.quality_passed,
             "flags": list(self.flags),
         }
 
@@ -50,10 +83,37 @@ class DetectionResult:
     candidate_count: int
     sources: tuple[Detection, ...]
     parameters: dict[str, float | int]
+    quality_count: int | None = None
 
     @property
     def star_count(self) -> int:
+        """通过当前质量规则的星点数，不等同于原始候选峰数。"""
+
+        return self.quality_count if self.quality_count is not None else sum(source.quality_passed for source in self.sources)
+
+    @property
+    def quality_sources(self) -> tuple[Detection, ...]:
+        """返回通过质量判定的源；原始候选仍保存在 ``sources`` 中。"""
+
+        return tuple(source for source in self.sources if source.quality_passed)
+
+    @property
+    def returned_count(self) -> int:
+        """实际返回并完成属性计算的候选源数。"""
+
         return len(self.sources)
+
+    @property
+    def rejected_count(self) -> int:
+        """已返回但未通过质量判定的候选数。"""
+
+        return self.returned_count - self.star_count
+
+    @property
+    def truncated(self) -> bool:
+        """是否因为显式 ``max_sources`` 而少返回了候选源。"""
+
+        return self.candidate_count > self.returned_count
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -62,8 +122,10 @@ class DetectionResult:
             "noise": self.noise,
             "threshold": self.threshold,
             "candidate_count": self.candidate_count,
-            "returned_count": self.star_count,
-            "truncated": self.candidate_count > self.star_count,
+            "returned_count": self.returned_count,
+            "quality_count": self.star_count,
+            "rejected_count": self.rejected_count,
+            "truncated": self.truncated,
             "parameters": self.parameters,
             "sources": [source.as_dict() for source in self.sources],
         }
@@ -115,6 +177,70 @@ def sigma_clipped_stats(
     return center, scale
 
 
+def _resize_grid(grid: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """把块统计网格线性插值到图像大小。"""
+
+    height, width = shape
+    if grid.shape == (1, 1):
+        return np.full(shape, float(grid[0, 0]), dtype=np.float64)
+    zoom = (
+        (height - 1) / max(1, grid.shape[0] - 1),
+        (width - 1) / max(1, grid.shape[1] - 1),
+    )
+    resized = ndimage.zoom(grid, zoom=zoom, order=1, mode="nearest", prefilter=False)
+    if resized.shape != shape:
+        result = np.empty(shape, dtype=np.float64)
+        result[...] = resized[-1, -1]
+        result[: min(height, resized.shape[0]), : min(width, resized.shape[1])] = resized[:height, :width]
+        return result
+    return resized
+
+
+def local_background_rms(
+    image: np.ndarray,
+    mask: np.ndarray,
+    *,
+    box_size: int = 128,
+    fallback: tuple[float, float] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """用网格化 sigma-clipping 生成二维背景和 RMS 图。
+
+    块统计避免把一个亮星的像素直接当作背景；线性插值只用于把块统计
+    变成逐像素权重。它不是对复杂散射光场的最终模型，但比单一全图
+    标量更能解释局部 SNR。
+    """
+
+    if box_size < 16:
+        raise ValueError("background box_size must be at least 16 pixels")
+    values = np.asarray(image, dtype=np.float64)
+    height, width = values.shape
+    rows = range(0, height, box_size)
+    cols = range(0, width, box_size)
+    global_stats = fallback or sigma_clipped_stats(values, mask=mask)
+    backgrounds: list[list[float]] = []
+    noises: list[list[float]] = []
+    for y0 in rows:
+        background_row: list[float] = []
+        noise_row: list[float] = []
+        for x0 in cols:
+            block = values[y0 : y0 + box_size, x0 : x0 + box_size]
+            block_mask = mask[y0 : y0 + box_size, x0 : x0 + box_size]
+            try:
+                block_stats = sigma_clipped_stats(block, mask=block_mask, sample_limit=100_000)
+            except ValueError:
+                block_stats = global_stats
+            if not np.isfinite(block_stats[0]) or not np.isfinite(block_stats[1]) or block_stats[1] <= 0:
+                block_stats = global_stats
+            background_row.append(float(block_stats[0]))
+            noise_row.append(float(block_stats[1]))
+        backgrounds.append(background_row)
+        noises.append(noise_row)
+    background_map = _resize_grid(np.asarray(backgrounds), values.shape)
+    noise_map = _resize_grid(np.asarray(noises), values.shape)
+    noise_map = np.maximum(noise_map, np.finfo(np.float64).eps)
+    return background_map, noise_map
+
+
 def _suppress_close_candidates(candidates: Iterable[tuple[int, int, float]], min_distance: int) -> list[tuple[int, int, float]]:
     """按峰值从高到低做网格化非极大值抑制，避免 O(n²) 全量比较。"""
 
@@ -149,69 +275,211 @@ def _source_from_peak(
     mask: np.ndarray,
     x_peak: int,
     y_peak: int,
-    background: float,
-    noise: float,
+    background_map: np.ndarray,
+    noise_map: np.ndarray,
     aperture_radius: int,
     saturation_level: float | None,
+    filter_snr: float,
+    min_flux_snr: float,
+    min_fwhm: float,
+    max_fwhm: float,
+    max_ellipticity: float,
+    min_sharpness: float,
+    max_sharpness: float,
+    min_footprint_pixels: int,
+    gain_e_per_adu: float | None,
+    read_noise_adu: float,
 ) -> Detection:
+    """在候选峰周围做局部背景、孔径测光和点源形状计算。"""
+
     height, width = image.shape
-    y0 = max(0, y_peak - aperture_radius)
-    y1 = min(height, y_peak + aperture_radius + 1)
-    x0 = max(0, x_peak - aperture_radius)
-    x1 = min(width, x_peak + aperture_radius + 1)
+    outer_radius = aperture_radius + 4
+    y0 = max(0, y_peak - outer_radius)
+    y1 = min(height, y_peak + outer_radius + 1)
+    x0 = max(0, x_peak - outer_radius)
+    x1 = min(width, x_peak + outer_radius + 1)
     patch = image[y0:y1, x0:x1]
     patch_mask = mask[y0:y1, x0:x1] | ~np.isfinite(patch)
-    signal = np.where(patch_mask, 0.0, np.maximum(patch - background, 0.0))
-    flux = float(signal.sum())
-    yy, xx = np.indices(signal.shape, dtype=np.float64)
-    if flux > 0:
-        x = float((signal * (xx + x0)).sum() / flux)
-        y = float((signal * (yy + y0)).sum() / flux)
-        var_x = float((signal * ((xx + x0) - x) ** 2).sum() / flux)
-        var_y = float((signal * ((yy + y0) - y) ** 2).sum() / flux)
-        fwhm = 2.35482 * float(np.sqrt(max(0.0, (var_x + var_y) / 2.0)))
-        if fwhm <= 0 or not np.isfinite(fwhm):
+    yy, xx = np.indices(patch.shape, dtype=np.float64)
+    distance = np.sqrt((xx + x0 - x_peak) ** 2 + (yy + y0 - y_peak) ** 2)
+    aperture = (distance <= aperture_radius) & ~patch_mask
+    annulus = (distance >= aperture_radius + 2) & (distance <= outer_radius) & ~patch_mask
+    annulus_values = patch[annulus]
+    fallback_background = float(background_map[y_peak, x_peak])
+    fallback_noise = float(noise_map[y_peak, x_peak])
+    annulus_is_usable = annulus_values.size >= 16
+    if annulus_is_usable:
+        local_background, local_noise = sigma_clipped_stats(annulus_values, sample_limit=100_000)
+    else:
+        local_background, local_noise = fallback_background, fallback_noise
+    local_noise = max(float(local_noise), np.finfo(np.float64).eps)
+
+    residual = patch - local_background
+    valid_aperture = residual[aperture]
+    net_flux = float(valid_aperture.sum()) if valid_aperture.size else 0.0
+    aperture_pixels = int(aperture.sum())
+    background_pixels = max(1, int(annulus.sum()))
+    source_variance = max(net_flux, 0.0) / gain_e_per_adu if gain_e_per_adu is not None else 0.0
+    source_variance += aperture_pixels * (read_noise_adu**2)
+    background_variance = aperture_pixels * local_noise**2
+    background_variance += (aperture_pixels**2 / background_pixels) * local_noise**2
+    flux_error = float(np.sqrt(max(source_variance + background_variance, np.finfo(np.float64).eps)))
+    flux_snr = net_flux / flux_error
+
+    # 用正残差估计形状，避免负噪声把质心拉向边缘。
+    positive = np.where(aperture, np.maximum(residual, 0.0), 0.0)
+    positive_sum = float(positive.sum())
+    if positive_sum > 0:
+        x = float((positive * (xx + x0)).sum() / positive_sum)
+        y = float((positive * (yy + y0)).sum() / positive_sum)
+        variance_x = float((positive * ((xx + x0) - x) ** 2).sum() / positive_sum)
+        variance_y = float((positive * ((yy + y0) - y) ** 2).sum() / positive_sum)
+        fwhm_x = 2.35482 * float(np.sqrt(max(0.0, variance_x)))
+        fwhm_y = 2.35482 * float(np.sqrt(max(0.0, variance_y)))
+        fwhm = 2.35482 * float(np.sqrt(max(0.0, (variance_x + variance_y) / 2.0)))
+        ellipticity = abs(fwhm_x - fwhm_y) / max(fwhm_x, fwhm_y, np.finfo(np.float64).eps)
+        sharpness = float(max(residual[aperture].max(), 0.0) / max(positive_sum, np.finfo(np.float64).eps))
+        if not np.isfinite(fwhm) or fwhm <= 0:
             fwhm = None
     else:
-        x, y, fwhm = float(x_peak), float(y_peak), None
+        x, y = float(x_peak), float(y_peak)
+        fwhm = fwhm_x = fwhm_y = ellipticity = sharpness = None
 
     peak = float(image[y_peak, x_peak])
-    snr = (peak - background) / noise if noise > 0 else float("inf")
+    peak_snr = (peak - local_background) / local_noise
+    footprint_pixels = int(((residual >= local_noise) & aperture).sum())
     flags: list[str] = []
     if x0 == 0 or y0 == 0 or x1 == width or y1 == height:
         flags.append("EDGE")
-    if patch_mask.any():
+    if patch_mask[aperture].any():
         flags.append("MASKED")
-    if saturation_level is not None and float(np.nanmax(patch)) >= saturation_level:
+    if not annulus_is_usable:
+        flags.append("BACKGROUND_UNCERTAIN")
+    if saturation_level is not None and np.any(aperture & np.isfinite(patch) & (patch >= saturation_level)):
         flags.append("SATURATED")
+    if net_flux <= 0:
+        flags.append("NON_POSITIVE_FLUX")
+    if not np.isfinite(flux_snr) or flux_snr < min_flux_snr:
+        flags.append("LOW_FLUX_SNR")
+    if fwhm is None or fwhm_x is None or fwhm_y is None:
+        flags.append("NO_SHAPE")
+    else:
+        if fwhm < min_fwhm:
+            flags.append("NARROW")
+        if fwhm > max_fwhm:
+            flags.append("BROAD")
+        if ellipticity is not None and ellipticity > max_ellipticity:
+            flags.append("ELONGATED")
+    if sharpness is None or sharpness < min_sharpness:
+        flags.append("DIFFUSE")
+    elif sharpness > max_sharpness:
+        flags.append("SPIKE")
+    if footprint_pixels < min_footprint_pixels:
+        flags.append("SMALL_FOOTPRINT")
+
+    reject_flags = {
+        "EDGE",
+        "MASKED",
+        "BACKGROUND_UNCERTAIN",
+        "SATURATED",
+        "NON_POSITIVE_FLUX",
+        "LOW_FLUX_SNR",
+        "NO_SHAPE",
+        "NARROW",
+        "BROAD",
+        "ELONGATED",
+        "DIFFUSE",
+        "SPIKE",
+        "SMALL_FOOTPRINT",
+    }
     return Detection(
         detection_id=-1,
         x=x,
         y=y,
         peak=peak,
-        flux=flux,
-        background=background,
-        noise=noise,
-        snr=float(snr),
+        flux=net_flux,
+        background=float(local_background),
+        noise=float(local_noise),
+        snr=float(peak_snr),
+        flux_error=flux_error,
+        flux_snr=float(flux_snr),
+        filter_snr=float(filter_snr),
         fwhm=fwhm,
+        fwhm_x=fwhm_x,
+        fwhm_y=fwhm_y,
+        ellipticity=ellipticity,
+        sharpness=sharpness,
+        footprint_pixels=footprint_pixels,
         flags=tuple(flags),
+        quality_passed=not reject_flags.intersection(flags),
     )
+
+
+def _working_mask(
+    values: np.ndarray,
+    mask: np.ndarray | None,
+    *,
+    background: float,
+    mask_zero_pixels: bool | None,
+    saturation_level: float | None,
+) -> tuple[np.ndarray, float | None, bool]:
+    """生成通用无效像素掩膜，并返回自动推断的饱和上限。"""
+
+    numeric = np.asarray(values, dtype=np.float64)
+    effective_mask = np.zeros(values.shape, dtype=bool) if mask is None else np.asarray(mask, dtype=bool).copy()
+    if effective_mask.shape != values.shape:
+        raise ValueError(f"mask shape {effective_mask.shape} does not match image shape {values.shape}")
+    effective_mask |= ~np.isfinite(numeric)
+    is_integer = np.issubdtype(np.asarray(values).dtype, np.integer)
+    if mask_zero_pixels is None:
+        mask_zero_pixels = bool(is_integer and np.isfinite(background) and abs(background) > 1.0)
+    if mask_zero_pixels:
+        effective_mask |= numeric == 0.0
+
+    inferred_saturation = saturation_level
+    if inferred_saturation is None and is_integer:
+        dtype_info = np.iinfo(np.asarray(values).dtype)
+        inferred_saturation = float(dtype_info.max - 32)
+        effective_mask |= numeric >= inferred_saturation
+        effective_mask |= numeric <= float(dtype_info.min + 32)
+    elif saturation_level is not None:
+        effective_mask |= numeric >= saturation_level
+    return effective_mask, inferred_saturation, bool(mask_zero_pixels)
 
 
 def detect_sources(
     image: np.ndarray,
     *,
     mask: np.ndarray | None = None,
-    threshold_sigma: float = 5.0,
+    threshold_sigma: float = 4.0,
     min_distance: int = 3,
     aperture_radius: int = 4,
     max_sources: int | None = None,
     saturation_level: float | None = None,
+    psf_fwhm: float = 3.0,
+    background_box_size: int = 128,
+    min_flux_snr: float = 5.0,
+    min_fwhm: float = 0.8,
+    max_fwhm: float = 12.0,
+    max_ellipticity: float = 0.65,
+    min_sharpness: float = 0.005,
+    max_sharpness: float = 0.85,
+    min_footprint_pixels: int = 2,
+    gain_e_per_adu: float | None = None,
+    read_noise_adu: float = 0.0,
+    mask_zero_pixels: bool | None = None,
 ) -> DetectionResult:
-    """检测超过鲁棒背景阈值的局部峰值。
+    """检测点源候选并进行可解释的局部质量判定。
 
-    这是可解释的第一版基线，不声称完成 PSF 拟合或星点真值分类。所有
-    参数会写入结果，便于后续做阈值扫描和注入实验。
+    检测阶段对背景扣除图像做 Gaussian PSF 匹配滤波，再以局部峰和
+    ``threshold_sigma`` 取得高召回候选。测量阶段在原始图像上用局部环
+    估计背景，计算净通量、误差和 ``flux_snr``，最后按点源形状和数据
+    有效性打标签。默认不限制源数量；只有调用方显式传入
+    ``max_sources`` 才会截断返回列表。
+
+    ``gain_e_per_adu`` 和 ``read_noise_adu`` 未知时不虚构仪器噪声参数：
+    flux SNR 至少包含孔径内背景噪声和局部背景估计误差；若提供增益，
+    再加入源光子的 Poisson 方差。
     """
 
     values = np.asarray(image)
@@ -221,17 +489,72 @@ def detect_sources(
         raise ValueError("threshold_sigma must be positive")
     if min_distance < 1 or aperture_radius < 1:
         raise ValueError("min_distance and aperture_radius must be positive")
-    effective_mask = np.zeros(values.shape, dtype=bool) if mask is None else np.asarray(mask, dtype=bool).copy()
-    if effective_mask.shape != values.shape:
-        raise ValueError(f"mask shape {effective_mask.shape} does not match image shape {values.shape}")
-    background, noise = sigma_clipped_stats(values, mask=effective_mask)
+    if psf_fwhm <= 0:
+        raise ValueError("psf_fwhm must be positive")
+    if min_flux_snr <= 0 or background_box_size < 16:
+        raise ValueError("min_flux_snr must be positive and background_box_size must be at least 16")
+    if min_fwhm <= 0 or max_fwhm < min_fwhm:
+        raise ValueError("fwhm limits are invalid")
+    if not 0 <= max_ellipticity <= 1:
+        raise ValueError("max_ellipticity must be between 0 and 1")
+    if min_sharpness < 0 or max_sharpness <= min_sharpness:
+        raise ValueError("sharpness limits are invalid")
+    if min_footprint_pixels < 1:
+        raise ValueError("min_footprint_pixels must be positive")
+    if gain_e_per_adu is not None and gain_e_per_adu <= 0:
+        raise ValueError("gain_e_per_adu must be positive when provided")
+    if read_noise_adu < 0:
+        raise ValueError("read_noise_adu cannot be negative")
+
     numeric = np.asarray(values, dtype=np.float64)
-    threshold = background + threshold_sigma * noise
-    candidate_mask = np.isfinite(numeric) & ~effective_mask & (numeric >= threshold)
-    neighborhood = 2 * min_distance + 1
-    local_max = numeric == ndimage.maximum_filter(numeric, size=neighborhood, mode="nearest")
+    finite_mask = ~np.isfinite(numeric)
+    base_mask = finite_mask if mask is None else (np.asarray(mask, dtype=bool) | finite_mask)
+    if base_mask.shape != values.shape:
+        raise ValueError(f"mask shape {base_mask.shape} does not match image shape {values.shape}")
+    global_background, global_noise = sigma_clipped_stats(numeric, mask=base_mask)
+    effective_mask, inferred_saturation, used_zero_mask = _working_mask(
+        values,
+        mask,
+        background=global_background,
+        mask_zero_pixels=mask_zero_pixels,
+        saturation_level=saturation_level,
+    )
+    background, noise = sigma_clipped_stats(numeric, mask=effective_mask)
+    background_map, noise_map = local_background_rms(
+        numeric,
+        effective_mask,
+        box_size=background_box_size,
+        fallback=(background, noise),
+    )
+
+    psf_sigma = psf_fwhm / 2.35482
+    valid = ~effective_mask
+    residual = np.where(valid, numeric - background_map, 0.0)
+    # 对掩膜区域做归一化卷积，避免边界/坏点的 0 值把附近源的响应压低。
+    filtered_sum = ndimage.gaussian_filter(residual * valid, sigma=psf_sigma, mode="nearest")
+    filtered_weight = ndimage.gaussian_filter(valid.astype(np.float64), sigma=psf_sigma, mode="nearest")
+    filtered = np.divide(
+        filtered_sum,
+        filtered_weight,
+        out=np.zeros_like(filtered_sum),
+        where=filtered_weight > 0.5,
+    )
+    filter_background, filter_noise = sigma_clipped_stats(filtered, mask=effective_mask)
+    filter_noise = max(filter_noise, np.finfo(np.float64).eps)
+    local_noise_scale = np.maximum(noise_map / max(float(np.median(noise_map[valid])), np.finfo(np.float64).eps), 0.25)
+    filter_noise_map = filter_noise * local_noise_scale
+    filter_snr_image = (filtered - filter_background) / filter_noise_map
+
+    peak_radius = max(min_distance, int(np.ceil(2.0 * psf_sigma)))
+    neighborhood = 2 * peak_radius + 1
+    candidate_mask = np.isfinite(filter_snr_image) & valid & (filter_snr_image >= threshold_sigma)
+    local_max = filter_snr_image == ndimage.maximum_filter(filter_snr_image, size=neighborhood, mode="nearest")
     yy, xx = np.nonzero(candidate_mask & local_max)
-    candidates = sorted(((int(x), int(y), float(numeric[y, x])) for x, y in zip(xx, yy, strict=True)), key=lambda item: item[2], reverse=True)
+    candidates = sorted(
+        ((int(x), int(y), float(filter_snr_image[y, x])) for x, y in zip(xx, yy, strict=True)),
+        key=lambda item: item[2],
+        reverse=True,
+    )
     selected = _suppress_close_candidates(candidates, min_distance)
     candidate_count = len(selected)
     if max_sources is not None:
@@ -240,18 +563,29 @@ def detect_sources(
         selected = selected[:max_sources]
 
     sources: list[Detection] = []
-    for x_peak, y_peak, _ in selected:
-        source = _source_from_peak(
-            numeric,
-            effective_mask,
-            x_peak,
-            y_peak,
-            background,
-            noise,
-            aperture_radius,
-            saturation_level,
+    for x_peak, y_peak, candidate_filter_snr in selected:
+        sources.append(
+            _source_from_peak(
+                numeric,
+                effective_mask,
+                x_peak,
+                y_peak,
+                background_map,
+                noise_map,
+                aperture_radius,
+                inferred_saturation,
+                candidate_filter_snr,
+                min_flux_snr,
+                min_fwhm,
+                max_fwhm,
+                max_ellipticity,
+                min_sharpness,
+                max_sharpness,
+                min_footprint_pixels,
+                gain_e_per_adu,
+                read_noise_adu,
+            )
         )
-        sources.append(source)
     sources.sort(key=lambda source: (source.y, source.x))
     numbered = [
         Detection(
@@ -265,20 +599,47 @@ def detect_sources(
             snr=source.snr,
             fwhm=source.fwhm,
             flags=source.flags,
+            flux_error=source.flux_error,
+            flux_snr=source.flux_snr,
+            filter_snr=source.filter_snr,
+            fwhm_x=source.fwhm_x,
+            fwhm_y=source.fwhm_y,
+            ellipticity=source.ellipticity,
+            sharpness=source.sharpness,
+            footprint_pixels=source.footprint_pixels,
+            quality_passed=source.quality_passed,
         )
         for index, source in enumerate(sources)
     ]
+    quality_count = sum(source.quality_passed for source in numbered)
     return DetectionResult(
         image_shape=(int(values.shape[0]), int(values.shape[1])),
-        background=background,
-        noise=noise,
-        threshold=threshold,
+        background=float(background),
+        noise=float(noise),
+        threshold=float(background + threshold_sigma * noise),
         candidate_count=candidate_count,
         sources=tuple(numbered),
+        quality_count=quality_count,
         parameters={
             "threshold_sigma": float(threshold_sigma),
             "min_distance": int(min_distance),
             "aperture_radius": int(aperture_radius),
             "max_sources": -1 if max_sources is None else int(max_sources),
+            "psf_fwhm": float(psf_fwhm),
+            "background_box_size": int(background_box_size),
+            "min_flux_snr": float(min_flux_snr),
+            "min_fwhm": float(min_fwhm),
+            "max_fwhm": float(max_fwhm),
+            "max_ellipticity": float(max_ellipticity),
+            "min_sharpness": float(min_sharpness),
+            "max_sharpness": float(max_sharpness),
+            "min_footprint_pixels": int(min_footprint_pixels),
+            "gain_e_per_adu": -1.0 if gain_e_per_adu is None else float(gain_e_per_adu),
+            "read_noise_adu": float(read_noise_adu),
+            "mask_zero_pixels": int(used_zero_mask),
+            "saturation_level": -1.0 if inferred_saturation is None else float(inferred_saturation),
+            "global_background": float(global_background),
+            "global_noise": float(global_noise),
+            "filter_noise": float(filter_noise),
         },
     )

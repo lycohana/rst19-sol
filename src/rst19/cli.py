@@ -25,10 +25,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--crpix-y", type=float, help="WCS 参考像素 y；默认图像中心")
     parser.add_argument("--epoch", type=float, help="将星表自行传播到指定 Julian 年")
     parser.add_argument("--match-radius-px", type=float, default=3.0, help="匹配半径（pixel）")
-    parser.add_argument("--threshold-sigma", type=float, default=5.0, help="检测阈值：背景 + N sigma")
+    parser.add_argument("--threshold-sigma", type=float, default=4.0, help="匹配滤波检测阈值；默认 4σ，优先保留候选")
     parser.add_argument("--min-distance", type=int, default=3, help="候选峰最小间距（pixel）")
     parser.add_argument("--aperture-radius", type=int, default=4, help="通量估计半径（pixel）")
     parser.add_argument("--max-sources", type=int, help="最多保留的检测源数")
+    parser.add_argument("--psf-fwhm", type=float, default=3.0, help="Gaussian 点扩散函数 FWHM（pixel）")
+    parser.add_argument("--background-box-size", type=int, default=128, help="局部背景/RMS 统计块大小（pixel）")
+    parser.add_argument("--min-flux-snr", type=float, default=5.0, help="可信星点的孔径通量 SNR 下限")
+    parser.add_argument("--min-fwhm", type=float, default=0.8, help="可信点源的 FWHM 下限（pixel）")
+    parser.add_argument("--max-fwhm", type=float, default=12.0, help="可信点源的 FWHM 上限（pixel）")
+    parser.add_argument("--max-ellipticity", type=float, default=0.65, help="可信点源椭圆率上限")
+    parser.add_argument("--min-sharpness", type=float, default=0.005, help="点源 sharpness 下限")
+    parser.add_argument("--max-sharpness", type=float, default=0.85, help="尖峰伪迹 sharpness 上限")
+    parser.add_argument("--min-footprint-pixels", type=int, default=2, help="点源孔径内超过 1 RMS 的最少像素数")
+    parser.add_argument("--gain-e-per-adu", type=float, help="可选 CCD 增益（electron/ADU）")
+    parser.add_argument("--read-noise-adu", type=float, default=0.0, help="读出噪声（ADU）")
+    parser.add_argument("--keep-zero-pixels", action="store_true", help="不把整数图像中的精确 0 自动标记为无效像素")
+    parser.add_argument("--zero-point", type=float, help="可选仪器星等零点；不提供时只输出仪器星等")
     parser.add_argument("--json-out", type=Path, help="可选 JSON 输出文件；不提供时输出到 stdout")
     return parser
 
@@ -68,8 +81,21 @@ def main(argv: list[str] | None = None) -> int:
             min_distance=args.min_distance,
             aperture_radius=args.aperture_radius,
             max_sources=args.max_sources,
+            psf_fwhm=args.psf_fwhm,
+            background_box_size=args.background_box_size,
+            min_flux_snr=args.min_flux_snr,
+            min_fwhm=args.min_fwhm,
+            max_fwhm=args.max_fwhm,
+            max_ellipticity=args.max_ellipticity,
+            min_sharpness=args.min_sharpness,
+            max_sharpness=args.max_sharpness,
+            min_footprint_pixels=args.min_footprint_pixels,
+            gain_e_per_adu=args.gain_e_per_adu,
+            read_noise_adu=args.read_noise_adu,
+            mask_zero_pixels=False if args.keep_zero_pixels else None,
             match_radius_px=args.match_radius_px,
             epoch=args.epoch,
+            zero_point=args.zero_point,
         )
         payload = result.as_dict()
         if wcs is not None:
@@ -84,3 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as exc:
         print(f"rst19: {exc}", file=sys.stderr)
         return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

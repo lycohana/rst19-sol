@@ -10,6 +10,8 @@ from .detection import Detection, DetectionResult, detect_sources
 from .fits import FitsError, decode_auxiliary, read_fits
 from .matching import CatalogMatch, MatchResult, match_detections
 from .models import AuxiliaryData, FitsFrame
+from .photometry import FaintestSource, find_faintest_source, instrumental_magnitude
+from .sequence import SequenceResult, SourceTrack, TrackPoint, analyze_sequence, track_detections
 from .wcs import TangentPlaneWCS
 
 __all__ = [
@@ -20,13 +22,21 @@ __all__ = [
     "DetectionResult",
     "FitsError",
     "FitsFrame",
+    "FaintestSource",
     "MatchResult",
     "TangentPlaneWCS",
+    "SequenceResult",
+    "SourceTrack",
+    "TrackPoint",
+    "analyze_sequence",
     "decode_auxiliary",
     "detect_sources",
+    "find_faintest_source",
+    "instrumental_magnitude",
     "load_catalog_csv",
     "match_detections",
     "read_fits",
+    "track_detections",
 ]
 
 __version__ = "0.1.0"

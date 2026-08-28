@@ -16,6 +16,7 @@ output/
 results/
 tmp/
 temp/
+.rst19-cache/
 *.log
 
 # 本地编辑器工作区配置

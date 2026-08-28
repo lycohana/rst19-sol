@@ -35,3 +35,23 @@ def test_detect_sources_returns_injected_peaks() -> None:
     assert np.min(np.linalg.norm(positions - np.array([24.5, 31.5]), axis=1)) < 1.5
     assert np.min(np.linalg.norm(positions - np.array([70.0, 64.0]), axis=1)) < 1.5
     assert all(source.snr > 5 for source in result.sources[:2])
+    assert all(source.flux_error is not None and source.flux_snr is not None for source in result.sources)
+    assert result.star_count == 2
+    assert result.returned_count == result.candidate_count
+
+
+def test_detect_sources_only_truncates_when_limit_is_explicit() -> None:
+    image = np.zeros((48, 48), dtype=float)
+    for y, x in ((8, 8), (8, 24), (8, 40), (24, 8), (24, 24), (24, 40), (40, 8), (40, 24), (40, 40)):
+        image[y, x] = 100.0
+
+    full = detect_sources(image, threshold_sigma=4.0, min_distance=3, aperture_radius=2)
+    limited = detect_sources(image, threshold_sigma=4.0, min_distance=3, aperture_radius=2, max_sources=2)
+
+    assert full.candidate_count == 9
+    assert full.returned_count == 9
+    assert limited.candidate_count == 9
+    assert limited.returned_count == 2
+    assert limited.truncated
+    assert full.star_count == 0
+    assert all("NARROW" in source.flags or "SPIKE" in source.flags for source in full.sources)

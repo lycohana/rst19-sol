@@ -1,6 +1,6 @@
 # rst19 实现模块
 
-这是 rst19-sol 的第一版 Python 算法实现，负责把资料中的星表路线落成可测试的离线基线。
+这是 rst19-sol 的第一版 Python 算法实现，负责把资料中的星表路线落成可测试的本地 Python 基线。
 
 ## 定位
 
@@ -8,16 +8,17 @@
 
 - 当前比赛 FITS 主 HDU 的读取、结构校验和 26 个辅助字段解码；
 - 屏蔽首行辅助区域后的鲁棒背景/噪声估计；
-- 局部峰值星点候选检测、简单通量、质心、SNR 和形状摘要；
+- 局部背景/RMS、Gaussian PSF 匹配滤波、全量候选审计、孔径通量误差、三种 SNR 和点源质量分层；
 - 基于切平面先验 WCS 的星表一对一匹配；
 - CSV 离线任务星表读取、自行传播和 JSON CLI 输出。
-- 本地浏览器工作台：选择 FITS、调整参数、查看预览叠加和实验日志。
+- Python Tkinter 桌面工作台：选择 FITS、调整参数、查看全量候选源叠加和最暗源标注。
+- 15 帧质量源的全局平移配准、唯一轨迹关联和 `static`/`moving`/`transient` 分类基线。
 
 模块当前不声称已经完成：
 
 - 完全盲的 plate solving 或 Astrometry.net 索引生成；
-- 经过真实标定的绝对星等、`Mv` 转换和检测完备率；
-- 15 帧运动目标轨迹关联和比赛最终真值验证。
+- 经过真实标定的绝对星等、`Mv` 转换和检测完备率；当前只输出仪器星等 `m_inst`；
+- 官方逐星/运动目标真值、注入完备率和误检率验证；当前 `quality_count` 是明确规则下的可信点源数，不自动等于物理恒星真值。
 
 ## 安装
 
@@ -35,10 +36,22 @@ python -m pip install -e ".[dev]"
 
 ```powershell
 rst19 doc/00-项目资料/原始数据/20260330163205413_9901.fits `
-  --threshold-sigma 5 `
+  --threshold-sigma 4 `
   --min-distance 3 `
-  --max-sources 20000 `
   --json-out output/frame-01.json
+```
+
+检测默认在 Gaussian PSF 匹配响应上采用 4σ 候选阈值并优先保留候选；不传 `--max-sources` 就不截断候选源。`--max-sources` 仍可作为显式的性能/导出限制，但带有限制时最暗源只会在返回的检测源中选择。结果同时保留 `candidate_count`、`returned_count`、`quality_count` 和拒绝标志，不把外部示例数量写入算法。
+
+分析结果中的 `faintest_detected` 是通过局部通量 SNR、正通量、点源形状以及边缘/掩膜/饱和质量筛选后的最暗可信候选源。其 `instrumental_magnitude` 按 `m_inst = -2.5 log10(flux_rate)` 计算；只有提供经过验证的 `--zero-point` 时才会附带 `calibrated_magnitude`，不能在未标定时直接称为 Gaia V 或 `Mv`。`snr` 是峰值 SNR，`flux_snr` 是孔径通量 SNR，`filter_snr` 是匹配滤波 SNR，三者语义不同。
+
+分析 15 帧：
+
+```powershell
+rst19-sequence doc/00-项目资料/原始数据 `
+  --threshold-sigma 4 --min-distance 3 --aperture-radius 4 `
+  --psf-fwhm 3 --min-flux-snr 5 --min-presence 12 `
+  --motion-min-displacement-px 2 --max-motion-fit-rms-px 0.75
 ```
 
 使用离线 CSV 星表进行先验匹配：
@@ -61,13 +74,17 @@ source_id,ra_deg,dec_deg,magnitude,pmra,pmdec,ref_epoch
 
 `--pixel-scale-arcsec`、旋转角和 parity 是相机参数假设，不是当前数据已经核验的事实；应通过稳定匹配星、残差和留出星验证后再固定。
 
-启动本地浏览器界面：
+启动 Python 桌面界面：
 
 ```powershell
-rst19-ui
+rst19-gui
 ```
 
-然后打开 <http://127.0.0.1:8765>。界面默认读取 `doc/00-项目资料/原始数据/`，只在本机处理；可以通过 `--data-dir` 指定其他获授权的 FITS 目录。
+界面默认读取 `doc/00-项目资料/原始数据/`，只在本机处理；可以通过 `--data-dir` 指定其他获授权的 FITS 目录。最大源数输入框留空表示全量检测，绿色环表示最暗可信源。
+
+界面启动和切换帧时只载入图像预览，不会提前计算检测结果。点击“分析当前帧”后，结果会按 FITS 文件路径、文件修改状态和检测参数写入项目根目录的 `.rst19-cache/` 压缩缓存；相同输入再次分析时直接复用。切换帧时旧线程结果会因帧令牌失效而丢弃，避免旧画面覆盖新画面。点击“清空检测缓存”会删除当前 gzip 缓存和旧版本 JSON 产物，原始 FITS 不会被删除。
+
+预览支持鼠标滚轮缩放和左键拖拽平移。鼠标移动到候选点附近时，底部信息栏和图像标注会显示检测 ID、坐标、峰值、通量、通量误差、三类 SNR、FWHM/椭圆率、仪器星等和质量标记。
 
 ## 测试
 
@@ -78,5 +95,7 @@ python -m pytest
 ## 相关资料
 
 - [星表路线深度研究](../doc/02-星图识别/星表路线深度研究.md)
+- [检测器实验记录](../doc/02-星图识别/检测器实验记录.md)
 - [FITS 读取与校验](../doc/01-数据解析/FITS读取与校验.md)
 - [星点识别方法](../doc/02-星图识别/星点识别方法.md)
+- [论文与答辩材料](../doc/05-论文答辩/论文与答辩材料.md)

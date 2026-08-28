@@ -21,13 +21,11 @@ dev = [
 
 [project.scripts]
 rst19 = "rst19.cli:main"
-rst19-ui = "rst19.web:main"
+rst19-gui = "rst19.gui:main"
+rst19-sequence = "rst19.sequence_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-rst19 = ["ui/*.html", "ui/*.css", "ui/*.js"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
