@@ -362,7 +362,6 @@ class StarfieldApp(tk.Tk):
         self.frame_token += 1
         token = self.frame_token
         self.selected_frame = frame_path
-        self.overlay_mode_var.set("quality")
         self._set_job_controls()
         self.frame_title_label.config(text=frame_path.stem)
         self.analysis = None
