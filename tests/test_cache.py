@@ -92,6 +92,7 @@ def test_cache_key_changes_when_scientific_parameters_change(tmp_path: Path) -> 
     base = cache_key(frame, threshold_sigma=4.0, min_distance=3, aperture_radius=4, max_sources=None, zero_point=None)
     assert cache_key(frame, threshold_sigma=4.0, min_distance=3, aperture_radius=4, max_sources=None, zero_point=None, psf_fwhm=4.0) != base
     assert cache_key(frame, threshold_sigma=4.0, min_distance=3, aperture_radius=4, max_sources=None, zero_point=None, min_flux_snr=8.0) != base
+    assert cache_key(frame, threshold_sigma=4.0, min_distance=3, aperture_radius=4, max_sources=None, zero_point=None, reject_linear_artifacts=False) != base
 
 
 def test_clear_cache_does_not_remove_unrelated_files(tmp_path: Path) -> None:

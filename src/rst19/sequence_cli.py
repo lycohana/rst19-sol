@@ -22,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-presence", type=int, help="轨迹至少出现的帧数；默认要求约 80%% 帧")
     parser.add_argument("--motion-min-displacement-px", type=float, default=2.0, help="运动轨迹最小总位移（pixel）")
     parser.add_argument("--max-motion-fit-rms-px", type=float, default=0.75, help="运动直线拟合最大 RMS（pixel）")
+    parser.add_argument("--keep-linear-artifacts", action="store_true", help="保留线状结构候选；默认将长线标记为 LINE_ARTIFACT")
     parser.add_argument("--json-out", type=Path, help="可选 JSON 输出路径")
     return parser
 
@@ -44,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
             min_presence=args.min_presence,
             motion_min_displacement_px=args.motion_min_displacement_px,
             max_motion_fit_rms_px=args.max_motion_fit_rms_px,
+            reject_linear_artifacts=not args.keep_linear_artifacts,
         )
         rendered = json.dumps(result.as_dict(), ensure_ascii=False, indent=2, allow_nan=False)
         if args.json_out:

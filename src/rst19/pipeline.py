@@ -66,6 +66,7 @@ def analyze_frame(
     gain_e_per_adu: float | None = None,
     read_noise_adu: float = 0.0,
     mask_zero_pixels: bool | None = None,
+    reject_linear_artifacts: bool = True,
 ) -> FrameAnalysis:
     """分析单帧图像；提供 catalog 时必须同时提供先验 WCS。"""
 
@@ -91,6 +92,7 @@ def analyze_frame(
         gain_e_per_adu=gain_e_per_adu,
         read_noise_adu=read_noise_adu,
         mask_zero_pixels=mask_zero_pixels,
+        reject_linear_artifacts=reject_linear_artifacts,
     )
     matching = match_detections(detection.quality_sources, catalog, wcs, radius_px=match_radius_px, epoch=epoch) if catalog is not None else None
     exposure_ms = frame.header.get("EXPOSURE")

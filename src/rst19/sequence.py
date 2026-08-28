@@ -148,13 +148,20 @@ def _estimate_translation(
     current_top = sorted(current, key=_signal_snr, reverse=True)[:reference_limit]
     previous_points = np.array([(source.x, source.y) for source in previous_top], dtype=np.float64)
     current_points = np.array([(source.x, source.y) for source in current_top], dtype=np.float64)
-    tree = cKDTree(current_points)
-    distances, indices = tree.query(previous_points, distance_upper_bound=radius_px)
-    valid = np.isfinite(distances) & (indices < len(current_top))
-    if not np.any(valid):
+    current_tree = cKDTree(current_points)
+    previous_tree = cKDTree(previous_points)
+    previous_distances, previous_indices = current_tree.query(previous_points, distance_upper_bound=radius_px)
+    _current_distances, current_indices = previous_tree.query(current_points, distance_upper_bound=radius_px)
+    valid = np.isfinite(previous_distances) & (previous_indices < len(current_top))
+    valid_indices = np.flatnonzero(valid)
+    if valid_indices.size == 0:
         return 0.0, 0.0
-    deltas = current_points[indices[valid]] - previous_points[valid]
-    # 最近邻可能重复使用同一源；中位数和 MAD 对少量重复/错误匹配仍稳健。
+    reciprocal = current_indices[previous_indices[valid_indices]] == valid_indices
+    valid_indices = valid_indices[reciprocal]
+    if valid_indices.size == 0:
+        return 0.0, 0.0
+    deltas = current_points[previous_indices[valid_indices]] - previous_points[valid_indices]
+    # 只保留互相最近的一对一匹配，避免一个当前源被多个前帧源重复使用。
     center = np.median(deltas, axis=0)
     residual = np.linalg.norm(deltas - center, axis=1)
     mad = np.median(np.abs(residual - np.median(residual)))

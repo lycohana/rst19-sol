@@ -270,9 +270,61 @@ def _suppress_close_candidates(candidates: Iterable[tuple[int, int, float]], min
     return accepted
 
 
+def _linear_artifact_mask(
+    residual: np.ndarray,
+    noise_map: np.ndarray,
+    valid: np.ndarray,
+    *,
+    detection_sigma: float,
+    psf_fwhm: float,
+) -> np.ndarray:
+    """识别跨越多个 PSF 宽度的线状正残差，并返回其膨胀掩膜。
+
+    这是点源检测前的结构审计，不是把所有长源都武断地当成伪迹：只有
+    同时满足最小面积、主轴长度和 PCA 长宽比的连通域才会被标记。掩膜
+    只用于给候选加 ``LINE_ARTIFACT`` 标志，候选仍保留在审计输出中。
+    """
+
+    support_threshold = max(4.0, float(detection_sigma))
+    support = valid & np.isfinite(residual) & np.isfinite(noise_map) & (residual / noise_map >= support_threshold)
+    labels, component_count = ndimage.label(support, structure=np.ones((3, 3), dtype=bool))
+    line_mask = np.zeros(valid.shape, dtype=bool)
+    if component_count == 0:
+        return line_mask
+
+    min_pixels = max(24, int(round(2.5 * psf_fwhm**2)))
+    min_length = max(16.0, 5.0 * psf_fwhm)
+    slices = ndimage.find_objects(labels)
+    sizes = ndimage.sum(support, labels, index=np.arange(1, component_count + 1))
+    for component_id, size in enumerate(sizes, start=1):
+        if float(size) < min_pixels:
+            continue
+        component_slice = slices[component_id - 1]
+        if component_slice is None:
+            continue
+        ys, xs = component_slice
+        component = labels[component_slice] == component_id
+        local_y, local_x = np.nonzero(component)
+        if local_x.size < 3:
+            continue
+        points = np.column_stack((local_x + xs.start, local_y + ys.start)).astype(np.float64)
+        covariance = np.cov(points, rowvar=False, bias=True)
+        eigenvalues = np.linalg.eigvalsh(np.atleast_2d(covariance))
+        major_variance = float(eigenvalues[-1])
+        minor_variance = max(0.0, float(eigenvalues[0]))
+        major_length = 4.0 * np.sqrt(max(major_variance, 0.0))
+        axis_ratio = np.sqrt(major_variance / max(minor_variance, np.finfo(np.float64).eps))
+        if major_length >= min_length and axis_ratio >= 4.0:
+            line_mask[component_slice] |= component
+
+    dilation = max(1, int(round(psf_fwhm / 2.0)))
+    return ndimage.binary_dilation(line_mask, iterations=dilation)
+
+
 def _source_from_peak(
     image: np.ndarray,
     mask: np.ndarray,
+    line_artifact_mask: np.ndarray | None,
     x_peak: int,
     y_peak: int,
     background_map: np.ndarray,
@@ -353,6 +405,8 @@ def _source_from_peak(
         flags.append("EDGE")
     if patch_mask[aperture].any():
         flags.append("MASKED")
+    if line_artifact_mask is not None and line_artifact_mask[y0:y1, x0:x1][aperture].any():
+        flags.append("LINE_ARTIFACT")
     if not annulus_is_usable:
         flags.append("BACKGROUND_UNCERTAIN")
     if saturation_level is not None and np.any(aperture & np.isfinite(patch) & (patch >= saturation_level)):
@@ -380,6 +434,7 @@ def _source_from_peak(
     reject_flags = {
         "EDGE",
         "MASKED",
+        "LINE_ARTIFACT",
         "BACKGROUND_UNCERTAIN",
         "SATURATED",
         "NON_POSITIVE_FLUX",
@@ -468,6 +523,7 @@ def detect_sources(
     gain_e_per_adu: float | None = None,
     read_noise_adu: float = 0.0,
     mask_zero_pixels: bool | None = None,
+    reject_linear_artifacts: bool = True,
 ) -> DetectionResult:
     """检测点源候选并进行可解释的局部质量判定。
 
@@ -530,6 +586,17 @@ def detect_sources(
     psf_sigma = psf_fwhm / 2.35482
     valid = ~effective_mask
     residual = np.where(valid, numeric - background_map, 0.0)
+    line_artifact_mask = (
+        _linear_artifact_mask(
+            residual,
+            noise_map,
+            valid,
+            detection_sigma=threshold_sigma,
+            psf_fwhm=psf_fwhm,
+        )
+        if reject_linear_artifacts
+        else None
+    )
     # 对掩膜区域做归一化卷积，避免边界/坏点的 0 值把附近源的响应压低。
     filtered_sum = ndimage.gaussian_filter(residual * valid, sigma=psf_sigma, mode="nearest")
     filtered_weight = ndimage.gaussian_filter(valid.astype(np.float64), sigma=psf_sigma, mode="nearest")
@@ -568,6 +635,7 @@ def detect_sources(
             _source_from_peak(
                 numeric,
                 effective_mask,
+                line_artifact_mask,
                 x_peak,
                 y_peak,
                 background_map,
@@ -637,6 +705,8 @@ def detect_sources(
             "gain_e_per_adu": -1.0 if gain_e_per_adu is None else float(gain_e_per_adu),
             "read_noise_adu": float(read_noise_adu),
             "mask_zero_pixels": int(used_zero_mask),
+            "reject_linear_artifacts": int(reject_linear_artifacts),
+            "line_artifact_pixels": 0 if line_artifact_mask is None else int(line_artifact_mask.sum()),
             "saturation_level": -1.0 if inferred_saturation is None else float(inferred_saturation),
             "global_background": float(global_background),
             "global_noise": float(global_noise),

@@ -36,6 +36,7 @@ def cache_key(
     gain_e_per_adu: float | None = None,
     read_noise_adu: float = 0.0,
     mask_zero_pixels: bool | None = None,
+    reject_linear_artifacts: bool = True,
 ) -> str:
     """根据输入文件状态和检测参数生成稳定缓存键。"""
 
@@ -62,6 +63,7 @@ def cache_key(
         "gain_e_per_adu": gain_e_per_adu,
         "read_noise_adu": read_noise_adu,
         "mask_zero_pixels": mask_zero_pixels,
+        "reject_linear_artifacts": reject_linear_artifacts,
     }
     encoded = json.dumps(descriptor, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

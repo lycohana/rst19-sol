@@ -55,3 +55,19 @@ def test_detect_sources_only_truncates_when_limit_is_explicit() -> None:
     assert limited.truncated
     assert full.star_count == 0
     assert all("NARROW" in source.flags or "SPIKE" in source.flags for source in full.sources)
+
+
+def test_detect_sources_rejects_a_long_connected_trail_without_hiding_candidates() -> None:
+    rng = np.random.default_rng(3)
+    image = rng.normal(20.0, 2.0, size=(128, 128))
+    for y in range(10, 118):
+        image[y, 64] += 80.0 + 20.0 * np.sin(y * 0.8)
+        image[y, 65] += 50.0 + 15.0 * np.cos(y * 0.6)
+
+    result = detect_sources(image, threshold_sigma=4.0, min_distance=3, aperture_radius=4, psf_fwhm=3.0)
+
+    line_sources = [source for source in result.sources if "LINE_ARTIFACT" in source.flags]
+    assert result.candidate_count >= len(line_sources) >= 1
+    assert line_sources
+    assert all(not source.quality_passed for source in line_sources)
+    assert result.star_count < result.returned_count

@@ -41,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gain-e-per-adu", type=float, help="可选 CCD 增益（electron/ADU）")
     parser.add_argument("--read-noise-adu", type=float, default=0.0, help="读出噪声（ADU）")
     parser.add_argument("--keep-zero-pixels", action="store_true", help="不把整数图像中的精确 0 自动标记为无效像素")
+    parser.add_argument("--keep-linear-artifacts", action="store_true", help="保留线状结构候选；默认将长线标记为 LINE_ARTIFACT")
     parser.add_argument("--zero-point", type=float, help="可选仪器星等零点；不提供时只输出仪器星等")
     parser.add_argument("--json-out", type=Path, help="可选 JSON 输出文件；不提供时输出到 stdout")
     return parser
@@ -93,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
             gain_e_per_adu=args.gain_e_per_adu,
             read_noise_adu=args.read_noise_adu,
             mask_zero_pixels=False if args.keep_zero_pixels else None,
+            reject_linear_artifacts=not args.keep_linear_artifacts,
             match_radius_px=args.match_radius_px,
             epoch=args.epoch,
             zero_point=args.zero_point,
