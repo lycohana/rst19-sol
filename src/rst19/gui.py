@@ -42,6 +42,7 @@ AMBER_LIGHT = "#f0b34b"
 MINT = "#4f9b83"
 SKY = "#72b9d4"
 SKY_LIGHT = "#b9e4ef"
+MOTION_TRAIL = "#ff3bd4"
 WHITE = "#f6f1e7"
 MONO = "Consolas"
 SANS = "Segoe UI"
@@ -486,7 +487,7 @@ class StarfieldApp(tk.Tk):
         hints = {
             "quality": "滚轮缩放 · 左键拖拽平移    琥珀色点 = 通过质量筛选    绿色环 = 最暗可信源",
             "candidates": "滚轮缩放 · 左键拖拽平移    琥珀色 = 可信源    暗琥珀 = 被剔除候选（仅审计）",
-            "motion": "滚轮缩放 · 左键拖拽平移    蓝线 = 跨帧 moving 线状目标    橙线 = 待复核线    不显示静态背景星",
+            "motion": "滚轮缩放 · 左键拖拽平移    洋红线 = 跨帧 moving 线状目标    橙线 = 待复核线    不显示静态背景星",
         }
         self.overlay_hint_var.set(hints.get(self.overlay_mode_var.get(), hints["quality"]))
 
@@ -779,8 +780,10 @@ class StarfieldApp(tk.Tk):
                     angle = np.deg2rad(point.angle_deg)
                     dx = np.cos(angle) * half_length * self.preview_scale_x
                     dy = np.sin(angle) * half_length * self.preview_scale_y
-                    color = SKY_LIGHT if track.classification == "moving" else AMBER_LIGHT
+                    color = MOTION_TRAIL if track.classification == "moving" else AMBER_LIGHT
                     line_width = max(2, int(round(point.width_px * scale)))
+                    if track.classification == "moving":
+                        draw.line((x - dx, y - dy, x + dx, y + dy), fill=NAVY_DARK, width=line_width + 4)
                     draw.line((x - dx, y - dy, x + dx, y + dy), fill=color, width=line_width)
                     draw.ellipse((x - 6, y - 6, x + 6, y + 6), outline=color, width=2)
                     label = f"TRAIL {track.track_id:04d}" if track.classification == "moving" else f"TRAIL? {track.track_id:04d}"
@@ -980,7 +983,7 @@ class StarfieldApp(tk.Tk):
             self.hover_source = None
             self.hover_source_id = None
             if track_point is None:
-                self.hover_info_var.set("运动层只显示跨帧线状候选和严格 moving 点轨迹；将鼠标移到蓝线或橙线查看信息")
+                self.hover_info_var.set("运动层只显示跨帧线状候选和严格 moving 点轨迹；将鼠标移到洋红线或橙线查看信息")
             else:
                 track, point = track_point
                 if isinstance(point, MotionFeaturePoint):
