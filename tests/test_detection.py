@@ -71,3 +71,28 @@ def test_detect_sources_rejects_a_long_connected_trail_without_hiding_candidates
     assert line_sources
     assert all(not source.quality_passed for source in line_sources)
     assert result.star_count < result.returned_count
+
+
+def test_detect_sources_marks_a_masked_pixel_inside_the_geometric_aperture() -> None:
+    rng = np.random.default_rng(31)
+    image = rng.normal(20.0, 2.0, size=(64, 64))
+    _add_gaussian(image, 32.0, 32.0, 1_000.0, 1.4)
+    mask = np.zeros(image.shape, dtype=bool)
+    mask[32, 35] = True
+
+    result = detect_sources(image, mask=mask, threshold_sigma=5.0, min_distance=4, aperture_radius=4)
+
+    assert any("MASKED" in source.flags for source in result.sources)
+    assert all(not source.quality_passed for source in result.sources if "MASKED" in source.flags)
+
+
+def test_detect_sources_marks_an_in_aperture_saturated_pixel() -> None:
+    rng = np.random.default_rng(32)
+    image = np.rint(rng.normal(20.0, 2.0, size=(64, 64))).astype(np.int16)
+    image[31:34, 31:34] += 500
+    image[32, 35] = 32750
+
+    result = detect_sources(image, threshold_sigma=5.0, min_distance=4, aperture_radius=4)
+
+    assert any("SATURATED" in source.flags for source in result.sources)
+    assert all(not source.quality_passed for source in result.sources if "SATURATED" in source.flags)

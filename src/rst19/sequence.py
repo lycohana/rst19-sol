@@ -13,9 +13,11 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 import numpy as np
+from scipy import ndimage
 from scipy.spatial import cKDTree
 
 from .detection import Detection
+from .fits import auxiliary_mask
 from .pipeline import FrameAnalysis, analyze_frame
 
 
@@ -71,6 +73,67 @@ class SourceTrack:
 
 
 @dataclass(frozen=True, slots=True)
+class MotionFeaturePoint:
+    """一帧中被时序/形状规则检出的线状运动候选。"""
+
+    frame_index: int
+    x: float
+    y: float
+    aligned_x: float
+    aligned_y: float
+    residual_snr: float
+    area_pixels: int
+    length_px: float
+    width_px: float
+    angle_deg: float
+    bbox: tuple[int, int, int, int]
+    touches_edge: bool
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "frame_index": self.frame_index,
+            "x": self.x,
+            "y": self.y,
+            "aligned_x": self.aligned_x,
+            "aligned_y": self.aligned_y,
+            "residual_snr": self.residual_snr,
+            "area_pixels": self.area_pixels,
+            "length_px": self.length_px,
+            "width_px": self.width_px,
+            "angle_deg": self.angle_deg,
+            "bbox": list(self.bbox),
+            "touches_edge": self.touches_edge,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class MotionFeatureTrack:
+    """由线状候选跨帧关联得到的运动目标候选轨迹。"""
+
+    track_id: int
+    classification: str
+    points: tuple[MotionFeaturePoint, ...]
+    displacement_px: float
+    speed_px_per_frame: float
+    fit_rms_px: float | None
+
+    @property
+    def presence(self) -> int:
+        return len(self.points)
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "track_id": self.track_id,
+            "classification": self.classification,
+            "presence": self.presence,
+            "displacement_px": self.displacement_px,
+            "speed_px_per_frame": self.speed_px_per_frame,
+            "fit_rms_px": self.fit_rms_px,
+            "points": [point.as_dict() for point in self.points],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class FrameSequenceSummary:
     frame_index: int
     path: str
@@ -99,6 +162,8 @@ class SequenceResult:
     min_presence: int
     motion_min_displacement_px: float
     max_motion_fit_rms_px: float
+    motion_features: tuple[MotionFeatureTrack, ...] = ()
+    motion_residual_threshold_adu: float = 100.0
 
     @property
     def stable_source_count(self) -> int:
@@ -122,9 +187,11 @@ class SequenceResult:
             "min_presence": self.min_presence,
             "motion_min_displacement_px": self.motion_min_displacement_px,
             "max_motion_fit_rms_px": self.max_motion_fit_rms_px,
+            "motion_residual_threshold_adu": self.motion_residual_threshold_adu,
             "frames": [frame.as_dict() for frame in self.frames],
             "cumulative_shifts": [list(shift) for shift in self.cumulative_shifts],
             "tracks": [track.as_dict() for track in self.tracks],
+            "motion_features": [track.as_dict() for track in self.motion_features],
         }
 
 
@@ -183,9 +250,202 @@ def _fit_track(points: Sequence[TrackPoint]) -> tuple[float, float, float | None
     fitted_x = x_slope * time + x_intercept
     fitted_y = y_slope * time + y_intercept
     rms = float(np.sqrt(np.mean((x - fitted_x) ** 2 + (y - fitted_y) ** 2)))
-    displacement = float(np.hypot(x[-1] - x[0], y[-1] - y[0]))
+    # 使用拟合速度在整个观测跨度上的位移，而不是首末两个质心的距离。
+    # 后者会把首帧/末帧一次性的质心抖动误判为持续运动。
+    duration = float(time[-1] - time[0])
+    displacement = float(np.hypot(x_slope * duration, y_slope * duration))
     speed = float(np.hypot(x_slope, y_slope))
     return displacement, speed, rms
+
+
+def _fit_motion_feature_track(points: Sequence[MotionFeaturePoint]) -> tuple[float, float, float | None]:
+    """在线状候选的配准坐标中拟合常速度轨迹。"""
+
+    if len(points) < 2:
+        return 0.0, 0.0, None
+    time = np.array([point.frame_index for point in points], dtype=np.float64)
+    x = np.array([point.aligned_x for point in points], dtype=np.float64)
+    y = np.array([point.aligned_y for point in points], dtype=np.float64)
+    x_slope, x_intercept = np.polyfit(time, x, 1)
+    y_slope, y_intercept = np.polyfit(time, y, 1)
+    fitted_x = x_slope * time + x_intercept
+    fitted_y = y_slope * time + y_intercept
+    rms = float(np.sqrt(np.mean((x - fitted_x) ** 2 + (y - fitted_y) ** 2)))
+    # 与点源轨迹保持同一语义：用拟合速度乘以观测跨度，避免首末帧
+    # 的单次质心/连通域形状抖动改变运动判定。
+    duration = float(time[-1] - time[0])
+    displacement = float(np.hypot(x_slope * duration, y_slope * duration))
+    speed = float(np.hypot(x_slope, y_slope))
+    return displacement, speed, rms
+
+
+def detect_motion_features(
+    frame_analyses: Sequence[FrameAnalysis],
+    cumulative_shifts: Sequence[tuple[float, float]],
+    *,
+    psf_fwhm: float,
+    residual_sigma: float = 15.0,
+    min_residual_adu: float = 100.0,
+    min_feature_area: int = 40,
+    min_axis_ratio: float = 4.0,
+) -> tuple[tuple[MotionFeatureTrack, ...], float]:
+    """从每帧原图中提取长线，再用配准坐标做跨帧关联。
+
+    当前数据中的运动目标不是一个每帧只移动几像素的点，而是高亮、细长的
+    拖影/线状结构。旧的点源质量筛选会正确地拒绝它，但也因此把它完全从
+    运动层抹掉。这里不把它重新塞回星点列表，而是单独建立“线状候选”层：
+    先用原图背景和 RMS 找显著正残差，再用连通域 PCA 排除普通圆点和孤立
+    热像素，最后在已经估计的全局平移坐标中关联。只有跨帧形成稳定轨迹的
+    线状候选才标成 ``moving``；单帧线保留为 ``candidate`` 供人工复核。
+    """
+
+    if not frame_analyses:
+        return (), float(min_residual_adu)
+    if len(cumulative_shifts) != len(frame_analyses):
+        raise ValueError("cumulative_shifts length must match frame_analyses")
+    if psf_fwhm <= 0:
+        raise ValueError("psf_fwhm must be positive")
+
+    min_pixels = max(int(min_feature_area), int(np.ceil(4.0 * psf_fwhm**2)))
+    min_length = max(18.0, 6.0 * psf_fwhm)
+    feature_frames: list[list[MotionFeaturePoint]] = []
+    thresholds: list[float] = []
+
+    for frame_index, (analysis, shift) in enumerate(zip(frame_analyses, cumulative_shifts, strict=True)):
+        values = np.asarray(analysis.frame.data, dtype=np.float32)
+        valid = np.isfinite(values)
+        valid &= ~auxiliary_mask(values.shape)
+        parameters = analysis.detection.parameters
+        if int(parameters.get("mask_zero_pixels", 0)):
+            valid &= values != 0.0
+        saturation_level = float(parameters.get("saturation_level", -1.0))
+        if saturation_level > 0:
+            valid &= values < saturation_level
+        background = float(analysis.detection.background)
+        noise = max(float(analysis.detection.noise), np.finfo(np.float32).eps)
+        threshold = max(float(min_residual_adu), float(residual_sigma) * noise)
+        thresholds.append(threshold)
+        residual = np.where(valid, values - background, 0.0)
+        support = valid & (residual >= threshold)
+        labels, component_count = ndimage.label(support, structure=np.ones((3, 3), dtype=bool))
+        slices = ndimage.find_objects(labels)
+        sizes = ndimage.sum(support, labels, index=np.arange(1, component_count + 1))
+        frame_features: list[MotionFeaturePoint] = []
+        for component_id, size in enumerate(sizes, start=1):
+            if float(size) < min_pixels:
+                continue
+            component_slice = slices[component_id - 1]
+            if component_slice is None:
+                continue
+            ys, xs = component_slice
+            component = labels[component_slice] == component_id
+            local_y, local_x = np.nonzero(component)
+            if local_x.size < 3:
+                continue
+            raw_x = local_x + xs.start
+            raw_y = local_y + ys.start
+            covariance = np.cov(np.column_stack((raw_x, raw_y)), rowvar=False, bias=True)
+            eigenvalues, eigenvectors = np.linalg.eigh(np.atleast_2d(covariance))
+            major_variance = max(0.0, float(eigenvalues[-1]))
+            minor_variance = max(0.0, float(eigenvalues[0]))
+            length_px = 4.0 * np.sqrt(major_variance)
+            width_px = 4.0 * np.sqrt(minor_variance)
+            axis_ratio = np.sqrt(major_variance / max(minor_variance, np.finfo(np.float64).eps))
+            if length_px < min_length or axis_ratio < min_axis_ratio:
+                continue
+            x_min, x_max = int(raw_x.min()), int(raw_x.max())
+            y_min, y_max = int(raw_y.min()), int(raw_y.max())
+            touches_edge = x_min == 0 or y_min == 0 or x_max == values.shape[1] - 1 or y_max == values.shape[0] - 1
+            # 小型边缘横线通常是数组边界/截断异常；保留足够长的真实拖影，
+            # 但不把几十个像素的边缘噪声当成目标。
+            if touches_edge and length_px < max(min_length, 8.0 * psf_fwhm):
+                continue
+            component_values = residual[component_slice][component]
+            weights = np.maximum(component_values.astype(np.float64), 0.0)
+            weight_sum = float(weights.sum())
+            center_x = float(np.average(raw_x, weights=weights)) if weight_sum > 0 else float(raw_x.mean())
+            center_y = float(np.average(raw_y, weights=weights)) if weight_sum > 0 else float(raw_y.mean())
+            major_vector = eigenvectors[:, -1]
+            angle_deg = float(np.degrees(np.arctan2(major_vector[1], major_vector[0])))
+            residual_peak = float(component_values.max())
+            frame_features.append(
+                MotionFeaturePoint(
+                    frame_index=frame_index,
+                    x=center_x,
+                    y=center_y,
+                    aligned_x=center_x - float(shift[0]),
+                    aligned_y=center_y - float(shift[1]),
+                    residual_snr=residual_peak / noise,
+                    area_pixels=int(size),
+                    length_px=float(length_px),
+                    width_px=float(width_px),
+                    angle_deg=angle_deg,
+                    bbox=(x_min, y_min, x_max, y_max),
+                    touches_edge=touches_edge,
+                )
+            )
+        feature_frames.append(frame_features)
+
+    # 当前真实数据中线状目标的帧间位移约为几十像素；半径过小会漏掉，
+    # 过大又会把不同边缘伪迹串成一条轨迹，因此单独使用 96 px 门限。
+    link_radius_px = max(48.0, 32.0 * psf_fwhm)
+    tracks: list[list[MotionFeaturePoint]] = []
+    for frame_index, current in enumerate(feature_frames):
+        if not current:
+            continue
+        possible: list[tuple[float, int, int]] = []
+        for track_index, history in enumerate(tracks):
+            last = history[-1]
+            if last.frame_index != frame_index - 1:
+                continue
+            if len(history) >= 2:
+                previous = history[-2]
+                predicted_x = last.aligned_x + (last.aligned_x - previous.aligned_x)
+                predicted_y = last.aligned_y + (last.aligned_y - previous.aligned_y)
+            else:
+                predicted_x, predicted_y = last.aligned_x, last.aligned_y
+            for source_index, point in enumerate(current):
+                distance = float(np.hypot(point.aligned_x - predicted_x, point.aligned_y - predicted_y))
+                if distance <= link_radius_px:
+                    possible.append((distance, track_index, source_index))
+        possible.sort(key=lambda item: (item[0], item[1], item[2]))
+        assigned_tracks: set[int] = set()
+        assigned_sources: set[int] = set()
+        for _distance, track_index, source_index in possible:
+            if track_index in assigned_tracks or source_index in assigned_sources:
+                continue
+            tracks[track_index].append(current[source_index])
+            assigned_tracks.add(track_index)
+            assigned_sources.add(source_index)
+        for source_index, point in enumerate(current):
+            if source_index not in assigned_sources:
+                tracks.append([point])
+
+    rendered: list[MotionFeatureTrack] = []
+    feature_min_presence = 3
+    feature_min_displacement = max(20.0, 6.0 * psf_fwhm)
+    feature_max_rms = max(4.0, 1.5 * psf_fwhm)
+    for track_id, points in enumerate(tracks):
+        displacement, speed, fit_rms = _fit_motion_feature_track(points)
+        classification = (
+            "moving"
+            if len(points) >= feature_min_presence
+            and displacement >= feature_min_displacement
+            and fit_rms is not None
+            and fit_rms <= feature_max_rms
+            else "candidate"
+        )
+        rendered.append(
+            MotionFeatureTrack(
+                track_id=track_id,
+                classification=classification,
+                points=tuple(points),
+                displacement_px=displacement,
+                speed_px_per_frame=speed,
+                fit_rms_px=fit_rms,
+            )
+        )
+    return tuple(rendered), float(np.median(thresholds)) if thresholds else float(min_residual_adu)
 
 
 def track_detections(
@@ -248,6 +508,11 @@ def track_detections(
         possible: list[tuple[float, int, int]] = []
         for track_index, history in enumerate(tracks):
             last = history[-1]
+            # 严格的连续观测：漏掉一帧就结束旧轨迹，避免把两个不相邻
+            # 的偶然亮点重新串起来；运动候选的独立检测层负责处理短暂
+            # 出现或拖线目标。
+            if last.frame_index != frame_index - 1:
+                continue
             distance, source_index = tree.query((last.aligned_x, last.aligned_y), distance_upper_bound=link_radius_px)
             if np.isfinite(distance) and source_index < len(current):
                 possible.append((float(distance), track_index, int(source_index)))
@@ -332,6 +597,11 @@ def analyze_sequence(
         registration_radius_px=registration_radius_px,
         max_motion_fit_rms_px=max_motion_fit_rms_px,
     )
+    motion_features, motion_threshold = detect_motion_features(
+        analyses,
+        result.cumulative_shifts,
+        psf_fwhm=float(detector_kwargs.get("psf_fwhm", 3.0)),
+    )
     summaries = tuple(
         FrameSequenceSummary(
             frame_index=index,
@@ -350,4 +620,6 @@ def analyze_sequence(
         min_presence=result.min_presence,
         motion_min_displacement_px=result.motion_min_displacement_px,
         max_motion_fit_rms_px=result.max_motion_fit_rms_px,
+        motion_features=motion_features,
+        motion_residual_threshold_adu=motion_threshold,
     )

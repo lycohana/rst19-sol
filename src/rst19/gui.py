@@ -17,7 +17,14 @@ from .cache import cache_key, clear_cache, load_analysis, save_analysis
 from .fits import auxiliary_mask, read_fits
 from .photometry import instrumental_magnitude
 from .pipeline import FrameAnalysis, analyze_frame
-from .sequence import SequenceResult, SourceTrack, TrackPoint, analyze_sequence
+from .sequence import (
+    MotionFeaturePoint,
+    MotionFeatureTrack,
+    SequenceResult,
+    SourceTrack,
+    TrackPoint,
+    analyze_sequence,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_DIR = PROJECT_ROOT / "doc" / "00-项目资料" / "原始数据"
@@ -76,6 +83,23 @@ def moving_points_for_frame(
     )
 
 
+def motion_features_for_frame(
+    result: SequenceResult | None,
+    frame_index: int,
+) -> tuple[tuple[MotionFeatureTrack, MotionFeaturePoint], ...]:
+    """返回当前帧的线状运动候选；静态星点不会进入此层。"""
+
+    if result is None:
+        return ()
+    return tuple(
+        (track, point)
+        for track in result.motion_features
+        if track.classification in {"moving", "candidate"}
+        for point in track.points
+        if point.frame_index == frame_index
+    )
+
+
 class StarfieldApp(tk.Tk):
     """本地星图检测工作台。"""
 
@@ -98,7 +122,10 @@ class StarfieldApp(tk.Tk):
         self.drag_start: tuple[int, int] | None = None
         self.hover_source_id: int | None = None
         self.hover_source: Any | None = None
-        self.hover_motion_track: tuple[SourceTrack, TrackPoint] | None = None
+        self.hover_motion_track: tuple[
+            SourceTrack | MotionFeatureTrack,
+            TrackPoint | MotionFeaturePoint,
+        ] | None = None
         self.source_grid: dict[tuple[int, int], list[Any]] = {}
         self.exposure_s = 1.0
         self.frame_token = 0
@@ -449,7 +476,7 @@ class StarfieldApp(tk.Tk):
         if mode == "motion" and self.sequence_result is None:
             self.status_var.set("尚未完成 15 帧动目标分析 · 请先点击“分析 15 帧动目标”")
         elif mode == "motion":
-            self.status_var.set("运动候选层 · 只显示通过跨帧拟合的 moving 轨迹")
+            self.status_var.set("运动候选层 · 只显示跨帧线状目标、待复核线和严格 moving 点轨迹")
         elif mode == "candidates":
             self.status_var.set("全部候选层 · 包含被质量规则剔除的审计候选")
         self._update_overlay_hint()
@@ -459,7 +486,7 @@ class StarfieldApp(tk.Tk):
         hints = {
             "quality": "滚轮缩放 · 左键拖拽平移    琥珀色点 = 通过质量筛选    绿色环 = 最暗可信源",
             "candidates": "滚轮缩放 · 左键拖拽平移    琥珀色 = 可信源    暗琥珀 = 被剔除候选（仅审计）",
-            "motion": "滚轮缩放 · 左键拖拽平移    蓝色环 = moving 轨迹当前帧位置    不显示静态背景星",
+            "motion": "滚轮缩放 · 左键拖拽平移    蓝线 = 跨帧 moving 线状目标    橙线 = 待复核线    不显示静态背景星",
         }
         self.overlay_hint_var.set(hints.get(self.overlay_mode_var.get(), hints["quality"]))
 
@@ -532,7 +559,7 @@ class StarfieldApp(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
 
     def run_sequence_analysis(self) -> None:
-        """对当前目录的全部 FITS 做跨帧关联，只把严格 moving 轨迹画到界面。"""
+        """对当前目录的全部 FITS 做跨帧关联，单独显示点轨迹和线状目标。"""
 
         if self.busy or not self.frames:
             if not self.frames:
@@ -629,9 +656,12 @@ class StarfieldApp(tk.Tk):
             self.sequence_result = payload
             self.overlay_mode_var.set("motion")
             self._update_overlay_hint()
+            moving_features = sum(track.classification == "moving" for track in payload.motion_features)
+            feature_candidates = sum(track.classification == "candidate" for track in payload.motion_features)
             self.status_var.set(
-                f"15 帧分析完成 · 稳定 {payload.stable_source_count:,} · "
-                f"运动候选 {payload.moving_track_count:,} · 瞬态 {payload.transient_track_count:,}"
+                f"15 帧分析完成 · 稳定点 {payload.stable_source_count:,} · "
+                f"点轨迹 {payload.moving_track_count:,} · 线状目标 {moving_features:,} · "
+                f"待复核线 {feature_candidates:,}"
             )
             self._draw_preview()
         self.after(100, self._poll_result)
@@ -737,6 +767,24 @@ class StarfieldApp(tk.Tk):
                     draw.ellipse((x - 7, y - 7, x + 7, y + 7), outline=SKY_LIGHT, width=2)
                     draw.point((x, y), fill=SKY_LIGHT)
                     self._draw_image_label(draw, f"MOV {track.track_id:04d}", x, y, image.size)
+                feature_points = motion_features_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
+                for track, point in feature_points:
+                    point_x = point.x * self.preview_scale_x
+                    point_y = point.y * self.preview_scale_y
+                    if not (left <= point_x < right and top <= point_y < bottom):
+                        continue
+                    x = (point_x - left) * scale
+                    y = (point_y - top) * scale
+                    half_length = 0.5 * point.length_px * scale
+                    angle = np.deg2rad(point.angle_deg)
+                    dx = np.cos(angle) * half_length * self.preview_scale_x
+                    dy = np.sin(angle) * half_length * self.preview_scale_y
+                    color = SKY_LIGHT if track.classification == "moving" else AMBER_LIGHT
+                    line_width = max(2, int(round(point.width_px * scale)))
+                    draw.line((x - dx, y - dy, x + dx, y + dy), fill=color, width=line_width)
+                    draw.ellipse((x - 6, y - 6, x + 6, y + 6), outline=color, width=2)
+                    label = f"TRAIL {track.track_id:04d}" if track.classification == "moving" else f"TRAIL? {track.track_id:04d}"
+                    self._draw_image_label(draw, label, x, y, image.size)
 
             if self.analysis is not None and mode == "quality" and self.analysis.faintest is not None:
                 faintest = self.analysis.faintest
@@ -767,7 +815,10 @@ class StarfieldApp(tk.Tk):
                     x = (point_x - left) * scale
                     y = (point_y - top) * scale
                     draw.ellipse((x - 10, y - 10, x + 10, y + 10), outline="#f3dfac", width=2)
-                    self._draw_image_label(draw, f"MOV {track.track_id:04d} · {track.displacement_px:.2f}px", x, y, image.size)
+                    if isinstance(point, MotionFeaturePoint):
+                        self._draw_image_label(draw, f"TRAIL {track.track_id:04d} · {point.residual_snr:.1f}σ", x, y, image.size)
+                    else:
+                        self._draw_image_label(draw, f"MOV {track.track_id:04d} · {track.displacement_px:.2f}px", x, y, image.size)
 
         screen_x = origin_x + left * scale
         screen_y = origin_y + top * scale
@@ -846,9 +897,12 @@ class StarfieldApp(tk.Tk):
         screen_radius = 12.0
         best = None
         best_distance = screen_radius * screen_radius
+        quality_only = self.overlay_mode_var.get() == "quality"
         for gx in range(cell_x - 1, cell_x + 2):
             for gy in range(cell_y - 1, cell_y + 2):
                 for source in self.source_grid.get((gx, gy), ()):
+                    if quality_only and not source.quality_passed:
+                        continue
                     point_x = origin_x + source.x * scale_x * scale
                     point_y = origin_y + source.y * scale_y * scale
                     distance = (point_x - event.x) ** 2 + (point_y - event.y) ** 2
@@ -857,7 +911,10 @@ class StarfieldApp(tk.Tk):
                         best_distance = distance
         return best
 
-    def _find_motion_track_at(self, event: tk.Event) -> tuple[SourceTrack, TrackPoint] | None:
+    def _find_motion_track_at(
+        self,
+        event: tk.Event,
+    ) -> tuple[SourceTrack | MotionFeatureTrack, TrackPoint | MotionFeaturePoint] | None:
         if self.preview is None or self.preview_shape is None:
             return None
         frame_index = self._selected_frame_index()
@@ -867,7 +924,7 @@ class StarfieldApp(tk.Tk):
         original_height, original_width = self.preview_shape
         scale_x = self.preview.width / original_width
         scale_y = self.preview.height / original_height
-        best: tuple[SourceTrack, TrackPoint] | None = None
+        best: tuple[SourceTrack | MotionFeatureTrack, TrackPoint | MotionFeaturePoint] | None = None
         best_distance = 12.0 * 12.0
         for track, point in moving_points_for_frame(self.sequence_result, frame_index):
             point_x = origin_x + point.x * scale_x * scale
@@ -876,30 +933,75 @@ class StarfieldApp(tk.Tk):
             if distance <= best_distance:
                 best = (track, point)
                 best_distance = distance
+        for track, point in motion_features_for_frame(self.sequence_result, frame_index):
+            point_x = origin_x + point.x * scale_x * scale
+            point_y = origin_y + point.y * scale_y * scale
+            half_length = 0.5 * point.length_px * scale
+            angle = np.deg2rad(point.angle_deg)
+            dx = np.cos(angle) * half_length * scale_x
+            dy = np.sin(angle) * half_length * scale_y
+            start_x, start_y = point_x - dx, point_y - dy
+            segment_x, segment_y = 2.0 * dx, 2.0 * dy
+            segment_length_sq = segment_x**2 + segment_y**2
+            if segment_length_sq <= 0:
+                distance = (point_x - event.x) ** 2 + (point_y - event.y) ** 2
+            else:
+                projection = ((event.x - start_x) * segment_x + (event.y - start_y) * segment_y) / segment_length_sq
+                projection = min(1.0, max(0.0, projection))
+                closest_x = start_x + projection * segment_x
+                closest_y = start_y + projection * segment_y
+                distance = (closest_x - event.x) ** 2 + (closest_y - event.y) ** 2
+            hit_radius = max(12.0, 0.5 * point.width_px * scale + 4.0)
+            if distance <= hit_radius**2 and distance <= best_distance:
+                best = (track, point)
+                best_distance = distance
         return best
 
     def _on_canvas_motion(self, event: tk.Event) -> None:
         if self.overlay_mode_var.get() == "motion":
             track_point = self._find_motion_track_at(event)
-            track_id = track_point[0].track_id if track_point is not None else None
-            previous_id = self.hover_motion_track[0].track_id if self.hover_motion_track is not None else None
-            if track_id == previous_id:
+            track_key = (
+                ("feature", track_point[0].track_id)
+                if track_point is not None and isinstance(track_point[1], MotionFeaturePoint)
+                else ("point", track_point[0].track_id)
+                if track_point is not None
+                else None
+            )
+            previous_key = (
+                ("feature", self.hover_motion_track[0].track_id)
+                if self.hover_motion_track is not None and isinstance(self.hover_motion_track[1], MotionFeaturePoint)
+                else ("point", self.hover_motion_track[0].track_id)
+                if self.hover_motion_track is not None
+                else None
+            )
+            if track_key == previous_key:
                 return
             self.hover_motion_track = track_point
             self.hover_source = None
             self.hover_source_id = None
             if track_point is None:
-                self.hover_info_var.set("运动层只显示跨帧拟合通过的 moving 轨迹；将鼠标移到蓝色环查看轨迹信息")
+                self.hover_info_var.set("运动层只显示跨帧线状候选和严格 moving 点轨迹；将鼠标移到蓝线或橙线查看信息")
             else:
                 track, point = track_point
-                fit_text = f"{track.fit_rms_px:.3f}px" if track.fit_rms_px is not None else "—"
-                snr_text = f"{point.flux_snr:.1f}" if point.flux_snr is not None else "—"
-                self.hover_info_var.set(
-                    f"MOV {track.track_id:04d}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
-                    f"X {point.x:.1f}  Y {point.y:.1f}  ·  flux SNR {snr_text}  ·  "
-                    f"位移 {track.displacement_px:.2f}px  ·  速度 {track.speed_px_per_frame:.3f}px/frame  ·  "
-                    f"拟合 RMS {fit_text}  ·  出现 {track.presence} 帧"
-                )
+                if isinstance(point, MotionFeaturePoint):
+                    fit_text = f"{track.fit_rms_px:.2f}px" if track.fit_rms_px is not None else "—"
+                    state_text = "moving" if track.classification == "moving" else "单帧候选"
+                    self.hover_info_var.set(
+                        f"TRAIL {track.track_id:04d}  ·  {state_text}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
+                        f"X {point.x:.1f}  Y {point.y:.1f}  ·  residual SNR {point.residual_snr:.1f}  ·  "
+                        f"长度 {point.length_px:.1f}px  / 宽度 {point.width_px:.1f}px  ·  "
+                        f"角度 {point.angle_deg:.1f}°  ·  位移 {track.displacement_px:.1f}px  ·  "
+                        f"拟合 RMS {fit_text}  ·  出现 {track.presence} 帧"
+                    )
+                else:
+                    fit_text = f"{track.fit_rms_px:.3f}px" if track.fit_rms_px is not None else "—"
+                    snr_text = f"{point.flux_snr:.1f}" if point.flux_snr is not None else "—"
+                    self.hover_info_var.set(
+                        f"MOV {track.track_id:04d}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
+                        f"X {point.x:.1f}  Y {point.y:.1f}  ·  flux SNR {snr_text}  ·  "
+                        f"位移 {track.displacement_px:.2f}px  ·  速度 {track.speed_px_per_frame:.3f}px/frame  ·  "
+                        f"拟合 RMS {fit_text}  ·  出现 {track.presence} 帧"
+                    )
             self._draw_preview()
             return
         source = self._find_source_at(event)
@@ -922,7 +1024,7 @@ class StarfieldApp(tk.Tk):
         self._draw_preview()
 
     def _clear_hover(self) -> None:
-        if self.hover_source_id is None:
+        if self.hover_source_id is None and self.hover_motion_track is None:
             return
         self.hover_source_id = None
         self.hover_source = None

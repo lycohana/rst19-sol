@@ -12,7 +12,9 @@ from .detection import Detection, DetectionResult
 from .fits import FitsFrame
 from .photometry import FaintestSource
 
-CACHE_VERSION = 2
+# 几何孔径的 MASKED/SATURATED 判定和线状伪迹质量语义发生过变化；
+# 旧缓存不能继续冒充当前检测结果，必须自动失效并重新计算。
+CACHE_VERSION = 3
 CACHE_SUFFIXES = {".gz", ".json", ".tmp"}
 
 

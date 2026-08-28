@@ -11,7 +11,16 @@ from .fits import FitsError, decode_auxiliary, read_fits
 from .matching import CatalogMatch, MatchResult, match_detections
 from .models import AuxiliaryData, FitsFrame
 from .photometry import FaintestSource, find_faintest_source, instrumental_magnitude
-from .sequence import SequenceResult, SourceTrack, TrackPoint, analyze_sequence, track_detections
+from .sequence import (
+    MotionFeaturePoint,
+    MotionFeatureTrack,
+    SequenceResult,
+    SourceTrack,
+    TrackPoint,
+    analyze_sequence,
+    detect_motion_features,
+    track_detections,
+)
 from .wcs import TangentPlaneWCS
 
 __all__ = [
@@ -26,9 +35,12 @@ __all__ = [
     "MatchResult",
     "TangentPlaneWCS",
     "SequenceResult",
+    "MotionFeaturePoint",
+    "MotionFeatureTrack",
     "SourceTrack",
     "TrackPoint",
     "analyze_sequence",
+    "detect_motion_features",
     "decode_auxiliary",
     "detect_sources",
     "find_faintest_source",

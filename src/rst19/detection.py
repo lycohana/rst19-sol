@@ -354,7 +354,8 @@ def _source_from_peak(
     patch_mask = mask[y0:y1, x0:x1] | ~np.isfinite(patch)
     yy, xx = np.indices(patch.shape, dtype=np.float64)
     distance = np.sqrt((xx + x0 - x_peak) ** 2 + (yy + y0 - y_peak) ** 2)
-    aperture = (distance <= aperture_radius) & ~patch_mask
+    geometric_aperture = distance <= aperture_radius
+    aperture = geometric_aperture & ~patch_mask
     annulus = (distance >= aperture_radius + 2) & (distance <= outer_radius) & ~patch_mask
     annulus_values = patch[annulus]
     fallback_background = float(background_map[y_peak, x_peak])
@@ -403,14 +404,16 @@ def _source_from_peak(
     flags: list[str] = []
     if x0 == 0 or y0 == 0 or x1 == width or y1 == height:
         flags.append("EDGE")
-    if patch_mask[aperture].any():
+    if patch_mask[geometric_aperture].any():
         flags.append("MASKED")
-    if line_artifact_mask is not None and line_artifact_mask[y0:y1, x0:x1][aperture].any():
+    if saturation_level is not None and np.any(
+        geometric_aperture & np.isfinite(patch) & (patch >= saturation_level)
+    ):
+        flags.append("SATURATED")
+    if line_artifact_mask is not None and line_artifact_mask[y0:y1, x0:x1][geometric_aperture].any():
         flags.append("LINE_ARTIFACT")
     if not annulus_is_usable:
         flags.append("BACKGROUND_UNCERTAIN")
-    if saturation_level is not None and np.any(aperture & np.isfinite(patch) & (patch >= saturation_level)):
-        flags.append("SATURATED")
     if net_flux <= 0:
         flags.append("NON_POSITIVE_FLUX")
     if not np.isfinite(flux_snr) or flux_snr < min_flux_snr:
