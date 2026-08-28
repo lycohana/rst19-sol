@@ -299,7 +299,20 @@ class StarfieldApp(tk.Tk):
         self.canvas.bind("<Motion>", self._on_canvas_motion)
         self.canvas.bind("<Leave>", lambda _event: self._clear_hover())
         self.hover_info_var = tk.StringVar(value="将鼠标移到候选点查看坐标、通量、误差、SNR、形状和仪器星等")
-        tk.Label(viewer, textvariable=self.hover_info_var, bg=PAPER_LIGHT, fg=INK_SOFT, font=(MONO, 8), anchor="w").pack(fill="x", padx=16, pady=(0, 4))
+        self.hover_info_label = tk.Label(
+            viewer,
+            textvariable=self.hover_info_var,
+            bg=PAPER_LIGHT,
+            fg=INK_SOFT,
+            font=(MONO, 8),
+            anchor="w",
+            justify="left",
+            width=1,
+            height=2,
+            wraplength=640,
+        )
+        self.hover_info_label.pack(fill="x", padx=16, pady=(0, 4))
+        viewer.bind("<Configure>", self._on_viewer_configure)
         self.overlay_hint_var = tk.StringVar(value="滚轮缩放 · 左键拖拽平移    琥珀色点 = 通过质量筛选    绿色环 = 最暗可信源")
         tk.Label(viewer, textvariable=self.overlay_hint_var, bg=PAPER_LIGHT, fg=INK_SOFT, font=(MONO, 8), anchor="w").pack(anchor="w", padx=16, pady=(0, 13))
 
@@ -449,6 +462,11 @@ class StarfieldApp(tk.Tk):
             "motion": "滚轮缩放 · 左键拖拽平移    蓝色环 = moving 轨迹当前帧位置    不显示静态背景星",
         }
         self.overlay_hint_var.set(hints.get(self.overlay_mode_var.get(), hints["quality"]))
+
+    def _on_viewer_configure(self, event: tk.Event) -> None:
+        """让悬浮信息栏随 viewer 换行，不用长文本撑大右侧布局。"""
+
+        self.hover_info_label.config(wraplength=max(240, int(event.width) - 32))
 
     def run_analysis(self) -> None:
         if self.busy or self.selected_frame is None:
