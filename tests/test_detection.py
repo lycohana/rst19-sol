@@ -506,9 +506,10 @@ def test_repeated_high_code_audit_uses_full_frame_frequency() -> None:
 
 
 def test_code_pattern_rejects_a_local_high_code_and_negative_pair() -> None:
+    # 候选峰本身落在全幅异常重复的高位码上，且孔径还含远离背景的负值，
+    # 才构成 CODE_PATTERN。这里把峰值直接设为重复码 3991。
     image = np.full((64, 64), 20, dtype=np.int16)
-    image[32, 32] = 1_000
-    image[32, 31] = 3991
+    image[32, 32] = 3_991
     image[31, 32] = -20_000
     mask = np.zeros(image.shape, dtype=bool)
     background = np.full(image.shape, 20.0)
@@ -552,10 +553,58 @@ def test_code_pattern_rejects_a_local_high_code_and_negative_pair() -> None:
     assert not source.quality_passed
 
 
+def test_code_pattern_does_not_reject_bright_peak_with_bleed_codes() -> None:
+    # 真实首帧的亮星会在饱和/溢出出血列里同时带入 3991/3992 等重复码
+    # 和 -20628 这类负值，但峰值仍是一个正常高亮度值（如 20893）。这种
+    # 星点不能被 CODE_PATTERN 误拒：只有峰值本身落在重复码上才算。
+    image = np.full((64, 64), 20, dtype=np.int16)
+    image[32, 32] = 20_893
+    image[32, 31] = 3_991
+    image[31, 32] = -20_628
+    mask = np.zeros(image.shape, dtype=bool)
+    background = np.full(image.shape, 20.0)
+    noise = np.full(image.shape, 2.0)
+
+    source = _source_from_peak(
+        image.astype(np.float64),
+        mask,
+        None,
+        32,
+        32,
+        background,
+        noise,
+        aperture_radius=4,
+        saturation_level=None,
+        filter_snr=20.0,
+        min_flux_snr=2.0,
+        min_fwhm=0.8,
+        max_fwhm=12.0,
+        max_ellipticity=0.65,
+        min_sharpness=0.005,
+        max_sharpness=0.85,
+        min_footprint_pixels=2,
+        min_psf_support_pixels=3,
+        gain_e_per_adu=None,
+        read_noise_adu=0.0,
+        refine_local_background=True,
+        psf_fwhm=2.0,
+        proposal_methods=("gaussian",),
+        proposal_scales=(2.0,),
+        proposal_snr=20.0,
+        nearest_gaussian_px=None,
+        dog_blend_radius_px=5.0,
+        negative_overflow_limit=-29_490.3,
+        repeated_high_code_values=(3991,),
+    )
+
+    assert source.repeated_code_count == 1
+    assert source.range_anomaly_pixel_count == 1
+    assert "CODE_PATTERN" not in source.flags
+
+
 def test_code_pattern_does_not_count_masked_negative_pixels() -> None:
     image = np.full((64, 64), 20, dtype=np.int16)
-    image[32, 32] = 1_000
-    image[32, 31] = 3991
+    image[32, 32] = 3_991
     image[31, 32] = -20_000
     mask = np.zeros(image.shape, dtype=bool)
     mask[31, 32] = True

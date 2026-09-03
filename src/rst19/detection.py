@@ -1297,7 +1297,15 @@ def _source_from_peak(
             & (patch <= local_range_pattern_limit)
         )
     )
-    code_pattern = bool(repeated_code_count > 0 and range_anomaly_pixel_count > 0)
+    # CODE_PATTERN 只拒绝“候选峰本身坐落在全幅异常重复高位码上、且孔径
+    # 还含远离背景的负值”的检测；它不应因为孔径内恰好含有高位码就拒绝
+    # 正常亮星。真实首帧中，亮星的饱和/溢出出血列会把 3991/3992 等重复
+    # 码和 -20628 这类负值同时带进孔径，但峰值仍是一个正常的高亮度值；
+    # 若把“孔径内含有重复码”当作充分条件，就会把这些亮星误标为数据编码
+    # 伪迹。只有峰值本身落在重复码上（此时它通常还紧邻一个更强的真源），
+    # 才判定为 CODE_PATTERN。
+    peak_is_repeated_code = bool(repeated_code_values) and int(round(peak)) in repeated_code_values
+    code_pattern = bool(peak_is_repeated_code and range_anomaly_pixel_count > 0)
     flags: list[str] = []
     if x0 == 0 or y0 == 0 or x1 == width or y1 == height:
         flags.append("EDGE")

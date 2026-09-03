@@ -258,7 +258,7 @@ FLAG_REASON_LABELS = {
     "PARTIAL_MASKED": "孔径内有少量精确零值坏像素，已按剩余有效像素保留",
     "SATURATED": "孔径内含饱和像素",
     "NEGATIVE_OVERFLOW": "孔径内含接近有符号整型下限的极端负码，疑似溢出/饱和邻域",
-    "CODE_PATTERN": "孔径同时含全幅异常重复高位码和远离背景的负值，数据有效性不足",
+    "CODE_PATTERN": "候选峰本身落在全幅异常重复高位码上，且孔径含远离背景的负值，数据有效性不足",
     "LINE_ARTIFACT": "落在线状伪影或亮线区域",
     "BACKGROUND_UNCERTAIN": "背景环可用像素不足，背景估计不确定",
     "NON_POSITIVE_FLUX": "背景扣除后的净通量非正",
