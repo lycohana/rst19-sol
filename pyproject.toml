@@ -22,7 +22,21 @@ dev = [
 [project.scripts]
 rst19 = "rst19.cli:main"
 rst19-gui = "rst19.gui:main"
+rst19-ui = "rst19.gui:main"
 rst19-sequence = "rst19.sequence_cli:main"
+rst19-innovation = "rst19.innovation_cli:main"
+rst19-injection = "rst19.injection_cli:main"
+rst19-sweep = "rst19.sweep_cli:main"
+rst19-trails = "rst19.trail_cli:main"
+rst19-sources = "rst19.source_cli:main"
+rst19-feature-sequence = "rst19.feature_sequence_cli:main"
+rst19-pair-audit = "rst19.pair_audit_cli:main"
+rst19-multipsf-audit = "rst19.multipsf_cli:main"
+rst19-free-multipsf-audit = "rst19.free_multipsf_cli:main"
+rst19-temporal-codes = "rst19.temporal_code_cli:main"
+rst19-feature-cross = "rst19.feature_cross_cli:main"
+rst19-wcs-validation = "rst19.wcs_validation_cli:main"
+rst19-aux-audit = "rst19.attitude_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

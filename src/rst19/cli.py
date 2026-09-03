@@ -30,6 +30,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--aperture-radius", type=int, default=4, help="通量估计半径（pixel）")
     parser.add_argument("--max-sources", type=int, help="最多保留的检测源数")
     parser.add_argument("--psf-fwhm", type=float, default=3.0, help="Gaussian 点扩散函数 FWHM（pixel）")
+    parser.add_argument("--proposal-mode", choices=("gaussian", "hybrid", "ensemble"), default="hybrid", help="宽筛选提案：Gaussian、Gaussian+DoG，或再加入 starlet 小波")
+    parser.add_argument("--dog-threshold-sigma", type=float, help="DoG 提案阈值；默认 max(6σ, Gaussian+2σ)")
+    parser.add_argument("--dog-min-peak-sigma", type=float, default=2.0, help="DoG 候选在原始残差图上的最低正峰显著性")
+    parser.add_argument("--starlet-threshold-sigma", type=float, help="starlet 响应阈值；默认 max(7σ, Gaussian+3σ)")
+    parser.add_argument("--starlet-min-peak-sigma", type=float, default=2.5, help="starlet 候选在原始残差图上的最低正峰显著性")
+    parser.add_argument("--enable-local-deblend", action="store_true", help="启用强主峰残差双源去混叠；较慢，默认关闭")
     parser.add_argument("--background-box-size", type=int, default=128, help="局部背景/RMS 统计块大小（pixel）")
     parser.add_argument("--min-flux-snr", type=float, default=5.0, help="可信星点的孔径通量 SNR 下限")
     parser.add_argument("--min-fwhm", type=float, default=0.8, help="可信点源的 FWHM 下限（pixel）")
@@ -38,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-sharpness", type=float, default=0.005, help="点源 sharpness 下限")
     parser.add_argument("--max-sharpness", type=float, default=0.85, help="尖峰伪迹 sharpness 上限")
     parser.add_argument("--min-footprint-pixels", type=int, default=2, help="点源孔径内超过 1 RMS 的最少像素数")
+    parser.add_argument("--min-psf-support-pixels", type=int, default=3, help="候选峰中心 3×3 内超过 PSF 支持阈值的最少像素数")
     parser.add_argument("--gain-e-per-adu", type=float, help="可选 CCD 增益（electron/ADU）")
     parser.add_argument("--read-noise-adu", type=float, default=0.0, help="读出噪声（ADU）")
     parser.add_argument("--keep-zero-pixels", action="store_true", help="不把整数图像中的精确 0 自动标记为无效像素")
@@ -83,6 +90,12 @@ def main(argv: list[str] | None = None) -> int:
             aperture_radius=args.aperture_radius,
             max_sources=args.max_sources,
             psf_fwhm=args.psf_fwhm,
+            proposal_mode=args.proposal_mode,
+            dog_threshold_sigma=args.dog_threshold_sigma,
+            dog_min_peak_sigma=args.dog_min_peak_sigma,
+            starlet_threshold_sigma=args.starlet_threshold_sigma,
+            starlet_min_peak_sigma=args.starlet_min_peak_sigma,
+            enable_local_deblend=args.enable_local_deblend,
             background_box_size=args.background_box_size,
             min_flux_snr=args.min_flux_snr,
             min_fwhm=args.min_fwhm,
@@ -91,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             min_sharpness=args.min_sharpness,
             max_sharpness=args.max_sharpness,
             min_footprint_pixels=args.min_footprint_pixels,
+            min_psf_support_pixels=args.min_psf_support_pixels,
             gain_e_per_adu=args.gain_e_per_adu,
             read_noise_adu=args.read_noise_adu,
             mask_zero_pixels=False if args.keep_zero_pixels else None,
