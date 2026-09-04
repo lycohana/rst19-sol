@@ -2540,6 +2540,170 @@ def _stack_forced_frame_measure(
     return flux_snr, support, True, fwhm, ellipticity
 
 
+def _stack_forced_frame_measure_batch(
+    image: np.ndarray,
+    mask: np.ndarray,
+    xs: np.ndarray,
+    ys: np.ndarray,
+    *,
+    aperture_radius: int,
+    min_psf_support_pixels: int,
+    global_background: float,
+    global_noise: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """向量化的单帧强制测光，等价于对每个坐标调用 ``_stack_forced_frame_measure``。
+
+    输入 ``xs/ys`` 为同长度的原始坐标数组；返回逐源的
+    ``(flux_snr, support, center_valid, fwhm, ellipticity)`` 数组，口径与
+    标量版本一致。相比逐个候选调用标量函数，这里把 4096² 背景环、孔径
+    通量、二阶矩和 3×3 支持全部做成按坐标广播的数组运算，减少数万次
+    Python 调用与重复的小数组分配。
+
+    局部环背景用一次稳健中位数/MAD/标准差估计：对干净背景环（绝大多数
+    弱源的情形）与 ``sigma_clipped_stats`` 的首轮结果一致；极少数被近邻
+    污染时会退回全局背景/噪声，再由调用方的出现帧数门槛吸收。
+    """
+
+    count = int(xs.size)
+    if count == 0:
+        return (
+            np.empty(0, dtype=np.float64),
+            np.empty(0, dtype=np.int16),
+            np.empty(0, dtype=bool),
+            np.empty(0, dtype=np.float64),
+            np.empty(0, dtype=np.float64),
+        )
+    xs = np.asarray(xs, dtype=np.float64)
+    ys = np.asarray(ys, dtype=np.float64)
+    outer = int(aperture_radius) + 4
+    side = 2 * outer + 1
+    pad = outer
+    height, width = image.shape
+    # 图像用 NaN 填充边界，掩膜用 True（无效）填充边界；这样边缘候选的
+    # 孔径自然失去边界外的像素，无需逐源裁剪分支。
+    padded = np.pad(np.asarray(image, dtype=np.float64), pad, mode="constant", constant_values=np.nan)
+    padded_mask = np.pad(np.asarray(mask, dtype=bool), pad, mode="constant", constant_values=True)
+
+    floor_x = np.floor(xs).astype(np.intp)
+    floor_y = np.floor(ys).astype(np.intp)
+    dx_sub = xs - floor_x
+    dy_sub = ys - floor_y
+
+    # 相对整数中心的偏移网格：元素 (py, px) 相对中心的偏移为
+    # (py - outer, px - outer)。
+    oy = np.arange(side, dtype=np.float64)[:, None] - outer  # (side, 1)
+    ox = np.arange(side, dtype=np.float64)[None, :] - outer  # (1, side)
+    distance = np.hypot(
+        ox[None, :, :] - dx_sub[:, None, None],
+        oy[None, :, :] - dy_sub[:, None, None],
+    )
+    aperture = distance <= float(aperture_radius)
+    annulus = (distance > float(aperture_radius) + 1.0) & (distance <= float(outer))
+
+    row_base = floor_y[:, None, None] + pad  # (count,1,1) -> padded rows
+    col_base = floor_x[:, None, None] + pad
+    rows = row_base + (np.arange(side, dtype=np.intp)[None, :, None] - outer)
+    cols = col_base + (np.arange(side, dtype=np.intp)[None, None, :] - outer)
+    patches = padded[rows, cols]  # (count, side, side)
+    patch_mask = padded_mask[rows, cols] | ~np.isfinite(patches)
+
+    aperture &= ~patch_mask
+    annulus &= ~patch_mask
+    annulus_count = annulus.sum(axis=(1, 2))
+    # 迭代式稳健裁剪，与标量版的 sigma_clipped_stats 对齐：首轮求中位数
+    # 和 MAD，按 3×MAD 保留像素，再重算；对干净背景环，后续迭代无变化，
+    # 对亮星翼部/近邻污染则逐步剔除异常值。固定三轮，向量化完成。
+    annulus_values = np.where(annulus, patches, np.nan)
+    working = annulus_values
+    annulus_median = np.full(count, np.nan, dtype=np.float64)
+    annulus_mad = np.full(count, np.nan, dtype=np.float64)
+    annulus_std = np.full(count, np.nan, dtype=np.float64)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        for _ in range(3):
+            center = np.nanmedian(working, axis=(1, 2))
+            deviation = np.abs(working - center[:, None, None])
+            scale = 1.4826 * np.nanmedian(deviation, axis=(1, 2))
+            keep = np.isfinite(working) & (deviation <= 3.0 * scale[:, None, None])
+            kept_all = keep.all(axis=(1, 2))
+            annulus_median = np.where(np.isfinite(center), center, annulus_median)
+            annulus_mad = np.where(np.isfinite(scale), scale, annulus_mad)
+            std = np.sqrt(np.nanmean((working - center[:, None, None]) ** 2, axis=(1, 2)))
+            annulus_std = np.where(np.isfinite(std), std, annulus_std)
+            if np.all(kept_all):
+                break
+            working = np.where(keep, working, np.nan)
+    local_noise = np.maximum.reduce(
+        (
+            annulus_mad,
+            annulus_std,
+            np.full(count, np.finfo(np.float64).eps),
+        )
+    )
+    usable_annulus = annulus_count >= 8
+    local_background = np.where(usable_annulus, annulus_median, float(global_background))
+    local_noise = np.where(usable_annulus, local_noise, max(float(global_noise), np.finfo(np.float64).eps))
+    # 局部环被亮星翼部抬高时退回全局噪声，与标量版本一致。
+    inflated = local_noise > 3.0 * max(float(global_noise), np.finfo(np.float64).eps)
+    local_noise = np.where(inflated, max(float(global_noise), np.finfo(np.float64).eps), local_noise)
+    local_noise = np.maximum(local_noise, np.finfo(np.float64).eps)
+
+    residual = patches - local_background[:, None, None]
+    # 边缘候选的 patch 含 NaN 填充；NaN * False 仍为 NaN，会污染求和。
+    # 用 np.where 只在有效孔径内取残差，等价于标量版的 ``residual[aperture]``。
+    aperture_residual = np.where(aperture, residual, 0.0)
+    net_flux = aperture_residual.sum(axis=(1, 2))
+    aperture_pixels = aperture.sum(axis=(1, 2))
+    background_pixels = np.maximum(annulus_count, 1).astype(np.float64)
+    background_variance = aperture_pixels * local_noise**2
+    background_variance += (aperture_pixels**2 / background_pixels) * local_noise**2
+    flux_error = np.sqrt(np.maximum(background_variance, np.finfo(np.float64).eps))
+    flux_snr = net_flux / flux_error
+
+    positive = np.where(aperture, np.maximum(residual, 0.0), 0.0)
+    positive_sum = positive.sum(axis=(1, 2))
+    valid_shape = positive_sum > 0
+    safe_sum = np.where(valid_shape, positive_sum, 1.0)
+    shape_x = (positive * (cols - pad)).sum(axis=(1, 2)) / safe_sum
+    shape_y = (positive * (rows - pad)).sum(axis=(1, 2)) / safe_sum
+    variance_x = (positive * ((cols - pad) - shape_x[:, None, None]) ** 2).sum(axis=(1, 2)) / safe_sum
+    variance_y = (positive * ((rows - pad) - shape_y[:, None, None]) ** 2).sum(axis=(1, 2)) / safe_sum
+    fwhm_x = 2.35482 * np.sqrt(np.maximum(variance_x, 0.0))
+    fwhm_y = 2.35482 * np.sqrt(np.maximum(variance_y, 0.0))
+    fwhm = 2.35482 * np.sqrt(np.maximum((variance_x + variance_y) / 2.0, 0.0))
+    ellipticity = np.abs(fwhm_x - fwhm_y) / np.maximum.reduce((fwhm_x, fwhm_y, np.full(count, np.finfo(np.float64).eps)))
+    fwhm = np.where(valid_shape & np.isfinite(fwhm) & (fwhm > 0), fwhm, np.nan)
+    ellipticity = np.where(valid_shape & np.isfinite(ellipticity), ellipticity, np.nan)
+
+    # 中心有效性：整数舍入后的中心像素，与标量版本一致。
+    center_ix = np.rint(xs).astype(np.intp)
+    center_iy = np.rint(ys).astype(np.intp)
+    center_valid = ~padded_mask[center_iy + pad, center_ix + pad] & np.isfinite(padded[center_iy + pad, center_ix + pad])
+    center_patch_y = center_iy - floor_y + outer
+    center_patch_x = center_ix - floor_x + outer
+    peak_excess = np.maximum(patches[np.arange(count), center_patch_y, center_patch_x] - local_background, 0.0)
+    support_threshold = np.maximum(2.0 * local_noise, 0.1 * peak_excess)
+    core_offsets = np.array(
+        [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 0), (0, 1), (1, -1), (1, 0), (1, 1)],
+        dtype=np.intp,
+    )
+    support = np.zeros(count, dtype=np.int16)
+    for dy, dx in core_offsets:
+        core_y = center_patch_y + dy
+        core_x = center_patch_x + dx
+        valid_core = (
+            (core_y >= 0)
+            & (core_y < side)
+            & (core_x >= 0)
+            & (core_x < side)
+            & ~patch_mask[np.arange(count), core_y, core_x]
+        )
+        support += (
+            valid_core
+            & (residual[np.arange(count), core_y, core_x] >= support_threshold)
+        ).astype(np.int16)
+    return flux_snr, support, center_valid, fwhm, ellipticity
+
+
 def _stack_faint_tracks(
     frame_analyses: Sequence[FrameAnalysis],
     cumulative_shifts: Sequence[tuple[float, float]],
@@ -2557,6 +2721,8 @@ def _stack_faint_tracks(
     link_radius_px: float,
     existing_tracks: Sequence[SourceTrack],
     audit_sink: MutableMapping[str, int] | None = None,
+    workers: int = DEFAULT_SEQUENCE_WORKERS,
+    chunk_size: int = 8_192,
 ) -> tuple[SourceTrack, ...]:
     """从注册中值/稳健叠加参考图恢复单帧漏掉的暗星。
 
@@ -2602,6 +2768,7 @@ def _stack_faint_tracks(
             proposal_mode=proposal_mode,
             refine_local_background=False,
             use_float32=True,
+            fast_sequence=True,
             mask_zero_pixels=False,
             allow_partial_zero_mask=False,
         )
@@ -2639,63 +2806,135 @@ def _stack_faint_tracks(
     frame_backgrounds = tuple(float(analysis.detection.background) for analysis in frame_analyses)
     frame_noises = tuple(float(analysis.detection.noise) for analysis in frame_analyses)
 
-    rendered: list[SourceTrack] = []
-    for candidate in stack_candidates:
-        ref_x = float(candidate.peak_x if candidate.peak_x is not None else candidate.x)
-        ref_y = float(candidate.peak_y if candidate.peak_y is not None else candidate.y)
-        if tree is not None:
-            distance, _index = tree.query((ref_x, ref_y), k=1)
-            if np.isfinite(distance) and float(distance) <= float(link_radius_px):
-                if audit_sink is not None:
-                    audit_sink["reject_stack_explained"] = audit_sink.get("reject_stack_explained", 0) + 1
-                continue
-        points: list[TrackPoint] = []
-        frame_flux_snrs: list[float] = []
-        for frame_index, (image, mask, background, noise, shift) in enumerate(
-            zip(
-                frame_images,
-                frame_masks,
-                frame_backgrounds,
-                frame_noises,
-                cumulative_shifts,
-                strict=True,
-            )
-        ):
-            raw_x = ref_x + float(shift[0])
-            raw_y = ref_y + float(shift[1])
-            flux_snr, support, center_valid, fwhm, ellipticity = _stack_forced_frame_measure(
+    ref_xs = np.asarray(
+        [float(candidate.peak_x if candidate.peak_x is not None else candidate.x) for candidate in stack_candidates],
+        dtype=np.float64,
+    )
+    ref_ys = np.asarray(
+        [float(candidate.peak_y if candidate.peak_y is not None else candidate.y) for candidate in stack_candidates],
+        dtype=np.float64,
+    )
+    filter_snrs = np.asarray(
+        [float(candidate.filter_snr) if candidate.filter_snr is not None else np.nan for candidate in stack_candidates],
+        dtype=np.float64,
+    )
+    # 去重：一次性查询所有候选到“已解释位置”的最近距离，而不是逐个查询。
+    explained_mask = np.zeros(len(stack_candidates), dtype=bool)
+    if tree is not None:
+        distances, _indices = tree.query(np.column_stack((ref_xs, ref_ys)), k=1)
+        explained_mask = np.isfinite(distances) & (distances <= float(link_radius_px))
+    if audit_sink is not None:
+        audit_sink["reject_stack_explained"] = int(explained_mask.sum())
+    keep = ~explained_mask
+    kept_xs = ref_xs[keep]
+    kept_ys = ref_ys[keep]
+    kept_filter_snrs = filter_snrs[keep]
+    kept_candidates = [candidate for candidate, is_kept in zip(stack_candidates, keep, strict=True) if is_kept]
+    if kept_xs.size == 0:
+        return ()
+
+    # 逐帧向量化强制测光：每一帧只做一次按坐标广播的数组计算，再按帧并行。
+    # 对约 4.9 万个候选 × 15 帧，标量版本需要约 73 万次 Python 调用；这里
+    # 降到每帧一次（内部再分块），峰值内存可控。
+    frame_count = len(frame_analyses)
+    chunk_size = max(1, int(chunk_size))
+
+    def measure_frame(
+        item: tuple[int, np.ndarray, np.ndarray, float, float, tuple[float, float]],
+    ) -> tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        frame_index, image, mask, background, noise, shift = item
+        raw_x = kept_xs + float(shift[0])
+        raw_y = kept_ys + float(shift[1])
+        flux_snr_parts: list[np.ndarray] = []
+        support_parts: list[np.ndarray] = []
+        center_valid_parts: list[np.ndarray] = []
+        fwhm_parts: list[np.ndarray] = []
+        ellipticity_parts: list[np.ndarray] = []
+        for start in range(0, kept_xs.size, chunk_size):
+            stop = min(kept_xs.size, start + chunk_size)
+            chunk_flux, chunk_support, chunk_valid, chunk_fwhm, chunk_ell = _stack_forced_frame_measure_batch(
                 image,
                 mask,
-                raw_x,
-                raw_y,
+                raw_x[start:stop],
+                raw_y[start:stop],
                 aperture_radius=aperture_radius,
                 min_psf_support_pixels=min_psf_support_pixels,
-                psf_fwhm=psf_fwhm,
                 global_background=background,
                 global_noise=noise,
             )
+            flux_snr_parts.append(chunk_flux)
+            support_parts.append(chunk_support)
+            center_valid_parts.append(chunk_valid)
+            fwhm_parts.append(chunk_fwhm)
+            ellipticity_parts.append(chunk_ell)
+        return (
+            frame_index,
+            np.concatenate(flux_snr_parts) if flux_snr_parts else np.empty(0, dtype=np.float64),
+            np.concatenate(support_parts) if support_parts else np.empty(0, dtype=np.int16),
+            np.concatenate(center_valid_parts) if center_valid_parts else np.empty(0, dtype=bool),
+            np.concatenate(fwhm_parts) if fwhm_parts else np.empty(0, dtype=np.float64),
+            np.concatenate(ellipticity_parts) if ellipticity_parts else np.empty(0, dtype=np.float64),
+        )
+
+    work_items = tuple(
+        (
+            frame_index,
+            frame_images[frame_index],
+            frame_masks[frame_index],
+            frame_backgrounds[frame_index],
+            frame_noises[frame_index],
+            cumulative_shifts[frame_index],
+        )
+        for frame_index in range(frame_count)
+    )
+    worker_count = min(max(1, int(workers)), frame_count)
+    if worker_count == 1:
+        measurements = list(map(measure_frame, work_items))
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="rst19-stack") as executor:
+            measurements = list(executor.map(measure_frame, work_items))
+    measurements.sort(key=lambda item: item[0])
+    frame_flux = [item[1] for item in measurements]
+    frame_support = [item[2] for item in measurements]
+    frame_center_valid = [item[3] for item in measurements]
+    frame_fwhm = [item[4] for item in measurements]
+    frame_ellipticity = [item[5] for item in measurements]
+
+    rendered: list[SourceTrack] = []
+    for candidate_index, candidate in enumerate(kept_candidates):
+        ref_x = float(kept_xs[candidate_index])
+        ref_y = float(kept_ys[candidate_index])
+        points: list[TrackPoint] = []
+        frame_flux_snrs: list[float] = []
+        for frame_index in range(frame_count):
+            flux_snr = frame_flux[frame_index][candidate_index]
+            support = int(frame_support[frame_index][candidate_index])
+            center_valid = bool(frame_center_valid[frame_index][candidate_index])
+            fwhm = frame_fwhm[frame_index][candidate_index]
+            ellipticity = frame_ellipticity[frame_index][candidate_index]
             if not center_valid:
                 continue
             if support < min_psf_support_pixels:
                 continue
-            if flux_snr is None or not np.isfinite(flux_snr) or flux_snr < float(stack_frame_min_flux_snr):
+            if not np.isfinite(flux_snr) or flux_snr < float(stack_frame_min_flux_snr):
                 continue
-            if fwhm is None or not 0.8 <= fwhm <= 12.0:
+            if not np.isfinite(fwhm) or not 0.8 <= fwhm <= 12.0:
                 continue
-            if ellipticity is None or ellipticity > 0.65:
+            if not np.isfinite(ellipticity) or ellipticity > 0.65:
                 continue
+            shift_x, shift_y = cumulative_shifts[frame_index]
             points.append(
                 TrackPoint(
                     frame_index=int(frame_index),
                     detection_id=-1,
-                    x=float(raw_x),
-                    y=float(raw_y),
+                    x=float(ref_x + shift_x),
+                    y=float(ref_y + shift_y),
                     aligned_x=ref_x,
                     aligned_y=ref_y,
                     flux_snr=float(flux_snr),
                     quality_passed=False,
-                    candidate_snr=float(candidate.filter_snr)
-                    if candidate.filter_snr is not None
+                    candidate_snr=float(kept_filter_snrs[candidate_index])
+                    if np.isfinite(kept_filter_snrs[candidate_index])
                     else float(flux_snr),
                 )
             )
@@ -2706,10 +2945,7 @@ def _stack_faint_tracks(
             continue
         # 少数帧被亮星翼部抬噪导致的低 flux_snr 可以吸收；要求多数出现帧
         # 有正的稳定通量，避免只凭 3×3 支持就把固定纹理算成星。
-        if frame_flux_snrs:
-            median_frame_flux_snr = float(np.median(frame_flux_snrs))
-        else:
-            median_frame_flux_snr = 0.0
+        median_frame_flux_snr = float(np.median(frame_flux_snrs)) if frame_flux_snrs else 0.0
         if median_frame_flux_snr < float(stack_frame_min_flux_snr):
             if audit_sink is not None:
                 audit_sink["reject_stack_flux_snr"] = audit_sink.get("reject_stack_flux_snr", 0) + 1
@@ -3082,6 +3318,7 @@ def analyze_sequence(
             link_radius_px=link_radius_px,
             existing_tracks=all_tracks,
             audit_sink=stack_audit,
+            workers=sequence_workers,
         )
         stack_faint_candidate_count = int(stack_audit.get("stack_reference_quality_sources", 0))
         if stack_reference is not temporal_reference:

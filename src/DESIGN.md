@@ -305,3 +305,7 @@ GUI 现在为每个 FITS 帧同时保留三种观察图：增强显示（轻度�
 ### 2026-09-03 - 增加叠加暗星恢复层
 
 `sequence.py` 新增 `_stack_faint_tracks` 与 `_stack_forced_frame_measure`：对 15 帧注册时间中值（或稳健均值）参考图按降噪后的噪声底重新检测（默认 `4σ`、`flux_snr≥5`、float32 快速路径），再回到每帧原图做 `±1 px` 局部峰强制测光、`3×3` 支持、形状与边缘/掩膜审计，要求达到 `persistent` 出现帧数且逐帧放宽 `flux_snr≥3`。结果单独计入 `SequenceResult.stack_faint_count`（`evidence_level="stack_faint"`），不与 `persistent_source_count`/`stable_source_count`/单帧 `quality_count` 混写；`SEQUENCE_CACHE_VERSION` 升至 35。GUI 新增“叠加暗星 · 待复核”图层，CLI 增加 `--no-stack-faint` 等开关。这修正了旧“肉眼可见亮点是单帧噪声”的结论：它们是噪声底压住的真实暗星，只能靠叠加降噪 + 逐帧强制测光恢复。
+
+### 2026-09-03 - 叠加暗星层向量化与并发加速
+
+`_stack_faint_tracks` 的逐帧强制测光由“逐候选调用标量 `_stack_forced_frame_measure`”改为 `_stack_forced_frame_measure_batch`：单帧内所有候选的背景环、孔径通量、二阶矩、`3×3` 支持全部按坐标广播成数组运算，内部按 `chunk_size` 分块控制峰值内存；再按帧用 `ThreadPoolExecutor` 并发（`workers` 复用序列 `sequence_workers`）。标量版与批量版在内部源上 `flux_snr/fwhm/ellipticity` 相对误差 `<1e-3`，`support/center_valid` 完全一致（近边缘差异来自 NaN 填充 vs 裁剪）。本机 15 帧全流程由约 `450 s` 降到约 `310 s`，其中逐帧强制测光由标量主导降到约 `22 s`；`stack_faint` 计数由 `9,857` 变为 `9,814`（`−0.4%`）。

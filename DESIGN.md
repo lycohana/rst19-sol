@@ -366,4 +366,6 @@ GUI 增加“可信星点 / 全部候选 / 运动候选”三种叠加层和“�
 
 在 `sequence.py` 增加 `_stack_faint_tracks`：对注册后的 15 帧时间中值（或稳健均值）参考图，用参考图自身降噪后的噪声底以 `4σ`、`flux_snr≥5` 重新检测，再回到每帧原始图做 `±1 px` 局部峰强制测光、`3×3` 支持、形状和边缘/掩膜审计，要求达到 `persistent` 出现帧数且逐帧放宽 `flux_snr≥3`。结果标为 `evidence_level="stack_faint"`、`classification="persistent"`，单独计为 `stack_faint_count`，不与 `persistent_source_count`、`stable_source_count` 或单帧 `quality_count` 混写；GUI 新增“叠加暗星 · 待复核”图层，`rst19-sequence` 默认开启、可用 `--no-stack-faint` 关闭。这修正了 8.41 的旧结论：那些亮星邻域的“肉眼可见亮点”不是噪声，而是单帧噪声底压住的真实暗星，只能通过降噪叠加 + 逐帧强制测光恢复，不能靠无差别调低单帧阈值。方法依据见 [最优图像叠加检测](http://arxiv.org/pdf/astro-ph/9310031) 和 [proper image subtraction](https://ar5iv.labs.arxiv.org/html/1601.02655)。
 
+逐帧强制测光已向量化（`_stack_forced_frame_measure_batch`，按 `chunk_size` 分块）并按帧用 `ThreadPoolExecutor` 并发；本机 15 帧全流程由约 `450 s` 降到约 `310 s`，`stack_faint` 计数 `9,857→9,814`（`−0.4%`）。
+
 新增规则专门保护“宽筛召回、质量确认、物理身份”三层边界；它不按峰数或外部 `18,000` 示例裁剪，也不把本组的两个候选直接宣称为两颗星。固定/自由多源结果及局部像素证据见 `doc/02-星图识别/检测器实验记录.md` 8.38 和 `doc/02-星图识别/亮点真实性与伪影判别研究.md` 10.25。

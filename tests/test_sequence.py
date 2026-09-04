@@ -18,6 +18,7 @@ from rst19.sequence import (
     _registered_median_reference,
     _stack_faint_tracks,
     _stack_forced_frame_measure,
+    _stack_forced_frame_measure_batch,
     _temporal_psf_fwhm_bank,
     _temporal_reference_candidate_frames,
     audit_fixed_sentinel,
@@ -1020,6 +1021,46 @@ def _faint_quality_source() -> Detection:
         peak_x=24.0,
         peak_y=24.0,
     )
+
+
+def test_stack_forced_frame_measure_batch_matches_scalar_on_interior_sources() -> None:
+    rng = np.random.default_rng(77)
+    image = rng.normal(20.0, 3.0, size=(96, 96)).astype(np.float32)
+    yy, xx = np.indices(image.shape, dtype=np.float64)
+    for cx0, cy0, sigma, amplitude in ((24.0, 24.0, 1.2, 10.0), (50.0, 50.0, 1.2, 8.0), (60.0, 30.0, 1.2, 12.0)):
+        image += (amplitude * np.exp(-0.5 * ((xx - cx0) ** 2 + (yy - cy0) ** 2) / sigma**2)).astype(np.float32)
+    mask = np.zeros(image.shape, dtype=bool)
+    xs = np.array([24.0, 50.0, 60.0])
+    ys = np.array([24.0, 50.0, 30.0])
+
+    batch = _stack_forced_frame_measure_batch(
+        image,
+        mask,
+        xs,
+        ys,
+        aperture_radius=4,
+        min_psf_support_pixels=3,
+        global_background=20.0,
+        global_noise=3.0,
+    )
+
+    for index, (x, y) in enumerate(zip(xs, ys, strict=True)):
+        scalar = _stack_forced_frame_measure(
+            image,
+            mask,
+            x,
+            y,
+            aperture_radius=4,
+            min_psf_support_pixels=3,
+            psf_fwhm=2.0,
+            global_background=20.0,
+            global_noise=3.0,
+        )
+        assert batch[0][index] == pytest.approx(scalar[0], rel=1e-3)
+        assert batch[1][index] == scalar[1]
+        assert batch[2][index] == scalar[2]
+        assert batch[3][index] == pytest.approx(scalar[3], rel=1e-3)
+        assert batch[4][index] == pytest.approx(scalar[4], rel=1e-3)
 
 
 def test_stack_forced_frame_measure_detects_faint_point_source() -> None:
