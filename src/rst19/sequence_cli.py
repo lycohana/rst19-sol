@@ -91,6 +91,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="时序补提案逐帧 Gaussian 形状相关系数下限；默认 0.8，作为细筛证据",
     )
     parser.add_argument(
+        "--no-stack-faint",
+        action="store_true",
+        help="关闭叠加参考图暗星恢复层；默认开启，结果记入 stack_faint_count",
+    )
+    parser.add_argument(
+        "--stack-reference-mode",
+        choices=("median", "coadd"),
+        default="median",
+        help="叠加参考图模式：时间中值或稳健均值；默认 median",
+    )
+    parser.add_argument(
+        "--stack-threshold-sigma",
+        type=float,
+        default=4.0,
+        help="叠加参考图检测候选阈值；默认 4.0，作用于降噪后的参考图",
+    )
+    parser.add_argument(
+        "--stack-min-flux-snr",
+        type=float,
+        default=5.0,
+        help="叠加参考图质量源通量 SNR 下限；默认 5.0",
+    )
+    parser.add_argument(
+        "--stack-frame-min-flux-snr",
+        type=float,
+        default=3.0,
+        help="叠加候选回到逐帧原图强制测光时的放宽通量 SNR 下限；默认 3.0",
+    )
+    parser.add_argument(
+        "--stack-min-presence",
+        type=int,
+        help="叠加暗星至少出现的帧数；默认跟随 persistent 门槛",
+    )
+    parser.add_argument(
         "--float64",
         action="store_true",
         help="禁用整数 FITS 序列的 float32 中间阵列，使用 float64 做对照",
@@ -139,6 +173,12 @@ def main(argv: list[str] | None = None) -> int:
             temporal_reference_min_snr=args.temporal_reference_min_snr,
             temporal_multiscale=args.temporal_multiscale,
             temporal_min_psf_correlation=args.temporal_min_psf_correlation,
+            stack_faint_recovery=not args.no_stack_faint,
+            stack_reference_mode=args.stack_reference_mode,
+            stack_threshold_sigma=args.stack_threshold_sigma,
+            stack_min_flux_snr=args.stack_min_flux_snr,
+            stack_frame_min_flux_snr=args.stack_frame_min_flux_snr,
+            stack_min_presence=args.stack_min_presence,
             use_float32=not args.float64,
             reject_linear_artifacts=not args.keep_linear_artifacts,
         )

@@ -97,6 +97,7 @@ STAR_POINT_REJECTED = "#d889ff"
 STATIC_STAR_POINT = "#5ff5d2"
 PERSISTENT_STAR_POINT = "#8bdcff"
 TEMPORAL_STAR_POINT = "#b89cff"
+STACK_FAINT_POINT = "#7ad0a8"
 MOTION_TRAIL = "#ff3bd4"
 MOTION_CANDIDATE = "#ef7d45"
 FORECAST = "#82d3b5"
@@ -408,6 +409,29 @@ def stable_points_for_frame(
         (track, point)
         for track in result.tracks
         if track.classification in {"static", "persistent"}
+        and track.evidence_level != "stack_faint"
+        for point in track.points
+        if point.frame_index == frame_index
+    )
+
+
+def stack_faint_points_for_frame(
+    result: SequenceResult | None,
+    frame_index: int,
+) -> tuple[tuple[SourceTrack, TrackPoint], ...]:
+    """返回当前帧中由叠加参考图恢复的暗星轨迹点。
+
+    这些点来自 15 帧注册中值/稳健叠加的降噪参考图，经逐帧强制测光确认
+    后标为 ``evidence_level="stack_faint"``。它们是单帧质量门下的低置信
+    补充层，不能与严格静态/持续候选或官方逐星真值混写。
+    """
+
+    if result is None:
+        return ()
+    return tuple(
+        (track, point)
+        for track in result.tracks
+        if track.evidence_level == "stack_faint"
         for point in track.points
         if point.frame_index == frame_index
     )
@@ -869,6 +893,24 @@ class StarfieldApp(tk.Tk):
             size=8,
             bg=PAPER_LIGHT,
         ).pack(side="left", padx=(5, 0))
+        stack_faint_row = tk.Frame(controls, bg=PAPER_LIGHT)
+        stack_faint_row.pack(fill="x", padx=15, pady=(5, 0))
+        self._mono_label(stack_faint_row, "叠加暗星恢复", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(side="left", padx=(0, 8))
+        self.stack_faint_recovery_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(
+            stack_faint_row,
+            text="15帧叠加恢复暗星（默认开）",
+            variable=self.stack_faint_recovery_var,
+            command=self._mark_manual_tuning_dirty,
+            bg=PAPER_LIGHT,
+            fg=INK,
+            activebackground=PAPER_LIGHT,
+            activeforeground=NAVY_DARK,
+            selectcolor=PAPER,
+            font=(MONO, 8),
+            highlightthickness=0,
+            bd=0,
+        ).pack(side="left")
         proposal_note = tk.Frame(controls, bg=PAPER_LIGHT)
         proposal_note.pack(fill="x", padx=15, pady=(2, 0))
         self._mono_label(
@@ -1068,7 +1110,7 @@ class StarfieldApp(tk.Tk):
         mode_box.pack(side="right", anchor="s")
         self.overlay_mode_var = tk.StringVar(value="quality")
         self._mono_label(mode_box, "OVERLAY", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(anchor="e")
-        choices = (("quality", "可信星点"), ("stable", "稳定星场"), ("candidates", "全部候选"), ("motion", "运动候选"), ("catalog", "星表匹配"))
+        choices = (("quality", "可信星点"), ("stable", "稳定星场"), ("stack-faint", "叠加暗星"), ("candidates", "全部候选"), ("motion", "运动候选"), ("catalog", "星表匹配"))
         choice_row = tk.Frame(mode_box, bg=PAPER_LIGHT)
         choice_row.pack(anchor="e", pady=(3, 0))
         for value, label in choices:
@@ -1659,6 +1701,21 @@ class StarfieldApp(tk.Tk):
                 f"稳定星场层 · {frame_text} 显示 {visible_count:,} 个点 · "
                 "绿色=严格静态，青色=滤波共识，紫色=时间中值补检"
             )
+        elif mode == "stack-faint":
+            if self.sequence_result is None:
+                self.status_var.set("尚未完成 15 帧分析 · 叠加暗星层需要跨帧降噪参考图")
+            else:
+                frame_index = self._sequence_frame_index()
+                visible_count = (
+                    len(stack_faint_points_for_frame(self.sequence_result, frame_index))
+                    if frame_index is not None
+                    else 0
+                )
+                frame_text = f"F{frame_index + 1:02d}" if frame_index is not None else "当前帧"
+                self.status_var.set(
+                    f"叠加暗星层 · {frame_text} 显示 {visible_count:,} 个点 · "
+                    "绿灰=叠加恢复的暗星，经逐帧强制测光确认，非官方逐星真值"
+                )
         elif mode == "motion":
             if self.sequence_result is None:
                 self.status_var.set("单帧长轨迹层 · 当前橙线只是形状候选，需跨帧才能确认运动目标")
@@ -1684,6 +1741,7 @@ class StarfieldApp(tk.Tk):
             "quality": f"{display_note} · 滚轮缩放≤15× · 高亮青点 = Gaussian质量源 · 亮黄点 = 补充算法质量源 · 绿色环 = 最暗可信源",
             "candidates": f"{display_note} · 滚轮缩放≤15× · 青点 = Gaussian质量源 · 黄点 = 补充算法质量源 · 紫红点 = 被剔除候选（悬停查看原因）",
             "stable": f"{display_note} · 亮青绿点 = 严格静态源 · 亮蓝点 = 持续源候选 · 该层是序列工作集，不等于全图恒星总数",
+            "stack-faint": f"{display_note} · 绿灰点 = 叠加参考图恢复的暗星 · 经逐帧强制测光确认 · 低置信待复核，非官方逐星真值",
             "motion": f"{display_note} · 滚轮缩放≤15× · 洋红线 = 跨帧 moving 候选 · 青绿虚线 = 末帧 +5 帧图像平面外推 · 橙线 = 单帧/待复核",
             "catalog": f"{display_note} · 滚轮缩放≤15× · 高亮青点 = 图像检测位置 · 绿色环 = 星表预测位置 · 仅用于身份核验",
         }
@@ -2084,6 +2142,8 @@ class StarfieldApp(tk.Tk):
             messagebox.showerror("参数错误", "15帧参考 SNR 应在 0 至 15σ 之间")
             return
         sequence_full = bool(self.sequence_full_var.get())
+        stack_faint_recovery = bool(self.stack_faint_recovery_var.get())
+        stack_reference_mode = temporal_proposal_mode if temporal_proposal_mode in {"median", "coadd"} else "median"
         self.catalog_analysis = None
         self.catalog_match_result = None
         self.catalog_wcs = None
@@ -2109,6 +2169,11 @@ class StarfieldApp(tk.Tk):
             "temporal_multiscale": GUI_DEFAULT_TEMPORAL_MULTISCALE,
             "temporal_min_psf_correlation": GUI_DEFAULT_TEMPORAL_MIN_PSF_CORRELATION,
             "temporal_proposal_mode": temporal_proposal_mode,
+            "stack_faint_recovery": stack_faint_recovery,
+            "stack_reference_mode": stack_reference_mode,
+            "stack_threshold_sigma": GUI_DEFAULT_THRESHOLD_SIGMA,
+            "stack_min_flux_snr": GUI_DEFAULT_MIN_FLUX_SNR,
+            "stack_frame_min_flux_snr": 3.0,
             "zero_point": zero_point,
             "psf_fwhm": psf_fwhm,
             "background_box_size": 256,
@@ -2181,6 +2246,8 @@ class StarfieldApp(tk.Tk):
                             value, label = 84.0, "全量候选跨帧共识"
                         elif stage == "temporal-coadd":
                             value, label = 84.0, "构建多帧稳健叠加提案"
+                        elif stage == "stack-faint":
+                            value, label = 85.0, "叠加参考图暗星恢复"
                         elif stage == "motion-detail":
                             value = 84.0 + 10.0 * max(0, min(100, index)) / max(1, total)
                             label = f"线状筛选 · {index}%"
@@ -2215,6 +2282,11 @@ class StarfieldApp(tk.Tk):
                         temporal_multiscale=GUI_DEFAULT_TEMPORAL_MULTISCALE,
                         temporal_min_psf_correlation=GUI_DEFAULT_TEMPORAL_MIN_PSF_CORRELATION,
                         temporal_proposal_mode=temporal_proposal_mode,
+                        stack_faint_recovery=stack_faint_recovery,
+                        stack_reference_mode=stack_reference_mode,
+                        stack_threshold_sigma=GUI_DEFAULT_THRESHOLD_SIGMA,
+                        stack_min_flux_snr=GUI_DEFAULT_MIN_FLUX_SNR,
+                        stack_frame_min_flux_snr=3.0,
                         zero_point=zero_point,
                         psf_fwhm=psf_fwhm,
                         min_flux_snr=min_flux_snr,
@@ -2666,6 +2738,7 @@ class StarfieldApp(tk.Tk):
             self.status_var.set(
                 f"{cache_state} · {len(result.frames)} 帧分析完成 · 严格静态 {result.stable_source_count:,} · "
                 f"持续候选 {result.persistent_source_count:,} · "
+                f"叠加暗星 {result.stack_faint_count:,} · "
                 f"点轨迹 {result.moving_track_count:,} · 线状目标 {moving_features:,} · "
                 f"待复核线 {feature_candidates:,} · 当前显示稳定星场 · "
                 f"配准工作集 {'≤' + format(result.source_working_limit, ',') if result.source_working_limit is not None else '全量'}"
@@ -2832,13 +2905,13 @@ class StarfieldApp(tk.Tk):
             lines = [
                 f"{len(frames)} 帧 · {size_text} · {duration_text} · Δt {interval_text}",
                 f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集前 {result.source_working_limit:,}" if result.source_working_limit is not None else f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集全量",
-                f"配准 {shift_norm:.2f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}）",
+                f"配准 {shift_norm:.2f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}）",
             ]
         else:
             lines = [
                 f"{len(frames)} 帧 · {size_text} · {duration_text} · Δt {interval_text} · 曝光 {exposure_text}",
                 f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集前 {result.source_working_limit:,}" if result.source_working_limit is not None else f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集全量",
-                f"配准末端 {shift_norm:.3f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · 线状 {group_text}",
+                f"配准末端 {shift_norm:.3f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · 线状 {group_text}",
             ]
         if fixed_audit_text:
             lines.append(fixed_audit_text)
@@ -3425,6 +3498,7 @@ class StarfieldApp(tk.Tk):
         relation_line = (
             f"{timing_text} · 静态配准最大位移 {max_shift:.3f} px · "
             f"严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · "
+            f"叠加暗星 {result.stack_faint_count:,} · "
             f"补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · "
             f"点源 moving {result.moving_track_count:,} · "
             f"点源工作集 {'≤' + format(result.source_working_limit, ',') if result.source_working_limit is not None else '全量'}"
@@ -5363,6 +5437,42 @@ class StarfieldApp(tk.Tk):
                     )
                     draw.point((center_x, center_y), fill=marker_color)
 
+            if mode == "stack-faint" and self.sequence_result is not None:
+                frame_index = self._sequence_frame_index()
+                faint_points = stack_faint_points_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
+                marker_radius = max(1, min(4, int(round(max(1.0, scale) * 0.8))))
+                for _track, point in faint_points:
+                    point_x = point.x * self.preview_scale_x
+                    point_y = point.y * self.preview_scale_y
+                    if not (left <= point_x < right and top <= point_y < bottom):
+                        continue
+                    x = (point_x - left) * scale
+                    y = (point_y - top) * scale
+                    center_x = int(round(x))
+                    center_y = int(round(y))
+                    draw.ellipse(
+                        (
+                            center_x - marker_radius - 1,
+                            center_y - marker_radius - 1,
+                            center_x + marker_radius + 1,
+                            center_y + marker_radius + 1,
+                        ),
+                        outline=NAVY_DARK,
+                        width=2,
+                    )
+                    draw.ellipse(
+                        (
+                            center_x - marker_radius,
+                            center_y - marker_radius,
+                            center_x + marker_radius,
+                            center_y + marker_radius,
+                        ),
+                        fill=STACK_FAINT_POINT if marker_radius == 1 else None,
+                        outline=STACK_FAINT_POINT,
+                        width=max(1, min(2, marker_radius)),
+                    )
+                    draw.point((center_x, center_y), fill=STACK_FAINT_POINT)
+
             if mode == "motion":
                 frame_index = self._sequence_frame_index()
                 motion_points = moving_points_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
@@ -5449,7 +5559,7 @@ class StarfieldApp(tk.Tk):
                         y,
                         image.size,
                     )
-            if mode in {"motion", "stable"} and self.hover_motion_track is not None:
+            if mode in {"motion", "stable", "stack-faint"} and self.hover_motion_track is not None:
                 track, point = self.hover_motion_track
                 point_x = point.x * self.preview_scale_x
                 point_y = point.y * self.preview_scale_y
@@ -5459,6 +5569,14 @@ class StarfieldApp(tk.Tk):
                     draw.ellipse((x - 10, y - 10, x + 10, y + 10), outline="#f3dfac", width=2)
                     if isinstance(point, MotionFeaturePoint):
                         self._draw_image_label(draw, f"TRAIL {track.track_id:04d} · {point.residual_snr:.1f}σ", x, y, image.size)
+                    elif mode == "stack-faint":
+                        self._draw_image_label(
+                            draw,
+                            f"FAINT {track.track_id:04d} · {track.presence}/{len(self.sequence_result.frames) if self.sequence_result is not None else '?'}F",
+                            x,
+                            y,
+                            image.size,
+                        )
                     else:
                         stable_label = (
                             "STATIC"
@@ -5756,6 +5874,29 @@ class StarfieldApp(tk.Tk):
                 best_distance = distance
         return best
 
+    def _find_stack_faint_track_at(self, event: tk.Event) -> tuple[SourceTrack, TrackPoint] | None:
+        """Find the nearest stack-faint recovered source for the overlay layer."""
+
+        if self.preview is None or self.preview_shape is None or self.sequence_result is None:
+            return None
+        frame_index = self._sequence_frame_index()
+        if frame_index is None:
+            return None
+        scale, origin_x, origin_y, _ = self._view_transform()
+        original_height, original_width = self.preview_shape
+        scale_x = self.preview.width / original_width
+        scale_y = self.preview.height / original_height
+        best: tuple[SourceTrack, TrackPoint] | None = None
+        best_distance = 12.0 * 12.0
+        for track, point in stack_faint_points_for_frame(self.sequence_result, frame_index):
+            point_x = origin_x + point.x * scale_x * scale
+            point_y = origin_y + point.y * scale_y * scale
+            distance = (point_x - event.x) ** 2 + (point_y - event.y) ** 2
+            if distance <= best_distance:
+                best = (track, point)
+                best_distance = distance
+        return best
+
     def _find_catalog_match_at(self, event: tk.Event) -> Any | None:
         """在星表核验层按检测点或目录预测点寻找最近匹配。"""
 
@@ -5841,6 +5982,41 @@ class StarfieldApp(tk.Tk):
                 self.hover_info_var.set(
                     f"{state_text} {track.track_id:04d}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
                     f"X {point.x:.1f} Y {point.y:.1f}  ·  {snr_label} {snr_text}  ·  "
+                    f"持续 {track.presence}/{frame_total} 帧  ·  配准后位移 {track.displacement_px:.2f}px  ·  "
+                    f"拟合 RMS {track.fit_rms_px:.3f}px"
+                )
+            self._draw_preview()
+            return
+        if self.overlay_mode_var.get() == "stack-faint":
+            track_point = self._find_stack_faint_track_at(event)
+            track_key = ("stack-faint", track_point[0].track_id) if track_point is not None else None
+            previous_key = (
+                ("stack-faint", self.hover_motion_track[0].track_id)
+                if self.hover_motion_track is not None
+                and not isinstance(self.hover_motion_track[1], MotionFeaturePoint)
+                and self.hover_motion_track[0].evidence_level == "stack_faint"
+                else None
+            )
+            if track_key == previous_key:
+                return
+            self.hover_motion_track = track_point
+            self.hover_source = None
+            self.hover_source_id = None
+            self.hover_catalog_match = None
+            if track_point is None:
+                self.hover_info_var.set("叠加暗星层只显示叠加参考图恢复、并经逐帧强制测光确认的暗星；将鼠标移到绿灰点查看证据")
+            else:
+                track, point = track_point
+                if point.flux_snr is not None:
+                    snr_text = f"{point.flux_snr:.1f}"
+                elif point.candidate_snr is not None:
+                    snr_text = f"{point.candidate_snr:.1f}"
+                else:
+                    snr_text = "—"
+                frame_total = len(self.sequence_result.frames)
+                self.hover_info_var.set(
+                    f"叠加暗星 {track.track_id:04d}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
+                    f"X {point.x:.1f} Y {point.y:.1f}  ·  逐帧 flux SNR {snr_text}  ·  "
                     f"持续 {track.presence}/{frame_total} 帧  ·  配准后位移 {track.displacement_px:.2f}px  ·  "
                     f"拟合 RMS {track.fit_rms_px:.3f}px"
                 )

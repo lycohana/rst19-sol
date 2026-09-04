@@ -15,6 +15,9 @@ from rst19.sequence import (
     TrackPoint,
     _candidate_consensus_tracks,
     _registered_coadd_reference,
+    _registered_median_reference,
+    _stack_faint_tracks,
+    _stack_forced_frame_measure,
     _temporal_psf_fwhm_bank,
     _temporal_reference_candidate_frames,
     audit_fixed_sentinel,
@@ -939,6 +942,7 @@ def test_analyze_sequence_reports_frame_and_stage_progress(monkeypatch: pytest.M
         ("frame", 2, 2),
         ("sentinel-audit", 2, 2),
         ("registration", 2, 2),
+        ("stack-faint", 2, 2),
         ("consensus", 2, 2),
         ("motion-detail", 0, 100),
         ("motion-detail", 100, 100),
@@ -968,3 +972,200 @@ def test_analyze_sequence_reports_frame_and_stage_progress(monkeypatch: pytest.M
     )
     assert all(call.get("max_sources") is None for call in detector_calls)
     assert full_result.source_working_limit is None
+
+
+def _faint_frame_analysis(
+    frame_index: int,
+    *,
+    star: bool = True,
+    noise: float = 3.0,
+    background: float = 20.0,
+) -> FrameAnalysis:
+    rng = np.random.default_rng(10_000 + frame_index)
+    image = rng.normal(background, noise, size=(48, 48)).astype(np.float32)
+    if star:
+        yy, xx = np.indices(image.shape, dtype=np.float64)
+        sigma = 1.2
+        image += (10.0 * np.exp(-0.5 * ((xx - 24.0) ** 2 + (yy - 24.0) ** 2) / sigma**2)).astype(np.float32)
+    detection = DetectionResult(
+        image_shape=image.shape,
+        background=background,
+        noise=noise,
+        threshold=background + 4.0 * noise,
+        candidate_count=0,
+        sources=(),
+        parameters={"mask_zero_pixels": 0, "saturation_level": -1.0, "aperture_radius": 4},
+        quality_count=0,
+    )
+    frame = FitsFrame(Path(f"faint-{frame_index}.fits"), {}, image, None, 0)
+    return FrameAnalysis(frame, detection, None, None)
+
+
+def _faint_quality_source() -> Detection:
+    return Detection(
+        detection_id=1,
+        x=24.0,
+        y=24.0,
+        peak=30.0,
+        flux=90.0,
+        background=20.0,
+        noise=3.0,
+        snr=10.0,
+        fwhm=2.8,
+        flags=(),
+        flux_error=25.0,
+        flux_snr=3.6,
+        filter_snr=12.0,
+        quality_passed=True,
+        peak_x=24.0,
+        peak_y=24.0,
+    )
+
+
+def test_stack_forced_frame_measure_detects_faint_point_source() -> None:
+    analysis = _faint_frame_analysis(0)
+    flux_snr, support, center_valid, fwhm, ellipticity = _stack_forced_frame_measure(
+        np.asarray(analysis.frame.data),
+        np.zeros(analysis.frame.data.shape, dtype=bool),
+        24.0,
+        24.0,
+        aperture_radius=4,
+        min_psf_support_pixels=3,
+        psf_fwhm=2.0,
+        global_background=float(analysis.detection.background),
+        global_noise=float(analysis.detection.noise),
+    )
+
+    assert flux_snr is not None and flux_snr > 3.0
+    assert support >= 3
+    assert center_valid is True
+    assert fwhm is not None and 0.8 <= fwhm <= 12.0
+    assert ellipticity is not None and ellipticity <= 0.65
+
+
+def test_stack_faint_tracks_recovers_persistent_faint_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    frames = tuple(_faint_frame_analysis(index) for index in range(3))
+    reference = np.full((48, 48), 20.0, dtype=np.float64)
+    faint_source = _faint_quality_source()
+    fake_detection = DetectionResult(
+        image_shape=reference.shape,
+        background=20.0,
+        noise=1.5,
+        threshold=26.0,
+        candidate_count=1,
+        sources=(faint_source,),
+        parameters={},
+        quality_count=1,
+    )
+    monkeypatch.setattr(sequence_module, "detect_sources", lambda *_args, **_kwargs: fake_detection)
+
+    tracks = _stack_faint_tracks(
+        frames,
+        ((0.0, 0.0),) * len(frames),
+        reference,
+        threshold_sigma=4.0,
+        min_distance=4,
+        aperture_radius=4,
+        psf_fwhm=2.0,
+        min_flux_snr=5.0,
+        min_psf_support_pixels=3,
+        proposal_mode="gaussian",
+        stack_frame_min_flux_snr=3.0,
+        min_presence=3,
+        link_radius_px=4.0,
+        existing_tracks=(),
+    )
+
+    assert len(tracks) == 1
+    assert tracks[0].evidence_level == "stack_faint"
+    assert tracks[0].classification == "persistent"
+    assert tracks[0].presence == 3
+
+
+def test_stack_faint_tracks_deduplicates_explained_position(monkeypatch: pytest.MonkeyPatch) -> None:
+    frames = tuple(_faint_frame_analysis(index) for index in range(3))
+    reference = np.full((48, 48), 20.0, dtype=np.float64)
+    fake_detection = DetectionResult(
+        image_shape=reference.shape,
+        background=20.0,
+        noise=1.5,
+        threshold=26.0,
+        candidate_count=1,
+        sources=(_faint_quality_source(),),
+        parameters={},
+        quality_count=1,
+    )
+    monkeypatch.setattr(sequence_module, "detect_sources", lambda *_args, **_kwargs: fake_detection)
+    explained = SourceTrack(
+        track_id=0,
+        classification="static",
+        points=(
+            TrackPoint(
+                frame_index=0,
+                detection_id=9,
+                x=24.0,
+                y=24.0,
+                aligned_x=24.0,
+                aligned_y=24.0,
+                flux_snr=20.0,
+            ),
+        ),
+        displacement_px=0.0,
+        speed_px_per_frame=0.0,
+        fit_rms_px=0.1,
+        evidence_level="quality",
+    )
+
+    tracks = _stack_faint_tracks(
+        frames,
+        ((0.0, 0.0),) * len(frames),
+        reference,
+        threshold_sigma=4.0,
+        min_distance=4,
+        aperture_radius=4,
+        psf_fwhm=2.0,
+        min_flux_snr=5.0,
+        min_psf_support_pixels=3,
+        proposal_mode="gaussian",
+        stack_frame_min_flux_snr=3.0,
+        min_presence=3,
+        link_radius_px=4.0,
+        existing_tracks=(explained,),
+    )
+
+    assert tracks == ()
+
+
+def test_stack_faint_tracks_rejects_transient_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    frames = (_faint_frame_analysis(0, star=True), _faint_frame_analysis(1, star=False), _faint_frame_analysis(2, star=False))
+    reference = np.full((48, 48), 20.0, dtype=np.float64)
+    fake_detection = DetectionResult(
+        image_shape=reference.shape,
+        background=20.0,
+        noise=1.5,
+        threshold=26.0,
+        candidate_count=1,
+        sources=(_faint_quality_source(),),
+        parameters={},
+        quality_count=1,
+    )
+    monkeypatch.setattr(sequence_module, "detect_sources", lambda *_args, **_kwargs: fake_detection)
+
+    tracks = _stack_faint_tracks(
+        frames,
+        ((0.0, 0.0),) * len(frames),
+        reference,
+        threshold_sigma=4.0,
+        min_distance=4,
+        aperture_radius=4,
+        psf_fwhm=2.0,
+        min_flux_snr=5.0,
+        min_psf_support_pixels=3,
+        proposal_mode="gaussian",
+        stack_frame_min_flux_snr=3.0,
+        min_presence=3,
+        link_radius_px=4.0,
+        existing_tracks=(),
+    )
+
+    assert tracks == ()

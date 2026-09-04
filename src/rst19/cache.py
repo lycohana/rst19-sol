@@ -26,10 +26,11 @@ CACHE_VERSION = 16
 # 以及时序补提案在预测坐标附近的 ±1 px 局部 PSF 峰定位；此前再加入
 # 序列级固定异常码审计结果及其对候选的孔径影响关联；本轮加入高位
 # 重复码与局部异常负值联合门控，以及极近 Gaussian 双 PSF 质量门。
-# 本轮（34）随 CACHE_VERSION=16 同步修正 CODE_PATTERN 触发条件。
+# 本轮（35）新增叠加参考图暗星恢复层（evidence_level="stack_faint"）：
+# 序列结果现在含 stack_faint 轨迹及其参数，旧缓存不具备该口径。
 # 旧缓存不具备相同计算口径，必须重新计算，否则 UI 可能把不同精度的
 # 结果混在一起。
-SEQUENCE_CACHE_VERSION = 34
+SEQUENCE_CACHE_VERSION = 35
 CACHE_SUFFIXES = {".gz", ".json", ".tmp"}
 
 
@@ -499,6 +500,12 @@ def _sequence_result_from_dict(payload: Mapping[str, Any]) -> Any:
             (str(key), int(value))
             for key, value in dict(payload.get("candidate_consensus_audit", {})).items()
         ),
+        stack_faint_candidate_count=int(payload.get("stack_faint_candidate_count", 0)),
+        stack_reference_mode=str(payload.get("stack_reference_mode", "median")),
+        stack_threshold_sigma=float(payload.get("stack_threshold_sigma", 4.0)),
+        stack_min_flux_snr=float(payload.get("stack_min_flux_snr", 5.0)),
+        stack_frame_min_flux_snr=float(payload.get("stack_frame_min_flux_snr", 3.0)),
+        stack_min_presence=int(payload.get("stack_min_presence", 0)),
         fixed_sentinel_audit=fixed_sentinel_audit,
         fixed_sentinel_impact_audit=fixed_sentinel_impact_audit,
     )

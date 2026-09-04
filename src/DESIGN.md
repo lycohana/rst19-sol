@@ -301,3 +301,7 @@ GUI 现在为每个 FITS 帧同时保留三种观察图：增强显示（轻度�
 ### 2026-09-03 - 修正 CODE_PATTERN 对真实亮星的误拒
 
 初版把“孔径内含重复高位码”当作 `CODE_PATTERN` 的充分条件，导致真实亮星在饱和/溢出出血列中同时带入 `3991/3992` 重复码与 `-20628` 负值、峰值却正常时被误拒（例如 `ID 24651`：峰值 `20893`、`flux_snr≈775.9`）。修正后只有**候选峰本身落在重复高位码上**且孔径含异常负值才触发 `CODE_PATTERN`；首帧 `CODE_PATTERN` 由 `159` 降到 `12`，质量数由 `29,153` 升到 `29,263`，宽筛候选与测光口径不变。
+
+### 2026-09-03 - 增加叠加暗星恢复层
+
+`sequence.py` 新增 `_stack_faint_tracks` 与 `_stack_forced_frame_measure`：对 15 帧注册时间中值（或稳健均值）参考图按降噪后的噪声底重新检测（默认 `4σ`、`flux_snr≥5`、float32 快速路径），再回到每帧原图做 `±1 px` 局部峰强制测光、`3×3` 支持、形状与边缘/掩膜审计，要求达到 `persistent` 出现帧数且逐帧放宽 `flux_snr≥3`。结果单独计入 `SequenceResult.stack_faint_count`（`evidence_level="stack_faint"`），不与 `persistent_source_count`/`stable_source_count`/单帧 `quality_count` 混写；`SEQUENCE_CACHE_VERSION` 升至 35。GUI 新增“叠加暗星 · 待复核”图层，CLI 增加 `--no-stack-faint` 等开关。这修正了旧“肉眼可见亮点是单帧噪声”的结论：它们是噪声底压住的真实暗星，只能靠叠加降噪 + 逐帧强制测光恢复。

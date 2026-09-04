@@ -17,7 +17,7 @@ import numpy as np
 from scipy import ndimage
 from scipy.spatial import cKDTree
 
-from .detection import Detection, DetectionResult, _working_mask, build_background_model, sigma_clipped_stats
+from .detection import Detection, DetectionResult, _working_mask, build_background_model, detect_sources, sigma_clipped_stats
 from .fits import auxiliary_mask, read_fits
 from .models import FitsFrame
 from .pipeline import FrameAnalysis, analyze_frame
@@ -572,6 +572,12 @@ class SequenceResult:
     temporal_multiscale: bool = False
     temporal_min_psf_correlation: float = 0.8
     candidate_consensus_audit: tuple[tuple[str, int], ...] = ()
+    stack_faint_candidate_count: int = 0
+    stack_reference_mode: str = "median"
+    stack_threshold_sigma: float = 4.0
+    stack_min_flux_snr: float = 5.0
+    stack_frame_min_flux_snr: float = 3.0
+    stack_min_presence: int = 0
     fixed_sentinel_audit: FixedSentinelAudit | None = None
     fixed_sentinel_impact_audit: FixedSentinelImpactAudit | None = None
 
@@ -589,9 +595,16 @@ class SequenceResult:
 
     @property
     def persistent_source_count(self) -> int:
-        """达到较低持续性门槛、但未达到严格静态门槛的点源轨迹数。"""
+        """达到较低持续性门槛、但未达到严格静态门槛的点源轨迹数。
 
-        return sum(track.classification == "persistent" for track in self.tracks)
+        叠加参考图恢复的 ``stack_faint`` 轨迹单独计入
+        :meth:`stack_faint_count`，不混入本计数。
+        """
+
+        return sum(
+            track.classification == "persistent" and track.evidence_level != "stack_faint"
+            for track in self.tracks
+        )
 
     @property
     def candidate_consensus_count(self) -> int:
@@ -609,6 +622,15 @@ class SequenceResult:
         return sum(track.evidence_level == "temporal_reference" for track in self.tracks)
 
     @property
+    def stack_faint_count(self) -> int:
+        """由叠加参考图恢复、经逐帧强制测光确认的低置信暗星轨迹数。
+
+        这是单帧质量门下的低置信补充层，不是官方逐星真值。
+        """
+
+        return sum(track.evidence_level == "stack_faint" for track in self.tracks)
+
+    @property
     def stable_field_candidate_count(self) -> int:
         """严格静态源与持续源候选的合计；不是物理恒星真值。"""
 
@@ -622,6 +644,7 @@ class SequenceResult:
             "stable_field_candidate_count": self.stable_field_candidate_count,
             "candidate_consensus_count": self.candidate_consensus_count,
             "temporal_reference_count": self.temporal_reference_count,
+            "stack_faint_count": self.stack_faint_count,
             "moving_track_count": self.moving_track_count,
             "transient_track_count": self.transient_track_count,
             "link_radius_px": self.link_radius_px,
@@ -645,6 +668,12 @@ class SequenceResult:
             "temporal_multiscale": self.temporal_multiscale,
             "temporal_min_psf_correlation": self.temporal_min_psf_correlation,
             "candidate_consensus_audit": dict(self.candidate_consensus_audit),
+            "stack_faint_candidate_count": self.stack_faint_candidate_count,
+            "stack_reference_mode": self.stack_reference_mode,
+            "stack_threshold_sigma": self.stack_threshold_sigma,
+            "stack_min_flux_snr": self.stack_min_flux_snr,
+            "stack_frame_min_flux_snr": self.stack_frame_min_flux_snr,
+            "stack_min_presence": self.stack_min_presence,
             "fixed_sentinel_audit": (
                 self.fixed_sentinel_audit.as_dict()
                 if self.fixed_sentinel_audit is not None
@@ -2408,6 +2437,300 @@ def _candidate_consensus_tracks(
     return tuple(rendered)
 
 
+def _stack_forced_frame_measure(
+    image: np.ndarray,
+    mask: np.ndarray,
+    x: float,
+    y: float,
+    *,
+    aperture_radius: int,
+    min_psf_support_pixels: int,
+    psf_fwhm: float,
+    global_background: float,
+    global_noise: float,
+) -> tuple[float | None, int, bool, float | None, float | None]:
+    """在单帧原图 (x, y) 处做紧凑强制测光。
+
+    叠加参考图把噪声压到约 ``1/√N``，但固定热像素和静态纹理也会一起
+    保留；因此任何叠加候选都必须回到每帧原始图像做局部环测光、3×3 支持
+    和点源形状审计，才能算作“该帧确实出现”。这里只做最小必要测量，
+    复用与 ``_source_from_peak`` 相同的局部环背景、孔径通量、flux_snr、
+    ``3×3`` 支持与二阶矩形状口径，避免为叠加候选再走一遍全帧背景网格。
+    返回 ``(flux_snr, support, center_valid, fwhm, ellipticity)``。
+    """
+
+    height, width = image.shape
+    outer = aperture_radius + 4
+    y0 = max(0, int(np.floor(y)) - outer)
+    y1 = min(height, int(np.floor(y)) + outer + 1)
+    x0 = max(0, int(np.floor(x)) - outer)
+    x1 = min(width, int(np.floor(x)) + outer + 1)
+    if x1 - x0 < 5 or y1 - y0 < 5:
+        return None, 0, False, None, None
+    patch = np.asarray(image[y0:y1, x0:x1], dtype=np.float64)
+    patch_mask = np.asarray(mask[y0:y1, x0:x1], dtype=bool) | ~np.isfinite(patch)
+    yy, xx = np.indices(patch.shape, dtype=np.float64)
+    center_x = x - x0
+    center_y = y - y0
+    distance = np.hypot(xx - center_x, yy - center_y)
+    aperture = (distance <= aperture_radius) & ~patch_mask
+    annulus = (distance > aperture_radius + 1) & (distance <= outer) & ~patch_mask
+    annulus_values = patch[annulus]
+    if annulus_values.size < 8:
+        local_background = float(global_background)
+        local_noise = max(float(global_noise), np.finfo(np.float64).eps)
+    else:
+        local_background, local_noise = sigma_clipped_stats(
+            annulus_values,
+            sample_limit=100_000,
+        )
+        local_noise = max(float(local_noise), np.finfo(np.float64).eps)
+    # 局部环可能落在亮星翼部里，噪声被系统性抬高；但相对全局噪声过高的
+    # 环不可靠，直接退回全局噪声，避免把翼部纹理误判成高显著性暗星。
+    if local_noise > 3.0 * max(float(global_noise), np.finfo(np.float64).eps):
+        local_noise = max(float(global_noise), np.finfo(np.float64).eps)
+    residual = patch - local_background
+    valid_aperture = residual[aperture]
+    net_flux = float(valid_aperture.sum()) if valid_aperture.size else 0.0
+    aperture_pixels = int(aperture.sum())
+    if aperture_pixels < 3:
+        return None, 0, False, None, None
+    background_pixels = max(1, int(annulus.sum()))
+    background_variance = aperture_pixels * local_noise**2
+    background_variance += (aperture_pixels**2 / background_pixels) * local_noise**2
+    flux_error = float(np.sqrt(max(background_variance, np.finfo(np.float64).eps)))
+    flux_snr = net_flux / flux_error
+
+    positive = np.where(aperture, np.maximum(residual, 0.0), 0.0)
+    positive_sum = float(positive.sum())
+    if positive_sum > 0:
+        shape_x = float((positive * (xx + x0)).sum() / positive_sum)
+        shape_y = float((positive * (yy + y0)).sum() / positive_sum)
+        variance_x = float((positive * ((xx + x0) - shape_x) ** 2).sum() / positive_sum)
+        variance_y = float((positive * ((yy + y0) - shape_y) ** 2).sum() / positive_sum)
+        fwhm_x = 2.35482 * float(np.sqrt(max(0.0, variance_x)))
+        fwhm_y = 2.35482 * float(np.sqrt(max(0.0, variance_y)))
+        fwhm = 2.35482 * float(np.sqrt(max(0.0, (variance_x + variance_y) / 2.0)))
+        ellipticity = abs(fwhm_x - fwhm_y) / max(fwhm_x, fwhm_y, np.finfo(np.float64).eps)
+        if not np.isfinite(fwhm) or fwhm <= 0:
+            fwhm = None
+            ellipticity = None
+    else:
+        fwhm = None
+        ellipticity = None
+
+    core_x = int(np.rint(center_x))
+    core_y = int(np.rint(center_y))
+    center_valid = bool(not patch_mask[core_y, core_x]) if 0 <= core_y < patch.shape[0] and 0 <= core_x < patch.shape[1] else False
+    if not center_valid:
+        return flux_snr, 0, False, fwhm, ellipticity
+    peak_excess = max(float(patch[core_y, core_x] - local_background), 0.0)
+    core_y0, core_y1 = max(0, core_y - 1), min(patch.shape[0], core_y + 2)
+    core_x0, core_x1 = max(0, core_x - 1), min(patch.shape[1], core_x + 2)
+    core_slice = residual[core_y0:core_y1, core_x0:core_x1]
+    core_valid = ~patch_mask[core_y0:core_y1, core_x0:core_x1]
+    support_threshold = max(2.0 * local_noise, 0.1 * peak_excess)
+    support = int(
+        np.count_nonzero(
+            core_valid
+            & np.isfinite(core_slice)
+            & (core_slice >= support_threshold)
+        )
+    )
+    return flux_snr, support, True, fwhm, ellipticity
+
+
+def _stack_faint_tracks(
+    frame_analyses: Sequence[FrameAnalysis],
+    cumulative_shifts: Sequence[tuple[float, float]],
+    reference: np.ndarray | None,
+    *,
+    threshold_sigma: float,
+    min_distance: int,
+    aperture_radius: int,
+    psf_fwhm: float,
+    min_flux_snr: float,
+    min_psf_support_pixels: int,
+    proposal_mode: str,
+    stack_frame_min_flux_snr: float,
+    min_presence: int,
+    link_radius_px: float,
+    existing_tracks: Sequence[SourceTrack],
+    audit_sink: MutableMapping[str, int] | None = None,
+) -> tuple[SourceTrack, ...]:
+    """从注册中值/稳健叠加参考图恢复单帧漏掉的暗星。
+
+    叠加把噪声降到约 ``1/√N``，能把单帧 ``flux_snr<5`` 的暗星抬到参考图
+    ``flux_snr≥5``；但叠加也保留固定热像素和静态纹理，所以这里不把参考图
+    检测直接当结果。流程：参考图局部测光 → 与已有质量/共识轨迹按
+    ``link_radius_px`` 去重 → 回到 15 帧原图做强制测光/3×3 支持/形状审计
+    → 出现帧数达到 ``min_presence`` 且逐帧 ``flux_snr`` 达到放宽门槛。
+    结果标为低置信 ``evidence_level="stack_faint"`` 轨迹，分类为
+    ``persistent``，不与单帧质量源或严格静态源混写。
+
+    参考图坐标已对齐到第 1 帧；第 i 帧的原始坐标是
+    ``(x + shift_x, y + shift_y)``。
+    """
+
+    if reference is None or len(frame_analyses) < 2:
+        return ()
+    if len(frame_analyses) != len(cumulative_shifts):
+        raise ValueError("cumulative_shifts length must match frame_analyses")
+    # 参考图本身是 float32（注册中值/稳健均值）。叠加上只剩“再筛一遍”，
+    # 不追求单帧式环形精修；使用 float32 + 网格背景即可显著降低 4096²
+    # 中间阵列的内存带宽，避免 GUI 后台在 15 帧之上再加一次 float64 全图
+    # 检测而耗尽内存。参考图候选仍需逐帧原图强制测光，最终质量不依赖这
+    # 一层测光的绝对精度。
+    values = np.asarray(reference, dtype=np.float32)
+    if values.ndim != 2:
+        return ()
+    reference_mask = ~np.isfinite(values)
+    # 第一行辅助区在参考图中已经是 NaN；这里不再重复屏蔽，但防御性地
+    # 保持与单帧一致的口径：仅当参考图没有 NaN 时才依赖 detect_sources
+    # 自身的有限掩膜。
+    try:
+        stack_detection = detect_sources(
+            values,
+            mask=reference_mask,
+            threshold_sigma=threshold_sigma,
+            min_distance=min_distance,
+            aperture_radius=aperture_radius,
+            max_sources=None,
+            psf_fwhm=psf_fwhm,
+            min_flux_snr=min_flux_snr,
+            min_psf_support_pixels=min_psf_support_pixels,
+            proposal_mode=proposal_mode,
+            refine_local_background=False,
+            use_float32=True,
+            mask_zero_pixels=False,
+            allow_partial_zero_mask=False,
+        )
+    except ValueError:
+        return ()
+    stack_candidates = tuple(stack_detection.quality_sources)
+    if audit_sink is not None:
+        audit_sink["stack_reference_quality_sources"] = len(stack_candidates)
+    if not stack_candidates:
+        return ()
+
+    # 去重：任何已经被质量轨迹或候选共识轨迹解释过的位置不再重复输出。
+    explained: list[tuple[float, float]] = []
+    for track in existing_tracks:
+        for point in track.points:
+            explained.append((point.aligned_x, point.aligned_y))
+    if explained:
+        tree = cKDTree(np.asarray(explained, dtype=np.float64))
+    else:
+        tree = None
+
+    # 逐帧原始图、有效掩膜和全局背景/噪声只准备一次；若在候选循环内
+    # 重复构造 4096² 的辅助掩膜或 ``image == 0`` 布尔阵列，数千候选会
+    # 放大成数百万次整图分配，把这一层拖到不可接受的耗时。
+    frame_images = tuple(np.asarray(analysis.frame.data) for analysis in frame_analyses)
+    frame_masks = tuple(
+        (
+            auxiliary_mask(image.shape)
+            | (image == 0)
+            if int(analysis.detection.parameters.get("mask_zero_pixels", 0))
+            else auxiliary_mask(image.shape)
+        )
+        for image, analysis in zip(frame_images, frame_analyses, strict=True)
+    )
+    frame_backgrounds = tuple(float(analysis.detection.background) for analysis in frame_analyses)
+    frame_noises = tuple(float(analysis.detection.noise) for analysis in frame_analyses)
+
+    rendered: list[SourceTrack] = []
+    for candidate in stack_candidates:
+        ref_x = float(candidate.peak_x if candidate.peak_x is not None else candidate.x)
+        ref_y = float(candidate.peak_y if candidate.peak_y is not None else candidate.y)
+        if tree is not None:
+            distance, _index = tree.query((ref_x, ref_y), k=1)
+            if np.isfinite(distance) and float(distance) <= float(link_radius_px):
+                if audit_sink is not None:
+                    audit_sink["reject_stack_explained"] = audit_sink.get("reject_stack_explained", 0) + 1
+                continue
+        points: list[TrackPoint] = []
+        frame_flux_snrs: list[float] = []
+        for frame_index, (image, mask, background, noise, shift) in enumerate(
+            zip(
+                frame_images,
+                frame_masks,
+                frame_backgrounds,
+                frame_noises,
+                cumulative_shifts,
+                strict=True,
+            )
+        ):
+            raw_x = ref_x + float(shift[0])
+            raw_y = ref_y + float(shift[1])
+            flux_snr, support, center_valid, fwhm, ellipticity = _stack_forced_frame_measure(
+                image,
+                mask,
+                raw_x,
+                raw_y,
+                aperture_radius=aperture_radius,
+                min_psf_support_pixels=min_psf_support_pixels,
+                psf_fwhm=psf_fwhm,
+                global_background=background,
+                global_noise=noise,
+            )
+            if not center_valid:
+                continue
+            if support < min_psf_support_pixels:
+                continue
+            if flux_snr is None or not np.isfinite(flux_snr) or flux_snr < float(stack_frame_min_flux_snr):
+                continue
+            if fwhm is None or not 0.8 <= fwhm <= 12.0:
+                continue
+            if ellipticity is None or ellipticity > 0.65:
+                continue
+            points.append(
+                TrackPoint(
+                    frame_index=int(frame_index),
+                    detection_id=-1,
+                    x=float(raw_x),
+                    y=float(raw_y),
+                    aligned_x=ref_x,
+                    aligned_y=ref_y,
+                    flux_snr=float(flux_snr),
+                    quality_passed=False,
+                    candidate_snr=float(candidate.filter_snr)
+                    if candidate.filter_snr is not None
+                    else float(flux_snr),
+                )
+            )
+            frame_flux_snrs.append(float(flux_snr))
+        if len(points) < int(min_presence):
+            if audit_sink is not None:
+                audit_sink["reject_stack_presence"] = audit_sink.get("reject_stack_presence", 0) + 1
+            continue
+        # 少数帧被亮星翼部抬噪导致的低 flux_snr 可以吸收；要求多数出现帧
+        # 有正的稳定通量，避免只凭 3×3 支持就把固定纹理算成星。
+        if frame_flux_snrs:
+            median_frame_flux_snr = float(np.median(frame_flux_snrs))
+        else:
+            median_frame_flux_snr = 0.0
+        if median_frame_flux_snr < float(stack_frame_min_flux_snr):
+            if audit_sink is not None:
+                audit_sink["reject_stack_flux_snr"] = audit_sink.get("reject_stack_flux_snr", 0) + 1
+            continue
+        displacement, speed, fit_rms = _fit_track(points)
+        rendered.append(
+            SourceTrack(
+                track_id=-1,
+                classification="persistent",
+                points=tuple(points),
+                displacement_px=float(displacement),
+                speed_px_per_frame=float(speed),
+                fit_rms_px=float(fit_rms),
+                evidence_level="stack_faint",
+            )
+        )
+        if audit_sink is not None:
+            audit_sink["accepted_stack_faint"] = audit_sink.get("accepted_stack_faint", 0) + 1
+    return tuple(rendered)
+
+
 def analyze_sequence(
     paths: Iterable[str | Path],
     *,
@@ -2425,6 +2748,12 @@ def analyze_sequence(
     temporal_multiscale: bool = False,
     temporal_min_psf_correlation: float = 0.8,
     temporal_proposal_mode: str = "median",
+    stack_faint_recovery: bool = True,
+    stack_reference_mode: str = "median",
+    stack_threshold_sigma: float = 4.0,
+    stack_min_flux_snr: float = 5.0,
+    stack_frame_min_flux_snr: float = 3.0,
+    stack_min_presence: int | None = None,
     progress: Callable[[str, int, int], None] | None = None,
     detail_progress: Callable[[int, int, float, str], None] | None = None,
     **detector_kwargs: object,
@@ -2484,6 +2813,13 @@ def analyze_sequence(
         raise ValueError("temporal_reference_min_snr must be positive and no greater than candidate_consensus_min_snr")
     if not 0.0 < float(temporal_min_psf_correlation) <= 1.0:
         raise ValueError("temporal_min_psf_correlation must be between 0 and 1")
+    stack_reference_mode = str(stack_reference_mode).strip().lower()
+    if stack_reference_mode not in {"median", "coadd"}:
+        raise ValueError("stack_reference_mode must be 'median' or 'coadd'")
+    if stack_threshold_sigma <= 0 or stack_min_flux_snr <= 0 or stack_frame_min_flux_snr <= 0:
+        raise ValueError("stack_faint thresholds must be positive")
+    if stack_min_presence is not None and stack_min_presence < 1:
+        raise ValueError("stack_min_presence must be positive when provided")
     if detector_kwargs.get("max_sources") is None and sequence_max_sources is not None:
         detector_kwargs["max_sources"] = int(sequence_max_sources)
     # 序列只需要稳定的空间噪声场；更大的网格减少背景统计开销，仍会在
@@ -2713,6 +3049,57 @@ def analyze_sequence(
         for index, track in enumerate(candidate_consensus)
     )
     all_tracks = quality_tracks + candidate_tracks
+    resolved_stack_min_presence = (
+        int(getattr(result, "persistent_min_presence", max(3, int(np.ceil(total * 0.5)))))
+        if stack_min_presence is None
+        else int(stack_min_presence)
+    )
+    stack_faint_candidate_count = 0
+    stack_faint_tracks: tuple[SourceTrack, ...] = ()
+    if stack_faint_recovery and total >= 2:
+        if progress is not None:
+            progress("stack-faint", total, total)
+        stack_reference = temporal_reference
+        if stack_reference_mode == "coadd":
+            stack_reference = _registered_coadd_reference(
+                resolved_analyses,
+                result.cumulative_shifts,
+            )
+        stack_audit: dict[str, int] = {}
+        stack_faint_tracks = _stack_faint_tracks(
+            resolved_analyses,
+            result.cumulative_shifts,
+            stack_reference,
+            threshold_sigma=float(detector_kwargs.get("threshold_sigma", 4.0)),
+            min_distance=int(detector_kwargs.get("min_distance", 3)),
+            aperture_radius=int(detector_kwargs.get("aperture_radius", 4)),
+            psf_fwhm=float(detector_kwargs.get("psf_fwhm", 3.0)),
+            min_flux_snr=float(stack_min_flux_snr),
+            min_psf_support_pixels=int(detector_kwargs.get("min_psf_support_pixels", 3)),
+            proposal_mode=str(detector_kwargs.get("proposal_mode", "gaussian")),
+            stack_frame_min_flux_snr=float(stack_frame_min_flux_snr),
+            min_presence=resolved_stack_min_presence,
+            link_radius_px=link_radius_px,
+            existing_tracks=all_tracks,
+            audit_sink=stack_audit,
+        )
+        stack_faint_candidate_count = int(stack_audit.get("stack_reference_quality_sources", 0))
+        if stack_reference is not temporal_reference:
+            del stack_reference
+        if stack_faint_tracks:
+            stack_faint_with_ids = tuple(
+                SourceTrack(
+                    track_id=len(all_tracks) + index,
+                    classification=track.classification,
+                    points=track.points,
+                    displacement_px=track.displacement_px,
+                    speed_px_per_frame=track.speed_px_per_frame,
+                    fit_rms_px=track.fit_rms_px,
+                    evidence_level=track.evidence_level,
+                )
+                for index, track in enumerate(stack_faint_tracks)
+            )
+            all_tracks = all_tracks + stack_faint_with_ids
     if progress is not None:
         progress("consensus", total, total)
     summaries = tuple(
@@ -2828,6 +3215,12 @@ def analyze_sequence(
         temporal_multiscale=bool(temporal_multiscale),
         temporal_min_psf_correlation=float(temporal_min_psf_correlation),
         candidate_consensus_audit=tuple(sorted(candidate_audit.items())),
+        stack_faint_candidate_count=stack_faint_candidate_count,
+        stack_reference_mode=stack_reference_mode,
+        stack_threshold_sigma=float(stack_threshold_sigma),
+        stack_min_flux_snr=float(stack_min_flux_snr),
+        stack_frame_min_flux_snr=float(stack_frame_min_flux_snr),
+        stack_min_presence=resolved_stack_min_presence,
         fixed_sentinel_audit=fixed_sentinel_audit,
         fixed_sentinel_impact_audit=fixed_sentinel_impact_audit,
     )
