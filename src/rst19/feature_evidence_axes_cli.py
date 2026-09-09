@@ -33,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(f"rst19-feature-evidence-axes: 结果已写入 {output}")
+    print(f"rst19-feature-evidence-axes: 敏感性配置 {len({row.configuration for row in result.sensitivity_rows})} 组")
     print(result.conclusion)
     for row in result.rows:
         conditional = (

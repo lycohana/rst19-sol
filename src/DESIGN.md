@@ -434,7 +434,7 @@ GUI 现在为每个 FITS 帧同时保留三种观察图：增强显示（轻度�
 
 `FeatureEvidenceRow` 新增 `recommended_audit_stage`、`recommended_audit_stage_label`、`counting_policy` 和 `counting_policy_label`。字段按固定 `feature_class` 映射下一步的值域、线几何、有效孔径、联合 PSF、二维支持、局部噪声/注入、形状 PSF 或星表/WCS 核验；只有 `compact_quality` 进入身份核验队列，其余保留候选但不直接计星。路由不使用指标加权、不输出恒星概率、不修改默认检测/质量层/GUI/缓存；当前复现目录为 `tmp/feature-evidence-matrix-code-pattern-current-v3-routing/`，回归测试为 `tests/test_feature_evidence_matrix.py`。
 
-新增 `run_feature_evidence_axes` 与 `rst19-feature-evidence-axes`，从证据矩阵派生 `Q|P=质量邻域持久数/候选位置持久数` 及四种证据轴模式。该比值只描述 detector-level 证据同步，质量邻域响应可能来自其它类别，不能解释为逐源通过率、precision、FDR 或恒星概率；模式阈值写入 JSON。模块只读矩阵，不重读 FITS、不改检测、质量层、GUI 或缓存；实现为 `src/rst19/feature_evidence_axes.py`，回归为 `tests/test_feature_evidence_axes.py`，产物为 `tmp/feature-evidence-axes-code-pattern-current-v1/`。
+新增 `run_feature_evidence_axes` 与 `rst19-feature-evidence-axes`，从证据矩阵派生 `Q|P=质量邻域持久数/候选位置持久数` 及四种证据轴模式，并自动输出五组预声明阈值配置的敏感性 CSV。该比值只描述 detector-level 证据同步，质量邻域响应可能来自其它类别，不能解释为逐源通过率、precision、FDR 或恒星概率；模式阈值与敏感性配置写入 JSON/CSV。模块只读矩阵，不重读 FITS、不改检测、质量层、GUI 或缓存；实现为 `src/rst19/feature_evidence_axes.py`，回归为 `tests/test_feature_evidence_axes.py`，产物为 `tmp/feature-evidence-axes-code-pattern-current-v1/`。
 
 ### 2026-09-06 - 多次重复特征机制控制
 

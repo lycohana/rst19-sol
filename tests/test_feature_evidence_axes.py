@@ -91,6 +91,10 @@ def test_evidence_axes_classifies_patterns_and_keeps_q_given_p_descriptive(tmp_p
     assert rows["linear_artifact"].evidence_axis_pattern == "sparse_or_structure_sensitive"
     assert rows["other_rejected"].evidence_axis_pattern == "no_sample"
     assert "逐源质量通过率" in rows["crowded_blend"].caution
+    sensitivity = {(row.configuration, row.feature_class): row.evidence_axis_pattern for row in result.sensitivity_rows}
+    assert sensitivity[("baseline", "compact_quality")] == "aligned_quality_psf"
+    assert sensitivity[("strict_psf", "compact_quality")] == "location_persistent_quality_sparse"
+    assert sensitivity[("strict_quality_gap", "crowded_blend")] == "persistent_without_quality"
 
 
 def test_evidence_axes_rejects_inconsistent_counts(tmp_path) -> None:
@@ -112,6 +116,7 @@ def test_evidence_axes_writes_csv_and_json(tmp_path) -> None:
     )
 
     assert (output / "feature_evidence_axes.csv").is_file()
+    assert (output / "feature_evidence_axes_sensitivity.csv").is_file()
     assert (output / "feature_evidence_axes.json").is_file()
     payload = json.loads((output / "feature_evidence_axes.json").read_text(encoding="utf-8"))
     assert payload["rows"][0]["feature_class"] == "compact_quality"

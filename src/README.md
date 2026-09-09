@@ -299,7 +299,7 @@ rst19-feature-evidence-axes `
   --out-dir tmp/feature-evidence-axes-code-pattern-current-v1
 ```
 
-输出 `feature_evidence_axes.csv/json`，其中 `Q|P` 是质量邻域持久数除以候选位置持久数；质量邻域可能属于其它类别，所以它不是逐源质量通过率或恒星概率。当前紧凑质量类 `Q|P=86.1%`，拥挤/尖峰/弱背景/形状类仅 `0.5%--5.0%`，边缘/掩膜类 `22.1%`。该只读汇总用于论文证据分流，不重读 FITS、不修改默认检测、GUI 或缓存。
+输出 `feature_evidence_axes.csv`、`feature_evidence_axes_sensitivity.csv` 和 `feature_evidence_axes.json`，其中 `Q|P` 是质量邻域持久数除以候选位置持久数；质量邻域可能属于其它类别，所以它不是逐源质量通过率或恒星概率。当前紧凑质量类 `Q|P=86.1%`，拥挤/尖峰/弱背景/形状类仅 `0.5%--5.0%`，边缘/掩膜类 `22.1%`。敏感性表覆盖基线、较严格 PSF 线、较宽候选线和两组质量差异线，用来区分稳健类别规律与工程阈值边界。该只读汇总用于论文证据分流，不重读 FITS、不修改默认检测、GUI 或缓存。
 
 类别规则签名的非参数对照可用 `rst19-feature-effect-size`：它以 `compact_quality` 为参考，输出各落选类别在 flux/filter SNR、峰值、FWHM、椭圆率、sharpness、足迹、PSF 支持、质心偏移和值域计数上的 AUC/Cliff's delta。该结果只描述当前标签规则的分布差异，不是物理恒星分类器；产物为 `tmp/feature-effect-size-code-pattern-current-v1/`。
 

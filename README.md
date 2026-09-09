@@ -448,7 +448,7 @@ rst19-feature-evidence-axes `
   --out-dir tmp/feature-evidence-axes-code-pattern-current-v1
 ```
 
-它输出 `Q|P=质量邻域持久数/候选位置持久数` 及四种 detector-level 证据模式。当前紧凑质量类为 `86.1%`，拥挤/尖峰/弱背景/形状类为 `0.5%--5.0%`，边缘/掩膜类为 `22.1%`；该比值不等于逐源质量通过率、precision、FDR 或恒星概率，也不修改默认检测、GUI 或缓存。
+它输出 `feature_evidence_axes.csv`、`feature_evidence_axes_sensitivity.csv` 和 JSON，其中包含 `Q|P=质量邻域持久数/候选位置持久数` 及四种 detector-level 证据模式。当前紧凑质量类为 `86.1%`，拥挤/尖峰/弱背景/形状类为 `0.5%--5.0%`，边缘/掩膜类为 `22.1%`；五组敏感性配置显示拥挤、尖峰、弱背景的不同步模式较稳，而形状/紧凑类存在工程阈值边界。该比值不等于逐源质量通过率、precision、FDR 或恒星概率，也不修改默认检测、GUI 或缓存。
 
 如需量化不同特征类别的“规则签名”而不是把它们混成一个 SNR 分数，可运行：
 

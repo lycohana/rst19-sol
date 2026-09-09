@@ -47,12 +47,108 @@ AXIS_SUMMARY_FIELDS = tuple(field.name for field in fields(FeatureEvidenceAxesRo
 
 
 @dataclass(frozen=True, slots=True)
+class EvidenceAxisThresholds:
+    """一组证据轴模式的工程分组线。"""
+
+    aligned_candidate_persistence_min: float
+    aligned_quality_response_min: float
+    aligned_spatial_correlation_min: float
+    persistent_candidate_persistence_min: float
+    persistent_quality_response_max: float
+
+    def as_dict(self) -> dict[str, float]:
+        return {
+            "aligned_candidate_persistence_min": self.aligned_candidate_persistence_min,
+            "aligned_quality_response_min": self.aligned_quality_response_min,
+            "aligned_spatial_correlation_min": self.aligned_spatial_correlation_min,
+            "persistent_candidate_persistence_min": self.persistent_candidate_persistence_min,
+            "persistent_quality_response_max": self.persistent_quality_response_max,
+        }
+
+
+DEFAULT_SENSITIVITY_CONFIGS: tuple[tuple[str, EvidenceAxisThresholds], ...] = (
+    (
+        "baseline",
+        EvidenceAxisThresholds(
+            aligned_candidate_persistence_min=0.80,
+            aligned_quality_response_min=0.80,
+            aligned_spatial_correlation_min=0.80,
+            persistent_candidate_persistence_min=0.50,
+            persistent_quality_response_max=0.05,
+        ),
+    ),
+    (
+        "strict_psf",
+        EvidenceAxisThresholds(
+            aligned_candidate_persistence_min=0.80,
+            aligned_quality_response_min=0.80,
+            aligned_spatial_correlation_min=0.85,
+            persistent_candidate_persistence_min=0.50,
+            persistent_quality_response_max=0.05,
+        ),
+    ),
+    (
+        "loose_persistence",
+        EvidenceAxisThresholds(
+            aligned_candidate_persistence_min=0.80,
+            aligned_quality_response_min=0.80,
+            aligned_spatial_correlation_min=0.80,
+            persistent_candidate_persistence_min=0.40,
+            persistent_quality_response_max=0.03,
+        ),
+    ),
+    (
+        "strict_quality_gap",
+        EvidenceAxisThresholds(
+            aligned_candidate_persistence_min=0.80,
+            aligned_quality_response_min=0.80,
+            aligned_spatial_correlation_min=0.80,
+            persistent_candidate_persistence_min=0.50,
+            persistent_quality_response_max=0.03,
+        ),
+    ),
+    (
+        "loose_quality_gap",
+        EvidenceAxisThresholds(
+            aligned_candidate_persistence_min=0.80,
+            aligned_quality_response_min=0.80,
+            aligned_spatial_correlation_min=0.80,
+            persistent_candidate_persistence_min=0.50,
+            persistent_quality_response_max=0.08,
+        ),
+    ),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureEvidenceAxesSensitivityRow:
+    """一个阈值配置下的类别模式，用于边界敏感性复核。"""
+
+    configuration: str
+    aligned_candidate_persistence_min: float
+    aligned_quality_response_min: float
+    aligned_spatial_correlation_min: float
+    persistent_candidate_persistence_min: float
+    persistent_quality_response_max: float
+    feature_class: str
+    evidence_axis_pattern: str
+    evidence_axis_pattern_label: str
+
+    def as_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+AXIS_SENSITIVITY_FIELDS = tuple(field.name for field in fields(FeatureEvidenceAxesSensitivityRow))
+
+
+@dataclass(frozen=True, slots=True)
 class FeatureEvidenceAxesResult:
     """证据轴关系的完整结果。"""
 
     matrix_path: str
     thresholds: dict[str, float]
     rows: tuple[FeatureEvidenceAxesRow, ...]
+    sensitivity_rows: tuple[FeatureEvidenceAxesSensitivityRow, ...]
     conclusion: str
 
     def as_dict(self) -> dict[str, object]:
@@ -60,6 +156,7 @@ class FeatureEvidenceAxesResult:
             "matrix_path": self.matrix_path,
             "thresholds": dict(self.thresholds),
             "rows": [row.as_dict() for row in self.rows],
+            "sensitivity_rows": [row.as_dict() for row in self.sensitivity_rows],
             "conclusion": self.conclusion,
             "interpretation_boundary": (
                 "all persistence and quality-response values are detector-level; "
@@ -137,17 +234,21 @@ def _classify_pattern(
     candidate_persistence: float,
     quality_response: float,
     spatial_correlation: float | None,
+    thresholds: EvidenceAxisThresholds,
 ) -> str:
     if candidate_count == 0:
         return "no_sample"
     if (
-        candidate_persistence >= 0.80
-        and quality_response >= 0.80
+        candidate_persistence >= thresholds.aligned_candidate_persistence_min
+        and quality_response >= thresholds.aligned_quality_response_min
         and spatial_correlation is not None
-        and spatial_correlation >= 0.80
+        and spatial_correlation >= thresholds.aligned_spatial_correlation_min
     ):
         return "aligned_quality_psf"
-    if candidate_persistence >= 0.50 and quality_response <= 0.05:
+    if (
+        candidate_persistence >= thresholds.persistent_candidate_persistence_min
+        and quality_response <= thresholds.persistent_quality_response_max
+    ):
         return "persistent_without_quality"
     if candidate_persistence >= 0.50:
         return "location_persistent_quality_sparse"
@@ -204,6 +305,7 @@ def run_feature_evidence_axes(matrix_path: str | Path) -> FeatureEvidenceAxesRes
             candidate_persistence=candidate_persistence,
             quality_response=quality_response,
             spatial_correlation=spatial_correlation,
+            thresholds=DEFAULT_SENSITIVITY_CONFIGS[0][1],
         )
         pattern_label, interpretation = _PATTERN_TEXT[pattern]
         rows.append(
@@ -225,13 +327,26 @@ def run_feature_evidence_axes(matrix_path: str | Path) -> FeatureEvidenceAxesRes
             )
         )
 
-    thresholds = {
-        "aligned_candidate_persistence_min": 0.80,
-        "aligned_quality_response_min": 0.80,
-        "aligned_spatial_correlation_min": 0.80,
-        "persistent_candidate_persistence_min": 0.50,
-        "persistent_quality_response_max": 0.05,
-    }
+    thresholds = DEFAULT_SENSITIVITY_CONFIGS[0][1].as_dict()
+    sensitivity_rows: list[FeatureEvidenceAxesSensitivityRow] = []
+    for configuration, configuration_thresholds in DEFAULT_SENSITIVITY_CONFIGS:
+        for row in rows:
+            pattern = _classify_pattern(
+                candidate_count=row.candidate_count,
+                candidate_persistence=row.candidate_persistence_fraction,
+                quality_response=row.quality_response_fraction,
+                spatial_correlation=row.spatial_local_correlation_median,
+                thresholds=configuration_thresholds,
+            )
+            sensitivity_rows.append(
+                FeatureEvidenceAxesSensitivityRow(
+                    configuration=configuration,
+                    **configuration_thresholds.as_dict(),
+                    feature_class=row.feature_class,
+                    evidence_axis_pattern=pattern,
+                    evidence_axis_pattern_label=_PATTERN_TEXT[pattern][0],
+                )
+            )
     conclusion = (
         "类别证据轴关系已汇总：紧凑质量类是候选位置、质量邻域和局部 PSF 同向的对照；"
         "拥挤、尖峰、弱背景和形状类可出现位置持久但质量不同步；边缘/掩膜类处于部分同步；"
@@ -242,6 +357,7 @@ def run_feature_evidence_axes(matrix_path: str | Path) -> FeatureEvidenceAxesRes
         matrix_path=str(path),
         thresholds=thresholds,
         rows=tuple(rows),
+        sensitivity_rows=tuple(sensitivity_rows),
         conclusion=conclusion,
     )
 
@@ -256,10 +372,15 @@ def write_feature_evidence_axes_artifacts(
     output.mkdir(parents=True, exist_ok=True)
     csv_path = output / "feature_evidence_axes.csv"
     json_path = output / "feature_evidence_axes.json"
+    sensitivity_path = output / "feature_evidence_axes_sensitivity.csv"
     with csv_path.open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=AXIS_SUMMARY_FIELDS)
         writer.writeheader()
         writer.writerows(row.as_dict() for row in result.rows)
+    with sensitivity_path.open("w", encoding="utf-8-sig", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=AXIS_SENSITIVITY_FIELDS)
+        writer.writeheader()
+        writer.writerows(row.as_dict() for row in result.sensitivity_rows)
     with json_path.open("w", encoding="utf-8") as stream:
         json.dump(result.as_dict(), stream, ensure_ascii=False, indent=2)
     return output
@@ -267,8 +388,12 @@ def write_feature_evidence_axes_artifacts(
 
 __all__ = [
     "AXIS_SUMMARY_FIELDS",
+    "AXIS_SENSITIVITY_FIELDS",
+    "DEFAULT_SENSITIVITY_CONFIGS",
+    "EvidenceAxisThresholds",
     "FeatureEvidenceAxesResult",
     "FeatureEvidenceAxesRow",
+    "FeatureEvidenceAxesSensitivityRow",
     "run_feature_evidence_axes",
     "write_feature_evidence_axes_artifacts",
 ]

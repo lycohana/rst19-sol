@@ -131,8 +131,12 @@ from .feature_evidence_matrix import (
 )
 from .feature_evidence_axes import (
     AXIS_SUMMARY_FIELDS,
+    AXIS_SENSITIVITY_FIELDS,
+    DEFAULT_SENSITIVITY_CONFIGS,
+    EvidenceAxisThresholds,
     FeatureEvidenceAxesResult,
     FeatureEvidenceAxesRow,
+    FeatureEvidenceAxesSensitivityRow,
     run_feature_evidence_axes,
     write_feature_evidence_axes_artifacts,
 )
@@ -654,8 +658,12 @@ __all__ = [
     "FeatureEvidenceMatrixResult",
     "FeatureEvidenceRow",
     "AXIS_SUMMARY_FIELDS",
+    "AXIS_SENSITIVITY_FIELDS",
+    "DEFAULT_SENSITIVITY_CONFIGS",
+    "EvidenceAxisThresholds",
     "FeatureEvidenceAxesResult",
     "FeatureEvidenceAxesRow",
+    "FeatureEvidenceAxesSensitivityRow",
     "FeatureAuditAggregateRow",
     "FeatureAuditReplicateResult",
     "SIGNED_NULL_SNR_THRESHOLDS",
