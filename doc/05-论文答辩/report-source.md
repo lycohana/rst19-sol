@@ -158,6 +158,8 @@
 
 97. 类别级参数鲁棒性复核：在同一首帧扫描候选阈值 `4/5/6/8σ`，宽筛候选由 `84,594` 降至 `53,371`，质量源由 `29,260` 降至 `28,542`；`8σ` 下范围异常/紧凑质量的同坐标与同类别保留率约为 `100%/100%`、`97.6%/97.6%`，拥挤混合/尖峰支持/弱背景/边缘掩膜约为 `36.2%/35.4%`、`42.5%/42.3%`、`46.8%/46.8%`、`57.7%/57.7%`。只改变 `flux SNR=3/5/7/9` 时候选池始终为 `84,594`，质量数为 `41,110/29,260/22,438/18,296`。该结果将“候选门控制召回、质量门重标记同一响应、特征类别决定专项复核路径”分开，不推出物理恒星数、precision 或 FDR；机器表为 `tmp/feature-parameter-sensitivity-code-pattern-current-v1/`，依据为检测器实验记录 8.57 与真实性研究 10.100。
 
+98. 注册坐标与 detector-fixed null 的类别对照：在相同 `hybrid + 4σ + FWHM=2 px + flux SNR≥5 + PSF support≥3` 参数下，仅把累计平移固定为 `(0,0)`，候选层 `≥12/15` 持久率在紧凑/弱背景/尖峰类别分别由 `0.946/0.759/0.735` 变为 `0.614/0.436/0.661`；质量邻域则由 `21,573/404/87` 变为 `21,559/404/87`。该控制表明注册模型明显影响宽筛候选账本，而少量质量响应更稳定；它不是 WCS、dither 或固定结构的真值校准，也不输出恒星概率。机器产物为 `tmp/sequence-feature-persistence-fixed-null-current-v1/sequence_feature_persistence.csv`，对照基线为 `tmp/sequence-feature-persistence-code-pattern-current-v4/`，依据为真实性研究 10.83；结果沿用当前 v4 序列表与 fixed-null 机器产物。
+
 对应机器产物：
 
 - `tmp/pair-flux-ratio-multilevel-gui-default/pair_flux_ratio_audit.csv`
