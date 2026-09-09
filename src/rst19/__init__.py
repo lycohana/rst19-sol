@@ -129,6 +129,13 @@ from .feature_evidence_matrix import (
     build_feature_evidence_matrix,
     write_feature_evidence_matrix_artifacts,
 )
+from .feature_evidence_axes import (
+    AXIS_SUMMARY_FIELDS,
+    FeatureEvidenceAxesResult,
+    FeatureEvidenceAxesRow,
+    run_feature_evidence_axes,
+    write_feature_evidence_axes_artifacts,
+)
 from .feature_audit_replicates import (
     FeatureAuditAggregateRow,
     FeatureAuditReplicateResult,
@@ -482,6 +489,7 @@ __all__ = [
     "run_empirical_psf_pair_audit",
     "run_feature_psf_leaveout_audit",
     "build_feature_evidence_matrix",
+    "run_feature_evidence_axes",
     "run_local_multipsf_audit",
     "run_local_free_multipsf_audit",
     "run_local_free_multipsf_radius_sweep",
@@ -631,6 +639,7 @@ __all__ = [
     "write_empirical_psf_pair_audit_artifacts",
     "write_feature_psf_leaveout_artifacts",
     "write_feature_evidence_matrix_artifacts",
+    "write_feature_evidence_axes_artifacts",
     "ForcedStabilityFluxRow",
     "PairFluxCovarianceAuditResult",
     "PairFluxCovarianceMetric",
@@ -644,6 +653,9 @@ __all__ = [
     "FeaturePSFLeaveOutSourceRow",
     "FeatureEvidenceMatrixResult",
     "FeatureEvidenceRow",
+    "AXIS_SUMMARY_FIELDS",
+    "FeatureEvidenceAxesResult",
+    "FeatureEvidenceAxesRow",
     "FeatureAuditAggregateRow",
     "FeatureAuditReplicateResult",
     "SIGNED_NULL_SNR_THRESHOLDS",

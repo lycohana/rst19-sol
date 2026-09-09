@@ -440,6 +440,16 @@ rst19-feature-evidence `
 
 输出 `feature_evidence_matrix.csv/json`。其中候选持久比例、同类质量比例、质量层邻域响应和候选/质量同类响应保持分列；邻域响应不是同类质量持久性。可选的 `--psf-spatial` 还会合并局部模板可得率、局部相关度/残差以及相对全局模板的变化，用来检验空间 PSF 校正是否改变类别解释；模板不足时只记录校准缺口。当前矩阵显示多个被拒类别仍可在 `12/15` 帧附近重复出现，但 PSF/质量层不支持，说明跨帧重复不能单独升级为恒星；该工具只组织研究证据，不修改默认检测、GUI 或缓存。
 
+类别级证据轴同步汇总可在上述矩阵上运行：
+
+```powershell
+rst19-feature-evidence-axes `
+  tmp/feature-evidence-matrix-code-pattern-current-v3-routing/feature_evidence_matrix.csv `
+  --out-dir tmp/feature-evidence-axes-code-pattern-current-v1
+```
+
+它输出 `Q|P=质量邻域持久数/候选位置持久数` 及四种 detector-level 证据模式。当前紧凑质量类为 `86.1%`，拥挤/尖峰/弱背景/形状类为 `0.5%--5.0%`，边缘/掩膜类为 `22.1%`；该比值不等于逐源质量通过率、precision、FDR 或恒星概率，也不修改默认检测、GUI 或缓存。
+
 如需量化不同特征类别的“规则签名”而不是把它们混成一个 SNR 分数，可运行：
 
 ```powershell

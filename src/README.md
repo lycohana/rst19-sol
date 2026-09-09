@@ -291,6 +291,16 @@ rst19-feature-evidence `
 
 输出 `feature_evidence_matrix.csv/json`。其中候选持久比例、同类质量比例、质量层邻域响应和候选/质量同类响应保持分列；邻域响应不是同类质量持久性。可选的 `--psf-spatial` 还会合并局部模板可得率、局部相关度/残差以及相对全局模板的变化，用来检验空间 PSF 校正是否改变类别解释；模板不足时只记录校准缺口。当前矩阵显示多个被拒类别仍可在 `12/15` 帧附近重复出现，但 PSF/质量层不支持，说明跨帧重复不能单独升级为恒星；该工具只组织研究证据，不修改默认检测、GUI 或缓存。
 
+如果要把“位置持久”与“质量响应同步”进一步压缩为类别级审计，可运行：
+
+```powershell
+rst19-feature-evidence-axes `
+  tmp/feature-evidence-matrix-code-pattern-current-v3-routing/feature_evidence_matrix.csv `
+  --out-dir tmp/feature-evidence-axes-code-pattern-current-v1
+```
+
+输出 `feature_evidence_axes.csv/json`，其中 `Q|P` 是质量邻域持久数除以候选位置持久数；质量邻域可能属于其它类别，所以它不是逐源质量通过率或恒星概率。当前紧凑质量类 `Q|P=86.1%`，拥挤/尖峰/弱背景/形状类仅 `0.5%--5.0%`，边缘/掩膜类 `22.1%`。该只读汇总用于论文证据分流，不重读 FITS、不修改默认检测、GUI 或缓存。
+
 类别规则签名的非参数对照可用 `rst19-feature-effect-size`：它以 `compact_quality` 为参考，输出各落选类别在 flux/filter SNR、峰值、FWHM、椭圆率、sharpness、足迹、PSF 支持、质心偏移和值域计数上的 AUC/Cliff's delta。该结果只描述当前标签规则的分布差异，不是物理恒星分类器；产物为 `tmp/feature-effect-size-code-pattern-current-v1/`。
 
 真实污染结构中的双源注入审计可用 `rst19-contaminated-pair-injection`。它把已知 Gaussian 双源叠加到目标 pair 中点、紧凑质量源和线状候选附近，扫描 `2.738/4.123 px` 分离和 `0.143/1` 副/主峰比，并将 baseline、injected、new 三层命中分别输出。当前 pilot 用于说明污染结构会改变双源回收，不是当前 FITS 的 precision、伪影概率或物理恒星数；产物为 `tmp/contaminated-pair-injection-code-pattern-current-v1/`，不接入默认检测、质量层、GUI 或缓存。
