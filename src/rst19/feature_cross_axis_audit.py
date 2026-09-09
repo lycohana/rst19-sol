@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 from collections import Counter
@@ -96,6 +97,26 @@ class FeatureCrossAxisPatternSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class FeatureCrossAxisInputProvenance:
+    """一个输入表的精确字节指纹和结构摘要。"""
+
+    name: str
+    path: str
+    sha256: str
+    row_count: int
+    columns: tuple[str, ...]
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "path": self.path,
+            "sha256": self.sha256,
+            "row_count": self.row_count,
+            "columns": list(self.columns),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class FeatureCrossAxisAuditResult:
     """跨证据轴审计的机器可读结果。"""
 
@@ -108,6 +129,7 @@ class FeatureCrossAxisAuditResult:
     source_rows: tuple[FeatureCrossAxisSource, ...]
     class_summaries: tuple[FeatureCrossAxisClassSummary, ...]
     pattern_summaries: tuple[FeatureCrossAxisPatternSummary, ...]
+    input_provenance: tuple[FeatureCrossAxisInputProvenance, ...]
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -120,28 +142,55 @@ class FeatureCrossAxisAuditResult:
             "source_rows": [row.as_dict() for row in self.source_rows],
             "class_summaries": [row.as_dict() for row in self.class_summaries],
             "pattern_summaries": [row.as_dict() for row in self.pattern_summaries],
+            "input_provenance": {
+                row.name: row.as_dict() for row in self.input_provenance
+            },
             "interpretation_guardrails": [
                 "feature_class 是检测器优先级旗标，不是物理恒星类别。",
                 "raw 局部峰、二维支持、值域计数和逐帧响应不是彼此独立的真值标签。",
                 "evidence_pattern 只描述证据并置，不是分类器、恒星概率或伪影率。",
                 "跨表连接要求抽样 detection_id 集合一致，避免把不同实验产物静默拼接。",
+                "input_provenance 记录输入表的精确字节 SHA-256、行数和列顺序，便于复核数据血缘。",
             ],
         }
 
 
-def _read_csv(path_value: str | Path, name: str) -> tuple[Path, list[dict[str, str]]]:
+def _read_csv(
+    path_value: str | Path,
+    name: str,
+) -> tuple[Path, list[dict[str, str]], tuple[str, ...]]:
     path = Path(path_value)
     try:
         with path.open("r", encoding="utf-8-sig", newline="") as stream:
             reader = csv.DictReader(stream)
             if not reader.fieldnames:
                 raise ValueError(f"{name} has no header: {path}")
+            columns = tuple(str(field) for field in reader.fieldnames)
             rows = [dict(row) for row in reader]
     except OSError as exc:
         raise OSError(f"无法读取{name}：{path}") from exc
     if not rows:
         raise ValueError(f"{name} is empty: {path}")
-    return path, rows
+    return path, rows, columns
+
+
+def _input_provenance(
+    name: str,
+    path: Path,
+    rows: Sequence[Mapping[str, str]],
+    columns: Sequence[str],
+) -> FeatureCrossAxisInputProvenance:
+    try:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise OSError(f"无法计算{name}的 SHA-256：{path}") from exc
+    return FeatureCrossAxisInputProvenance(
+        name=name,
+        path=str(path),
+        sha256=digest,
+        row_count=len(rows),
+        columns=tuple(columns),
+    )
 
 
 def _required_columns(rows: Sequence[Mapping[str, str]], fields: Iterable[str], name: str) -> None:
@@ -274,10 +323,13 @@ def run_feature_cross_axis_audit(
 ) -> FeatureCrossAxisAuditResult:
     """严格对齐四类既有表，输出跨证据轴的描述性审计。"""
 
-    catalog_file, catalog_rows = _read_csv(catalog_path, "source catalog")
-    raw_file, raw_rows = _read_csv(raw_summary_path, "raw source summary")
-    peak_file, peak_rows = _read_csv(peak_consistency_path, "peak consistency table")
-    temporal_file, temporal_rows = _read_csv(temporal_sources_path, "temporal source table")
+    catalog_file, catalog_rows, catalog_columns = _read_csv(catalog_path, "source catalog")
+    raw_file, raw_rows, raw_columns = _read_csv(raw_summary_path, "raw source summary")
+    peak_file, peak_rows, peak_columns = _read_csv(peak_consistency_path, "peak consistency table")
+    temporal_file, temporal_rows, temporal_columns = _read_csv(
+        temporal_sources_path,
+        "temporal source table",
+    )
 
     _required_columns(
         catalog_rows,
@@ -504,6 +556,12 @@ def run_feature_cross_axis_audit(
         source_rows=source_rows,
         class_summaries=class_summaries,
         pattern_summaries=tuple(pattern_rows),
+        input_provenance=(
+            _input_provenance("catalog", catalog_file, catalog_rows, catalog_columns),
+            _input_provenance("raw_summary", raw_file, raw_rows, raw_columns),
+            _input_provenance("peak_consistency", peak_file, peak_rows, peak_columns),
+            _input_provenance("temporal_sources", temporal_file, temporal_rows, temporal_columns),
+        ),
     )
 
 
@@ -543,6 +601,7 @@ def write_feature_cross_axis_artifacts(
 __all__ = [
     "FeatureCrossAxisAuditResult",
     "FeatureCrossAxisClassSummary",
+    "FeatureCrossAxisInputProvenance",
     "FeatureCrossAxisPatternSummary",
     "FeatureCrossAxisSource",
     "run_feature_cross_axis_audit",

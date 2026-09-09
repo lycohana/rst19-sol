@@ -530,7 +530,7 @@ hard-negative 的跨帧回查复用 `forced_stability.py` 而不复制测量逻�
 
 ### 2026-09-09 - 跨证据轴交叉审计
 
-`feature_cross_axis_audit.py` 严格连接 canonical 源目录、原始局部抽样摘要、raw 局部峰表和逐帧源摘要，只保留 raw sample 的共同 `detection_id` 集合；集合不一致时失败，不静默取交集。它还逐行校验 peak 表的 `feature_class`、`feature_class_label` 和 `quality_passed` 与源目录一致，避免不同运行的同号候选被拼接。输出 raw `r=1` 局部峰、二维支持帧数、值域异常、局部噪声、核心占比和 `R_MAD` 的逐源并置与类别摘要。`evidence_pattern` 是证据组合描述，不是分类器或质量分数。该模块不重读 FITS、不接入默认 detector、质量层、GUI 或缓存，测试为 `tests/test_feature_cross_axis_audit.py`，修正产物为 `tmp/feature-cross-axis-audit-code-pattern-current-v2/`。
+`feature_cross_axis_audit.py` 严格连接 canonical 源目录、原始局部抽样摘要、raw 局部峰表和逐帧源摘要，只保留 raw sample 的共同 `detection_id` 集合；集合不一致时失败，不静默取交集。它还逐行校验 peak 表的 `feature_class`、`feature_class_label` 和 `quality_passed` 与源目录一致，避免不同运行的同号候选被拼接。输出 raw `r=1` 局部峰、二维支持帧数、值域异常、局部噪声、核心占比和 `R_MAD` 的逐源并置与类别摘要，并在 JSON 中记录四张输入表的精确字节 SHA-256、行数与列顺序，使“路径相同但表版本不同”的血缘错误可被复核。`evidence_pattern` 是证据组合描述，不是分类器或质量分数。该模块不重读 FITS、不接入默认 detector、质量层、GUI 或缓存，测试为 `tests/test_feature_cross_axis_audit.py`，修正产物为 `tmp/feature-cross-axis-audit-code-pattern-current-v2/`。
 
 ### 2026-09-09 - 各特征类别的原始局部证据审计
 

@@ -160,6 +160,15 @@ def test_cross_axis_audit_aligns_sources_and_reports_conflict_pattern(tmp_path) 
     assert summary.raw_non_local_maximum_fraction == 1.0
     assert summary.value_domain_anomaly_fraction == 1.0
     assert summary.temporal_any_sign_flip_fraction == 1.0
+    provenance = result.as_dict()["input_provenance"]
+    assert provenance["catalog"]["row_count"] == 2
+    assert len(provenance["catalog"]["sha256"]) == 64
+    assert provenance["catalog"]["columns"] == [
+        "detection_id",
+        "feature_class",
+        "feature_class_label",
+        "quality_passed",
+    ]
 
     output = write_feature_cross_axis_artifacts(result, tmp_path / "out")
     assert (output / "feature_cross_axis_audit.json").is_file()
