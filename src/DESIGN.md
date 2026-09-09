@@ -522,6 +522,12 @@ hard-negative 的跨帧回查复用 `forced_stability.py` 而不复制测量逻�
 
 当前 `linear_artifact` 的 `96` 个候选轴比为 `40.066`，`compact_quality` 的 `5,000` 次等样本量对照最大为 `1.508`。该模块只用于把线状候选路由到线宽、方向、跨帧注册残差和运动一致性审计，不能独立判定拖影、固定结构或运动目标。测试为 `tests/test_source_geometry_audit.py`，产物为 `tmp/source-geometry-audit-code-pattern-current-v1/`。
 
+### 2026-09-09 - 逐帧原始响应与产物血缘审计
+
+`feature_temporal_consistency_audit.py` 只读取源目录和逐帧原始孔径摘要 CSV，在固定 detector 坐标/测量口径下计算逐源稳健相对波动 `R_MAD`、覆盖、正值/`flux SNR≥5` 比例、符号翻转、零值、负异常和重复码比例，再按首要 `feature_class` 汇总。`R_MAD` 使用 `1.4826×MAD/max(|median|,1)`；它是响应描述量，不是 p 值、FDR、precision 或恒星概率。输入字段 `repeated_code_count` 与 pair 专用的 `repeated_3990_3993_count` 是显式同义别名，其余字段不做猜测。
+
+类别默认来自 `source_catalog.csv`。若逐帧表也带 `feature_class`，默认要求每个 detection ID 的类别一致；`feature_class_source="frame"` 是显式采用 artifact-local 类别的研究模式，CLI 还支持重复 `--detection-id` 只审计指定源。这样处理是必要的：同名 `82931/82934` 在全图源表和 pair 专用表的类别不同，detection ID 不是跨产物全局物理身份。该模块不接入默认 detection、质量层、GUI、缓存或 FITS 读取；产物为 `feature_temporal_consistency_audit.json`、`feature_temporal_consistency_sources.csv` 和 `feature_temporal_consistency_summary.csv`，测试为 `tests/test_feature_temporal_consistency_audit.py`。
+
 ### 2026-09-09 - 各特征类别的原始局部证据审计
 
 新增 `feature_raw_evidence_audit.py` 与 `rst19-feature-raw-evidence-audit`。模块严格按 `detection_id` 连接源表和既有原始 FITS 分层抽样摘要，汇总核心能量占比、局部噪声、零值/负值/重复码以及 15 帧峰值 SNR、通量 SNR、`support_3x3` 达线帧数；它不重读 FITS，不接入默认 detector、质量层、GUI 或缓存。
