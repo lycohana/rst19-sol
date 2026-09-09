@@ -512,6 +512,17 @@ rst19-source-geometry-audit `
 
 该审计只读取源表坐标，用 PCA 轴比和垂直残差对线状类与等样本量点源类做可重复对照；它支持“线状类需要独立线/轨迹分支”的工程判断，但不证明运动目标、固定条带或伪影身份，也不是 p 值、FDR 或恒星概率。当前结果为 `linear_artifact` 轴比 `40.07`，`compact_quality` 对照最大 `1.51`；详细解释见 [`亮点真实性与伪影判别研究`](doc/02-星图识别/亮点真实性与伪影判别研究.md) 10.106。
 
+若要把原始 FITS 抽样中的局部剖面和值域证据按首要类别汇总，可运行：
+
+```powershell
+rst19-feature-raw-evidence-audit `
+  tmp/source-feature-morphology-gui-default/source_catalog.csv `
+  tmp/raw-source-diagnostics-stratified-v2/stratified_raw_source_summary.csv `
+  --out-dir tmp/feature-raw-evidence-audit-code-pattern-current-v1
+```
+
+该命令只连接已经生成的 CSV，不重读 FITS；它输出核心能量占比、局部噪声、零值/负值/重复码和 15 帧支持的类别分布，并逐字段标注与类别规则的重叠。当前样本中，尖峰类核心占比高但二维支持低，拥挤类局部噪声高且通量 SNR 持久弱，范围异常类重复码持续；这些是机制分流证据，不是独立 precision、FDR 或恒星概率。详细解释见 [`检测器实验记录`](doc/02-星图识别/检测器实验记录.md) 8.121。
+
 若要检查这些源级字段是否在重复表达同一响应，可运行：
 
 ```powershell

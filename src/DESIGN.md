@@ -521,3 +521,9 @@ hard-negative 的跨帧回查复用 `forced_stability.py` 而不复制测量逻�
 新增 `source_geometry_audit.py` 与 `rst19-source-geometry-audit`。模块只读取源表中的 `x/y` 与 `feature_class`，用 PCA 轴比、主轴方向和垂直残差检查指定类别的探测器坐标几何，并从 `compact_quality` 做固定种子的等样本量抽样对照。它不读取 FITS，不接入默认 detector、质量层、GUI 或缓存；同一源表产生的类别标签和坐标不是独立真值，轴比上尾也不是 p 值、FDR 或恒星概率。
 
 当前 `linear_artifact` 的 `96` 个候选轴比为 `40.066`，`compact_quality` 的 `5,000` 次等样本量对照最大为 `1.508`。该模块只用于把线状候选路由到线宽、方向、跨帧注册残差和运动一致性审计，不能独立判定拖影、固定结构或运动目标。测试为 `tests/test_source_geometry_audit.py`，产物为 `tmp/source-geometry-audit-code-pattern-current-v1/`。
+
+### 2026-09-09 - 各特征类别的原始局部证据审计
+
+新增 `feature_raw_evidence_audit.py` 与 `rst19-feature-raw-evidence-audit`。模块严格按 `detection_id` 连接源表和既有原始 FITS 分层抽样摘要，汇总核心能量占比、局部噪声、零值/负值/重复码以及 15 帧峰值 SNR、通量 SNR、`support_3x3` 达线帧数；它不重读 FITS，不接入默认 detector、质量层、GUI 或缓存。
+
+输出同时记录 `control_sample_count`、`diagnostic_sample_count` 和 `definition_overlap`。当前抽样的发现是：尖峰类核心能量占比可高但二维支持为零，拥挤类局部噪声更高且通量支持弱，范围异常类重复码长期存在；这些是类别路由的原始证据，不是独立真值、precision、FDR 或恒星概率。测试为 `tests/test_feature_raw_evidence_audit.py`，产物为 `tmp/feature-raw-evidence-audit-code-pattern-current-v1/`。
