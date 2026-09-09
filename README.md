@@ -516,35 +516,48 @@ rst19-source-geometry-audit `
 
 ```powershell
 rst19-feature-raw-evidence-audit `
-  tmp/source-feature-morphology-gui-default/source_catalog.csv `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
   tmp/raw-source-diagnostics-stratified-v2/stratified_raw_source_summary.csv `
-  --out-dir tmp/feature-raw-evidence-audit-code-pattern-current-v1
+  --out-dir tmp/feature-raw-evidence-audit-code-pattern-current-v2
 ```
 
-该命令只连接已经生成的 CSV，不重读 FITS；它输出核心能量占比、局部噪声、零值/负值/重复码和 15 帧支持的类别分布，并逐字段标注与类别规则的重叠。当前样本中，尖峰类核心占比高但二维支持低，拥挤类局部噪声高且通量 SNR 持久弱，范围异常类重复码持续；这些是机制分流证据，不是独立 precision、FDR 或恒星概率。详细解释见 [`检测器实验记录`](doc/02-星图识别/检测器实验记录.md) 8.121。
+该命令只连接已经生成的 CSV，不重读 FITS；它输出核心能量占比、局部噪声、零值/负值/重复码和 15 帧支持的类别分布，并逐字段标注与类别规则的重叠。当前样本中，尖峰类核心占比高但二维支持低，拥挤类局部噪声高且通量 SNR 持久弱，范围异常类重复码持续；这些是机制分流证据，不是独立 precision、FDR 或恒星概率。必须使用当前 v3 源表；旧 GUI 源表会把 8 个范围异常样本误归为紧凑类。详细解释见 [`检测器实验记录`](doc/02-星图识别/检测器实验记录.md) 8.121。
 
 若要进一步审计各特征类在 15 帧原始固定坐标孔径中的响应波动，可运行：
 
 ```powershell
 rst19-feature-temporal-consistency-audit `
-  tmp/source-feature-morphology-gui-default/source_catalog.csv `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
   tmp/raw-source-diagnostics-stratified-v2/stratified_raw_source_frame_metrics.csv `
-  --out-dir tmp/feature-temporal-consistency-audit-code-pattern-current-v1
+  --out-dir tmp/feature-temporal-consistency-audit-code-pattern-current-v2
 ```
 
 它输出逐源/逐类别的覆盖率、稳健相对 MAD、正值比例、`flux SNR≥5` 比例、符号翻转和重复码/异常值比例。默认从 `source_catalog.csv` 取类别，并在逐帧表带有不同类别时拒绝静默连接；pair 专用表的类别属于其本地产物，必须显式限定 ID 和来源：
 
 ```powershell
 rst19-feature-temporal-consistency-audit `
-  tmp/source-feature-morphology-gui-default/source_catalog.csv `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
   tmp/raw-source-diagnostics-v1/raw_source_frame_metrics.csv `
   --feature-class-source frame `
   --detection-id 82931 `
   --detection-id 82934 `
-  --out-dir tmp/feature-temporal-consistency-pair-82931-82934-current-v1
+  --out-dir tmp/feature-temporal-consistency-pair-82931-82934-current-v2
 ```
 
 pair 结果中的 `15/15` 是固定孔径强制响应，不等价于注册候选 `15/15` 帧出现；重复码、负异常和共享孔径仍必须单独解释。该审计只读 CSV，不改默认 detector、质量层、GUI 或缓存。
+
+若要把 raw 局部峰、二维支持、值域和逐帧波动放在同一张类别交叉表中，可运行：
+
+```powershell
+rst19-feature-cross-axis-audit `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  tmp/raw-source-diagnostics-stratified-v2/stratified_raw_source_summary.csv `
+  tmp/source-peak-consistency-code-pattern-current-v1/source_peak_consistency.csv `
+  tmp/feature-temporal-consistency-audit-code-pattern-current-v2/feature_temporal_consistency_sources.csv `
+  --out-dir tmp/feature-cross-axis-audit-code-pattern-current-v2
+```
+
+该命令要求四张表的抽样 `detection_id` 严格对齐，并额外校验 peak 表的 `feature_class`/`quality_passed` 与 canonical 源表一致；输出逐源证据组合和类别汇总。例如 raw 局部峰为真不代表有二维支持，低波动也不代表值域干净。它是规则重叠/证据冲突审计，不输出新的质量分数或恒星概率，也不修改默认检测与 GUI。旧 v1 因源表版本不一致已撤回。
 
 若要检查这些源级字段是否在重复表达同一响应，可运行：
 
