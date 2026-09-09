@@ -478,6 +478,12 @@ hard-negative 的跨帧回查复用 `forced_stability.py` 而不复制测量逻�
 该模块同时输出 `feature_gate_temporal_subgroup_summary.csv`，按诊断子组汇总路径组成、候选持久、同机制持久和邻域质量持久，用于区分“固定位置反复响应”和“同一诊断机制反复响应”。`mechanism_gap_fraction` 只是两种 detector-level 持久率的差额，不是噪点概率、伪影率或物理身份；当前 `masked_partial` 为候选 `9,048/11,289`、同机制 `9/11,289`，`blend_unresolved` 为 `509/905`、`196/905`。该表也只读已有 CSV/JSON，不接入默认检测、GUI 或缓存。
 可选的 `--target-id` 会再生成 `feature_gate_temporal_targets.csv`，给出目标相对所属子组的含并列值经验 `le/ge` 位置以及三项持久条件是否同时满足；该表仅用于复核排序，不是概率、置信区间或身份判定。
 
+### 2026-09-09 - 候选峰与原始像素峰一致性审计
+
+新增 `source_peak_consistency.py` 与 `rst19-source-peak-consistency`。该模块读取已有 `source_catalog.csv` 和对应原始 FITS，不重新运行 detector，而是把候选的整数峰坐标放回原始像素，在固定的 `r=1/2/3 px` 窗口内计算局部最大值、并列/唯一局部峰和候选到窗口最大值的 ADU 差值，并按 `feature_class` 汇总。这样显式区分“匹配滤波响应图的候选峰”和“raw 图像像素拓扑峰”，避免把二者当作同一证据。
+
+该模块的输出分为逐候选、类别汇总和指定目标三层：`source_peak_consistency.csv`、`source_peak_consistency_class_summary.csv`、`source_peak_consistency_targets.csv` 和 `source_peak_consistency.json`。`raw_local_maximum` 只回答局部像素拓扑问题，不升级 `quality_passed`，不输出物理恒星概率、precision、FDR 或源数，也不接入默认检测、质量层、GUI 或缓存。当前目标 pair 的 `82931/82934` 在三个窗口均非 raw 局部峰，`r=3` 共同指向同一亮像素；该结果作为值域/共享结构/PSF 混叠的复核信号，不能单独判定噪点或真实星。
+
 ### 2026-09-07 - 近邻 pair 原始像素拓扑审计
 
 新增 `pair_pixel_topology.py` 与 `rst19-pair-pixel-topology`。模块从未降噪 FITS 中截取指定 pair 的局部窗口，在多个阈值下对正值像素做 8 邻域连通分量分析，并以多个邻域半径寻找原始局部极大值；重复工程码和特殊负值只作为显式敏感性对照。它用于验证候选框是否共享同一片原始响应结构，以及检测器质心/峰坐标是否发生重定位，不把 `source_catalog.csv` 的两个 ID 当作两个物理真值。

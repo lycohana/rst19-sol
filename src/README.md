@@ -301,6 +301,18 @@ rst19-feature-evidence-axes `
 
 输出 `feature_evidence_axes.csv`、`feature_evidence_axes_sensitivity.csv` 和 `feature_evidence_axes.json`，其中 `Q|P` 是质量邻域持久数除以候选位置持久数；质量邻域可能属于其它类别，所以它不是逐源质量通过率或恒星概率。当前紧凑质量类 `Q|P=86.1%`，拥挤/尖峰/弱背景/形状类仅 `0.5%--5.0%`，边缘/掩膜类 `22.1%`。敏感性表覆盖基线、较严格 PSF 线、较宽候选线和两组质量差异线，用来区分稳健类别规律与工程阈值边界。该只读汇总用于论文证据分流，不重读 FITS、不修改默认检测、GUI 或缓存。
 
+候选峰与 raw 像素局部峰的一致性审计：
+
+```powershell
+rst19-source-peak-consistency `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --target-id 82931 --target-id 82934 `
+  --out-dir tmp/source-peak-consistency-code-pattern-current-v1
+```
+
+`source_peak_consistency.py` 只读取现有源表和原始 FITS，在 `3×3/5×5/7×7` 窗口输出逐源 CSV、类别汇总 CSV、目标明细 CSV 与 JSON。候选来自匹配滤波响应，因此 raw 像素峰与响应峰可以不重合；输出的局部峰标志、最大值差值和类别比例是 detector-level 拓扑诊断，不是恒星概率、precision、FDR 或物理源数。该模块不重新检测、不修改质量层、GUI 或缓存。
+
 类别规则签名的非参数对照可用 `rst19-feature-effect-size`：它以 `compact_quality` 为参考，输出各落选类别在 flux/filter SNR、峰值、FWHM、椭圆率、sharpness、足迹、PSF 支持、质心偏移和值域计数上的 AUC/Cliff's delta。该结果只描述当前标签规则的分布差异，不是物理恒星分类器；产物为 `tmp/feature-effect-size-code-pattern-current-v1/`。
 
 真实污染结构中的双源注入审计可用 `rst19-contaminated-pair-injection`。它把已知 Gaussian 双源叠加到目标 pair 中点、紧凑质量源和线状候选附近，扫描 `2.738/4.123 px` 分离和 `0.143/1` 副/主峰比，并将 baseline、injected、new 三层命中分别输出。当前 pilot 用于说明污染结构会改变双源回收，不是当前 FITS 的 precision、伪影概率或物理恒星数；产物为 `tmp/contaminated-pair-injection-code-pattern-current-v1/`，不接入默认检测、质量层、GUI 或缓存。

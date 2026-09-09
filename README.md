@@ -450,6 +450,18 @@ rst19-feature-evidence-axes `
 
 它输出 `feature_evidence_axes.csv`、`feature_evidence_axes_sensitivity.csv` 和 JSON，其中包含 `Q|P=质量邻域持久数/候选位置持久数` 及四种 detector-level 证据模式。当前紧凑质量类为 `86.1%`，拥挤/尖峰/弱背景/形状类为 `0.5%--5.0%`，边缘/掩膜类为 `22.1%`；五组敏感性配置显示拥挤、尖峰、弱背景的不同步模式较稳，而形状/紧凑类存在工程阈值边界。该比值不等于逐源质量通过率、precision、FDR 或恒星概率，也不修改默认检测、GUI 或缓存。
 
+检查“匹配滤波候选峰是否也是原始像素局部峰”，可运行：
+
+```powershell
+rst19-source-peak-consistency `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --target-id 82931 --target-id 82934 `
+  --out-dir tmp/source-peak-consistency-code-pattern-current-v1
+```
+
+该只读审计在 `3×3/5×5/7×7` raw 窗口中输出逐源峰一致性、类别汇总和目标明细。当前 `82931/82934` 在三个窗口都不是 raw 局部峰，且 `7×7` 共同指向 `(2438,4022)=13028 ADU`；这支持共享亮结构/值域异常导致的 detector response 重定位，但不把 raw 局部峰当作恒星充分条件，也不直接输出 precision、FDR 或物理源数。产物为 `tmp/source-peak-consistency-code-pattern-current-v1/`，实现为 `src/rst19/source_peak_consistency.py`，测试为 `tests/test_source_peak_consistency.py`。
+
 如需量化不同特征类别的“规则签名”而不是把它们混成一个 SNR 分数，可运行：
 
 ```powershell
