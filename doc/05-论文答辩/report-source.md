@@ -156,6 +156,8 @@
 95. 截图 pair 的局部 Gaussian 响应反事实归因：新增 `src/rst19/pair_response_attribution.py` 与 CLI，在共同背景 `B=37 ADU`、`FWHM=2 px` 下比较 `raw`、重复码屏蔽、`≤−1000 ADU` 负异常屏蔽和联合屏蔽。raw 的主/副响应为 `3579.261/888.725 ADU`；屏蔽重复码后主位置无效，屏蔽负异常后副位置不再是局部响应极大值。`4σ` 离散核归因中，主响应的普通/重复码/负异常贡献为 `+2729.889/+1308.807/−459.535 ADU`，副响应为 `+1358.338/+0.020/−469.635 ADU`。该结果把两个框具体解释为“重复码正值锚点 + 共享亮斑翼部响应”，以及负异常在亮斑内部形成的响应凹槽；它是 detector-level 线性归因，不是噪点概率、物理星数或伪影率。机器产物为 `tmp/pair-response-attribution-code-pattern-current-v1/`，测试为 `tests/test_pair_response_attribution.py`。
 96. 截图 pair 的局部补值反事实：新增 `src/rst19/pair_repair_counterfactual.py` 与 CLI，在原始 FITS 的内存局部窗口中用排除全部特殊像素后的邻域中位数，分别替换重复码、`≤−1000 ADU` 负异常和两类像素，再用同一 `hybrid + 4σ + FWHM=2 px + min_distance=4 px` detector 重跑。目标窗口候选/质量由 raw 的 `2/1` 变为重复码修复 `2/1`、负异常修复 `1/1`、两类修复 `1/1`；补值半径 `1/2/3 px` 均复现该 `2→1`。这比单纯屏蔽更接近“像素缺口是否改变局部形状”的敏感性问题，支持负值缺口为当前双峰分裂的主要形状触发、重复码主要影响主框值域锚点；但补值不是坏像素标定或天空真值重建，不能写成噪点率、硬件故障或物理星数结论。机器产物为 `tmp/pair-repair-counterfactual-code-pattern-current-v1/`、`tmp/pair-repair-counterfactual-code-pattern-current-r2/`、`tmp/pair-repair-counterfactual-code-pattern-current-r3/`，测试为 `tests/test_pair_repair_counterfactual.py`，对应真实性研究 10.99。
 
+97. 类别级参数鲁棒性复核：在同一首帧扫描候选阈值 `4/5/6/8σ`，宽筛候选由 `84,594` 降至 `53,371`，质量源由 `29,260` 降至 `28,542`；`8σ` 下范围异常/紧凑质量的同坐标与同类别保留率约为 `100%/100%`、`97.6%/97.6%`，拥挤混合/尖峰支持/弱背景/边缘掩膜约为 `36.2%/35.4%`、`42.5%/42.3%`、`46.8%/46.8%`、`57.7%/57.7%`。只改变 `flux SNR=3/5/7/9` 时候选池始终为 `84,594`，质量数为 `41,110/29,260/22,438/18,296`。该结果将“候选门控制召回、质量门重标记同一响应、特征类别决定专项复核路径”分开，不推出物理恒星数、precision 或 FDR；机器表为 `tmp/feature-parameter-sensitivity-code-pattern-current-v1/`，依据为检测器实验记录 8.57 与真实性研究 10.100。
+
 对应机器产物：
 
 - `tmp/pair-flux-ratio-multilevel-gui-default/pair_flux_ratio_audit.csv`
