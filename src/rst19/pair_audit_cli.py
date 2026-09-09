@@ -85,12 +85,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"target_distance={result.target_peak_distance_px:.3f}px")
         print(result.conclusion)
         for row in result.rows:
+            shared_fraction = (
+                f"{row.secondary_shared_aperture_net_fraction:.1%}"
+                if row.secondary_shared_aperture_net_fraction is not None
+                else "—"
+            )
             print(
                 f"F{row.frame_index:02d}: primary={row.primary_detection_id} "
                 f"secondary={row.secondary_detection_id} "
                 f"secondary_quality={row.secondary_quality_passed} "
                 f"nearest_secondary={row.nearest_secondary_detection_id} "
                 f"same_nearest={row.nearest_source_same_for_targets} "
+                f"shared_aperture={row.secondary_shared_aperture_pixel_count}/"
+                f"{row.secondary_aperture_pixel_count} "
+                f"shared_net={shared_fraction} "
                 f"neg={row.secondary_negative_overflow_count} "
                 f"-1={row.secondary_fixed_minus_one_count} "
                 f"raw_delta_bic={row.pair_delta_bic_raw}"

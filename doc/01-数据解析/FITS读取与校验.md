@@ -87,6 +87,14 @@ def decode_auxiliary(raw_image_bytes: bytes) -> tuple[float, ...]:
 
 本项目已用 `rst19-aux-audit` 完成上述逐帧光轴交叉检查。结果表明四元数推导光轴与辅助 `ra/dec` 在 15 帧内的最大角残差约为 `1.1×10^-10 arcsec`，但这只是辅助字段之间的一致性，不代表已经获得完整 WCS。
 
+对格式说明与实际文件的完整只读复核可运行：
+
+```powershell
+rst19-format-audit doc/00-项目资料/原始数据 --out-dir tmp/format-audit-code-pattern-current-v1
+```
+
+该命令另外检查文件长度、`NAXIS1/NAXIS2`、`BITPIX`、`BSCALE/BZERO/BLANK`、首行 208 字节辅助区域、负值/精确 `-1`/正负极值，并用 `DATE-OBS` 对位置—速度字段做内部自洽比较。它只生成审计产物，不把负值或极值自动掩膜，不改变 `read_fits` 的有符号大端存储解释；实际结果见 [本地数据核验](../00-项目资料/本地数据核验.md) 第 13 节。
+
 ## 4. 图像值处理原则
 
 - 先保存原始整型数组或只读映射，再生成用于算法的浮点视图。

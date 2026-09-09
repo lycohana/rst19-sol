@@ -1425,6 +1425,15 @@ def _source_peak_position(source: Detection) -> tuple[float, float]:
     )
 
 
+def _source_measurement_position(source: Detection) -> tuple[float, float]:
+    """返回源级测量质心，用于近邻重叠审计。"""
+
+    return float(source.x), float(source.y)
+
+
+_PAIR_AUDIT_FLAGS = frozenset({"CODE_PATTERN", "NEGATIVE_OVERFLOW", "MASKED", "SATURATED"})
+
+
 def _guard_unresolved_gaussian_pairs(
     sources: Sequence[Detection],
     image: np.ndarray,
@@ -1438,10 +1447,12 @@ def _guard_unresolved_gaussian_pairs(
 
     ``min_distance`` 只约束匹配滤波峰的整数坐标，不能证明两个测量源
     是两个独立天体；质心会把两个相邻峰重新拉近，亮斑的非高斯翼部也
-    可能形成两个峰。因此只对约 ``1.5 FWHM`` 内、且都已通过普通质量
-    规则的 Gaussian 源运行局部单/双 PSF 比较。双模型没有同时达到
-    ΔBIC 和次分量 SNR 证据线时，仅将较弱分量标成 ``UNRESOLVED_BLEND``，
-    主峰和两个候选都保留在审计层。
+    可能形成两个峰。因此按源级测量质心寻找约 ``1.5 FWHM`` 内的近邻，
+    并纳入少量带值域审计旗标的强 Gaussian 邻峰。这样可以覆盖“主峰先
+    因 ``CODE_PATTERN`` 或溢出被拒、副峰却仍通过普通质量规则”的情况，
+    同时不把所有低 SNR 拒绝候选成批送入昂贵的 PSF 拟合。双模型没有同时
+    达到 ΔBIC 和次分量 SNR 证据线时，仅将较弱分量标成
+    ``UNRESOLVED_BLEND``，主峰和两个候选都保留在审计层。
 
     这是“候选层全保留、质量层不重复计数”的折中：它不声称相距更远
     的源不可分辨，也不把一个成功的局部模型直接升级为星表身份。
@@ -1456,13 +1467,17 @@ def _guard_unresolved_gaussian_pairs(
     eligible_indices = [
         index
         for index, source in enumerate(sources)
-        if source.quality_passed and "gaussian" in source.proposal_methods
+        if "gaussian" in source.proposal_methods
+        and (
+            source.quality_passed
+            or bool(_PAIR_AUDIT_FLAGS.intersection(source.flags))
+        )
     ]
     if len(eligible_indices) < 2:
         return list(sources), 0, 0, radius_px
     coordinates = np.asarray(
         [
-            _source_peak_position(source)
+            _source_measurement_position(source)
             for source in (sources[index] for index in eligible_indices)
         ],
         dtype=np.float64,

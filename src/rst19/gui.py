@@ -3127,7 +3127,7 @@ class StarfieldApp(tk.Tk):
                     ),
                 )
             rms = f"{matching.rms_residual_px:.3f}px" if matching.rms_residual_px is not None else "—"
-            summary.config(text=f"检测源 {len(analysis.detection.quality_sources):,} · 匹配成功 {matching.matched_count:,} · 未匹配检测源 {len(matching.unmatched_detection_ids):,} · 未匹配目录源 {len(matching.unmatched_catalog_ids):,}\n匹配半径 {matching.radius_px:.2f}px · RMS 残差 {rms} · 检测源匹配比例 {matching.inlier_ratio:.2%}\n绿色环为目录预测位置；连线长度是位置残差，不能解释为运动轨迹。")
+            summary.config(text=f"检测源 {len(analysis.detection.quality_sources):,} · 匹配成功 {matching.matched_count:,} · 未匹配检测源 {len(matching.unmatched_detection_ids):,} · 未匹配目录源 {len(matching.unmatched_catalog_ids):,}\n匹配半径 {matching.radius_px:.2f}px · RMS 残差 {rms} · 检测源匹配比例 {matching.inlier_ratio:.2%} · 一对一分配 {matching.assignment_mode}\n绿色环为目录预测位置；连线长度是位置残差，不能解释为运动轨迹。")
             self.overlay_mode_var.set("catalog")
             self._update_overlay_hint()
             self._draw_preview()

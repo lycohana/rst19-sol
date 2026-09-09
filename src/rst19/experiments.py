@@ -131,6 +131,208 @@ class SequenceFeatureFrameRow:
 
 
 @dataclass(frozen=True, slots=True)
+class SequenceFeatureMethodFrameRow:
+    """15 帧中每个特征类别的提议器来源计数。"""
+
+    frame_index: int
+    path: str
+    feature_class: str
+    feature_class_label: str
+    feature_candidate_count: int
+    feature_quality_count: int
+    all_three_count: int
+    gaussian_only_count: int
+    dog_only_count: int
+    partial_combination_count: int
+    no_gaussian_count: int
+    no_method_count: int
+    no_gaussian_quality_count: int
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "frame_index": self.frame_index,
+            "path": self.path,
+            "feature_class": self.feature_class,
+            "feature_class_label": self.feature_class_label,
+            "feature_candidate_count": self.feature_candidate_count,
+            "feature_quality_count": self.feature_quality_count,
+            "all_three_count": self.all_three_count,
+            "gaussian_only_count": self.gaussian_only_count,
+            "dog_only_count": self.dog_only_count,
+            "partial_combination_count": self.partial_combination_count,
+            "no_gaussian_count": self.no_gaussian_count,
+            "no_method_count": self.no_method_count,
+            "no_gaussian_quality_count": self.no_gaussian_quality_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SequenceFeatureSourceSubgroupPersistenceRow:
+    """首帧紧凑质量候选来源子组的跨帧候选/质量持久性。"""
+
+    feature_class: str
+    feature_class_label: str
+    proposal_subgroup: str
+    proposal_subgroup_label: str
+    anchor_count: int
+    anchor_quality_count: int
+    frame_count: int
+    required_presence: int
+    association_radius_px: float
+    candidate_median_presence: float | None
+    candidate_mean_presence: float | None
+    candidate_presence_ge_required_count: int
+    candidate_presence_all_frames_count: int
+    quality_median_presence: float | None
+    quality_mean_presence: float | None
+    quality_presence_ge_required_count: int
+    quality_presence_all_frames_count: int
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "feature_class": self.feature_class,
+            "feature_class_label": self.feature_class_label,
+            "proposal_subgroup": self.proposal_subgroup,
+            "proposal_subgroup_label": self.proposal_subgroup_label,
+            "anchor_count": self.anchor_count,
+            "anchor_quality_count": self.anchor_quality_count,
+            "frame_count": self.frame_count,
+            "required_presence": self.required_presence,
+            "association_radius_px": self.association_radius_px,
+            "candidate_median_presence": self.candidate_median_presence,
+            "candidate_mean_presence": self.candidate_mean_presence,
+            "candidate_presence_ge_required_count": self.candidate_presence_ge_required_count,
+            "candidate_presence_all_frames_count": self.candidate_presence_all_frames_count,
+            "quality_median_presence": self.quality_median_presence,
+            "quality_mean_presence": self.quality_mean_presence,
+            "quality_presence_ge_required_count": self.quality_presence_ge_required_count,
+            "quality_presence_all_frames_count": self.quality_presence_all_frames_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SequenceFeatureDiagnosticSubgroupPersistenceRow:
+    """首帧非紧凑特征诊断子组的跨帧位置/机制持久性。"""
+
+    feature_class: str
+    feature_class_label: str
+    diagnostic_subgroup: str
+    diagnostic_subgroup_label: str
+    diagnostic_subgroup_definition: str
+    anchor_count: int
+    anchor_quality_count: int
+    frame_count: int
+    required_presence: int
+    association_radius_px: float
+    candidate_median_presence: float | None
+    candidate_mean_presence: float | None
+    candidate_presence_ge_required_count: int
+    candidate_presence_all_frames_count: int
+    candidate_same_subgroup_median_presence: float | None
+    candidate_same_subgroup_mean_presence: float | None
+    candidate_same_subgroup_presence_ge_required_count: int
+    candidate_same_subgroup_presence_all_frames_count: int
+    quality_median_presence: float | None
+    quality_mean_presence: float | None
+    quality_presence_ge_required_count: int
+    quality_presence_all_frames_count: int
+    quality_same_subgroup_median_presence: float | None
+    quality_same_subgroup_mean_presence: float | None
+    quality_same_subgroup_presence_ge_required_count: int
+    quality_same_subgroup_presence_all_frames_count: int
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "feature_class": self.feature_class,
+            "feature_class_label": self.feature_class_label,
+            "diagnostic_subgroup": self.diagnostic_subgroup,
+            "diagnostic_subgroup_label": self.diagnostic_subgroup_label,
+            "diagnostic_subgroup_definition": self.diagnostic_subgroup_definition,
+            "anchor_count": self.anchor_count,
+            "anchor_quality_count": self.anchor_quality_count,
+            "frame_count": self.frame_count,
+            "required_presence": self.required_presence,
+            "association_radius_px": self.association_radius_px,
+            "candidate_median_presence": self.candidate_median_presence,
+            "candidate_mean_presence": self.candidate_mean_presence,
+            "candidate_presence_ge_required_count": self.candidate_presence_ge_required_count,
+            "candidate_presence_all_frames_count": self.candidate_presence_all_frames_count,
+            "candidate_same_subgroup_median_presence": self.candidate_same_subgroup_median_presence,
+            "candidate_same_subgroup_mean_presence": self.candidate_same_subgroup_mean_presence,
+            "candidate_same_subgroup_presence_ge_required_count": self.candidate_same_subgroup_presence_ge_required_count,
+            "candidate_same_subgroup_presence_all_frames_count": self.candidate_same_subgroup_presence_all_frames_count,
+            "quality_median_presence": self.quality_median_presence,
+            "quality_mean_presence": self.quality_mean_presence,
+            "quality_presence_ge_required_count": self.quality_presence_ge_required_count,
+            "quality_presence_all_frames_count": self.quality_presence_all_frames_count,
+            "quality_same_subgroup_median_presence": self.quality_same_subgroup_median_presence,
+            "quality_same_subgroup_mean_presence": self.quality_same_subgroup_mean_presence,
+            "quality_same_subgroup_presence_ge_required_count": self.quality_same_subgroup_presence_ge_required_count,
+            "quality_same_subgroup_presence_all_frames_count": self.quality_same_subgroup_presence_all_frames_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SequenceFeatureDiagnosticSourceRow:
+    """首帧非紧凑特征源的逐源跨帧位置/机制审计结果。"""
+
+    detection_id: int
+    feature_class: str
+    feature_class_label: str
+    diagnostic_subgroup: str
+    diagnostic_subgroup_label: str
+    diagnostic_subgroup_definition: str
+    quality_passed: bool
+    peak_x: float
+    peak_y: float
+    x: float
+    y: float
+    flux_snr: float | None
+    filter_snr: float | None
+    fwhm: float | None
+    ellipticity: float | None
+    sharpness: float | None
+    psf_support_pixels: int | None
+    footprint_pixels: int | None
+    centroid_shift_px: float | None
+    flags: str
+    proposal_methods: str
+    candidate_presence: int
+    candidate_same_subgroup_presence: int
+    quality_presence: int
+    quality_same_subgroup_presence: int
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "detection_id": self.detection_id,
+            "feature_class": self.feature_class,
+            "feature_class_label": self.feature_class_label,
+            "diagnostic_subgroup": self.diagnostic_subgroup,
+            "diagnostic_subgroup_label": self.diagnostic_subgroup_label,
+            "diagnostic_subgroup_definition": self.diagnostic_subgroup_definition,
+            "quality_passed": self.quality_passed,
+            "peak_x": self.peak_x,
+            "peak_y": self.peak_y,
+            "x": self.x,
+            "y": self.y,
+            "flux_snr": self.flux_snr,
+            "filter_snr": self.filter_snr,
+            "fwhm": self.fwhm,
+            "ellipticity": self.ellipticity,
+            "sharpness": self.sharpness,
+            "psf_support_pixels": self.psf_support_pixels,
+            "footprint_pixels": self.footprint_pixels,
+            "centroid_shift_px": self.centroid_shift_px,
+            "flags": self.flags,
+            "proposal_methods": self.proposal_methods,
+            "candidate_presence": self.candidate_presence,
+            "candidate_same_subgroup_presence": self.candidate_same_subgroup_presence,
+            "quality_presence": self.quality_presence,
+            "quality_same_subgroup_presence": self.quality_same_subgroup_presence,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class SequenceFeatureTemporalProfile:
     """15 帧特征类别计数、占比和质量通过率的时间剖面。"""
 
@@ -260,6 +462,10 @@ class SequenceFeatureAuditResult:
     frame_rows: tuple[SequenceFeatureFrameRow, ...]
     persistence_rows: tuple[SequenceFeaturePersistenceRow, ...]
     class_transition_rows: tuple[SequenceFeatureClassTransitionRow, ...]
+    proposal_method_rows: tuple[SequenceFeatureMethodFrameRow, ...] = ()
+    source_subgroup_rows: tuple[SequenceFeatureSourceSubgroupPersistenceRow, ...] = ()
+    diagnostic_subgroup_rows: tuple[SequenceFeatureDiagnosticSubgroupPersistenceRow, ...] = ()
+    diagnostic_source_rows: tuple[SequenceFeatureDiagnosticSourceRow, ...] = ()
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -273,6 +479,10 @@ class SequenceFeatureAuditResult:
             "frame_rows": [row.as_dict() for row in self.frame_rows],
             "persistence_rows": [row.as_dict() for row in self.persistence_rows],
             "class_transition_rows": [row.as_dict() for row in self.class_transition_rows],
+            "proposal_method_rows": [row.as_dict() for row in self.proposal_method_rows],
+            "source_subgroup_rows": [row.as_dict() for row in self.source_subgroup_rows],
+            "diagnostic_subgroup_rows": [row.as_dict() for row in self.diagnostic_subgroup_rows],
+            "diagnostic_source_row_count": len(self.diagnostic_source_rows),
         }
 
 
@@ -405,6 +615,17 @@ class SourcePairAuditRow:
     pair_component_snr_range_masked: float | None
     pair_delta_bic_sentinel_masked: float | None
     pair_component_snr_sentinel_masked: float | None
+    # 两个目标孔径的几何重叠与原始通量贡献。这个量用于解释“副框
+    # SNR 很高但可能只是邻近亮斑泄漏”，不是去混叠后的独立源通量。
+    secondary_aperture_pixel_count: int
+    secondary_shared_aperture_pixel_count: int
+    secondary_aperture_background_adu: float | None
+    secondary_aperture_raw_sum_adu: float | None
+    secondary_shared_aperture_raw_sum_adu: float | None
+    secondary_aperture_net_sum_adu: float | None
+    secondary_shared_aperture_net_sum_adu: float | None
+    secondary_shared_aperture_net_fraction: float | None
+    secondary_shared_aperture_max_adu: float | None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -455,6 +676,15 @@ class SourcePairAuditRow:
             "pair_component_snr_range_masked": self.pair_component_snr_range_masked,
             "pair_delta_bic_sentinel_masked": self.pair_delta_bic_sentinel_masked,
             "pair_component_snr_sentinel_masked": self.pair_component_snr_sentinel_masked,
+            "secondary_aperture_pixel_count": self.secondary_aperture_pixel_count,
+            "secondary_shared_aperture_pixel_count": self.secondary_shared_aperture_pixel_count,
+            "secondary_aperture_background_adu": self.secondary_aperture_background_adu,
+            "secondary_aperture_raw_sum_adu": self.secondary_aperture_raw_sum_adu,
+            "secondary_shared_aperture_raw_sum_adu": self.secondary_shared_aperture_raw_sum_adu,
+            "secondary_aperture_net_sum_adu": self.secondary_aperture_net_sum_adu,
+            "secondary_shared_aperture_net_sum_adu": self.secondary_shared_aperture_net_sum_adu,
+            "secondary_shared_aperture_net_fraction": self.secondary_shared_aperture_net_fraction,
+            "secondary_shared_aperture_max_adu": self.secondary_shared_aperture_max_adu,
         }
 
 
@@ -723,6 +953,8 @@ class TemporalCodeAuditResult:
     frame_count: int
     image_shape: tuple[int, int]
     paths: tuple[str, ...]
+    code_focus_values_by_frame: tuple[int | None, ...]
+    sentinel_focus_values_by_frame: tuple[int | None, ...]
     exact_stable_pixel_count: int
     exact_stable_value_counts: tuple[tuple[int, int], ...]
     low_variation_span_adu: int
@@ -750,6 +982,24 @@ class TemporalCodeAuditResult:
             "frame_count": self.frame_count,
             "image_shape": list(self.image_shape),
             "paths": list(self.paths),
+            "focus_values_by_frame": [
+                {
+                    "frame_index": index + 1,
+                    "path": self.paths[index],
+                    "code_value": self.code_focus_values_by_frame[index],
+                    "sentinel_value": self.sentinel_focus_values_by_frame[index],
+                    "code_in_range": (
+                        self.code_focus_values_by_frame[index] is not None
+                        and self.code_range_adu[0]
+                        <= self.code_focus_values_by_frame[index]
+                        <= self.code_range_adu[1]
+                    ),
+                    "sentinel_exact": (
+                        self.sentinel_focus_values_by_frame[index] == self.sentinel_value
+                    ),
+                }
+                for index in range(self.frame_count)
+            ],
             "exact_stable_pixel_count": self.exact_stable_pixel_count,
             "exact_stable_value_counts": {
                 str(value): count for value, count in self.exact_stable_value_counts
@@ -1356,6 +1606,435 @@ def summarize_source_features(sources: Sequence[Detection]) -> tuple[dict[str, o
     return tuple(rows)
 
 
+def summarize_source_proposal_methods(sources: Sequence[Detection]) -> tuple[dict[str, object], ...]:
+    """按首要特征类别统计候选由哪些提议器提出。
+
+    ``proposal_methods`` 记录的是同一候选在宽筛阶段被 Gaussian/DoG
+    提议器命中的来源，不是算法投票后的真星概率。这里单独输出
+    ``gaussian_only``、``dog_only`` 和 ``all_three``，用于回答“某一类是
+    多方法共同支持，还是主要由某一个尺度提议出来”的问题。结果只做
+    机制审计，不改变质量层计数。
+    """
+
+    grouped: dict[str, list[Detection]] = {feature_class: [] for feature_class, _label in _SOURCE_FEATURE_CLASSES}
+    for source in sources:
+        grouped.setdefault(classify_source_feature(source), []).append(source)
+
+    rows: list[dict[str, object]] = []
+    for feature_class, label in _SOURCE_FEATURE_CLASSES:
+        members = grouped[feature_class]
+        method_sets = [set(str(method) for method in source.proposal_methods) for source in members]
+        no_gaussian = [source for source, methods in zip(members, method_sets) if "gaussian" not in methods]
+        dog_only = [source for source, methods in zip(members, method_sets) if "gaussian" not in methods and methods]
+        no_method = [source for source, methods in zip(members, method_sets) if not methods]
+        gaussian_only = [source for source, methods in zip(members, method_sets) if methods == {"gaussian"}]
+        all_three = [
+            source
+            for source, methods in zip(members, method_sets)
+            if {"gaussian", "dog_narrow", "dog_broad"}.issubset(methods)
+        ]
+        no_gaussian_snr = np.asarray(
+            [
+                float(source.flux_snr if source.flux_snr is not None else source.snr)
+                for source in no_gaussian
+                if np.isfinite(source.flux_snr if source.flux_snr is not None else source.snr)
+            ],
+            dtype=np.float64,
+        )
+        rows.append(
+            {
+                "feature_class": feature_class,
+                "feature_class_label": label,
+                "candidate_count": len(members),
+                "quality_count": sum(bool(source.quality_passed) for source in members),
+                "gaussian_present_count": sum("gaussian" in methods for methods in method_sets),
+                "dog_narrow_present_count": sum("dog_narrow" in methods for methods in method_sets),
+                "dog_broad_present_count": sum("dog_broad" in methods for methods in method_sets),
+                "all_three_count": len(all_three),
+                "gaussian_only_count": len(gaussian_only),
+                "dog_only_count": len(dog_only),
+                "partial_combination_count": (
+                    len(members) - len(all_three) - len(gaussian_only) - len(dog_only) - len(no_method)
+                ),
+                "no_gaussian_count": len(no_gaussian),
+                "no_method_count": len(no_method),
+                "no_gaussian_quality_count": sum(bool(source.quality_passed) for source in no_gaussian),
+                "no_gaussian_median_flux_snr": (
+                    float(np.median(no_gaussian_snr)) if no_gaussian_snr.size else None
+                ),
+            }
+        )
+    return tuple(rows)
+
+
+_COMPACT_SOURCE_PROPOSAL_SUBGROUPS: tuple[tuple[str, str], ...] = (
+    ("all_three", "紧凑质量·Gaussian+DoG窄/宽三路共同支持"),
+    ("gaussian_only", "紧凑质量·Gaussian-only"),
+    ("dog_only_deblend", "紧凑质量·DoG-only·有近邻双PSF记录"),
+    ("dog_only_no_deblend", "紧凑质量·DoG-only·无近邻双PSF记录"),
+    ("compact_other", "紧凑质量·其他来源组合"),
+)
+
+
+def classify_source_proposal_subgroup(source: Detection) -> str | None:
+    """按首帧来源把紧凑质量源拆成可做跨帧审计的子组。
+
+    该函数只给 ``compact_quality`` 返回子组；其余特征类别返回 ``None``。
+    ``dog_only_deblend`` 表示该源实际进入了默认 Gaussian 近邻双 PSF 审计，
+    不是“已经确认双星”；双 PSF 字段缺失也只表示没有进入该审计适用域。
+    """
+
+    if classify_source_feature(source) != "compact_quality":
+        return None
+    methods = frozenset(str(method) for method in source.proposal_methods)
+    if "gaussian" not in methods:
+        if source.deblend_delta_bic is not None and source.deblend_component_snr is not None:
+            return "dog_only_deblend"
+        return "dog_only_no_deblend"
+    if {"gaussian", "dog_narrow", "dog_broad"}.issubset(methods):
+        return "all_three"
+    if methods == {"gaussian"}:
+        return "gaussian_only"
+    return "compact_other"
+
+
+_SOURCE_DIAGNOSTIC_SUBGROUP_DEFINITIONS: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "range_anomaly",
+        "range_code_pattern",
+        "范围异常·重复码峰值",
+        "首要类别为范围异常且含 CODE_PATTERN；这是值域/编码审计子组，不是恒星类型。",
+    ),
+    (
+        "range_anomaly",
+        "range_negative_overflow",
+        "范围异常·极端负值",
+        "首要类别为范围异常且含 NEGATIVE_OVERFLOW；优先于饱和子组显示。",
+    ),
+    (
+        "range_anomaly",
+        "range_saturated",
+        "范围异常·饱和标志",
+        "首要类别为范围异常且含 SATURATED；当前只表示检测器标志，不等于已完成满阱标定。",
+    ),
+    (
+        "range_anomaly",
+        "range_other",
+        "范围异常·其他组合",
+        "首要类别为范围异常，但未命中当前三个值域子组。",
+    ),
+    (
+        "linear_artifact",
+        "line_artifact",
+        "线状/拖影",
+        "首要类别为线状候选且含 LINE_ARTIFACT；需要结合长度、宽度、方向和跨帧一致性复核。",
+    ),
+    (
+        "masked_or_edge",
+        "masked_hard",
+        "边缘/掩膜·硬掩膜",
+        "首要类别为边缘/掩膜且含 MASKED；即使同时有 EDGE 或 PARTIAL_MASKED，也按硬掩膜优先归组。",
+    ),
+    (
+        "masked_or_edge",
+        "masked_partial_edge",
+        "边缘/掩膜·边界+部分掩膜",
+        "首要类别为边缘/掩膜，同时含 EDGE 和 PARTIAL_MASKED，但不含 MASKED。",
+    ),
+    (
+        "masked_or_edge",
+        "masked_partial",
+        "边缘/掩膜·部分掩膜",
+        "首要类别为边缘/掩膜，含 PARTIAL_MASKED 但不含 EDGE 或 MASKED。",
+    ),
+    (
+        "masked_or_edge",
+        "masked_edge_only",
+        "边缘/掩膜·纯边界",
+        "首要类别为边缘/掩膜，含 EDGE 但不含 PARTIAL_MASKED 或 MASKED。",
+    ),
+    (
+        "masked_or_edge",
+        "masked_other",
+        "边缘/掩膜·其他组合",
+        "首要类别为边缘/掩膜，但未命中当前边缘/掩膜组合。",
+    ),
+    (
+        "crowded_blend",
+        "blend_unresolved",
+        "拥挤/未分辨近邻",
+        "首要类别为拥挤近邻且含 UNRESOLVED_BLEND；需以双 PSF 证据、分离度和跨帧位置共同判断。",
+    ),
+    (
+        "crowded_blend",
+        "blend_other",
+        "拥挤/未分辨近邻·其他",
+        "首要类别为拥挤近邻，但未保留 UNRESOLVED_BLEND 标志。",
+    ),
+    (
+        "spike_or_support",
+        "spike_and_psf_support",
+        "尖峰/支持·尖峰+PSF支持不足",
+        "首要类别为尖峰/PSF支持不足，同时含 SPIKE 和 INSUFFICIENT_PSF_SUPPORT。",
+    ),
+    (
+        "spike_or_support",
+        "spike_only",
+        "尖峰/支持·尖峰",
+        "首要类别为尖峰/PSF支持不足，含 SPIKE 但不含 INSUFFICIENT_PSF_SUPPORT。",
+    ),
+    (
+        "spike_or_support",
+        "psf_support_only",
+        "尖峰/支持·支持不足",
+        "首要类别为尖峰/PSF支持不足，含 INSUFFICIENT_PSF_SUPPORT 但不含 SPIKE。",
+    ),
+    (
+        "spike_or_support",
+        "narrow_or_small_footprint",
+        "尖峰/支持·窄峰或小足迹",
+        "首要类别为尖峰/PSF支持不足，命中 NARROW 或 SMALL_FOOTPRINT，但未命中上述子组。",
+    ),
+    (
+        "spike_or_support",
+        "spike_other",
+        "尖峰/支持·其他组合",
+        "首要类别为尖峰/PSF支持不足，但未命中当前尖峰/支持子组。",
+    ),
+    (
+        "weak_or_background",
+        "weak_non_positive_flux",
+        "弱通量/背景·非正通量",
+        "首要类别为弱通量/背景且含 NON_POSITIVE_FLUX；它优先于一般低 SNR。",
+    ),
+    (
+        "weak_or_background",
+        "weak_background_uncertain",
+        "弱通量/背景·背景不确定",
+        "首要类别为弱通量/背景且含 BACKGROUND_UNCERTAIN。",
+    ),
+    (
+        "weak_or_background",
+        "weak_low_flux_snr",
+        "弱通量/背景·通量SNR不足",
+        "首要类别为弱通量/背景且含 LOW_FLUX_SNR。",
+    ),
+    (
+        "weak_or_background",
+        "weak_other",
+        "弱通量/背景·其他组合",
+        "首要类别为弱通量/背景，但未命中当前弱源子组。",
+    ),
+    (
+        "shape_outlier",
+        "shape_no_shape",
+        "形状异常·无可用形状",
+        "首要类别为形状异常且含 NO_SHAPE。",
+    ),
+    (
+        "shape_outlier",
+        "shape_broad",
+        "形状异常·宽峰",
+        "首要类别为形状异常且含 BROAD。",
+    ),
+    (
+        "shape_outlier",
+        "shape_elongated",
+        "形状异常·拉长",
+        "首要类别为形状异常且含 ELONGATED。",
+    ),
+    (
+        "shape_outlier",
+        "shape_diffuse",
+        "形状异常·弥散",
+        "首要类别为形状异常且含 DIFFUSE。",
+    ),
+    (
+        "shape_outlier",
+        "shape_other",
+        "形状异常·其他组合",
+        "首要类别为形状异常，但未命中当前形状子组。",
+    ),
+    (
+        "other_rejected",
+        "other_rejected",
+        "其他拒绝",
+        "未命中已定义特征旗标且未通过质量层。",
+    ),
+)
+
+
+def classify_source_diagnostic_subgroup(source: Detection) -> str | None:
+    """给非紧凑质量首要类别返回一个互斥的诊断子组。
+
+    ``Detection.flags`` 仍允许重叠；这里先取 ``classify_source_feature`` 的
+    首要类别，再在该类别内按固定优先级选择一个子组。它服务于真实序列
+    的机制持久性审计，不把“同一子组”解释成星表身份或物理伪影真值。
+    ``compact_quality`` 已有独立的提议器来源子组表，因此返回 ``None``。
+    """
+
+    feature_class = classify_source_feature(source)
+    if feature_class == "compact_quality":
+        return None
+    flags = frozenset(str(flag) for flag in source.flags)
+    if feature_class == "range_anomaly":
+        if "CODE_PATTERN" in flags:
+            return "range_code_pattern"
+        if "NEGATIVE_OVERFLOW" in flags:
+            return "range_negative_overflow"
+        if "SATURATED" in flags:
+            return "range_saturated"
+        return "range_other"
+    if feature_class == "linear_artifact":
+        return "line_artifact"
+    if feature_class == "masked_or_edge":
+        if "MASKED" in flags:
+            return "masked_hard"
+        if {"EDGE", "PARTIAL_MASKED"}.issubset(flags):
+            return "masked_partial_edge"
+        if "PARTIAL_MASKED" in flags:
+            return "masked_partial"
+        if "EDGE" in flags:
+            return "masked_edge_only"
+        return "masked_other"
+    if feature_class == "crowded_blend":
+        return "blend_unresolved" if "UNRESOLVED_BLEND" in flags else "blend_other"
+    if feature_class == "spike_or_support":
+        if {"SPIKE", "INSUFFICIENT_PSF_SUPPORT"}.issubset(flags):
+            return "spike_and_psf_support"
+        if "SPIKE" in flags:
+            return "spike_only"
+        if "INSUFFICIENT_PSF_SUPPORT" in flags:
+            return "psf_support_only"
+        if {"NARROW", "SMALL_FOOTPRINT"}.intersection(flags):
+            return "narrow_or_small_footprint"
+        return "spike_other"
+    if feature_class == "weak_or_background":
+        if "NON_POSITIVE_FLUX" in flags:
+            return "weak_non_positive_flux"
+        if "BACKGROUND_UNCERTAIN" in flags:
+            return "weak_background_uncertain"
+        if "LOW_FLUX_SNR" in flags:
+            return "weak_low_flux_snr"
+        return "weak_other"
+    if feature_class == "shape_outlier":
+        if "NO_SHAPE" in flags:
+            return "shape_no_shape"
+        if "BROAD" in flags:
+            return "shape_broad"
+        if "ELONGATED" in flags:
+            return "shape_elongated"
+        if "DIFFUSE" in flags:
+            return "shape_diffuse"
+        return "shape_other"
+    if feature_class == "other_rejected":
+        return "other_rejected"
+    raise ValueError(f"unknown source feature class: {feature_class}")
+
+
+_SOURCE_FEATURE_SUBCLASS_DEFINITIONS: tuple[tuple[str, str, str], ...] = (
+    ("range_code_pattern", "数据有效性/重复码峰值", "flags 含 CODE_PATTERN；与其他范围旗标可重叠"),
+    ("range_negative_overflow", "数据有效性/极端负值", "flags 含 NEGATIVE_OVERFLOW；与其他范围旗标可重叠"),
+    ("range_saturated", "数据有效性/饱和标志", "flags 含 SATURATED；不是设备满阱标定"),
+    ("edge_only", "边界截断", "含 EDGE，但不含 PARTIAL_MASKED 或 MASKED"),
+    ("partial_masked_only", "部分掩膜（可容错候选）", "含 PARTIAL_MASKED，但不含 EDGE 或 MASKED"),
+    ("edge_partial_masked", "边界 + 部分掩膜", "同时含 EDGE 和 PARTIAL_MASKED，但不含 MASKED"),
+    ("hard_masked", "硬掩膜", "含 MASKED，但不含 EDGE 或 PARTIAL_MASKED"),
+    ("edge_hard_masked", "边界 + 硬掩膜", "同时含 EDGE 和 MASKED，但不含 PARTIAL_MASKED"),
+    ("line_artifact", "线状/拖影", "flags 含 LINE_ARTIFACT"),
+    ("unresolved_blend", "未分辨近邻", "flags 含 UNRESOLVED_BLEND"),
+    ("spike", "尖峰", "flags 含 SPIKE"),
+)
+
+
+def _matches_source_feature_subclass(subclass: str, flags: frozenset[str]) -> bool:
+    """按完整 flag token 判断一个可重叠的诊断子类。"""
+
+    if subclass == "range_code_pattern":
+        return "CODE_PATTERN" in flags
+    if subclass == "range_negative_overflow":
+        return "NEGATIVE_OVERFLOW" in flags
+    if subclass == "range_saturated":
+        return "SATURATED" in flags
+    if subclass == "edge_only":
+        return "EDGE" in flags and not ({"PARTIAL_MASKED", "MASKED"} & flags)
+    if subclass == "partial_masked_only":
+        return "PARTIAL_MASKED" in flags and not ({"EDGE", "MASKED"} & flags)
+    if subclass == "edge_partial_masked":
+        return {"EDGE", "PARTIAL_MASKED"}.issubset(flags) and "MASKED" not in flags
+    if subclass == "hard_masked":
+        return "MASKED" in flags and not ({"EDGE", "PARTIAL_MASKED"} & flags)
+    if subclass == "edge_hard_masked":
+        return {"EDGE", "MASKED"}.issubset(flags) and "PARTIAL_MASKED" not in flags
+    if subclass == "line_artifact":
+        return "LINE_ARTIFACT" in flags
+    if subclass == "unresolved_blend":
+        return "UNRESOLVED_BLEND" in flags
+    if subclass == "spike":
+        return "SPIKE" in flags
+    raise ValueError(f"unknown source feature subclass: {subclass}")
+
+
+def summarize_source_feature_subclasses(
+    sources: Sequence[Detection],
+    *,
+    high_flux_snr_threshold: float = 10.0,
+) -> tuple[dict[str, object], ...]:
+    """汇总可重叠的 flag 子类，拆开主类别中容易混淆的机制。
+
+    这些子类是诊断轴，不是互斥分类：一个候选可以同时属于重复码、
+    极端负值和尖峰。尤其是边界/掩膜子类采用完整 flag token 判断，
+    不会把 ``PARTIAL_MASKED`` 误当成 ``MASKED``。输出用于解释“边界
+    截断”和“部分掩膜容错”为什么在质量层表现不同，不能把各行相加
+    推导候选总数或误检率。
+    """
+
+    if not np.isfinite(high_flux_snr_threshold) or high_flux_snr_threshold <= 0:
+        raise ValueError("high_flux_snr_threshold must be finite and positive")
+
+    rows: list[dict[str, object]] = []
+    for subclass, label, definition in _SOURCE_FEATURE_SUBCLASS_DEFINITIONS:
+        members = [
+            source
+            for source in sources
+            if _matches_source_feature_subclass(subclass, frozenset(str(flag) for flag in source.flags))
+        ]
+        quality_count = sum(bool(source.quality_passed) for source in members)
+        signal_values = _finite_source_attribute(members, "flux_snr")
+        high_snr_rejected_count = sum(
+            1
+            for source in members
+            if not source.quality_passed
+            and source.flux_snr is not None
+            and np.isfinite(source.flux_snr)
+            and float(source.flux_snr) >= high_flux_snr_threshold
+        )
+        flag_counts = Counter(flag for source in members for flag in source.flags)
+        class_counts = Counter(classify_source_feature(source) for source in members)
+        rows.append(
+            {
+                "subclass": subclass,
+                "subclass_label": label,
+                "definition": definition,
+                "candidate_count": len(members),
+                "quality_count": quality_count,
+                "rejected_count": len(members) - quality_count,
+                "quality_fraction": quality_count / len(members) if members else None,
+                "high_flux_snr_threshold": float(high_flux_snr_threshold),
+                "high_snr_rejected_count": high_snr_rejected_count,
+                "median_flux_snr": _percentile_or_none(signal_values, 50.0),
+                "primary_feature_classes": "|".join(
+                    f"{feature_class}:{count}"
+                    for feature_class, count in sorted(class_counts.items(), key=lambda item: (-item[1], item[0]))
+                ),
+                "common_flags": "|".join(
+                    flag for flag, _count in sorted(flag_counts.items(), key=lambda item: (-item[1], item[0]))[:4]
+                ),
+            }
+        )
+    return tuple(rows)
+
+
 def _finite_source_attribute(sources: Sequence[Detection], attribute: str) -> np.ndarray:
     """Return finite numeric values for one source attribute.
 
@@ -1612,6 +2291,7 @@ def estimate_empirical_psf(
     support_radius: int = 7,
     max_sources: int = 64,
     isolation_sources: Sequence[Detection] | None = None,
+    exclude_detection_ids: Iterable[int] = (),
 ) -> EmpiricalPSF | None:
     """从亮、孤立、未饱和质量源提取并中值叠加实测 PSF。
 
@@ -1622,7 +2302,9 @@ def estimate_empirical_psf(
     “全局隔离参照”分离，避免局部窗口边界隐藏邻峰。若调用方只传质量
     子集作为两者，隔离审计会变得过宽。该函数只建立注入模型，不改变
     输入图像；若合格源不足则返回 None，由调用方明确回退到 Gaussian，
-    而不是静默伪造实测 PSF。
+    而不是静默伪造实测 PSF。``exclude_detection_ids`` 只排除模板候选，
+    不会从 ``isolation_sources`` 中删除这些点；留一法研究因此仍能用
+    完整候选表检查模板源附近是否存在被拒绝或拥挤邻峰。
     """
 
     if support_radius < 3 or max_sources < 1:
@@ -1632,12 +2314,17 @@ def estimate_empirical_psf(
         raise ValueError(f"expected a 2-D image, got shape {values.shape}")
     radius = int(support_radius)
     margin = radius + 1
+    try:
+        excluded_ids = frozenset(int(value) for value in exclude_detection_ids)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("exclude_detection_ids must contain integer detection IDs") from exc
     aux_mask = auxiliary_mask(values.shape)
     eligible = [
         source
         for source in sources
         if margin <= source.x < values.shape[1] - margin
         and margin <= source.y < values.shape[0] - margin
+        and int(source.detection_id) not in excluded_ids
         and source.quality_passed
         and not any(
             flag in source.flags
@@ -3074,13 +3761,19 @@ def run_sequence_feature_persistence(
     quality_frames: list[np.ndarray] = []
     candidate_class_frames: list[np.ndarray] = []
     quality_class_frames: list[np.ndarray] = []
+    candidate_diagnostic_subgroup_frames: list[np.ndarray] = []
+    quality_diagnostic_subgroup_frames: list[np.ndarray] = []
     frame_rows: list[SequenceFeatureFrameRow] = []
+    proposal_method_rows: list[SequenceFeatureMethodFrameRow] = []
     cumulative_shifts: list[tuple[float, float]] = [(0.0, 0.0)]
     previous_quality: tuple[Detection, ...] | None = None
     anchor_peak_points: np.ndarray | None = None
     anchor_centroid_points: np.ndarray | None = None
     anchor_classes: np.ndarray | None = None
     anchor_quality: np.ndarray | None = None
+    anchor_proposal_subgroups: np.ndarray | None = None
+    anchor_diagnostic_subgroups: np.ndarray | None = None
+    anchor_sources: tuple[Detection, ...] | None = None
 
     for frame_index, path in enumerate(frame_paths):
         analysis = analyze_frame(
@@ -3125,13 +3818,28 @@ def run_sequence_feature_persistence(
             [classify_source_feature(source) for source in quality_sources],
             dtype=object,
         )
+        candidate_diagnostic_subgroups = np.asarray(
+            [classify_source_diagnostic_subgroup(source) or "" for source in sources],
+            dtype=object,
+        )
+        quality_diagnostic_subgroups = np.asarray(
+            [classify_source_diagnostic_subgroup(source) or "" for source in quality_sources],
+            dtype=object,
+        )
         candidate_frames.append(candidate_points)
         quality_frames.append(quality_points)
         candidate_class_frames.append(candidate_classes)
         quality_class_frames.append(quality_classes)
+        candidate_diagnostic_subgroup_frames.append(candidate_diagnostic_subgroups)
+        quality_diagnostic_subgroup_frames.append(quality_diagnostic_subgroups)
 
         feature_summary = summarize_source_features(sources)
+        proposal_method_summary = {
+            str(row["feature_class"]): row
+            for row in summarize_source_proposal_methods(sources)
+        }
         for summary in feature_summary:
+            feature_class = str(summary["feature_class"])
             frame_rows.append(
                 SequenceFeatureFrameRow(
                     frame_index=frame_index + 1,
@@ -3141,10 +3849,28 @@ def run_sequence_feature_persistence(
                     quality_count=analysis.detection.star_count,
                     background_adu=float(analysis.detection.background),
                     noise_adu=float(analysis.detection.noise),
-                    feature_class=str(summary["feature_class"]),
+                    feature_class=feature_class,
                     feature_class_label=str(summary["feature_class_label"]),
                     feature_candidate_count=int(summary["candidate_count"]),
                     feature_quality_count=int(summary["quality_count"]),
+                )
+            )
+            method_summary = proposal_method_summary[feature_class]
+            proposal_method_rows.append(
+                SequenceFeatureMethodFrameRow(
+                    frame_index=frame_index + 1,
+                    path=str(path),
+                    feature_class=feature_class,
+                    feature_class_label=str(method_summary["feature_class_label"]),
+                    feature_candidate_count=int(method_summary["candidate_count"]),
+                    feature_quality_count=int(method_summary["quality_count"]),
+                    all_three_count=int(method_summary["all_three_count"]),
+                    gaussian_only_count=int(method_summary["gaussian_only_count"]),
+                    dog_only_count=int(method_summary["dog_only_count"]),
+                    partial_combination_count=int(method_summary["partial_combination_count"]),
+                    no_gaussian_count=int(method_summary["no_gaussian_count"]),
+                    no_method_count=int(method_summary["no_method_count"]),
+                    no_gaussian_quality_count=int(method_summary["no_gaussian_quality_count"]),
                 )
             )
 
@@ -3159,6 +3885,12 @@ def run_sequence_feature_persistence(
                 [bool(source.quality_passed) for source in sources],
                 dtype=bool,
             )
+            anchor_proposal_subgroups = np.asarray(
+                [classify_source_proposal_subgroup(source) or "" for source in sources],
+                dtype=object,
+            )
+            anchor_diagnostic_subgroups = candidate_diagnostic_subgroups.copy()
+            anchor_sources = tuple(sources)
         previous_quality = quality_sources
         if progress is not None:
             progress(frame_index + 1, frame_count)
@@ -3169,6 +3901,9 @@ def run_sequence_feature_persistence(
         or anchor_centroid_points is None
         or anchor_classes is None
         or anchor_quality is None
+        or anchor_proposal_subgroups is None
+        or anchor_diagnostic_subgroups is None
+        or anchor_sources is None
     ):
         raise RuntimeError("sequence feature audit did not produce an anchor frame")
 
@@ -3228,7 +3963,212 @@ def run_sequence_feature_persistence(
 
     candidate_presence = reciprocal_presence_counts(anchor_peak_points, candidate_frames)
     quality_presence = reciprocal_presence_counts(anchor_centroid_points, quality_frames)
+    candidate_pairs = reciprocal_match_pairs(anchor_peak_points, candidate_frames)
+    quality_pairs_all = reciprocal_match_pairs(anchor_centroid_points, quality_frames)
+
+    def same_subgroup_presence_counts(
+        anchor_subgroups: np.ndarray,
+        pairs_by_frame: Sequence[np.ndarray],
+        response_subgroups_by_frame: Sequence[np.ndarray],
+    ) -> np.ndarray:
+        """只计数位置匹配且首要诊断子组相同的响应。"""
+
+        counts = np.zeros(anchor_subgroups.shape[0], dtype=np.int16)
+        for pairs, response_subgroups in zip(
+            pairs_by_frame,
+            response_subgroups_by_frame,
+            strict=True,
+        ):
+            if not pairs.size:
+                continue
+            anchor_indices = pairs[:, 0]
+            response_indices = pairs[:, 1]
+            matched_subgroups = anchor_subgroups[anchor_indices]
+            valid = (
+                (matched_subgroups != "")
+                & (response_subgroups[response_indices] == matched_subgroups)
+            )
+            if np.any(valid):
+                np.add.at(counts, anchor_indices[valid], 1)
+        return counts
+
+    candidate_same_subgroup_presence = same_subgroup_presence_counts(
+        anchor_diagnostic_subgroups,
+        candidate_pairs,
+        candidate_diagnostic_subgroup_frames,
+    )
+    quality_same_subgroup_presence = same_subgroup_presence_counts(
+        anchor_diagnostic_subgroups,
+        quality_pairs_all,
+        quality_diagnostic_subgroup_frames,
+    )
+    source_subgroup_rows: list[SequenceFeatureSourceSubgroupPersistenceRow] = []
+    compact_label = dict(_SOURCE_FEATURE_CLASSES)["compact_quality"]
+    for subgroup, subgroup_label in _COMPACT_SOURCE_PROPOSAL_SUBGROUPS:
+        subgroup_mask = anchor_proposal_subgroups == subgroup
+        if not np.any(subgroup_mask):
+            continue
+        subgroup_candidate_presence = candidate_presence[subgroup_mask]
+        subgroup_quality_presence = quality_presence[subgroup_mask]
+        source_subgroup_rows.append(
+            SequenceFeatureSourceSubgroupPersistenceRow(
+                feature_class="compact_quality",
+                feature_class_label=compact_label,
+                proposal_subgroup=subgroup,
+                proposal_subgroup_label=subgroup_label,
+                anchor_count=int(np.count_nonzero(subgroup_mask)),
+                anchor_quality_count=int(np.count_nonzero(anchor_quality[subgroup_mask])),
+                frame_count=frame_count,
+                required_presence=resolved_required_presence,
+                association_radius_px=float(association_radius_px),
+                candidate_median_presence=float(np.median(subgroup_candidate_presence)),
+                candidate_mean_presence=float(np.mean(subgroup_candidate_presence)),
+                candidate_presence_ge_required_count=int(
+                    np.count_nonzero(subgroup_candidate_presence >= resolved_required_presence)
+                ),
+                candidate_presence_all_frames_count=int(
+                    np.count_nonzero(subgroup_candidate_presence >= frame_count)
+                ),
+                quality_median_presence=float(np.median(subgroup_quality_presence)),
+                quality_mean_presence=float(np.mean(subgroup_quality_presence)),
+                quality_presence_ge_required_count=int(
+                    np.count_nonzero(subgroup_quality_presence >= resolved_required_presence)
+                ),
+                quality_presence_all_frames_count=int(
+                    np.count_nonzero(subgroup_quality_presence >= frame_count)
+                ),
+            )
+        )
+    diagnostic_subgroup_rows: list[SequenceFeatureDiagnosticSubgroupPersistenceRow] = []
     label_by_class = dict(_SOURCE_FEATURE_CLASSES)
+    for (
+        feature_class,
+        diagnostic_subgroup,
+        diagnostic_subgroup_label,
+        diagnostic_subgroup_definition,
+    ) in _SOURCE_DIAGNOSTIC_SUBGROUP_DEFINITIONS:
+        subgroup_mask = (
+            (anchor_classes == feature_class)
+            & (anchor_diagnostic_subgroups == diagnostic_subgroup)
+        )
+        if not np.any(subgroup_mask):
+            continue
+        subgroup_candidate_presence = candidate_presence[subgroup_mask]
+        subgroup_candidate_same_presence = candidate_same_subgroup_presence[subgroup_mask]
+        subgroup_quality_presence = quality_presence[subgroup_mask]
+        subgroup_quality_same_presence = quality_same_subgroup_presence[subgroup_mask]
+        diagnostic_subgroup_rows.append(
+            SequenceFeatureDiagnosticSubgroupPersistenceRow(
+                feature_class=feature_class,
+                feature_class_label=label_by_class[feature_class],
+                diagnostic_subgroup=diagnostic_subgroup,
+                diagnostic_subgroup_label=diagnostic_subgroup_label,
+                diagnostic_subgroup_definition=diagnostic_subgroup_definition,
+                anchor_count=int(np.count_nonzero(subgroup_mask)),
+                anchor_quality_count=int(np.count_nonzero(anchor_quality[subgroup_mask])),
+                frame_count=frame_count,
+                required_presence=resolved_required_presence,
+                association_radius_px=float(association_radius_px),
+                candidate_median_presence=float(np.median(subgroup_candidate_presence)),
+                candidate_mean_presence=float(np.mean(subgroup_candidate_presence)),
+                candidate_presence_ge_required_count=int(
+                    np.count_nonzero(subgroup_candidate_presence >= resolved_required_presence)
+                ),
+                candidate_presence_all_frames_count=int(
+                    np.count_nonzero(subgroup_candidate_presence >= frame_count)
+                ),
+                candidate_same_subgroup_median_presence=float(
+                    np.median(subgroup_candidate_same_presence)
+                ),
+                candidate_same_subgroup_mean_presence=float(
+                    np.mean(subgroup_candidate_same_presence)
+                ),
+                candidate_same_subgroup_presence_ge_required_count=int(
+                    np.count_nonzero(subgroup_candidate_same_presence >= resolved_required_presence)
+                ),
+                candidate_same_subgroup_presence_all_frames_count=int(
+                    np.count_nonzero(subgroup_candidate_same_presence >= frame_count)
+                ),
+                quality_median_presence=float(np.median(subgroup_quality_presence)),
+                quality_mean_presence=float(np.mean(subgroup_quality_presence)),
+                quality_presence_ge_required_count=int(
+                    np.count_nonzero(subgroup_quality_presence >= resolved_required_presence)
+                ),
+                quality_presence_all_frames_count=int(
+                    np.count_nonzero(subgroup_quality_presence >= frame_count)
+                ),
+                quality_same_subgroup_median_presence=float(
+                    np.median(subgroup_quality_same_presence)
+                ),
+                quality_same_subgroup_mean_presence=float(
+                    np.mean(subgroup_quality_same_presence)
+                ),
+                quality_same_subgroup_presence_ge_required_count=int(
+                    np.count_nonzero(subgroup_quality_same_presence >= resolved_required_presence)
+                ),
+                quality_same_subgroup_presence_all_frames_count=int(
+                    np.count_nonzero(subgroup_quality_same_presence >= frame_count)
+                ),
+            )
+        )
+    diagnostic_subgroup_spec_by_id = {
+        diagnostic_subgroup: (
+            feature_class,
+            diagnostic_subgroup_label,
+            diagnostic_subgroup_definition,
+        )
+        for (
+            feature_class,
+            diagnostic_subgroup,
+            diagnostic_subgroup_label,
+            diagnostic_subgroup_definition,
+        ) in _SOURCE_DIAGNOSTIC_SUBGROUP_DEFINITIONS
+    }
+    diagnostic_source_rows: list[SequenceFeatureDiagnosticSourceRow] = []
+    for source_index, source in enumerate(anchor_sources):
+        feature_class = str(anchor_classes[source_index])
+        diagnostic_subgroup = str(anchor_diagnostic_subgroups[source_index])
+        if not diagnostic_subgroup:
+            continue
+        subgroup_spec = diagnostic_subgroup_spec_by_id.get(diagnostic_subgroup)
+        if subgroup_spec is None or subgroup_spec[0] != feature_class:
+            raise RuntimeError(
+                f"missing diagnostic subgroup definition for {feature_class}/{diagnostic_subgroup}"
+            )
+        _subgroup_class, subgroup_label, subgroup_definition = subgroup_spec
+        diagnostic_source_rows.append(
+            SequenceFeatureDiagnosticSourceRow(
+                detection_id=int(source.detection_id),
+                feature_class=feature_class,
+                feature_class_label=label_by_class[feature_class],
+                diagnostic_subgroup=diagnostic_subgroup,
+                diagnostic_subgroup_label=subgroup_label,
+                diagnostic_subgroup_definition=subgroup_definition,
+                quality_passed=bool(source.quality_passed),
+                peak_x=float(source.peak_x if source.peak_x is not None else source.x),
+                peak_y=float(source.peak_y if source.peak_y is not None else source.y),
+                x=float(source.x),
+                y=float(source.y),
+                flux_snr=source.flux_snr,
+                filter_snr=source.filter_snr,
+                fwhm=source.fwhm,
+                ellipticity=source.ellipticity,
+                sharpness=source.sharpness,
+                psf_support_pixels=source.psf_support_pixels,
+                footprint_pixels=source.footprint_pixels,
+                centroid_shift_px=source.centroid_shift_px,
+                flags="|".join(str(flag) for flag in source.flags),
+                proposal_methods="|".join(str(method) for method in source.proposal_methods),
+                candidate_presence=int(candidate_presence[source_index]),
+                candidate_same_subgroup_presence=int(
+                    candidate_same_subgroup_presence[source_index]
+                ),
+                quality_presence=int(quality_presence[source_index]),
+                quality_same_subgroup_presence=int(
+                    quality_same_subgroup_presence[source_index]
+                ),
+            )
+        )
     persistence_rows: list[SequenceFeaturePersistenceRow] = []
     for feature_class, feature_label in _SOURCE_FEATURE_CLASSES:
         class_mask = anchor_classes == feature_class
@@ -3278,7 +4218,6 @@ def run_sequence_feature_persistence(
             )
         )
 
-    candidate_pairs = reciprocal_match_pairs(anchor_peak_points, candidate_frames)
     quality_anchor_points = anchor_centroid_points[anchor_quality]
     quality_anchor_classes = anchor_classes[anchor_quality]
     quality_pairs = reciprocal_match_pairs(quality_anchor_points, quality_frames)
@@ -3357,6 +4296,10 @@ def run_sequence_feature_persistence(
         frame_rows=tuple(frame_rows),
         persistence_rows=tuple(persistence_rows),
         class_transition_rows=tuple(class_transition_rows),
+        proposal_method_rows=tuple(proposal_method_rows),
+        source_subgroup_rows=tuple(source_subgroup_rows),
+        diagnostic_subgroup_rows=tuple(diagnostic_subgroup_rows),
+        diagnostic_source_rows=tuple(diagnostic_source_rows),
     )
 
 
@@ -3447,6 +4390,74 @@ def summarize_sequence_feature_temporal_profiles(
                     total_quality_count / total_candidate_count if total_candidate_count > 0 else None
                 ),
             )
+        )
+    return tuple(profiles)
+
+
+def summarize_sequence_feature_proposal_methods(
+    rows: Sequence[SequenceFeatureMethodFrameRow],
+) -> tuple[dict[str, object], ...]:
+    """汇总 15 帧各特征类别的提议器来源交叉。
+
+    输入由 ``run_sequence_feature_persistence`` 在每帧检测时生成，因而不
+    会再次执行卷积或源级测量。计数按帧求和，``*_fraction`` 的分母是
+    该类别在整段序列的候选总数；``no_gaussian_quality_fraction`` 则
+    专门表示无 Gaussian 候选内部的质量通过比例。它们都是 detector-level
+    机制统计，不是跨帧逐星身份或真阳性率。
+    """
+
+    if not rows:
+        return ()
+    frame_ids = tuple(sorted({int(row.frame_index) for row in rows}))
+    if any(frame_id < 1 for frame_id in frame_ids):
+        raise ValueError("frame_index must be positive")
+    by_key: dict[tuple[int, str], SequenceFeatureMethodFrameRow] = {}
+    for row in rows:
+        key = (int(row.frame_index), str(row.feature_class))
+        if key in by_key:
+            raise ValueError(f"duplicate frame/category method row: {key}")
+        by_key[key] = row
+
+    profiles: list[dict[str, object]] = []
+    for feature_class, feature_class_label in _SOURCE_FEATURE_CLASSES:
+        members = [
+            by_key[(frame_id, feature_class)]
+            for frame_id in frame_ids
+            if (frame_id, feature_class) in by_key
+        ]
+        if len(members) != len(frame_ids):
+            raise ValueError(f"missing frame/category method rows for {feature_class}")
+        candidate_total = sum(int(row.feature_candidate_count) for row in members)
+        quality_total = sum(int(row.feature_quality_count) for row in members)
+        all_three_count = sum(int(row.all_three_count) for row in members)
+        gaussian_only_count = sum(int(row.gaussian_only_count) for row in members)
+        dog_only_count = sum(int(row.dog_only_count) for row in members)
+        partial_combination_count = sum(int(row.partial_combination_count) for row in members)
+        no_gaussian_count = sum(int(row.no_gaussian_count) for row in members)
+        no_method_count = sum(int(row.no_method_count) for row in members)
+        no_gaussian_quality_count = sum(int(row.no_gaussian_quality_count) for row in members)
+        profiles.append(
+            {
+                "feature_class": feature_class,
+                "feature_class_label": feature_class_label,
+                "frame_count": len(frame_ids),
+                "active_frame_count": sum(row.feature_candidate_count > 0 for row in members),
+                "candidate_count_total": candidate_total,
+                "quality_count_total": quality_total,
+                "all_three_count": all_three_count,
+                "gaussian_only_count": gaussian_only_count,
+                "dog_only_count": dog_only_count,
+                "partial_combination_count": partial_combination_count,
+                "no_gaussian_count": no_gaussian_count,
+                "no_method_count": no_method_count,
+                "no_gaussian_quality_count": no_gaussian_quality_count,
+                "all_three_fraction": all_three_count / candidate_total if candidate_total else None,
+                "dog_only_fraction": dog_only_count / candidate_total if candidate_total else None,
+                "no_gaussian_fraction": no_gaussian_count / candidate_total if candidate_total else None,
+                "no_gaussian_quality_fraction": (
+                    no_gaussian_quality_count / no_gaussian_count if no_gaussian_count else None
+                ),
+            }
         )
     return tuple(profiles)
 
@@ -3897,6 +4908,96 @@ def _raw_region_statistics(
         "fixed_minus_one": int(np.count_nonzero(selected == -1)),
         "negative_overflow": negative_extreme,
         "positive_extreme": positive_extreme,
+    }
+
+
+def _raw_aperture_overlap_statistics(
+    image: np.ndarray,
+    primary_center_xy: tuple[float, float],
+    secondary_center_xy: tuple[float, float],
+    radius_px: int,
+    *,
+    background_adu: float | None,
+) -> dict[str, object]:
+    """量化副孔径中有多少原始通量来自主/副孔径的几何重叠区。
+
+    这里使用目标峰坐标和未缩放 FITS 像素，不声称完成了 PSF 去混叠。
+    ``shared_*`` 只表示两个圆孔径共同覆盖的像素；如果亮斑核心落在
+    该区域，副框的孔径通量和 SNR 可能被邻近响应显著抬高。净通量只在
+    调用方提供有限局部背景时计算，避免把原始像素总和与背景混用。
+    """
+
+    values = np.asarray(image)
+    if values.ndim != 2:
+        raise ValueError("aperture overlap audit expects a 2-D image")
+    if radius_px < 1:
+        raise ValueError("aperture overlap radius must be positive")
+    centers = (
+        (float(primary_center_xy[0]), float(primary_center_xy[1])),
+        (float(secondary_center_xy[0]), float(secondary_center_xy[1])),
+    )
+    if not all(np.isfinite(value) for center in centers for value in center):
+        raise ValueError("aperture overlap centers must be finite")
+
+    height, width = values.shape
+    radius = float(radius_px)
+    x0 = max(0, int(np.floor(min(center[0] for center in centers) - radius)))
+    x1 = min(width, int(np.ceil(max(center[0] for center in centers) + radius)) + 1)
+    y0 = max(0, int(np.floor(min(center[1] for center in centers) - radius)))
+    y1 = min(height, int(np.ceil(max(center[1] for center in centers) + radius)) + 1)
+    if x0 >= x1 or y0 >= y1:
+        return {
+            "secondary_pixels": 0,
+            "shared_pixels": 0,
+            "background": None,
+            "secondary_raw_sum": None,
+            "shared_raw_sum": None,
+            "secondary_net_sum": None,
+            "shared_net_sum": None,
+            "shared_net_fraction": None,
+            "shared_max": None,
+        }
+
+    yy, xx = np.indices((y1 - y0, x1 - x0), dtype=np.float64)
+    raw = np.asarray(values[y0:y1, x0:x1], dtype=np.float64)
+    primary_mask = np.hypot(xx + x0 - centers[0][0], yy + y0 - centers[0][1]) <= radius
+    secondary_mask = np.hypot(xx + x0 - centers[1][0], yy + y0 - centers[1][1]) <= radius
+    shared_mask = primary_mask & secondary_mask & np.isfinite(raw)
+    secondary_mask &= np.isfinite(raw)
+    secondary_values = raw[secondary_mask]
+    shared_values = raw[shared_mask]
+    background = (
+        float(background_adu)
+        if background_adu is not None and np.isfinite(float(background_adu))
+        else None
+    )
+    secondary_raw_sum = float(np.sum(secondary_values)) if secondary_values.size else None
+    shared_raw_sum = float(np.sum(shared_values)) if shared_values.size else None
+    secondary_net_sum = (
+        None
+        if secondary_raw_sum is None or background is None
+        else float(secondary_raw_sum - background * secondary_values.size)
+    )
+    shared_net_sum = (
+        None
+        if shared_raw_sum is None or background is None
+        else float(shared_raw_sum - background * shared_values.size)
+    )
+    shared_net_fraction = (
+        None
+        if shared_net_sum is None or secondary_net_sum is None or secondary_net_sum <= 0
+        else float(shared_net_sum / secondary_net_sum)
+    )
+    return {
+        "secondary_pixels": int(secondary_values.size),
+        "shared_pixels": int(shared_values.size),
+        "background": background,
+        "secondary_raw_sum": secondary_raw_sum,
+        "shared_raw_sum": shared_raw_sum,
+        "secondary_net_sum": secondary_net_sum,
+        "shared_net_sum": shared_net_sum,
+        "shared_net_fraction": shared_net_fraction,
+        "shared_max": float(np.max(shared_values)) if shared_values.size else None,
     }
 
 
@@ -5023,6 +6124,14 @@ def run_source_pair_audit(
             aperture_radius,
             negative_overflow_limit=negative_limit,
         )
+        secondary_background = None if secondary is None else float(secondary.background)
+        overlap_stats = _raw_aperture_overlap_statistics(
+            image,
+            frame_primary_target,
+            frame_secondary_target,
+            aperture_radius,
+            background_adu=secondary_background,
+        )
         pair_stats = _raw_region_statistics(
             image,
             frame_midpoint,
@@ -5034,33 +6143,43 @@ def run_source_pair_audit(
         if negative_limit is not None:
             range_mask |= image <= float(negative_limit)
             range_mask |= image >= -float(negative_limit)
-        raw_bic, raw_component = _pair_peak_evidence(
-            image,
-            auxiliary,
-            primary,
-            secondary,
-            frame_primary_target,
-            frame_secondary_target,
-            psf_fwhm=psf_fwhm,
-        )
-        range_bic, range_component = _pair_peak_evidence(
-            image,
-            range_mask,
-            primary,
-            secondary,
-            frame_primary_target,
-            frame_secondary_target,
-            psf_fwhm=psf_fwhm,
-        )
-        sentinel_bic, sentinel_component = _pair_peak_evidence(
-            image,
-            sentinel_mask,
-            primary,
-            secondary,
-            frame_primary_target,
-            frame_secondary_target,
-            psf_fwhm=psf_fwhm,
-        )
+        # 双 PSF 的 BIC 只有在两个目标都被候选表独立找到时才进入
+        # “成对证据”口径。若某一目标缺失，仍可以做局部模型敏感性
+        # 诊断，但不能用 fallback 坐标把一个偏离目标中心的单峰拟合
+        # 成双源；否则固定 detector 坐标的漂移/合并会产生虚假的高
+        # ΔBIC（截图序列 F05/F06/F11 正是这个反例）。
+        if primary is None or secondary is None:
+            raw_bic = raw_component = None
+            range_bic = range_component = None
+            sentinel_bic = sentinel_component = None
+        else:
+            raw_bic, raw_component = _pair_peak_evidence(
+                image,
+                auxiliary,
+                primary,
+                secondary,
+                frame_primary_target,
+                frame_secondary_target,
+                psf_fwhm=psf_fwhm,
+            )
+            range_bic, range_component = _pair_peak_evidence(
+                image,
+                range_mask,
+                primary,
+                secondary,
+                frame_primary_target,
+                frame_secondary_target,
+                psf_fwhm=psf_fwhm,
+            )
+            sentinel_bic, sentinel_component = _pair_peak_evidence(
+                image,
+                sentinel_mask,
+                primary,
+                secondary,
+                frame_primary_target,
+                frame_secondary_target,
+                psf_fwhm=psf_fwhm,
+            )
 
         primary_peak = None if primary is None else float(primary.peak)
         secondary_peak = None if secondary is None else float(secondary.peak)
@@ -5177,6 +6296,15 @@ def run_source_pair_audit(
                 pair_component_snr_range_masked=finite_float(range_component),
                 pair_delta_bic_sentinel_masked=finite_float(sentinel_bic),
                 pair_component_snr_sentinel_masked=finite_float(sentinel_component),
+                secondary_aperture_pixel_count=int(overlap_stats["secondary_pixels"]),
+                secondary_shared_aperture_pixel_count=int(overlap_stats["shared_pixels"]),
+                secondary_aperture_background_adu=finite_float(overlap_stats["background"]),
+                secondary_aperture_raw_sum_adu=finite_float(overlap_stats["secondary_raw_sum"]),
+                secondary_shared_aperture_raw_sum_adu=finite_float(overlap_stats["shared_raw_sum"]),
+                secondary_aperture_net_sum_adu=finite_float(overlap_stats["secondary_net_sum"]),
+                secondary_shared_aperture_net_sum_adu=finite_float(overlap_stats["shared_net_sum"]),
+                secondary_shared_aperture_net_fraction=finite_float(overlap_stats["shared_net_fraction"]),
+                secondary_shared_aperture_max_adu=finite_float(overlap_stats["shared_max"]),
             )
         )
         if progress is not None:
@@ -5288,6 +6416,8 @@ def run_temporal_code_audit(
     first: np.ndarray | None = None
     minimum: np.ndarray | None = None
     maximum: np.ndarray | None = None
+    code_focus_values: list[int | None] = []
+    sentinel_focus_values: list[int | None] = []
     for frame_index, path in enumerate(frame_paths):
         frame = read_fits(path)
         values = np.asarray(frame.data)
@@ -5305,6 +6435,17 @@ def run_temporal_code_audit(
                 raise ValueError("all FITS images must have the same shape")
             minimum = np.minimum(minimum, numeric)
             maximum = np.maximum(maximum, numeric)
+
+        def focus_value(point: tuple[int, int] | None) -> int | None:
+            if point is None:
+                return None
+            x, y = point
+            if not (0 <= x < numeric.shape[1] and 0 <= y < numeric.shape[0]):
+                return None
+            return int(numeric[y, x])
+
+        code_focus_values.append(focus_value(resolved_code_focus))
+        sentinel_focus_values.append(focus_value(resolved_sentinel_focus))
         if progress is not None:
             progress(frame_index + 1, total)
 
@@ -5396,6 +6537,8 @@ def run_temporal_code_audit(
         frame_count=total,
         image_shape=(int(first.shape[0]), int(first.shape[1])),
         paths=tuple(str(path) for path in frame_paths),
+        code_focus_values_by_frame=tuple(code_focus_values),
+        sentinel_focus_values_by_frame=tuple(sentinel_focus_values),
         exact_stable_pixel_count=int(np.count_nonzero(exact_stable)),
         exact_stable_value_counts=exact_value_counts,
         low_variation_span_adu=int(low_variation_span_adu),
@@ -6691,6 +7834,70 @@ def write_sequence_feature_persistence_artifacts(
         writer = csv.DictWriter(stream, fieldnames=frame_fields)
         writer.writeheader()
         writer.writerows(row.as_dict() for row in result.frame_rows)
+    method_frame_fields = (
+        tuple(result.proposal_method_rows[0].as_dict())
+        if result.proposal_method_rows
+        else ("frame_index", "feature_class")
+    )
+    with (output / "sequence_feature_method_frame_summary.csv").open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as stream:
+        writer = csv.DictWriter(stream, fieldnames=method_frame_fields)
+        writer.writeheader()
+        writer.writerows(row.as_dict() for row in result.proposal_method_rows)
+    method_profiles = summarize_sequence_feature_proposal_methods(result.proposal_method_rows)
+    method_profile_fields = (
+        tuple(method_profiles[0]) if method_profiles else ("feature_class",)
+    )
+    with (output / "sequence_feature_method_profile.csv").open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as stream:
+        writer = csv.DictWriter(stream, fieldnames=method_profile_fields)
+        writer.writeheader()
+        writer.writerows(method_profiles)
+    subgroup_fields = (
+        tuple(result.source_subgroup_rows[0].as_dict())
+        if result.source_subgroup_rows
+        else ("feature_class", "proposal_subgroup")
+    )
+    with (output / "sequence_feature_source_subgroup_persistence.csv").open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as stream:
+        writer = csv.DictWriter(stream, fieldnames=subgroup_fields)
+        writer.writeheader()
+        writer.writerows(row.as_dict() for row in result.source_subgroup_rows)
+    diagnostic_subgroup_fields = (
+        tuple(result.diagnostic_subgroup_rows[0].as_dict())
+        if result.diagnostic_subgroup_rows
+        else ("feature_class", "diagnostic_subgroup")
+    )
+    with (output / "sequence_feature_diagnostic_subgroup_persistence.csv").open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as stream:
+        writer = csv.DictWriter(stream, fieldnames=diagnostic_subgroup_fields)
+        writer.writeheader()
+        writer.writerows(row.as_dict() for row in result.diagnostic_subgroup_rows)
+    diagnostic_source_fields = (
+        tuple(result.diagnostic_source_rows[0].as_dict())
+        if result.diagnostic_source_rows
+        else ("detection_id", "feature_class", "diagnostic_subgroup")
+    )
+    with (output / "sequence_feature_diagnostic_sources.csv").open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as stream:
+        writer = csv.DictWriter(stream, fieldnames=diagnostic_source_fields)
+        writer.writeheader()
+        writer.writerows(row.as_dict() for row in result.diagnostic_source_rows)
     temporal_profiles = summarize_sequence_feature_temporal_profiles(result.frame_rows)
     temporal_fields = tuple(temporal_profiles[0].as_dict()) if temporal_profiles else ("feature_class",)
     with (output / "sequence_feature_temporal_profile.csv").open("w", encoding="utf-8-sig", newline="") as stream:
@@ -6719,6 +7926,20 @@ def write_sequence_feature_persistence_artifacts(
     payload["temporal_profile_note"] = (
         "candidate_fraction_cv 描述类别构成的时间稳定性；quality_fraction_weighted 对 compact_quality "
         "包含按 quality_passed 分类造成的定义性泄漏，不是真阳性率。"
+    )
+    payload["source_subgroup_note"] = (
+        "source_subgroup_rows 只对首帧 compact_quality 来源子组做逐源持久性统计；"
+        "dog_only_deblend 表示进入近邻双 PSF 审计适用域，不等于星表确认，"
+        "无双 PSF 记录也不表示拟合失败。"
+    )
+    payload["diagnostic_subgroup_note"] = (
+        "diagnostic_subgroup_rows 只对首帧非 compact_quality 首要特征做互斥子组审计；"
+        "candidate/quality_presence 表示位置响应，same_subgroup_presence 还要求响应帧的"
+        "首要诊断子组相同。它们都是 detector-level 统计，不是星表身份、物理伪影真值或真阳性率。"
+    )
+    payload["diagnostic_source_note"] = (
+        "diagnostic_source_rows 已写入 sequence_feature_diagnostic_sources.csv；"
+        "JSON 只保存 diagnostic_source_row_count，避免把逐源长表重复嵌入 JSON。"
     )
     (output / "sequence_feature_persistence.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False),
@@ -7056,9 +8277,15 @@ def write_source_pair_audit_artifacts(
         writer.writeheader()
         writer.writerows(row.as_dict() for row in result.rows)
     payload = result.as_dict()
+    coordinate_note = (
+        "secondary 的原始像素统计使用按累计平移调整的 registered detector 坐标"
+        if result.association_coordinate_system.startswith("registered detector")
+        else "secondary 的原始像素统计使用固定 detector 坐标"
+    )
     payload["note"] = (
-        "ID 只在单次检测运行内有效；secondary 的原始像素统计使用固定 detector 坐标，"
-        "pair PSF 数值是局部模型比较，不是星表身份或物理真值。"
+        f"ID 只在单次检测运行内有效；{coordinate_note}，"
+        "pair PSF 数值是局部模型比较，不是星表身份或物理真值；"
+        "secondary_shared_aperture_* 是两个圆孔径的几何通量泄漏诊断，不是去混叠后的独立源通量。"
     )
     (output / "source_pair_audit.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False),
@@ -7133,7 +8360,7 @@ def write_temporal_code_audit_artifacts(
     result: TemporalCodeAuditResult,
     out_dir: str | Path,
 ) -> Path:
-    """写固定码审计的 JSON 和连通簇 CSV。"""
+    """写固定码审计的 JSON、焦点时序 CSV 和连通簇 CSV。"""
 
     output = Path(out_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -7141,6 +8368,45 @@ def write_temporal_code_audit_artifacts(
         json.dumps(result.as_dict(), ensure_ascii=False, indent=2, allow_nan=False),
         encoding="utf-8",
     )
+    focus_fields = (
+        "frame_index",
+        "path",
+        "code_focus_xy",
+        "code_value",
+        "code_in_range",
+        "sentinel_focus_xy",
+        "sentinel_value",
+        "sentinel_exact",
+    )
+    with (output / "temporal_code_focus_series.csv").open(
+        "w", encoding="utf-8-sig", newline=""
+    ) as stream:
+        writer = csv.DictWriter(stream, fieldnames=focus_fields)
+        writer.writeheader()
+        for index, path in enumerate(result.paths):
+            code_value = result.code_focus_values_by_frame[index]
+            sentinel_value = result.sentinel_focus_values_by_frame[index]
+            writer.writerow(
+                {
+                    "frame_index": index + 1,
+                    "path": path,
+                    "code_focus_xy": (
+                        "" if result.code_focus_xy is None else f"{result.code_focus_xy[0]},{result.code_focus_xy[1]}"
+                    ),
+                    "code_value": code_value,
+                    "code_in_range": (
+                        code_value is not None
+                        and result.code_range_adu[0] <= code_value <= result.code_range_adu[1]
+                    ),
+                    "sentinel_focus_xy": (
+                        ""
+                        if result.sentinel_focus_xy is None
+                        else f"{result.sentinel_focus_xy[0]},{result.sentinel_focus_xy[1]}"
+                    ),
+                    "sentinel_value": sentinel_value,
+                    "sentinel_exact": sentinel_value == result.sentinel_value,
+                }
+            )
     fields = ("kind", "component_id", "size", "x0", "y0", "x1", "y1", "is_focus_component")
     with (output / "temporal_code_components.csv").open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
@@ -7720,7 +8986,9 @@ def write_detection_source_artifacts(
         "flags",
     )
     feature_rows = summarize_source_features(detection.sources)
+    proposal_method_rows = summarize_source_proposal_methods(detection.sources)
     morphology_rows = summarize_feature_morphology(detection.sources)
+    subclass_rows = summarize_source_feature_subclasses(detection.sources)
     feature_spatial_rows = summarize_feature_spatial_distribution(
         detection.sources,
         detection.image_shape,
@@ -7763,6 +9031,27 @@ def write_detection_source_artifacts(
         writer = csv.DictWriter(stream, fieldnames=feature_fields)
         writer.writeheader()
         writer.writerows(feature_rows)
+    with (output / "source_feature_method_summary.csv").open("w", encoding="utf-8-sig", newline="") as stream:
+        proposal_method_fields = (
+            "feature_class",
+            "feature_class_label",
+            "candidate_count",
+            "quality_count",
+            "gaussian_present_count",
+            "dog_narrow_present_count",
+            "dog_broad_present_count",
+            "all_three_count",
+            "gaussian_only_count",
+            "dog_only_count",
+            "partial_combination_count",
+            "no_gaussian_count",
+            "no_method_count",
+            "no_gaussian_quality_count",
+            "no_gaussian_median_flux_snr",
+        )
+        writer = csv.DictWriter(stream, fieldnames=proposal_method_fields)
+        writer.writeheader()
+        writer.writerows(proposal_method_rows)
     _source_feature_class_chart(output / "source_feature_classes.png", feature_rows)
     morphology_fields = (
         "feature_class",
@@ -7823,6 +9112,24 @@ def write_detection_source_artifacts(
         writer = csv.DictWriter(stream, fieldnames=morphology_fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(morphology_rows)
+    subclass_fields = (
+        "subclass",
+        "subclass_label",
+        "definition",
+        "candidate_count",
+        "quality_count",
+        "rejected_count",
+        "quality_fraction",
+        "high_flux_snr_threshold",
+        "high_snr_rejected_count",
+        "median_flux_snr",
+        "primary_feature_classes",
+        "common_flags",
+    )
+    with (output / "source_feature_subclass_summary.csv").open("w", encoding="utf-8-sig", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=subclass_fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(subclass_rows)
     feature_spatial_fields = (
         "feature_class",
         "feature_class_label",

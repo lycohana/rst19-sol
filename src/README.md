@@ -9,7 +9,7 @@
 - 当前比赛 FITS 主 HDU 的读取、结构校验和 26 个辅助字段解码；
 - 屏蔽首行辅助区域后的鲁棒背景/噪声估计；
 - 局部背景/RMS、Gaussian PSF 匹配滤波、3×3 PSF 支持反尖峰审计、全量候选审计、孔径通量误差、三种 SNR 和点源质量分层；
-- 基于切平面先验 WCS 的星表一对一匹配；
+- 基于切平面先验 WCS 的全局/贪心可对照星表一对一匹配；
 - CSV 离线任务星表读取、自行传播和 JSON CLI 输出。
 - Python Tkinter 桌面工作台：选择 FITS、调整参数，在“可信星点 / 全部候选 / 运动候选”图层间切换，并查看最暗源标注。
 - 15 帧质量源的全局平移配准、唯一轨迹关联和 `static`/`moving`/`transient` 点轨迹基线；另有独立的线状候选检测与跨帧关联。
@@ -64,7 +64,7 @@ rst19-sequence doc/00-项目资料/原始数据 `
 
 单帧质量层默认要求候选峰中心 3×3 核心至少 3 个像素超过 `max(2×局部噪声, 0.1×峰值超额)`；不满足时仍保留候选并记录 `INSUFFICIENT_PSF_SUPPORT`，避免把孤立单像素脉冲当成点源。该约束不改变原始 ADU、通量或星等，只影响质量层。当前快速 15 帧序列还对时间补提案在预测点 `±1 px` 内做局部峰重定位，再执行 PSF 相关和跨帧细筛；同一真实数据的最新口径为严格静态 `5,276`、持续候选 `15,524`、稳定/持续合计 `20,800`。早期全量工作集的 `9,938 / 6,249 / 16,187` 仍保留在实验记录中作为历史对照，不能与当前结果混写；持续候选仍需星表/人工复核。
 
-当前质量层还会审计有符号整型 FITS 中的“候选峰本身落在全幅异常重复高位码上 + 孔径含异常负值”模式，记录为 `CODE_PATTERN`。它只把受污染候选降级，不删除宽筛候选；仅“孔径内含重复码”不足以拒绝，否则真实亮星的饱和/溢出出血列会把 `3991/3992` 等重复码和 `-20628` 这类负值同时带进孔径而被误拒。当前首帧 `hybrid + FWHM=2` 为 `84,594` 个候选、`29,263` 个质量源、`12` 个 `CODE_PATTERN`。这个规则不是相机满阱、`BLANK` 或坏像素的替代标定；详细局部复核见 [检测器实验记录 8.38](../doc/02-星图识别/检测器实验记录.md) 和 [真实性研究 10.25](../doc/02-星图识别/亮点真实性与伪影判别研究.md)。
+当前质量层还会审计有符号整型 FITS 中的“候选峰本身落在全幅异常重复高位码上 + 孔径含异常负值”模式，记录为 `CODE_PATTERN`。它只把受污染候选降级，不删除宽筛候选；仅“孔径内含重复码”不足以拒绝，否则真实亮星的饱和/溢出出血列会把 `3991/3992` 等重复码和 `-20628` 这类负值同时带进孔径而被误拒。近邻联合门控修补后的首帧 `hybrid + FWHM=2` 为 `84,594` 个候选、`29,260` 个质量源、`12` 个 `CODE_PATTERN`；`29,263` 是修补前质量基线。这个规则不是相机满阱、`BLANK` 或坏像素的替代标定；详细局部复核见 [检测器实验记录 8.49](../doc/02-星图识别/检测器实验记录.md) 和 [真实性研究 10.32](../doc/02-星图识别/亮点真实性与伪影判别研究.md)。
 
 15 帧序列另有一个独立的**叠加暗星恢复层**（`evidence_level="stack_faint"`）：它先把注册后的 15 帧取时间中值（或稳健均值）得到降噪参考图，在参考图自身噪声上以 `4σ`、`flux_snr≥5` 重新检测，再回到每帧原始图做 `±1 px` 局部峰强制测光、3×3 支持、形状和边缘/掩膜审计，要求达到 `persistent` 出现帧数且逐帧放宽 `flux_snr≥3`。这样能把单帧 `flux_snr<5` 但跨帧持久的真实暗星恢复出来，同时不给单帧质量层灌进噪声。结果单独计为 `stack_faint_count`，GUI 提供“叠加暗星 · 待复核”图层，`rst19-sequence` 默认开启，可用 `--no-stack-faint` 关闭。该层仍是低置信候选，不是官方逐星真值；方法依据与对照见 [检测器实验记录 8.42](../doc/02-星图识别/检测器实验记录.md)。
 
@@ -108,10 +108,11 @@ rst19-injection --real-fits doc/00-项目资料/原始数据/20260330163205413_9
 
 ```powershell
 rst19-injection --real-fits doc/00-项目资料/原始数据/20260330163205413_9901.fits `
-  --stratified-real --strata blank high_background edge crowded special_code `
+  --stratified-real `
   --peak-levels 24 56 128 --trials 1 --sources 8 --psf-fwhm 2 `
   --proposal-mode hybrid --psf-model empirical `
-  --out-dir tmp/stratified-real-background-gui-default-n8
+  --strata blank high_background edge crowded special_code line `
+  --out-dir tmp/stratified-real-background-code-pattern-current-n8
 ```
 
 该模式把低纹理/高局部噪声、边缘、拥挤邻域和特殊值域分开，记录候选层召回、质量层召回、局部背景/RMS 和基线邻源歧义；示例使用每格 8 个位置，便于比较条件趋势。`crowded`、`special_code` 和可选的 `line` 是困难条件控制，不是逐星真值；`line` 建议单独输出到独立目录，避免与普通星点分层混报。完整说明见 [检测器实验记录](../doc/02-星图识别/检测器实验记录.md) 的真实背景分层注入章节。
@@ -166,6 +167,179 @@ python -m rst19.multipsf_cli `
 
 该组 raw `K=2` 在 15 帧的 `ΔBIC` 全部为负，不能作为两颗独立恒星。检测器会将同孔径的重复高位码/异常负值记录为 `CODE_PATTERN`；候选仍可在候选视图查看，质量视图只显示通过当前质量规则的源。
 
+对当前 pair 再运行有限自由位置审计：
+
+```powershell
+python -m rst19.free_multipsf_cli `
+  doc/00-项目资料/原始数据 `
+  --positions "2439,4021;2435,4022" --psf-fwhm 2 `
+  --position-radius 1.25 --mask-modes raw range_masked sentinel_masked `
+  --shifts-json tmp/sequence-feature-persistence-code-pattern-current-v3/sequence_feature_persistence.json `
+  --out-dir tmp/local-free-multipsf-audit-current-pair-v1
+```
+
+当前 raw 结果为：K=2 的 BIC 在 `9/15` 帧有改善，但 `ΔBIC≥10` 只有 `1/15`，第二分量 SNR 最大约 `2.41`，且 `11/15` 帧位置触及 `±1.25 px` 边界。因此局部模型改善只能作为混合结构敏感性证据，不能写成第二颗星确认；详见 [`检测器实验记录`](../doc/02-星图识别/检测器实验记录.md) 8.61。
+
+经验 PSF 形状对照命令：
+
+```powershell
+rst19-empirical-pair-audit doc/00-项目资料/原始数据 `
+  --source-catalog tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --primary-id 82931 --secondary-id 82934 `
+  --coordinate-mode centroid `
+  --shifts-json tmp/sequence-feature-persistence-code-pattern-current-v3/sequence_feature_persistence.json `
+  --out-dir tmp/empirical-pair-psf-audit-code-pattern-current-v1
+```
+
+该研究命令只在模板帧中从质量通过且隔离的源估计经验 PSF，再对两个指定 detector 位置逐帧计算余弦相关、相对残差和中心能量占比；局部隔离模板不足时显式记录 `None`。它不参与默认检测、质量门控、GUI 或缓存，相关度也不代表恒星概率、星表身份或独立去混叠通量。
+
+对 `82931/82934` 的局部模板窗口扫描显示，`18--512 px` 范围内虽有 `6,081--17,132` 个候选，但满足 `21 px` 隔离条件的源始终只有 `2` 个；`1024 px` 才得到 `6` 个宽范围模板源。该结果说明 `local None` 是拥挤区的模板适用域缺口，不是物理否定；宽范围 fallback 的主/副相关度中位数为 `0.553/0.480`，机器记录位于 `tmp/local-psf-availability-pair-82931-82934-current-v1/`。
+
+pair 强制测光共变审计：
+
+```powershell
+rst19-pair-covariance-audit `
+  tmp/forced-stability-audit-code-pattern-current-v8-pair-peak/forced_stability_frame_metrics.csv `
+  --primary-id 82931 --secondary-id 82934 `
+  --out-dir tmp/pair-flux-covariance-audit-code-pattern-current-v1
+```
+
+它比较固定/局部 `flux_snr` 的跨帧共变，并用同表其它完整源构造控制 pair；另按 pair 总响应中位数输出组内相关，防止共同状态切换被误写成两颗独立星。输出是共享响应/孔径/值域的研究诊断，不是双星概率、正式 p 值或星表身份。
+
+经验 PSF 的单源位置控制：
+
+```powershell
+rst19-empirical-pair-fit doc/00-项目资料/原始数据 `
+  --source-catalog tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --primary-id 82931 --secondary-id 82934 `
+  --coordinate-mode centroid `
+  --mask-modes raw,range_masked,sentinel_masked,range_sentinel_masked `
+  --shifts-json tmp/sequence-feature-persistence-code-pattern-current-v3/sequence_feature_persistence.json `
+  --out-dir tmp/empirical-pair-fit-code-pattern-current-centroid-v2
+```
+
+它在同一窗口/掩膜中比较固定质心 K=1/K=2，再用双源中点周围的单源位置网格控制锚定偏差；真实 pair 的质心固定双源 raw 线为 `11/15`，网格控制为 `0/15`，峰值锚点固定与控制均为 `0/15`。该结果用于解释局部模型自由度，不接入默认检测或星数。
+
+为检验局部模板缺口是否改变上述结论，研究审计又把 `1024 px` 范围内筛出的 6 个隔离源直接作为经验 PSF 重跑。宽范围模板的固定质心双源 raw 线仍为 `11/15`，最佳单源位置控制仍为 `0/15`，首帧固定双源 `ΔBIC=-6.31`、第二分量 SNR `0`；因此模板不足会改变拟合幅度，但不能把两个宽筛响应升级为两颗物理恒星。该复核不进入默认检测、GUI 或缓存，产物为 `tmp/empirical-pair-fit-local-wide-1024-pair-82931-82934-current-v1/`，完整解释见 [`检测器实验记录`](../doc/02-星图识别/检测器实验记录.md) 8.91。
+
+正式的有界自由位置经验 PSF 对照：
+
+```powershell
+rst19-empirical-pair-free doc/00-项目资料/原始数据 `
+  --source-catalog tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --primary-id 82931 --secondary-id 82934 `
+  --mask-modes raw,repeated_code_masked,range_repeated_code_masked,range_sentinel_repeated_code_masked `
+  --shifts-json tmp/sequence-feature-persistence-code-pattern-current-v3/sequence_feature_persistence.json `
+  --single-position-radius-px 2 --double-position-radius-px 3 `
+  --out-dir tmp/empirical-pair-free-code-pattern-current-v3
+```
+
+该研究命令在同一经验 PSF、窗口、平面背景和掩膜下连续优化 K=1/K=2 的位置与幅度，并允许 K=2 退化为同一位置。当前 pair 的 raw 联合证据线（`ΔBIC≥10`、第二分量 SNR `≥5`、拟合间距 `≥1 px`、收敛且不触边）为 `0/15`；raw 拟合间距中位约 `0 px`、最大约 `1.05 px`。值域掩膜组合仍无通过帧；同一实现的 `6 px` 双源注入回归控制可以通过联合线，说明结果不是算法完全不会拟合双源。该工具只写 `tmp/empirical-pair-free-code-pattern-current-v3/`，不接入默认检测、质量门、GUI 或缓存，详细解释见 [`检测器实验记录`](../doc/02-星图识别/检测器实验记录.md) 8.92。
+
+需要排查工程重复码时，可使用 `repeated_code_masked`、`range_repeated_code_masked` 等模式并传入 `--repeated-code-values 3990,3991,3992,3993`；这只是值域敏感性对照，不是设备满阱标定。
+
+源目录最近邻群体控制可用 rst19-source-separation-audit。它分开统计测量质心与整数峰的最近邻距离，并支持用 --target-id 回查指定候选；当前 82931/82934 的质心最近邻距为 2.738 px，位于 84,594 个候选最近邻距离的 0.0165% 分位，而峰坐标最近邻距 4.123 px 位于 5.70% 分位。该统计用于说明峰竞争与质心收缩的几何背景，不是双星概率或星表身份。产物为 tmp/source-separation-audit-code-pattern-current-v1/。
+
+几何条件化的近邻机制背景可用 `rst19-pair-mechanism-context`：在测量质心距 `≤3.5 px` 且整数峰距 `3.5--4.8 px` 的无序候选 pair 中，统计两端 `feature_class` 是否一致、是否同时通过质量层，并回查目标 pair。当前窗口共 `11` 对，其中同类别 `7` 对、跨类别 `4` 对，双质量通过 `0/11`；`82931/82934` 属于 `range_anomaly + crowded_blend` 跨类别组合。该结果只描述 detector-level 机制背景，不是噪点率、双星概率或星表身份；目标位置污染注入还要把 baseline、injected 和 new 分开。产物为 `tmp/pair-mechanism-context-code-pattern-current-v1/`，实现为 `src/rst19/pair_mechanism_context.py`。
+质心上限放宽到 `4.0 px` 时会得到 `840` 对、双质量通过 `149`，所以严格窗口的 `0/11` 不能外推成全图比例；窗口改变后必须重新定义比较总体。
+
+窗口敏感性可用 `rst19-pair-mechanism-sensitivity` 固定复现：它输出 `3.0/3.5/4.0 px` 质心上限和两组峰距扩展的 CSV/JSON，当前对应 `8/11/840` 对、双质量 `0/0/149`。该模块只读源表，不重跑 FITS、不写检测缓存；产物为 `tmp/pair-mechanism-sensitivity-code-pattern-current-v1/`。
+
+若要避免把局部峰数直接解释成恒星数，可使用 `rst19-source-group-audit` 建立“父源组—子候选”层：它只读取已有 `source_catalog.csv`，按测量质心距离和 `max(2.5 px, 1.5×PSF FWHM)` 建立连通组，再依据质量通过、值域/结构旗标和双 PSF 独立证据，将组标为 `isolated`、`unresolved_group` 或 `independent_group_candidate`。组代表仅用于显示和排序，不能覆盖子候选、落选原因或物理星数；一对一像素分配、跨帧稳定性和星表身份仍是后续拆分前的必要核验。当前 v3 的 `84,594` 个候选形成 `84,586` 个组，其中 `8` 个多成员组全部为 `unresolved_group`，`0` 个达到独立候选线；`82931/82934` 是两成员未分辨组，质心距 `2.738 px`。该解释层不修改检测、质量层、GUI 或缓存，产物为 `tmp/source-group-audit-code-pattern-current-v1/`，测试为 `tests/test_source_group_audit.py`。
+
+父源组半径敏感性可用 `rst19-source-group-sensitivity`：固定同一源表和 PSF/质量证据线，扫描 `2.5/3.0/3.5/4.0 px` 并输出统一 CSV/JSON。当前多成员组数为 `4/8/12/831`，独立候选组为 `0/0/0/25`；目标在 `2.5 px` 暂时分开，在 `3.0 px` 及以上均为 `unresolved_group`。该扫描只说明解释层对半径的敏感性，不是光学分辨率、恒星数量或双星概率；产物为 `tmp/source-group-radius-sensitivity-code-pattern-current-v1/`，测试为 `tests/test_source_group_sensitivity.py`。
+
+```powershell
+rst19-source-group-sensitivity `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --target-id 82931 --target-id 82934 --psf-fwhm 2 --workers 4 `
+  --out-dir tmp/source-group-radius-sensitivity-code-pattern-current-v1
+```
+
+近邻 pair 的独立像素支持留出可用 `rst19-pair-support-audit`：它在每帧目标局部裁剪上重新执行当前宽筛，随后用最大基数/最小残差一对一分配，并把总孔径、共同孔径、非共同孔径和最近目标二分区的有效像素/正残差通量分开记录。它还可屏蔽全局极值、重复码、局部极端负值和共同孔径；15 帧截图 pair 的 raw 双分配为 `4/15`、双质量为 `0/15`，重复码或局部异常屏蔽后的双分配均为 `0/15`。v2 另写出 `pair_support_summary.csv`，保留候选分配与质量通过的不同分母；结果只用于混叠/值域敏感性审计，不直接修改质量层、GUI 或缓存。产物为 `tmp/pair-support-audit-code-pattern-current-v2/`。
+
+源级特征依赖审计可用 `rst19-feature-correlation`：它只读取 `source_catalog.csv`，计算峰值、通量/滤波 SNR、FWHM、椭圆率、sharpness、足迹、PSF 支持和质心偏移之间的 Spearman 相关性，并输出每个首要类别的中位数及类别内相关性。当前全量候选中 `peak—filter_snr=0.9355`、`flux_snr—filter_snr=0.8711`、`filter_snr—FWHM=-0.8444`；这用于防止把相关显著性量重复计权，不是因果分析、真星概率或质量规则改写。产物为 `tmp/feature-correlation-audit-code-pattern-current-v1/feature_correlations.csv`、`feature_class_medians.csv`、`feature_class_correlations.csv` 和 `feature_correlation_audit.json`，测试为 `tests/test_feature_correlation_audit.py`。
+
+孔径半径 `3/4/5 px` 的敏感性对照中，raw 双分配均为 `4/15`，双质量均为 `0/15`，重复码和局部异常屏蔽后的双分配均为 `0/15`；对应产物为 `tmp/pair-support-audit-code-pattern-current-r3/` 和 `current-r5/`。共享比例随孔径变化，因此它是几何测光诊断量，不是孔径无关的伪影概率。
+
+原始像素拓扑审计可用 `rst19-pair-pixel-topology`。它在指定 pair 的未降噪局部窗口内，以多个阈值统计 8 邻域正值连通块，再以多个邻域半径寻找原始局部极大值；同时输出重复码/特殊负值屏蔽对照。当前 `82931/82934` 在 `3/5/8/10σ` 下均属于同一正值连通块，但 `3/5/7 px` 局部峰审计中两者均不是局部极大值，首帧最亮像素为 `(2438,4022)=13028`。因此它是“共享响应结构/峰重定位”的像素级证据，不是噪点真值判定；不能单独排除真实混叠恒星，也不应把两个宽筛框直接计为两颗星。实现为 `src/rst19/pair_pixel_topology.py`，测试为 `tests/test_pair_pixel_topology.py`，产物为 `tmp/pair-pixel-topology-pair-82931-82934-current-v1/`。
+
+另有一个小样本类别控制 pilot：8 个几何相近的 `compact_quality` pair 中，7/8 对的两个候选同时为 `3 px` raw 局部极大值；目标 pair 为 0/1，且目标质心距 2.738 px 小于控制最小 3.54 px。它只用于描述性上下文，不是 precision 或物理身份估计；产物为 `tmp/pair-pixel-topology-controls-current-v1/`。
+
+按特征类别做经验 PSF 留一法交叉核验：
+
+```powershell
+rst19-feature-psf-leaveout `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --source-catalog tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --per-class 16 --max-template-sources 20 `
+  --out-dir tmp/feature-psf-leaveout-code-pattern-current-v1
+```
+
+它逐源排除自身后重建经验核，并同时输出类别汇总和逐源成对指标，用来检查类别 PSF 差异是否被模板泄漏夸大；结果不参与默认检测、质量门控、GUI 或缓存，也不等于恒星概率。
+
+把宽筛、质量层、15 帧响应和留一 PSF 结果合并成类别证据矩阵：
+
+```powershell
+rst19-feature-evidence `
+  --source-morphology tmp/source-quality-audit-code-pattern-current-v3/source_feature_morphology.csv `
+  --feature-cross tmp/feature-cross-audit-code-pattern-current-v3/feature_cross_audit.csv `
+  --psf-leaveout tmp/feature-psf-leaveout-code-pattern-current-v1/feature_psf_leaveout.csv `
+  --psf-spatial tmp/source-feature-psf-grid2-per16-code-pattern-current-v4/source_feature_psf_spatial.csv `
+  --out-dir tmp/feature-evidence-matrix-code-pattern-current-v3-routing
+```
+
+输出 `feature_evidence_matrix.csv/json`。其中候选持久比例、同类质量比例、质量层邻域响应和候选/质量同类响应保持分列；邻域响应不是同类质量持久性。可选的 `--psf-spatial` 还会合并局部模板可得率、局部相关度/残差以及相对全局模板的变化，用来检验空间 PSF 校正是否改变类别解释；模板不足时只记录校准缺口。当前矩阵显示多个被拒类别仍可在 `12/15` 帧附近重复出现，但 PSF/质量层不支持，说明跨帧重复不能单独升级为恒星；该工具只组织研究证据，不修改默认检测、GUI 或缓存。
+
+类别规则签名的非参数对照可用 `rst19-feature-effect-size`：它以 `compact_quality` 为参考，输出各落选类别在 flux/filter SNR、峰值、FWHM、椭圆率、sharpness、足迹、PSF 支持、质心偏移和值域计数上的 AUC/Cliff's delta。该结果只描述当前标签规则的分布差异，不是物理恒星分类器；产物为 `tmp/feature-effect-size-code-pattern-current-v1/`。
+
+真实污染结构中的双源注入审计可用 `rst19-contaminated-pair-injection`。它把已知 Gaussian 双源叠加到目标 pair 中点、紧凑质量源和线状候选附近，扫描 `2.738/4.123 px` 分离和 `0.143/1` 副/主峰比，并将 baseline、injected、new 三层命中分别输出。当前 pilot 用于说明污染结构会改变双源回收，不是当前 FITS 的 precision、伪影概率或物理恒星数；产物为 `tmp/contaminated-pair-injection-code-pattern-current-v1/`，不接入默认检测、质量层、GUI 或缓存。
+
+跨类别污染双源复核可用 `rst19-contaminated-pair-class`：
+
+```powershell
+rst19-contaminated-pair-class `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --source-catalog tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --separations-px 2.738 4.123 --ratios 0.143 1 `
+  --total-peak-adu 4096 --out-dir tmp/contaminated-pair-class-audit-code-pattern-current-v1
+```
+
+它从 8 个互斥首要特征类别中各选一个中位 `filter_snr` 锚点，输出类别选择、逐条件 baseline/injected/new 三层以及 `contaminated_pair_class_summary.csv`。当前机制 pilot 在 `2.738 px` 下候选/质量双命中为 `0/16`、`0/16`，在 `4.123 px` 下为 `11/16`、`9/16`；线状和范围异常类仍为 `0/4`。类别回收只用于区分间距—PSF 几何与局部结构质量门，不是类别召回率、precision、FDR 或物理恒星概率。
+
+多锚点研究可增加 `--per-class 3 --analysis-scope local_roi --roi-half-size-px 192`。该口径在每个类别的 3 个中位锚点周围运行同一 detector，完成 `96` 个局部条件；输出中的 `analysis_scope`、`roi_bounds` 和 injected 计数范围明确标注 ROI 局部边界。当前结果为短距候选/质量 `0/48、0/48`，长距 `33/48、28/48`；它不能替代全幅候选总数，也不接入 GUI 默认或缓存。
+
+逐条件结果还保存注入端点的匹配 ID、匹配距离和质量原因，并写出 `contaminated_pair_quality_reason_summary.csv`。原因标签来自实际 detector flags，`NO_CANDIDATE` 表示宽筛未命中，`QUALITY_PASS` 表示通过质量层；该输出用于机制审计，不改变检测器判断。
+
+当前版本还为每个类别输出确定性的 `recommended_audit_stage` 和 `counting_policy`：例如拥挤类进入联合 PSF 去混叠，范围异常进入原始值域核验，弱源进入分区噪声/注入核验，只有 `compact_quality` 进入星表/WCS 或留出注入的身份核验队列。它们只是下一步审计路由和计数边界，不是加权分数、恒星概率或物理真值；最新带路由字段的复现产物可写入 `tmp/feature-evidence-matrix-code-pattern-current-v3-routing/`。
+
+多次重复特征机制控制：
+
+```powershell
+rst19-feature-audit-replicates `
+  --trials 64 --seed 19019 `
+  --out-dir tmp/feature-audit-replicates-code-pattern-current-v2
+```
+
+该命令在不同随机背景上重复已知源注入和阴性结构场景；正样本按注入真值统计候选/质量回收，阴性样本只统计邻域泄漏。当前 `64` 次是扩展版，首轮 `16` 次保留为历史 pilot；它用于检验“宽筛能找到、细筛按机制拒绝”的稳定性，不把合成回收率写成真实 FITS 的 precision、完备率或伪影概率。
+
+真实首帧的符号反相阴性对照：
+
+```powershell
+rst19-signed-null-audit `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --threshold-sigma 4 --min-distance 4 --aperture-radius 4 `
+  --psf-fwhm 2 --proposal-mode hybrid --min-flux-snr 5 `
+  --min-psf-support-pixels 3 `
+  --out-dir tmp/signed-null-audit-code-pattern-current-v1
+```
+
+该命令以稳健背景 `B` 构造 `I_mirror=2B-I`，在正向和反相图上使用同一套候选/质量参数，输出 `signed_null_summary.json`、SNR 分档表和特征类别表。它只估计近似对称的背景/噪声尾部泄漏，不是 FDR、p 值、precision 或真实伪影概率；对于有符号整型 FITS，报告还会单独标出“原始极端负码经反相转移”的候选，避免把这类值域结构误认为噪声或恒星。命令只写研究汇总，不写全量源目录、不修改 GUI 默认值或检测缓存。
+
+15 帧聚合入口为 `rst19-signed-null-sequence doc/00-项目资料/原始数据 --out-dir tmp/signed-null-sequence-code-pattern-current-v3`。它逐帧复用同一阴性对照，并额外输出 `signed_null_sequence_quality_sources.csv` 与 `signed_null_sequence_recurrences.csv`，把反相质量源拆成极端负码转移、原始负值/固定哨兵异常、普通弱/宽响应三层；源表的互斥 `raw_evidence_layer` 实际分布为 `19/13/3`，同时保留负值、极值和 `-1` 的非互斥计数。`≤1 px` 复现簇只表示 detector-level 固定坐标重复，不是物理身份匹配。当前 pooled 结果为反相 `36,170/35`、排除转移后质量 `16`，不改变默认检测、GUI 或缓存。
+
+反相质量源的同帧正向近邻控制使用 rst19-signed-null-overlap，复用当前 GUI 的 hybrid + 4σ + FWHM=2 px + flux SNR≥5 + PSF support≥3，只在原始 detector 坐标查询 ≤1/2/4 px 候选和质量邻域，不做跨帧注册、不写正向全量目录。当前结果为候选 0/35、23/35、32/35，质量源 0/35；它用于证明“局部候选近邻不等于正常星”，不替代星表/WCS 或注入真值。正式 CLI 产物为 tmp/signed-null-positive-overlap-code-pattern-current-v2/。
+
 使用用户显式提供的 CSV 星表进行先验匹配（仓库不内置离线星表）：
 
 ```powershell
@@ -178,7 +352,7 @@ rst19 frame.fits `
   --parity 1
 ```
 
-主界面的“打开星表核验”会复用这套 CSV/WCS 参数并显示唯一匹配、位置残差和目录星等；运行匹配后可点击“根据匹配拟合 WCS”，用至少 6 个有效、非共线匹配点估计视场内的局部仿射模型，展示像元角尺度、旋转、parity、内点 RMS 和各向异性，并把结果用于创新摘要的视场切平面角速度。它仍以先验 WCS 为入口，不是全天空盲解算；未填写可靠像元角尺度时不要运行匹配。CSV 至少需要以下列：
+主界面的“打开星表核验”会复用这套 CSV/WCS 参数并显示唯一匹配、位置残差和目录星等；默认匹配在半径门控形成的稀疏候选连通分量内使用全局最大基数、最小总残差的一对一分配，并保留 `assignment_mode="greedy"` 作为历史贪心对照；运行匹配后可点击“根据匹配拟合 WCS”，用至少 6 个有效、非共线匹配点估计视场内的局部仿射模型，展示像元角尺度、旋转、parity、内点 RMS 和各向异性，并把结果用于创新摘要的视场切平面角速度。它仍以先验 WCS 为入口，不是全天空盲解算；未填写可靠像元角尺度时不要运行匹配。CSV 至少需要以下列：
 
 ```text
 source_id,ra_deg,dec_deg,magnitude,pmra,pmdec,ref_epoch
@@ -193,6 +367,14 @@ rst19-aux-audit doc/00-项目资料/原始数据 --out-dir tmp/auxiliary-attitud
 ```
 
 该命令把四元数按向量在前、标量在后的 Hamilton 约定转换为主动旋转，并以相机机体系 `-Y` 轴计算 RA/Dec；实际 15 帧中四元数模长均为 1，计算光轴与辅助 RA/Dec 的最大差为约 `1.1e-10` 角秒，`p_az/p_el` 与 FITS 头匹配 `15/15`。这证明辅助数据可以用于按帧收窄星表候选搜索和检查坐标约定，但当前头文件仍缺少像元尺度、完整轴向矩阵、畸变/SIP 等信息，所以它是“光轴/姿态先验”，不是完整 WCS，也不能单独给出逐星身份或正式星数。输出为 `auxiliary_boresight_audit.csv` 和 `auxiliary_boresight_audit.json`。
+
+若要把格式说明中的文字与实际 FITS 文件分开核验，可运行：
+
+```powershell
+rst19-format-audit doc/00-项目资料/原始数据 --out-dir tmp/format-audit-code-pattern-current-v1
+```
+
+该命令只读检查 15 帧的文件长度、`NAXIS1/NAXIS2`、`BITPIX`、存储 dtype、`BSCALE/BZERO/BLANK`、首行 208 字节辅助区域、标准 WCS 卡片、负值/`-1`/正负极值，并输出用 `DATE-OBS` 对位置—速度字段的差分自洽误差。当前结果为 `15/15` 个 `4096×4096`、`BITPIX=16`、大端 `>i2`，文件长度全部匹配；`BLANK` 为 `0/15`，精确 `-1` 合计 `2,185`，标准 WCS 卡片为 `0/15` 帧存在、最小 WCS 核心为 `0/15`。这只是格式和值域审计，不确认 ADC signedness、坏像素/饱和语义或完整 WCS；首行辅助区的光轴/姿态字段不能替代标准 WCS。产物为 `tmp/format-audit-code-pattern-current-v1/format_audit_frames.csv`、`format_audit_velocity.csv` 和 `format_audit.json`。
 
 对整组 15 帧做逐帧验证：
 
@@ -221,17 +403,124 @@ rst19-gui
 
 命令 `rst19-trails <FITS目录>` 可以逐张运行单图长线审计，输出候选数量、最长线长度/宽度/方向、残差 SNR、触边状态和包围盒的 CSV 与曲线；GUI 的“单图长线”页按当前检测参数按需运行同一审计。它只回答“单张图中是否存在长线形状候选”，不跨帧判定 `moving`；15 帧速度和方向仍以序列证据为准。
 
-命令 `rst19-sources <FITS文件>` 会在一次检测完成后导出全量 `source_catalog.csv`、质量/拒绝标记汇总、互斥首要特征类别 `source_feature_summary.csv`、`source_feature_morphology.csv`、按类别 4×4 粗网格统计的 `source_feature_spatial.csv`、按类别原图抽样的 `source_cutout_contact_sheet.png`/`source_cutout_manifest.csv`、按类别经验 PSF 相似度的 `source_feature_psf_similarity.csv`、全局/局部经验 PSF 留出对照 `source_feature_psf_spatial.csv`、类别图、两张 SNR 图、重叠质量标志图以及 16×16 返回源密度/质量通过率空间图和 `source_spatial_grid.csv`。形态表按类别记录峰值/通量/滤波 SNR、FWHM、椭圆率、sharpness、PSF 支持、质心偏移、空间分位数和拒绝原因比例；空间表用于检查线状、边缘、固定结构是否集中在局部区域；PSF 相似度表记录确定性原图抽样的经验核相关系数、相对残差和中心能量占比；空间 PSF 表用留出样本构造局部模板，并用整幅候选表做隔离检查，模板不足时只记录回退，不改写 `quality_passed`。高 SNR 拒绝计数、空间集中性、`corr≥0.8` 和局部模板可得率都只是诊断切片，不是物理伪影真值，也不会自动改写质量层。它保留 `peak SNR`、孔径 `flux SNR` 与匹配滤波 `filter SNR` 三个不同量，并明确记录当前背景、噪声、阈值、PSF、质量参数和空间诊断边界；`feature_class` 只是按固定优先级整理的算法审计标签，原始 `flags` 仍允许重叠。GUI 检测参数区的“研究工具 → 导出星点研究表”复用当前已完成的检测结果，不会因为导出而再次检测，导出完成后直接打开 Tkinter 的“论文表图 / 指标与口径”窗口。
+命令 `rst19-sources <FITS文件>` 会在一次检测完成后导出全量 `source_catalog.csv`、质量/拒绝标记汇总、互斥首要特征类别 `source_feature_summary.csv`、提议器来源交叉表 `source_feature_method_summary.csv`、`source_feature_morphology.csv`、可重叠机制子类 `source_feature_subclass_summary.csv`、按类别 4×4 粗网格统计的 `source_feature_spatial.csv`、按类别原图抽样的 `source_cutout_contact_sheet.png`/`source_cutout_manifest.csv`、按类别经验 PSF 相似度的 `source_feature_psf_similarity.csv`、全局/局部经验 PSF 留出对照 `source_feature_psf_spatial.csv`、类别图、两张 SNR 图、重叠质量标志图以及 16×16 返回源密度/质量通过率空间图和 `source_spatial_grid.csv`。方法来源表记录 Gaussian/DoG 的交集、`gaussian_only`、`dog_only` 和无 Gaussian 质量数，用于区分提议器敏感性与质量层证据，但不产生真星概率。形态表按类别记录峰值/通量/滤波 SNR、FWHM、椭圆率、sharpness、PSF 支持、质心偏移、空间分位数和拒绝原因比例；子类表按完整 flag token 拆开重复码、极端负值、饱和、边界、部分掩膜、线状、未分辨近邻和尖峰，明确这些行允许重叠、不能相加；空间表用于检查线状、边缘、固定结构是否集中在局部区域；PSF 相似度表记录确定性原图抽样的经验核相关系数、相对残差和中心能量占比；空间 PSF 表用留出样本构造局部模板，并用整幅候选表做隔离检查，模板不足时只记录回退，不改写 `quality_passed`。高 SNR 拒绝计数、空间集中性、方法交集、`corr≥0.8` 和局部模板可得率都只是诊断切片，不是物理伪影真值，也不会自动改写质量层。它保留 `peak SNR`、孔径 `flux SNR` 与匹配滤波 `filter SNR` 三个不同量，并明确记录当前背景、噪声、阈值、PSF、质量参数和空间诊断边界；`feature_class` 只是按固定优先级整理的算法审计标签，原始 `flags` 仍允许重叠。GUI 检测参数区的“研究工具 → 导出星点研究表”复用当前已完成的检测结果，不会因为导出而再次检测，导出完成后直接打开 Tkinter 的“论文表图 / 指标与口径”窗口。
 
 空间 PSF 诊断默认使用 `4×4` 网格、每类 8 个抽样源，以保持日常导出速度；进行类别研究时可以显式扩大抽样：
 
 ```powershell
 rst19-sources <FITS文件> --psf-fwhm 2 `
   --spatial-psf-per-class 16 --spatial-psf-grid-size 2 `
-  --out-dir tmp/source-feature-psf-grid2-per16-gui-default
+  --out-dir tmp/source-feature-psf-grid2-per16-code-pattern-current-v4
 ```
 
 这两个参数只影响 `source_feature_psf_spatial.csv` 的诊断抽样，不改变候选数、质量规则或 GUI 默认结果。
+
+若要把空间差异与信号强度分开，可在真实首帧上运行空间分区留出注入：
+
+```powershell
+rst19-spatial-injection `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --grid-size 2 --peak-levels 256 512 1024 `
+  --trials 1 --sources-per-cell 1 --psf-fwhm 2 `
+  --proposal-mode hybrid --psf-model gaussian `
+  --signal-normalization integrated_excess `
+  --out-dir tmp/spatial-injection-code-pattern-current-2x2-gaussian-t1-high-paired-v2
+```
+
+该命令在每个 detector 单元中从当前候选、特殊值和局部亮结构之外选相对空白位置，记录已知注入源的候选/质量回收率、局部背景噪声和实际峰值超额。`integrated_excess` 固定离散注入小窗的总积分信号，避免不同 PSF 核和把峰值实验混在一起。回收率分母是已知注入源，不是当前 FITS 的真实恒星数、precision 或完备率；统一 Gaussian 核的 pilot 也不能替代各分区实测 PSF。当前首帧 `2×2` pilot 显示 `256/512/1024 ADU` 的候选回收均为 `4/4`，质量回收为 `0/4、4/4、4/4`，支持“质量层跃迁首先受通量 SNR 控制”。配对版还保存同 dtype 无注入控制：某单元的候选增量为 `+16`，但质量只增 `+1`，新增项集中在 `filter_snr≈4` 边界，说明宽筛全图响应噪声重估会产生非局部候选膨胀，不能把它解释为空间特殊星点。每档仅 4 个样本，不能外推成正式空间完备率；低信号 `56/128 ADU` 对照保存在 `tmp/spatial-injection-code-pattern-current-2x2-gaussian-t1/`，配对版保存在 `tmp/spatial-injection-code-pattern-current-2x2-gaussian-t1-high-paired-v2/`。
+
+经验 PSF 的孔径敏感性审计可复核“亮点是否因测光口径而改变”：
+
+```powershell
+rst19-aperture-sensitivity `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --aperture-radii 3 4 5 6 --reference-aperture-radius 4 `
+  --control-signal-adu 512 --grid-size 2 --psf-fwhm 2 `
+  --background-box-size 128 --min-flux-snr 5 `
+  --min-psf-support-pixels 3 --min-distance 4 `
+  --threshold-sigma 4 --proposal-mode hybrid `
+  --empirical-psf-radius 7 --empirical-psf-sources 64 `
+  --seed 19019 --out-dir tmp/aperture-sensitivity-code-pattern-current-v1
+```
+
+当前首帧产物中四档候选回收均为 `4/4`，质量回收为 `4/4、2/4、0/4、0/4`；`flux SNR` 中位数为 `6.428、5.168、3.940、3.644`。这只是固定四点、固定经验模板的测光边界实验，不是完备率，不修改默认孔径、质量规则或缓存。机器产物为 `tmp/aperture-sensitivity-code-pattern-current-v1/aperture_sensitivity_audit.csv/json`。
+
+各类特征的参数敏感性和同坐标类别转移：
+
+```powershell
+rst19-feature-parameter-sensitivity `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --threshold-levels 4,5,6,8 --flux-snr-levels 3,5,7,9 `
+  --out-dir tmp/feature-parameter-sensitivity-code-pattern-current-v1
+```
+
+固定同一首帧分别扫描候选阈值和质量层 `flux SNR`，输出运行汇总、按类别默认坐标匹配率和类别转移矩阵。当前首帧 `flux SNR=3/5/7/9` 的候选数都为 `84,594`，质量数为 `41,110/29,260/22,438/18,296`；`flux SNR=9` 时 `9,614` 个默认紧凑质量位置转为弱/背景，`flux SNR=3` 时 `10,280` 个默认弱/背景位置转入紧凑类。该结果用于证明质量门会重标记同一候选，不能把质量数变化直接叫恒星数量变化；候选层、质量层和物理身份仍需分开。该研究工具不写检测缓存、不修改 GUI 默认参数。
+
+三组序列 JSON 完成后，可用 `rst19-feature-sequence-compare --run NAME=JSON ...` 做只读比较。该命令校验唯一帧数、`required_presence` 和关联半径一致，输出首帧候选/质量数量、各类候选/质量持久性和类别转移；它不重跑 FITS，也不会把每帧按类别展开的行数当作帧数。当前 `SNR=3/5/9` 的 `compact_quality` 质量持久率为 `0.776/0.815/0.864`，截图 `82931/82934` 在三组中仍为异常值域/未分辨近邻候选，而不是两个稳定质量源。产物目录示例为 `tmp/sequence-feature-parameter-comparison-current-v1/`。
+
+若要检查指定候选在其所属类别中是否属于异常高显著性 hard negative，可运行：
+
+```powershell
+rst19-feature-class-context `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --target-id 82931 --target-id 82934 `
+  --out-dir tmp/feature-class-context-pair-82931-82934-current-v1
+```
+
+该命令只读取源级 CSV，输出同类 `p10/median/p90/empirical percentile`，不重跑 FITS、不输出恒星概率。当前 `82934` 在 `crowded_blend` 类中 `flux SNR/filter SNR/PSF 支持` 约为 `98.2%/99.9%/99.6%` 分位，但仍因 `UNRESOLVED_BLEND` 和共享几何不能计星；这正是“高 SNR 不等于独立身份”的 hard negative 证据。
+
+若要对所有类别筛查高显著性落选候选，可运行：
+
+```powershell
+rst19-feature-hard-negative `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --top-n 5 --metric flux_snr `
+  --out-dir tmp/feature-hard-negative-code-pattern-current-v1
+```
+
+命令只读取 `source_catalog.csv`，按 `quality_passed=False` 且类别内 `flux_snr` 降序输出每类 top 5，另外保留 `filter_snr/peak/FWHM/椭圆率/sharpness/PSF支持/足迹/flags` 和 `filter_flux_snr_ratio`。该比值只是孔径通量 SNR 与匹配滤波 SNR 的分歧诊断，不是新的综合分数。工具用于发现“显著性与质量拒绝规则冲突”的 hard negative，不输出恒星概率；`other_rejected` 默认不纳入，可用 `--include-other-rejected` 显式加入。当前产物为 `tmp/feature-hard-negative-code-pattern-current-v1/`。
+
+若要检查“单个旗标是否可容错、两个旗标叠加后是否必然落选”，可运行：
+
+```powershell
+rst19-feature-flag-interaction `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --high-snr-threshold 10 `
+  --out-dir tmp/feature-flag-interaction-code-pattern-current-v1
+```
+
+该命令只读取源级 CSV，分别输出旗标 presence、完整旗标集合恰好相等的 `exact_set`、质量通过数和高 SNR 落选数。当前 v3 中 `PARTIAL_MASKED` 出现在 `11,490` 行，其中恰好只有该旗标的 `2,777` 行全部通过；但 `LOW_FLUX_SNR+PARTIAL_MASKED` 的 `7,703` 行和 `INSUFFICIENT_PSF_SUPPORT+PARTIAL_MASKED` 的 `5,084` 行质量通过数均为 `0`。这说明当前质量门是条件组合逻辑，而不是“看到一个掩膜就全部删除”；这些数字仍是 detector-level 规则行为，不是物理真星率或伪影概率。产物为 `tmp/feature-flag-interaction-code-pattern-current-v1/feature_flag_interactions.csv/json`，实现为 `src/rst19/feature_flag_interaction.py`，测试为 `tests/test_feature_flag_interaction.py`。
+
+若要解释不同类别为什么落选，可运行 `rst19-feature-gate-margin`：
+
+```powershell
+rst19-feature-gate-margin `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --out-dir tmp/feature-gate-margin-code-pattern-current-v1
+```
+
+它只读取 `source_catalog.csv`，按 `feature_class` 输出 `flux_snr`、PSF 支撑、FWHM、椭圆率、sharpness 和足迹相对于当前质量门的有符号余量，并保留负余量比例。正值只代表该字段未越过数值门，负值只代表该字段越界；不同单位不相加，也不生成恒星概率。当前结果显示弱/背景类由 `flux_snr` 主导、尖峰类由 PSF 支撑主导，而线状类虽有很高 SNR 仍由 `LINE_ARTIFACT` 结构旗标分流。实现为 `src/rst19/feature_gate_margin.py`，测试为 `tests/test_feature_gate_margin.py`，产物为 `tmp/feature-gate-margin-code-pattern-current-v1/`。
+
+若要查看每个候选的观测规则路径，可运行 `rst19-feature-gate-route`。该命令只读源级 CSV，输出逐候选路径表和按类别汇总表，将拒绝候选分成 `rejected_numeric_only`、`rejected_structural_only` 和 `rejected_numeric_and_structural`；数值同义旗标不会在相应数值字段已越界时重复计入结构旗标。当前 pair `82931/82934` 均为 `rejected_structural_only`，但这仍是 detector-rule 分解，不是反事实因果消融、噪点概率或物理恒星身份。产物为 `tmp/feature-gate-route-code-pattern-current-v1/`，实现为 `src/rst19/feature_gate_route.py`，测试为 `tests/test_feature_gate_route.py`。
+
+若要把质量门路径与 15 帧逐源响应继续交叉，可运行 `rst19-feature-gate-temporal-route`。该命令只读取路径 CSV、非紧凑诊断源 CSV 和同一次序列 JSON，按 `detection_id` 连接候选 `presence`、同诊断子组 `presence` 和邻域质量 `presence`；缺少逐源行保留空值，被拒候选缺行则报错。当前 `82931/82934` 为 `4/15、4/15、0/15` 与 `4/15、3/15、0/15`，说明候选重复不等于稳定质量身份；输出不提供噪点概率、precision、完备率或物理恒星数。产物为 `tmp/feature-gate-temporal-route-code-pattern-current-v1/`，实现为 `src/rst19/feature_gate_temporal_route.py`，测试为 `tests/test_feature_gate_temporal_route.py`。
+该命令还写出 `feature_gate_temporal_subgroup_summary.csv`，将 `masked_partial`、`blend_unresolved`、`weak_low_flux_snr` 等诊断子组的规则路径、候选持久、同机制持久和邻域质量持久并列。当前 `masked_partial` 候选为 `9,048/11,289`、同机制仅 `9/11,289`，`blend_unresolved` 为 `509/905`、`196/905`；这只是 detector-level 的复核路由，不是噪点率或物理恒星身份。
+追加 `--target-id` 可写出 `feature_gate_temporal_targets.csv`，报告目标在所属子组中的含并列值经验 `le/ge` 位置；当前 `82934` 的候选 `4/15` 在 `blend_unresolved` 的低持久端（`le/ge=9.4%/94.7%`）。它只用于复核排序，不是噪点概率或显著性检验。
+
+若要把类别代表带入 15 帧原始图复核，可在 hard-negative 命令后运行 `rst19-forced-stability`，显式追加代表 ID，并使用同一 `sequence_feature_persistence.json` 的累计平移。该复核输出固定位置/局部峰的逐帧通量 SNR、支持、形态、重定位和 `quality_like`；`quality_like` 不是源级 `quality_passed` 的覆盖，也不是恒星概率。当前代表产物为 `tmp/feature-hard-negative-forced-stability-current-v1/`。
+
+若要继续检查“某类是否集中在边缘/单个 detector 单元，以及 hard-negative 周围到底有哪些候选”，可运行：
+
+```powershell
+rst19-feature-spatial-context `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --target-id 82931 --target-id 82934 `
+  --top-n 5 --grid-size 4 --edge-margin-px 16 `
+  --high-flux-snr 10 `
+  --out-dir tmp/feature-spatial-context-code-pattern-current-v1
+```
+
+该命令只读取源级表，输出每类的网格熵、最大单格占比、边缘比例、高 SNR 落选热点，以及 top hard-negative/显式目标的最近邻、`5/10/20 px` 邻域和类别组成。它把“线状集中”“拥挤全场分散”“截图 pair 是否在边缘”等问题分开；空间集中和近邻都只是 detector-level 线索，不是伪影真值、双星概率或星表身份。当前结果显示 `linear_artifact` 的 `96/96` 个候选在同一 `4×4` 单元，而 `crowded_blend` 覆盖 `16/16` 单元；`82931/82934` 的边缘距离约 `73.8/73.2 px`，最近候选距离 `2.738 px`，两者都落在 `r3c2`，因此截图不是边缘截断，却确实是一个局部近邻/混合问题。产物为 `tmp/feature-spatial-context-code-pattern-current-v1/`。
 
 需要做特征分层控制实验时运行：
 
@@ -276,7 +565,22 @@ rst19-feature-sequence doc/00-项目资料/原始数据 `
   --out-dir tmp/sequence-feature-persistence-gui-default
 ```
 
-默认使用完整源级返回、质量源配准、`1 px` 首帧邻域和 `12/15` 持续门槛，输出 `sequence_feature_persistence.csv`、逐帧类别表、`sequence_feature_temporal_profile.csv`、`sequence_feature_class_transition.csv`、JSON 和曲线。持久性表把候选邻域与质量邻域分开；时间剖面表另外报告每类在 15 帧中的候选占比 CV、质量计数和活跃帧数；类别转移表再把“任意类别响应”和“同类响应”拆开，检查邻域命中是否只是检测器类别切换。注意 `compact_quality` 本身按 `quality_passed=True` 定义，因此该表的质量比例不是独立真阳性率；所有表都不是星表/WCS 身份匹配，不能替代星表、注入回收或人工真值。传入 `--max-sources 6000` 可做快速工作集抽测，但结果不能与全量质量率混用。
+默认使用完整源级返回、质量源配准、`1 px` 首帧邻域和 `12/15` 持续门槛，输出 `sequence_feature_persistence.csv`、逐帧类别表、`sequence_feature_temporal_profile.csv`、`sequence_feature_class_transition.csv`、`sequence_feature_method_frame_summary.csv`、`sequence_feature_method_profile.csv`、`sequence_feature_source_subgroup_persistence.csv`、`sequence_feature_diagnostic_subgroup_persistence.csv`、JSON 和曲线。方法逐帧表把每个首要类别拆成三路共同支持、Gaussian-only、DoG-only、部分组合、无 Gaussian 和无提议器；方法聚合表再给出 15 帧总数及比例，用于检查来源分歧是否稳定，但它描述的是 detector-level 提议，不是物理目标身份。来源子组表只对首帧 `compact_quality` 的来源子组做逐源持久性统计，进一步区分 DoG-only 近邻双 PSF 记录与非近邻尺度响应；新增诊断子组表对其他首要类别按边界/掩膜、尖峰/支持、弱背景、拥挤、线状、范围和形状拆成互斥子组，并同时报告位置重复与同机制重复，后者要求响应帧仍属于同一诊断子组。持久性表把候选邻域与质量邻域分开；时间剖面表另外报告每类在 15 帧中的候选占比 CV、质量计数和活跃帧数；类别转移表再把“任意类别响应”和“同类响应”拆开，检查邻域命中是否只是检测器类别切换。注意 `compact_quality` 本身按 `quality_passed=True` 定义，因此该表的质量比例不是独立真阳性率；所有表都不是星表/WCS 身份匹配，不能替代星表、注入回收或人工真值。传入 `--max-sources 6000` 可做快速工作集抽测，但结果不能与全量质量率混用。
+
+对上述首帧源表和 15 帧持久性 JSON 做分层强制测光控制：
+
+```powershell
+rst19-forced-stability `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  tmp/sequence-feature-persistence-code-pattern-current-v3/sequence_feature_persistence.json `
+  --base-dir . --anchor-coordinate peak `
+  --local-peak-search-radius 1 `
+  --out-dir tmp/forced-stability-audit-code-pattern-current-v8-peak
+```
+
+该命令只在预测注册位置回到未降噪原图测量，不重跑候选、不写检测缓存；它输出每类最多 32 个锚点的固定位置逐帧通量 SNR、支持像素、FWHM、椭圆率和质量样式出现帧数。默认还在预测位置周围最多 `±1 px` 用三尺度 Gaussian 匹配响应选局部位置，并输出 `local_peak_*` 与 `relocalization_*`；固定值是主控，局部最大值有多位置选择偏差，只用于混合/配准诊断。传 `--local-peak-search-radius 0` 可关闭该层。`peak` 是与序列提案一致的默认锚点，`--anchor-coordinate centroid` 只用于中心敏感性对照，不能把任一输出解释为星表身份或真星率。完整限制见 [`检测器实验记录`](../02-星图识别/检测器实验记录.md) 8.58/8.59。
+若要把某个截图或反例追加到分层样本，可重复传入 `--include-detection-id <ID>`；例如 `82931`/`82934` 的 pair 控制会保留原有分位点样本并额外输出这两个源。
+当显式追加两个或更多 ID 时，还会写出 `forced_stability_pair_frame_metrics.csv` 和 `forced_stability_pair_summary.csv`，记录注册后局部相对间距、收缩比例和向内偏移比例；这些字段只用于共享结构风险审计，不是双星或星表身份判据。
 
 将单帧特征汇总与 15 帧持久性汇总连接成跨类别反例报告：
 
@@ -325,7 +629,7 @@ rst19-temporal-codes doc/00-项目资料/原始数据 `
   --out-dir tmp/temporal-code-audit
 ```
 
-该命令只比较原始 FITS 的跨帧 detector 坐标，输出 `temporal_code_audit.json` 和 `temporal_code_components.csv`；它不修改像素、不改变候选/质量层，也不能把低变化簇直接定义为坏点或恒星。
+该命令只比较原始 FITS 的跨帧 detector 坐标，输出 `temporal_code_audit.json`、`temporal_code_focus_series.csv` 和 `temporal_code_components.csv`；焦点时序表保留每一帧关注坐标的原始值，便于复核固定正码、`-1` 或其它异常值是否与候选共位。它不修改像素、不改变候选/质量层，也不能把低变化簇直接定义为坏点或恒星。
 
 预览支持鼠标滚轮缩放（最大 `15×`）和左键拖拽平移。在“可信星点 / 全部候选”层将鼠标移到候选点附近时，底部信息栏和图像标注会显示检测 ID、坐标、峰值、通量、通量误差、三类 SNR、FWHM/椭圆率、仪器星等和质量标记；在“运动候选”层悬停洋红线、橙色线或蓝色环会显示轨迹 ID、当前帧坐标、残差 SNR、线长/线宽/方向、出现帧数、总位移、速度和拟合 RMS。完成单帧检测后，从检测参数区的“研究工具”菜单选择“导出星点研究表”，即可从当前结果生成全量源 CSV、质量标记汇总和两张 SNR 图，不会再次运行检测。检测参数区固定显示序列进度条和 F01…F15 帧状态带，右侧证据卡同步显示总体百分比、已完成帧数、当前帧号和阶段；底部状态栏保留 220 px 确定性进度条，因此在 1120×720 最小窗口仍有可见反馈。单图长轨迹筛选、15 帧共享背景准备、逐帧检测、时间中值参考、残差和轨迹拟合都会持续推进。悬浮信息与右侧说明按各自容器动态换行，窗口变矮时次要源表自动收起，完整表格仍可从“研究工具”打开，不会再由长文本或固定表格列宽挤走右侧结果面板。
 
@@ -340,6 +644,8 @@ rst19-temporal-codes doc/00-项目资料/原始数据 `
 落选原因由检测器实际写入的质量标记翻译而来，包括边缘、坏点/掩膜、饱和、线状伪迹、背景不确定、非正通量、低 SNR、PSF 支持不足、形状异常和小面积足迹；这只是当前参数下的质量判定，不把“亮点”直接等同于恒星。
 
 ## 测试
+
+当前全量回归为 `243` 项，覆盖分层抽样、峰/质心锚点切换、指定源追加、汇总统计、局部匹配响应选择、pair 相对几何、经验 PSF 留一法、类别证据矩阵及其确定性复核路由、pair 独立像素支持留出、原始像素拓扑审计、空间分区留出注入、经验 PSF 孔径敏感性、类别参数敏感性转移矩阵、序列参数比较器、类别内经验分位审计、类别内高显著性落选审计、hard-negative 空间条件化审计、固定码焦点时序导出、污染局部背景双源注入、跨类别污染双源复核、端点级质量原因记录、旗标交互审计、质量门余量审计、质量门逐候选路径审计、质量门路径—跨帧响应交叉审计、局部 ROI 坐标恢复和计数范围回归以及两种序列 shift JSON 兼容口径记录。
 
 ```powershell
 python -m pytest

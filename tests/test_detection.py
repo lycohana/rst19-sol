@@ -706,6 +706,63 @@ def test_close_gaussian_pair_guard_keeps_stronger_source(monkeypatch) -> None:
     assert "UNRESOLVED_BLEND" in guarded[1].flags
 
 
+def test_close_pair_guard_includes_rejected_value_domain_neighbor(monkeypatch) -> None:
+    image = np.zeros((96, 96), dtype=np.float64)
+    mask = np.zeros(image.shape, dtype=bool)
+    sources = [
+        Detection(
+            detection_id=1,
+            x=40.0,
+            y=48.0,
+            peak=3992.0,
+            flux=500.0,
+            background=20.0,
+            noise=2.0,
+            snr=90.0,
+            fwhm=2.0,
+            flags=("CODE_PATTERN",),
+            filter_snr=100.0,
+            quality_passed=False,
+            peak_x=40.0,
+            peak_y=48.0,
+            proposal_methods=("gaussian",),
+        ),
+        Detection(
+            detection_id=2,
+            x=42.74,
+            y=48.0,
+            peak=569.0,
+            flux=220.0,
+            background=20.0,
+            noise=2.0,
+            snr=30.0,
+            fwhm=2.0,
+            flags=(),
+            filter_snr=40.0,
+            quality_passed=True,
+            peak_x=44.0,
+            peak_y=48.0,
+            proposal_methods=("gaussian",),
+        ),
+    ]
+    monkeypatch.setattr("rst19.detection._pair_psf_evidence", lambda *args, **kwargs: (0.0, 1.0))
+
+    guarded, tested, guarded_count, radius = _guard_unresolved_gaussian_pairs(
+        sources,
+        image,
+        mask,
+        psf_fwhm=2.0,
+        delta_bic_min=10.0,
+        component_snr_min=5.0,
+    )
+
+    assert tested == 1
+    assert guarded_count == 1
+    assert radius == pytest.approx(3.0)
+    assert not guarded[1].quality_passed
+    assert "UNRESOLVED_BLEND" in guarded[1].flags
+
+
 def test_detect_sources_can_keep_original_negative_code_limit_after_float_conversion() -> None:
     rng = np.random.default_rng(34)
     image = rng.normal(20.0, 2.0, size=(96, 96))

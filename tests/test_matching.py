@@ -63,6 +63,49 @@ def test_match_detections_is_one_to_one() -> None:
     assert result.rms_residual_px is not None and result.rms_residual_px < 0.5
 
 
+def test_global_assignment_preserves_cardinality_in_a_competing_local_component() -> None:
+    wcs = TangentPlaneWCS(
+        center_ra_deg=10.0,
+        center_dec_deg=20.0,
+        pixel_scale_arcsec=10.0,
+        crpix_x=0.0,
+        crpix_y=0.0,
+    )
+    catalog_pixels = np.array(((0.0, 0.0), (2.0, 0.0)), dtype=np.float64)
+    ra, dec = wcs.pixel_to_world(catalog_pixels[:, 0], catalog_pixels[:, 1])
+    catalog = tuple(
+        CatalogSource(source_id=f"s{index}", ra_deg=float(ra[index]), dec_deg=float(dec[index]))
+        for index in range(2)
+    )
+    detections = (
+        _detection(0, 1.0, 0.0),
+        _detection(1, 0.9, 0.9),
+    )
+
+    greedy = match_detections(detections, catalog, wcs, radius_px=1.3, assignment_mode="greedy")
+    global_result = match_detections(detections, catalog, wcs, radius_px=1.3, assignment_mode="global")
+    default_result = match_detections(detections, catalog, wcs, radius_px=1.3)
+
+    assert greedy.matched_count == 1
+    assert global_result.matched_count == 2
+    assert default_result == global_result
+    assert [(match.detection_id, match.source_id) for match in global_result.matches] == [(0, "s1"), (1, "s0")]
+    assert global_result.assignment_mode == "global"
+
+
+def test_match_detections_rejects_unknown_assignment_mode() -> None:
+    wcs = TangentPlaneWCS(
+        center_ra_deg=10.0,
+        center_dec_deg=20.0,
+        pixel_scale_arcsec=10.0,
+        crpix_x=0.0,
+        crpix_y=0.0,
+    )
+
+    with pytest.raises(ValueError, match="assignment_mode"):
+        match_detections((), (), wcs, assignment_mode="nearest")
+
+
 def test_load_catalog_csv_supports_gaia_column_aliases(tmp_path) -> None:
     path = tmp_path / "catalog.csv"
     path.write_text(

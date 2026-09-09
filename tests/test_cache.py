@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import gzip
+import json
 from pathlib import Path
 
 import numpy as np
 
 from rst19.cache import (
+    CACHE_VERSION,
     cache_key,
     clear_cache,
     load_analysis,
@@ -110,6 +113,24 @@ def test_analysis_cache_round_trip_and_clear(tmp_path: Path) -> None:
     assert restored.faintest.detection_id == 0
     assert restored.faintest.flux_rate == 10.0
     assert clear_cache(cache_dir) == 1
+    assert load_analysis(cache_dir, key, frame) is None
+
+
+def test_analysis_cache_rejects_previous_detection_version(tmp_path: Path) -> None:
+    frame_path = tmp_path / "frame.fits"
+    frame_path.write_bytes(b"frame")
+    frame = FitsFrame(frame_path, {"BITPIX": 16}, np.zeros((12, 16), dtype=np.int16), None, 0)
+    key = cache_key(frame, threshold_sigma=4.0, min_distance=4, aperture_radius=4, max_sources=None, zero_point=None)
+    cache_dir = tmp_path / ".rst19-cache"
+    save_analysis(cache_dir, key, _analysis(frame))
+    cache_path = next(cache_dir.glob("*.json.gz"))
+
+    with gzip.open(cache_path, "rt", encoding="utf-8") as stream:
+        payload = json.load(stream)
+    payload["cache_version"] = CACHE_VERSION - 1
+    with gzip.open(cache_path, "wt", encoding="utf-8") as stream:
+        json.dump(payload, stream)
+
     assert load_analysis(cache_dir, key, frame) is None
 
 

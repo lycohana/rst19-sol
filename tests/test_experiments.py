@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +15,8 @@ from rst19.experiments import (
     _fixed_position_multi_psf_fit,
     _free_position_multi_psf_fit,
     classify_source_feature,
+    classify_source_diagnostic_subgroup,
+    classify_source_proposal_subgroup,
     estimate_empirical_psf,
     run_feature_cross_audit,
     run_feature_audit,
@@ -35,8 +39,11 @@ from rst19.experiments import (
     summarize_feature_morphology,
     summarize_feature_spatial_distribution,
     summarize_sequence_feature_temporal_profiles,
+    summarize_sequence_feature_proposal_methods,
     summarize_spatial_psf_similarity,
     summarize_source_features,
+    summarize_source_proposal_methods,
+    summarize_source_feature_subclasses,
     write_detection_source_artifacts,
     write_detection_source_cutouts,
     write_feature_cross_audit_artifacts,
@@ -114,7 +121,15 @@ def test_feature_audit_separates_known_sources_from_negative_artifacts_and_write
 
 
 def test_sequence_feature_persistence_separates_anchor_categories(monkeypatch, tmp_path) -> None:
-    def make_source(detection_id: int, x: float, y: float, *, quality: bool, flags: tuple[str, ...]) -> Detection:
+    def make_source(
+        detection_id: int,
+        x: float,
+        y: float,
+        *,
+        quality: bool,
+        flags: tuple[str, ...],
+        proposal_methods: tuple[str, ...],
+    ) -> Detection:
         return Detection(
             detection_id=detection_id,
             x=x,
@@ -137,15 +152,64 @@ def test_sequence_feature_persistence_separates_anchor_categories(monkeypatch, t
             quality_passed=quality,
             peak_x=float(round(x)),
             peak_y=float(round(y)),
+            proposal_methods=proposal_methods,
         )
+
+    dog_only = make_source(
+        99,
+        70.0,
+        70.0,
+        quality=True,
+        flags=(),
+        proposal_methods=("dog_narrow",),
+    )
+    assert classify_source_proposal_subgroup(dog_only) == "dog_only_no_deblend"
+    assert (
+        classify_source_proposal_subgroup(
+            replace(dog_only, deblend_delta_bic=12.0, deblend_component_snr=5.0)
+        )
+        == "dog_only_deblend"
+    )
+    assert classify_source_diagnostic_subgroup(
+        make_source(
+            3,
+            75.0,
+            75.0,
+            quality=False,
+            flags=("SPIKE", "INSUFFICIENT_PSF_SUPPORT"),
+            proposal_methods=("dog_narrow",),
+        )
+    ) == "spike_and_psf_support"
+    assert classify_source_diagnostic_subgroup(dog_only) is None
 
     fake_analyses = {}
     for frame_index in range(3):
         shift = frame_index * 0.2
         sources = (
-            make_source(0, 20.0 + shift, 20.0 + shift, quality=True, flags=()),
-            make_source(1, 40.0 + shift, 40.0 + shift, quality=False, flags=("LOW_FLUX_SNR",)),
-            make_source(2, 60.0 + shift, 60.0 + shift, quality=False, flags=("SPIKE", "INSUFFICIENT_PSF_SUPPORT")),
+            make_source(
+                0,
+                20.0 + shift,
+                20.0 + shift,
+                quality=True,
+                flags=(),
+                proposal_methods=("gaussian", "dog_narrow", "dog_broad"),
+            ),
+            make_source(
+                1,
+                40.0 + shift,
+                40.0 + shift,
+                quality=False,
+                flags=("LOW_FLUX_SNR",),
+                proposal_methods=("gaussian",),
+            ),
+            make_source(
+                2,
+                60.0 + shift,
+                60.0 + shift,
+                quality=False,
+                flags=("SPIKE", "INSUFFICIENT_PSF_SUPPORT"),
+                proposal_methods=("dog_narrow",),
+            ),
         )
         detection = DetectionResult(
             image_shape=(96, 96),
@@ -192,6 +256,44 @@ def test_sequence_feature_persistence_separates_anchor_categories(monkeypatch, t
     assert by_class["weak_or_background"].quality_presence_ge_required_count == 0
     assert by_class["spike_or_support"].anchor_candidate_count == 1
     assert by_class["spike_or_support"].quality_presence_ge_required_count == 0
+    method_rows = [
+        row
+        for row in result.proposal_method_rows
+        if row.frame_index == 1
+    ]
+    by_method_class = {row.feature_class: row for row in method_rows}
+    assert by_method_class["compact_quality"].all_three_count == 1
+    assert by_method_class["weak_or_background"].gaussian_only_count == 1
+    assert by_method_class["spike_or_support"].dog_only_count == 1
+    method_profiles = summarize_sequence_feature_proposal_methods(result.proposal_method_rows)
+    by_method_profile = {str(row["feature_class"]): row for row in method_profiles}
+    assert by_method_profile["compact_quality"]["all_three_count"] == 3
+    assert by_method_profile["crowded_blend"]["candidate_count_total"] == 0
+    subgroup_rows = {row.proposal_subgroup: row for row in result.source_subgroup_rows}
+    assert subgroup_rows["all_three"].anchor_count == 1
+    assert subgroup_rows["all_three"].candidate_presence_ge_required_count == 1
+    assert subgroup_rows["all_three"].quality_presence_ge_required_count == 1
+    diagnostic_rows = {
+        (row.feature_class, row.diagnostic_subgroup): row
+        for row in result.diagnostic_subgroup_rows
+    }
+    assert diagnostic_rows[("weak_or_background", "weak_low_flux_snr")].anchor_count == 1
+    assert (
+        diagnostic_rows[("weak_or_background", "weak_low_flux_snr")]
+        .candidate_same_subgroup_presence_ge_required_count
+        == 1
+    )
+    assert (
+        diagnostic_rows[("spike_or_support", "spike_and_psf_support")]
+        .candidate_same_subgroup_presence_all_frames_count
+        == 1
+    )
+    diagnostic_sources = {
+        row.detection_id: row for row in result.diagnostic_source_rows
+    }
+    assert set(diagnostic_sources) == {1, 2}
+    assert diagnostic_sources[2].candidate_presence == 3
+    assert diagnostic_sources[2].candidate_same_subgroup_presence == 3
 
     temporal_profiles = summarize_sequence_feature_temporal_profiles(result.frame_rows)
     by_temporal_class = {row.feature_class: row for row in temporal_profiles}
@@ -228,6 +330,11 @@ def test_sequence_feature_persistence_separates_anchor_categories(monkeypatch, t
     assert (output / "sequence_feature_persistence.png").is_file()
     assert (output / "sequence_feature_temporal_profile.csv").is_file()
     assert (output / "sequence_feature_class_transition.csv").is_file()
+    assert (output / "sequence_feature_method_frame_summary.csv").is_file()
+    assert (output / "sequence_feature_method_profile.csv").is_file()
+    assert (output / "sequence_feature_source_subgroup_persistence.csv").is_file()
+    assert (output / "sequence_feature_diagnostic_subgroup_persistence.csv").is_file()
+    assert (output / "sequence_feature_diagnostic_sources.csv").is_file()
 
 
 def test_fixed_position_multipsf_audit_compares_model_order_and_writes_artifacts(monkeypatch, tmp_path) -> None:
@@ -421,6 +528,11 @@ def test_source_pair_audit_keeps_raw_range_evidence_separate_from_quality(monkey
     assert result.rows[0].nearest_secondary_detection_id == 2
     assert result.rows[0].nearest_source_same_for_targets is False
     assert result.rows[0].nearest_secondary_quality_passed is False
+    assert result.rows[0].secondary_aperture_pixel_count > 0
+    assert result.rows[0].secondary_shared_aperture_pixel_count > 0
+    assert result.rows[0].secondary_aperture_raw_sum_adu is not None
+    assert result.rows[0].secondary_shared_aperture_raw_sum_adu is not None
+    assert result.rows[0].secondary_aperture_background_adu == 21.0
     assert "同一检测源的情况有 0/2 帧" in result.conclusion
     assert "detector" in result.association_coordinate_system
     output = write_source_pair_audit_artifacts(result, tmp_path / "pair-audit")
@@ -428,6 +540,10 @@ def test_source_pair_audit_keeps_raw_range_evidence_separate_from_quality(monkey
     assert (output / "source_pair_audit.json").is_file()
     assert (output / "source_pair_raw_codes.png").is_file()
     assert (output / "source_pair_psf_evidence.png").is_file()
+    header = (output / "source_pair_audit.csv").read_text(encoding="utf-8-sig").splitlines()[0]
+    assert "secondary_shared_aperture_net_fraction" in header
+    payload = json.loads((output / "source_pair_audit.json").read_text(encoding="utf-8"))
+    assert "固定 detector 坐标" in payload["note"]
 
     def fake_analyze_primary_only(frame, **_kwargs):
         source = make_source(1, 20.0, 30.0, quality=True, flags=())
@@ -451,6 +567,8 @@ def test_source_pair_audit_keeps_raw_range_evidence_separate_from_quality(monkey
     )
     assert same_source.rows[0].secondary_detection_id is None
     assert same_source.rows[0].nearest_source_same_for_targets is True
+    assert same_source.rows[0].pair_delta_bic_raw is None
+    assert same_source.rows[0].pair_component_snr_raw is None
     assert "同一检测源的情况有 1/1 帧" in same_source.conclusion
 
     registered = run_source_pair_audit(
@@ -463,6 +581,11 @@ def test_source_pair_audit_keeps_raw_range_evidence_separate_from_quality(monkey
     assert registered.rows[0].frame_shift_y_px == 0.0
     assert registered.rows[0].primary_detection_id == 1
     assert "registered detector" in registered.association_coordinate_system
+    registered_output = write_source_pair_audit_artifacts(registered, tmp_path / "registered-pair-audit")
+    registered_payload = json.loads(
+        (registered_output / "source_pair_audit.json").read_text(encoding="utf-8")
+    )
+    assert "registered detector 坐标" in registered_payload["note"]
 
 
 def test_detection_threshold_sweep_keeps_candidate_and_quality_layers() -> None:
@@ -1120,7 +1243,10 @@ def test_source_artifacts_preserve_snr_layers_and_overlapping_flags(tmp_path) ->
     assert (output / "source_flux_snr_distribution.png").is_file()
     assert (output / "source_quality_flags.png").is_file()
     assert (output / "source_feature_summary.csv").is_file()
+    assert (output / "source_feature_method_summary.csv").is_file()
+    assert "dog_only_count" in (output / "source_feature_method_summary.csv").read_text(encoding="utf-8-sig")
     assert (output / "source_feature_morphology.csv").is_file()
+    assert (output / "source_feature_subclass_summary.csv").is_file()
     assert (output / "source_feature_psf_spatial.csv").is_file()
     assert (output / "source_feature_classes.png").is_file()
     assert (output / "source_spatial_density.png").is_file()
@@ -1186,6 +1312,44 @@ def test_source_feature_classes_are_primary_and_keep_overlapping_flags() -> None
     assert by_class["range_anomaly"]["candidate_count"] == 1
     assert by_class["range_anomaly"]["rejected_count"] == 1
     assert "NEGATIVE_OVERFLOW" in str(by_class["range_anomaly"]["common_flags"])
+
+
+def test_source_proposal_method_summary_separates_detector_agreement() -> None:
+    def source(
+        detection_id: int,
+        methods: tuple[str, ...],
+        quality_passed: bool,
+        feature_flag: tuple[str, ...] = (),
+    ) -> Detection:
+        return Detection(
+            detection_id=detection_id,
+            x=float(detection_id),
+            y=float(detection_id),
+            peak=80.0,
+            flux=120.0,
+            background=21.0,
+            noise=5.0,
+            snr=12.0,
+            fwhm=2.0,
+            flags=feature_flag,
+            flux_snr=10.0,
+            quality_passed=quality_passed,
+            proposal_methods=methods,
+        )
+
+    rows = summarize_source_proposal_methods(
+        (
+            source(1, ("gaussian", "dog_narrow", "dog_broad"), True),
+            source(2, ("gaussian",), False, ("LOW_FLUX_SNR",)),
+            source(3, ("dog_narrow",), False, ("UNRESOLVED_BLEND",)),
+        )
+    )
+    by_class = {str(row["feature_class"]): row for row in rows}
+    assert by_class["compact_quality"]["all_three_count"] == 1
+    assert by_class["compact_quality"]["quality_count"] == 1
+    assert by_class["weak_or_background"]["gaussian_only_count"] == 1
+    assert by_class["crowded_blend"]["dog_only_count"] == 1
+    assert by_class["crowded_blend"]["no_gaussian_quality_count"] == 0
 
 
 def test_feature_morphology_summary_separates_snr_from_shape_and_flags() -> None:
@@ -1257,6 +1421,44 @@ def test_feature_morphology_summary_separates_snr_from_shape_and_flags() -> None
     assert compact_row["fwhm_px_median"] == 2.0
     assert compact_row["x_px_median"] == 10.0
     assert compact_row["y_px_median"] == 20.0
+
+
+def test_source_feature_subclasses_keep_mask_tokens_separate() -> None:
+    def source(detection_id: int, flags: tuple[str, ...], quality_passed: bool, flux_snr: float) -> Detection:
+        return Detection(
+            detection_id=detection_id,
+            x=float(detection_id),
+            y=float(detection_id),
+            peak=100.0,
+            flux=200.0,
+            background=21.0,
+            noise=5.0,
+            snr=20.0,
+            fwhm=2.0,
+            flags=flags,
+            flux_snr=flux_snr,
+            quality_passed=quality_passed,
+        )
+
+    rows = summarize_source_feature_subclasses(
+        (
+            source(1, ("EDGE",), False, 4.0),
+            source(2, ("PARTIAL_MASKED",), True, 6.0),
+            source(3, ("EDGE", "PARTIAL_MASKED"), False, 8.0),
+            source(4, ("CODE_PATTERN", "NEGATIVE_OVERFLOW"), False, 20.0),
+            source(5, ("EDGE", "MASKED"), False, 3.0),
+        )
+    )
+    by_subclass = {str(row["subclass"]): row for row in rows}
+    assert by_subclass["edge_only"]["candidate_count"] == 1
+    assert by_subclass["edge_only"]["quality_count"] == 0
+    assert by_subclass["partial_masked_only"]["candidate_count"] == 1
+    assert by_subclass["partial_masked_only"]["quality_count"] == 1
+    assert by_subclass["edge_partial_masked"]["candidate_count"] == 1
+    assert by_subclass["edge_hard_masked"]["candidate_count"] == 1
+    assert by_subclass["range_code_pattern"]["candidate_count"] == 1
+    assert by_subclass["range_negative_overflow"]["candidate_count"] == 1
+    assert by_subclass["range_code_pattern"]["high_snr_rejected_count"] == 1
 
 
 def test_source_cutout_audit_writes_stratified_manifest_and_contact_sheet(tmp_path) -> None:
@@ -1362,9 +1564,14 @@ def test_temporal_code_audit_reports_low_variation_components_and_writes_outputs
     assert result.code_components_ge_2 == 1
     assert result.code_focus_component_size == 2
     assert result.code_focus_component_coordinates == ((5, 3), (5, 4))
+    assert result.code_focus_values_by_frame == (3991, 3992)
+    assert result.sentinel_focus_values_by_frame == (-1, -1)
 
     output = write_temporal_code_audit_artifacts(result, tmp_path / "temporal-code-audit")
     assert (output / "temporal_code_audit.json").is_file()
+    focus_series = (output / "temporal_code_focus_series.csv").read_text(encoding="utf-8-sig")
+    assert "code_value" in focus_series
+    assert "3991" in focus_series
     components = (output / "temporal_code_components.csv").read_text(encoding="utf-8-sig")
     assert "low_variation_code" in components
     assert "exact_stable_sentinel" in components
