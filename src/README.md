@@ -618,6 +618,23 @@ rst19-pair-response-attribution `
 
 该命令在同一局部窗口比较 raw、重复码屏蔽、极端负值屏蔽和联合屏蔽的 Gaussian 响应，并输出目标响应、局部响应峰及普通像素/重复码/负异常的带符号核归因。它用于解释候选分裂机制，不改默认质量层、GUI 或缓存；响应贡献不是噪点概率、FDR、物理星数或伪影率。
 
+如果要区分“屏蔽特殊像素后消失”与“特殊像素缺口改变了响应形状”，可运行局部补值反事实：
+
+```powershell
+rst19-pair-repair-counterfactual `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --source-catalog tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --primary-id 82931 --secondary-id 82934 `
+  --patch-padding-px 128 --replacement-radius-px 1 `
+  --target-match-radius-px 4 --negative-anomaly-threshold-adu -1000 `
+  --threshold-sigma 4 --min-distance 4 --aperture-radius 4 `
+  --psf-fwhm 2 --background-box-size 128 --min-flux-snr 5 `
+  --min-psf-support-pixels 3 --proposal-mode hybrid `
+  --out-dir tmp/pair-repair-counterfactual-code-pattern-current-v1
+```
+
+命令只在内存副本中用局部中位数替换重复码或极端负值，然后重跑同一 detector；原始 FITS 不会被覆盖。输出 `pair_repair_summaries.csv`、`pair_repair_candidates.csv`、`pair_repair_replacements.csv` 和 JSON 解释。补值是 detector-level 敏感性控制，不是坏像素标定、天空值重建或物理星数结论；目标 pair 的当前结果为 raw `2` 个目标窗口候选，仅修复重复码仍 `2` 个，修复负异常后 `1` 个。
+
 若要把首帧目标按 15 帧的累计平移带入注册 detector 坐标，可复用序列分析输出的 `cumulative_shifts`：
 
 ```powershell
