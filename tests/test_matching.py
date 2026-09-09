@@ -124,6 +124,31 @@ def test_load_catalog_csv_supports_gaia_column_aliases(tmp_path) -> None:
     assert propagated.dec_deg != catalog[0].dec_deg
 
 
+def test_load_catalog_csv_rejects_duplicate_source_ids(tmp_path) -> None:
+    path = tmp_path / "catalog.csv"
+    path.write_text(
+        "source_id,ra,dec\n"
+        "same,10.0,20.0\n"
+        "same,11.0,21.0\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="duplicate source_id"):
+        load_catalog_csv(path)
+
+
+def test_load_catalog_csv_rejects_non_finite_optional_values(tmp_path) -> None:
+    path = tmp_path / "catalog.csv"
+    path.write_text(
+        "source_id,ra,dec,phot_g_mean_mag,pmra\n"
+        "s1,10.0,20.0,nan,1.0\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="non-finite magnitude"):
+        load_catalog_csv(path)
+
+
 def test_fit_affine_wcs_recovers_local_scale_rotation_and_rejects_outlier() -> None:
     reference = TangentPlaneWCS(
         center_ra_deg=10.0,
