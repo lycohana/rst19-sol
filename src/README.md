@@ -315,6 +315,8 @@ rst19-source-peak-consistency `
 
 `source_proposal_peak_audit.py` 再把 `proposal_methods` 与 raw 峰表按 `detection_id` 连接，按 `feature_class × method_group` 输出来源子组的质量、raw 局部峰率、非局部差值和目标相对占比。它用于发现类别总平均掩盖的来源尾部，例如目标 `82934` 是拥挤类仅 `2/905` 的 `gaussian_only` 子组。来源组合共享同一原图，不是独立投票；模块只读 CSV，不重跑 FITS、不修改 detector、质量层、GUI 或缓存。
 
+`source_proposal_temporal_audit.py` 再把上述来源组合接到同一次 15 帧实验：非紧凑类别逐源连接 `sequence_feature_diagnostic_sources.csv`，紧凑质量类别按 `sequence_feature_source_subgroup_persistence.csv` 聚合。它并列输出候选位置 `≥12/15`、同诊断子组 `≥12/15` 和质量邻域 `≥12/15`，严格区分“来源大组持久”与“目标逐源持久”。当前拥挤 `dog_only` 为 `509/902、196/902、6/902`，目标 `82934` 的 `gaussian_only` 来源组仅 `2` 个且目标自身为 `4/15、3/15、0/15`；`82931` 自身为 `4/15、4/15、0/15`。紧凑类没有逐源时序时保持空值，不把不可用写成零；所有计数仍是注册邻域 detector-level 诊断，不是星表身份、precision、FDR 或物理恒星数。命令为 `rst19-source-proposal-temporal-audit`，产物为 `tmp/source-proposal-temporal-audit-code-pattern-current-v1/`，测试为 `tests/test_source_proposal_temporal_audit.py`。
+
 类别规则签名的非参数对照可用 `rst19-feature-effect-size`：它以 `compact_quality` 为参考，输出各落选类别在 flux/filter SNR、峰值、FWHM、椭圆率、sharpness、足迹、PSF 支持、质心偏移和值域计数上的 AUC/Cliff's delta。该结果只描述当前标签规则的分布差异，不是物理恒星分类器；产物为 `tmp/feature-effect-size-code-pattern-current-v1/`。
 
 真实污染结构中的双源注入审计可用 `rst19-contaminated-pair-injection`。它把已知 Gaussian 双源叠加到目标 pair 中点、紧凑质量源和线状候选附近，扫描 `2.738/4.123 px` 分离和 `0.143/1` 副/主峰比，并将 baseline、injected、new 三层命中分别输出。当前 pilot 用于说明污染结构会改变双源回收，不是当前 FITS 的 precision、伪影概率或物理恒星数；产物为 `tmp/contaminated-pair-injection-code-pattern-current-v1/`，不接入默认检测、质量层、GUI 或缓存。

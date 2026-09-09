@@ -474,6 +474,19 @@ rst19-source-proposal-peak-audit `
 
 该命令按 `feature_class × method_group` 汇总 `all_three / gaussian_only / dog_only / partial` 的质量数、来源比例和 `3×3` raw 局部峰率。当前拥挤类总体 raw 峰率为 `902/905`，但目标 `82934` 所在 `gaussian_only` 子组为 `0/2`；`82931` 所在 `range_anomaly/partial` 子组为 `0/18`。来源组合共享同一原图，不是独立投票；结果只用于复核排序，不输出恒星概率、precision、FDR 或物理源数。产物为 `tmp/source-proposal-peak-audit-code-pattern-current-v1/`，实现为 `src/rst19/source_proposal_peak_audit.py`，测试为 `tests/test_source_proposal_peak_audit.py`。
 
+若要继续检查“来源子组是否在 15 帧中稳定重复”，可运行：
+
+```powershell
+rst19-source-proposal-temporal-audit `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  tmp/sequence-feature-persistence-diagnostic-sources-v6/sequence_feature_diagnostic_sources.csv `
+  tmp/sequence-feature-persistence-diagnostic-sources-v6/sequence_feature_source_subgroup_persistence.csv `
+  --target-id 82931 --target-id 82934 `
+  --out-dir tmp/source-proposal-temporal-audit-code-pattern-current-v1
+```
+
+该命令把 `candidate_presence≥12/15`、同诊断子组持久和 `quality_presence≥12/15` 按 `feature_class × method_group` 对照；非紧凑候选逐源精确，`compact_quality` 仅按来源子组聚合，缺少逐源字段不会填成零。当前 `crowded_blend/dog_only` 为 `509/902、196/902、6/902`，目标 `82934` 所在 `gaussian_only` 为 `0/2` 达到候选持久线，目标自身为 `4/15、3/15、0/15`；`82931` 自身为 `4/15、4/15、0/15`。这些是注册邻域 detector-level 计数，不是星表身份、噪点概率或恒星数。产物为 `tmp/source-proposal-temporal-audit-code-pattern-current-v1/`，实现为 `src/rst19/source_proposal_temporal_audit.py`，测试为 `tests/test_source_proposal_temporal_audit.py`。
+
 如需量化不同特征类别的“规则签名”而不是把它们混成一个 SNR 分数，可运行：
 
 ```powershell
