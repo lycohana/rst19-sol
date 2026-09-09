@@ -498,6 +498,20 @@ rst19-feature-effect-size `
 
 该命令对 `filter_snr`、flux SNR、峰值、FWHM、椭圆率、sharpness、足迹、PSF 支持、质心偏移和值域计数输出非参数 AUC、Cliff's delta 和稳健中位差。AUC 固定表示参考类数值大于比较类的概率；它只审计当前 detector-rule signature，不能解释为分类器精度、precision、FDR 或恒星概率。当前结果显示线状候选可以很亮但 FWHM/sharpness 不像点源，尖峰类的二维支持不足，范围异常应先查值域；产物为 `tmp/feature-effect-size-code-pattern-current-v1/`。
 
+若要单独检查线状候选是否在探测器坐标上形成细长集合，可运行：
+
+```powershell
+rst19-source-geometry-audit `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --target-class linear_artifact `
+  --control-class compact_quality `
+  --trials 5000 `
+  --seed 1909 `
+  --out-dir tmp/source-geometry-audit-code-pattern-current-v1
+```
+
+该审计只读取源表坐标，用 PCA 轴比和垂直残差对线状类与等样本量点源类做可重复对照；它支持“线状类需要独立线/轨迹分支”的工程判断，但不证明运动目标、固定条带或伪影身份，也不是 p 值、FDR 或恒星概率。当前结果为 `linear_artifact` 轴比 `40.07`，`compact_quality` 对照最大 `1.51`；详细解释见 [`亮点真实性与伪影判别研究`](doc/02-星图识别/亮点真实性与伪影判别研究.md) 10.106。
+
 若要检查这些源级字段是否在重复表达同一响应，可运行：
 
 ```powershell

@@ -515,3 +515,9 @@ hard-negative 的跨帧回查复用 `forced_stability.py` 而不复制测量逻�
 `contaminated_pair_injection.py` 还提供 `analysis_scope=local_roi`，用一次全幅 baseline 加每锚点局部窗口检测支撑多锚点复核；结果显式记录 ROI 边界和局部计数范围，不能替代全幅候选统计。该口径只扩展研究规模，不改变默认全幅检测、GUI 或缓存。
 
 逐条件行同时记录注入端点匹配的 detection ID、匹配距离和质量原因；类别审计写出 `contaminated_pair_quality_reason_summary.csv`，用于区分 `NO_CANDIDATE`、`UNRESOLVED_BLEND`、线状/值域旗标与质量通过。它是 detector-level 机制诊断，不是物理分类器评估。
+
+### 2026-09-09 - 线状候选的坐标几何交叉审计
+
+新增 `source_geometry_audit.py` 与 `rst19-source-geometry-audit`。模块只读取源表中的 `x/y` 与 `feature_class`，用 PCA 轴比、主轴方向和垂直残差检查指定类别的探测器坐标几何，并从 `compact_quality` 做固定种子的等样本量抽样对照。它不读取 FITS，不接入默认 detector、质量层、GUI 或缓存；同一源表产生的类别标签和坐标不是独立真值，轴比上尾也不是 p 值、FDR 或恒星概率。
+
+当前 `linear_artifact` 的 `96` 个候选轴比为 `40.066`，`compact_quality` 的 `5,000` 次等样本量对照最大为 `1.508`。该模块只用于把线状候选路由到线宽、方向、跨帧注册残差和运动一致性审计，不能独立判定拖影、固定结构或运动目标。测试为 `tests/test_source_geometry_audit.py`，产物为 `tmp/source-geometry-audit-code-pattern-current-v1/`。
