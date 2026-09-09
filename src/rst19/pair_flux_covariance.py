@@ -58,6 +58,11 @@ class PairFluxCovarianceMetric:
     primary_fraction_median: float | None
     primary_fraction_min: float | None
     primary_fraction_max: float | None
+    primary_fraction_range: float | None
+    primary_fraction_mad_scaled: float | None
+    below_pair_total_median_primary_fraction_median: float | None
+    above_pair_total_median_primary_fraction_median: float | None
+    primary_fraction_shift_high_minus_low: float | None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -84,6 +89,15 @@ class PairFluxCovarianceMetric:
             "primary_fraction_median": self.primary_fraction_median,
             "primary_fraction_min": self.primary_fraction_min,
             "primary_fraction_max": self.primary_fraction_max,
+            "primary_fraction_range": self.primary_fraction_range,
+            "primary_fraction_mad_scaled": self.primary_fraction_mad_scaled,
+            "below_pair_total_median_primary_fraction_median": (
+                self.below_pair_total_median_primary_fraction_median
+            ),
+            "above_pair_total_median_primary_fraction_median": (
+                self.above_pair_total_median_primary_fraction_median
+            ),
+            "primary_fraction_shift_high_minus_low": self.primary_fraction_shift_high_minus_low,
         }
 
 
@@ -210,6 +224,16 @@ def _upper_tail(target: float | None, controls: Sequence[float]) -> float | None
     return float((1 + count) / (1 + len(controls)))
 
 
+def _scaled_mad(values: Sequence[float]) -> float | None:
+    """返回 1.4826×MAD；只作小样本的稳健离散度描述。"""
+
+    if not values:
+        return None
+    median = float(np.median(np.asarray(values, dtype=np.float64)))
+    deviations = np.abs(np.asarray(values, dtype=np.float64) - median)
+    return float(1.4826 * np.median(deviations))
+
+
 def _metric_values(row: ForcedStabilityFluxRow, metric_name: str) -> float | None:
     if metric_name not in PAIR_FLUX_METRICS:
         raise ValueError(f"unsupported pair flux metric: {metric_name!r}")
@@ -292,6 +316,11 @@ def run_pair_flux_covariance_audit(
                     primary_fraction_median=None,
                     primary_fraction_min=None,
                     primary_fraction_max=None,
+                    primary_fraction_range=None,
+                    primary_fraction_mad_scaled=None,
+                    below_pair_total_median_primary_fraction_median=None,
+                    above_pair_total_median_primary_fraction_median=None,
+                    primary_fraction_shift_high_minus_low=None,
                 )
             )
             continue
@@ -321,6 +350,7 @@ def run_pair_flux_covariance_audit(
         raw_secondary: list[float] = []
         pair_totals: list[float] = []
         split_fractions: list[float] = []
+        pair_fractions: list[float | None] = []
         for frame, primary_value, secondary_value in zip(frame_indices, primary_values, secondary_values):
             if primary_value is None or secondary_value is None:
                 continue
@@ -333,7 +363,11 @@ def run_pair_flux_covariance_audit(
             total = primary_float + secondary_float
             pair_totals.append(total)
             if abs(total) > np.finfo(np.float64).eps:
-                split_fractions.append(primary_float / total)
+                fraction = primary_float / total
+                split_fractions.append(fraction)
+                pair_fractions.append(fraction)
+            else:
+                pair_fractions.append(None)
             scale = frame_medians.get(frame)
             if scale is not None and abs(scale) > np.finfo(np.float64).eps:
                 normalized_primary.append(primary_float / scale)
@@ -380,7 +414,31 @@ def run_pair_flux_covariance_audit(
             [raw_primary[index] for index in above_indices],
             [raw_secondary[index] for index in above_indices],
         )
+        below_fractions = [
+            float(pair_fractions[index])
+            for index in below_indices
+            if pair_fractions[index] is not None
+        ]
+        above_fractions = [
+            float(pair_fractions[index])
+            for index in above_indices
+            if pair_fractions[index] is not None
+        ]
         primary_fraction_median = _percentile(split_fractions, 50.0)
+        primary_fraction_min = _percentile(split_fractions, 0.0)
+        primary_fraction_max = _percentile(split_fractions, 100.0)
+        primary_fraction_range = (
+            primary_fraction_max - primary_fraction_min
+            if primary_fraction_min is not None and primary_fraction_max is not None
+            else None
+        )
+        below_fraction_median = _percentile(below_fractions, 50.0)
+        above_fraction_median = _percentile(above_fractions, 50.0)
+        primary_fraction_shift = (
+            above_fraction_median - below_fraction_median
+            if below_fraction_median is not None and above_fraction_median is not None
+            else None
+        )
         metrics_out.append(
             PairFluxCovarianceMetric(
                 metric_name=metric_name,
@@ -404,8 +462,13 @@ def run_pair_flux_covariance_audit(
                 raw_upper_tail_fraction=_upper_tail(primary_pearson, raw_controls),
                 normalized_upper_tail_fraction=_upper_tail(normalized_pearson, normalized_controls),
                 primary_fraction_median=primary_fraction_median,
-                primary_fraction_min=_percentile(split_fractions, 0.0),
-                primary_fraction_max=_percentile(split_fractions, 100.0),
+                primary_fraction_min=primary_fraction_min,
+                primary_fraction_max=primary_fraction_max,
+                primary_fraction_range=primary_fraction_range,
+                primary_fraction_mad_scaled=_scaled_mad(split_fractions),
+                below_pair_total_median_primary_fraction_median=below_fraction_median,
+                above_pair_total_median_primary_fraction_median=above_fraction_median,
+                primary_fraction_shift_high_minus_low=primary_fraction_shift,
             )
         )
 
@@ -436,6 +499,9 @@ def run_pair_flux_covariance_audit(
             "control_pair_scope": "all complete source pairs excluding the two targets",
             "upper_tail_is_not_p_value": True,
             "interpretation_boundary": "diagnostic of shared response, not binary-star probability",
+            "primary_fraction_definition": "primary metric / (primary metric + secondary metric) per common frame",
+            "primary_fraction_mad_scale": 1.4826,
+            "pair_total_split": "below < median and above >= median of the target pair total",
         },
         conclusion=conclusion,
     )

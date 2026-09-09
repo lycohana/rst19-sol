@@ -488,6 +488,12 @@ hard-negative 的跨帧回查复用 `forced_stability.py` 而不复制测量逻�
 
 新增 `source_proposal_temporal_audit.py` 与 `rst19-source-proposal-temporal-audit`，把来源组合与同一 15 帧实验的注册邻域持久性连接。输入包括当前 v3 `source_catalog.csv`、v6 非紧凑逐源诊断表和 v6 紧凑来源子组持久表；实验参数从子组表统一取得，并对可选的逐源元数据做严格核对。非紧凑类别输出逐源来源—时序行，紧凑质量类别只输出按来源子组加权的计数和均值，不伪造逐源中位数/同机制值。`candidate≥12/15`、`candidate_same_subgroup≥12/15`、`quality≥12/15` 分列；当前 `crowded_blend/dog_only` 为 `509/902、196/902、6/902`，目标 `82934` 的 Gaussian-only 子组为 `2` 个且目标自身 `4/15、3/15、0/15`，目标 `82931` 为 `4/15、4/15、0/15`。这些字段只支持 detector-level 复核排序，不是星表身份、噪点概率、precision、FDR 或物理源数；该层不修改 detector、质量层、GUI 或缓存，产物为 `tmp/source-proposal-temporal-audit-code-pattern-current-v1/`，回归为 `tests/test_source_proposal_temporal_audit.py`，对应真实性研究 10.104 与实验记录 8.117。
 
+### 2026-09-09 - pair 强度分配状态审计
+
+`pair_flux_covariance.py` 的 v2 在原有跨帧共变之外，记录每个共同帧的 `primary/(primary+secondary)`，并以 pair 总响应中位数把帧分成低/高两组。新增 `primary_fraction_range`、`primary_fraction_mad_scaled`、两组分配中位数和 `primary_fraction_shift_high_minus_low` 字段。它们使用同一强制测光 SNR，仅用于发现“共同变亮”与“响应在两个框之间重新分配”的差别；不称为通量比例、双星概率或显著性检验。
+
+当前 `82931/82934` 的固定 `flux_snr` 分配中位数/范围/稳健离散度为 `0.5486 / 0.2476 / 0.0243`；按总响应分层，低组 `7` 帧分配中位数 `0.6065`，高组 `8` 帧为 `0.5354`，差值（高−低）为 `-0.0711`。局部重定位量对应为 `0.5399 / 0.2430 / 0.0176`，低/高组为 `0.6106/0.5330`，差值 `-0.0776`。该状态依赖与重复码、负异常和共享孔径方向一致，但只有 `7/8` 帧，不能单独区分混合真实源、坏值结构或未解析双星；模块只读既有 CSV，不改默认 detector、质量层、GUI 或缓存。
+
 ### 2026-09-07 - 近邻 pair 原始像素拓扑审计
 
 新增 `pair_pixel_topology.py` 与 `rst19-pair-pixel-topology`。模块从未降噪 FITS 中截取指定 pair 的局部窗口，在多个阈值下对正值像素做 8 邻域连通分量分析，并以多个邻域半径寻找原始局部极大值；重复工程码和特殊负值只作为显式敏感性对照。它用于验证候选框是否共享同一片原始响应结构，以及检测器质心/峰坐标是否发生重定位，不把 `source_catalog.csv` 的两个 ID 当作两个物理真值。

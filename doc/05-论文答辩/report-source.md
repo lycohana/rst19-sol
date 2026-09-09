@@ -168,6 +168,7 @@
 
 103. 旧项目与当前 FITS 的数据血缘复核：对 `C:\Users\lycohana\Desktop\code\星图识别与星图分析竞赛\new\fits/` 与仓库原始数据目录的 15 个同名文件计算 SHA-256，结果为 `15/15` 完全一致。旧项目的可读 Python 代码实际是 `DAOStarFinder + MAD + 代理星等`，而“11 种像素尺度无 `<2\"` Gaia 紧匹配峰”只出现在其 README/脚本说明中，未在随附依赖和源码中找到可复现的 Gaia 查询或 plate-solving 实现。因此该结论只能作为尚未独立复现的负向线索，不能升级为“当前数据没有物理恒星”；当前仍需获授权星表、完整 WCS、FOV/像元尺度、历元传播、唯一匹配和留出残差。外部页面为 [Aoyeww/StarImage_SimuIden](https://github.com/Aoyeww/StarImage_SimuIden)，对应星表路线深度研究 2.5.1。
 104. 自由位置双 PSF 的边界门控复核：在当前 pair 的 `raw/range_masked/sentinel_masked` 15 帧机器表中，确认线同时要求 `ΔBIC≥10`、第二分量 `SNR≥5`、优化器成功、两个位置不触碰 `±1.25 px` 搜索边界且拟合间距不少于 `1 px`。`raw`/`range_masked` 前两项同时通过为 `0/15`；`sentinel_masked` 形式上为 `1/15`，但唯一帧 F15 的两个位置均触边，加入适用域门后为 `0/15`。三种口径双位置触边为 `11/15、10/15、11/15`。该结果支持把掩膜后的高 `ΔBIC` 视为受限局部模型诊断，而非独立第二星确认；机器依据为 `tmp/local-free-multipsf-audit-current-pair-v1/local_free_multipsf_audit.json`，对应检测器实验记录 8.118 与详版论文 4.27。
+105. pair 响应分配状态审计：在既有 `forced_stability_frame_metrics.csv` 上计算 `f=主/(主+副)`，并按 pair 总响应中位数分为低 `7` 帧/高 `8` 帧。固定 `flux_snr` 的 `f` 中位数/范围/`1.4826×MAD` 为 `0.5486/0.2476/0.0243`，低/高组中位数 `0.6065/0.5354`，高−低 `-0.0711`；局部量为 `0.5399/0.2430/0.0176`、`0.6106/0.5330`、`-0.0776`。该结果把共同变亮与组内重新分配分开，支持共享局部状态的优先复核，但不是通量比、显著性、双星概率或物理真值。实现为 `src/rst19/pair_flux_covariance.py`，测试为 `tests/test_pair_flux_covariance.py`，产物为 `tmp/pair-flux-covariance-audit-code-pattern-current-v2/`，对应检测器实验记录 8.119、真实性研究 10.105、详版论文 4.16.1。
 
 对应机器产物：
 
