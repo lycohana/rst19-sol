@@ -206,7 +206,7 @@ rst19-pair-covariance-audit `
 
 它比较固定/局部 `flux_snr` 的跨帧共变，并用同表其它完整源构造控制 pair；另按 pair 总响应中位数输出组内相关，防止共同状态切换被误写成两颗独立星。输出是共享响应/孔径/值域的研究诊断，不是双星概率、正式 p 值或星表身份。
 
-当前 v2 还输出 `primary_fraction=primary/(primary+secondary)` 的中位数、范围、`1.4826×MAD` 以及低/高 pair 总响应状态下的分配中位数和差值。该比例使用强制测光 SNR，只描述两个 detector response 如何重新分配，不是校准通量比例；小样本分层也不构成显著性检验。复现已有结果可将输出目录改为 `tmp/pair-flux-covariance-audit-code-pattern-current-v2`。
+当前 v3 还输出 `primary_fraction=primary/(primary+secondary)` 的中位数、范围、`1.4826×MAD`、低/高 pair 总响应状态下的分配中位数和差值，以及 `29,639--29,640` 个控制 pair 的绝对分配变化中位数、P95 和探索性上尾。该比例使用强制测光 SNR，只描述两个 detector response 如何重新分配，不是校准通量比例；小样本分层和控制上尾也不构成显著性检验。复现已有结果可将输出目录改为 `tmp/pair-flux-covariance-audit-code-pattern-current-v3`。
 
 经验 PSF 的单源位置控制：
 

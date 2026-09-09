@@ -53,6 +53,10 @@ def test_pair_flux_covariance_compares_raw_and_frame_normalized_controls() -> No
     assert fixed.below_pair_total_median_primary_fraction_median == 2.0 / 3.0
     assert fixed.above_pair_total_median_primary_fraction_median == 2.0 / 3.0
     assert fixed.primary_fraction_shift_high_minus_low == 0.0
+    assert fixed.control_fraction_shift_pair_count == 6
+    assert fixed.control_fraction_shift_abs_median is not None
+    assert fixed.control_fraction_shift_abs_p95 is not None
+    assert fixed.absolute_fraction_shift_upper_tail_fraction == 1.0
     assert fixed.below_pair_total_median_frame_count == 2
     assert fixed.above_pair_total_median_frame_count == 3
     assert fixed.below_pair_total_median_pearson is None

@@ -63,6 +63,10 @@ class PairFluxCovarianceMetric:
     below_pair_total_median_primary_fraction_median: float | None
     above_pair_total_median_primary_fraction_median: float | None
     primary_fraction_shift_high_minus_low: float | None
+    control_fraction_shift_pair_count: int
+    control_fraction_shift_abs_median: float | None
+    control_fraction_shift_abs_p95: float | None
+    absolute_fraction_shift_upper_tail_fraction: float | None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -98,6 +102,12 @@ class PairFluxCovarianceMetric:
                 self.above_pair_total_median_primary_fraction_median
             ),
             "primary_fraction_shift_high_minus_low": self.primary_fraction_shift_high_minus_low,
+            "control_fraction_shift_pair_count": self.control_fraction_shift_pair_count,
+            "control_fraction_shift_abs_median": self.control_fraction_shift_abs_median,
+            "control_fraction_shift_abs_p95": self.control_fraction_shift_abs_p95,
+            "absolute_fraction_shift_upper_tail_fraction": (
+                self.absolute_fraction_shift_upper_tail_fraction
+            ),
         }
 
 
@@ -234,6 +244,31 @@ def _scaled_mad(values: Sequence[float]) -> float | None:
     return float(1.4826 * np.median(deviations))
 
 
+def _fraction_shift_high_minus_low(
+    primary: Sequence[float], secondary: Sequence[float]
+) -> float | None:
+    """按 pair 总响应切分后返回 median(f_high)-median(f_low)。"""
+
+    if len(primary) != len(secondary) or len(primary) < 3:
+        return None
+    totals: list[float] = []
+    fractions: list[float] = []
+    for primary_value, secondary_value in zip(primary, secondary):
+        if not math.isfinite(float(primary_value)) or not math.isfinite(float(secondary_value)):
+            return None
+        total = float(primary_value) + float(secondary_value)
+        if not math.isfinite(total) or abs(total) <= np.finfo(np.float64).eps:
+            return None
+        totals.append(total)
+        fractions.append(float(primary_value) / total)
+    total_median = float(np.median(np.asarray(totals, dtype=np.float64)))
+    low = [fraction for total, fraction in zip(totals, fractions) if total < total_median]
+    high = [fraction for total, fraction in zip(totals, fractions) if total >= total_median]
+    if not low or not high:
+        return None
+    return float(np.median(np.asarray(high, dtype=np.float64)) - np.median(np.asarray(low, dtype=np.float64)))
+
+
 def _metric_values(row: ForcedStabilityFluxRow, metric_name: str) -> float | None:
     if metric_name not in PAIR_FLUX_METRICS:
         raise ValueError(f"unsupported pair flux metric: {metric_name!r}")
@@ -321,6 +356,10 @@ def run_pair_flux_covariance_audit(
                     below_pair_total_median_primary_fraction_median=None,
                     above_pair_total_median_primary_fraction_median=None,
                     primary_fraction_shift_high_minus_low=None,
+                    control_fraction_shift_pair_count=0,
+                    control_fraction_shift_abs_median=None,
+                    control_fraction_shift_abs_p95=None,
+                    absolute_fraction_shift_upper_tail_fraction=None,
                 )
             )
             continue
@@ -375,6 +414,7 @@ def run_pair_flux_covariance_audit(
 
         raw_controls: list[float] = []
         normalized_controls: list[float] = []
+        control_fraction_shift_abs: list[float] = []
         for left_id, right_id in itertools.combinations(normalized_control_ids, 2):
             left = [
                 _metric_values(by_id[left_id][frame], metric_name)
@@ -388,6 +428,9 @@ def run_pair_flux_covariance_audit(
             raw_corr = _pearson(left_series, right_series)
             if raw_corr is not None:
                 raw_controls.append(raw_corr)
+            fraction_shift = _fraction_shift_high_minus_low(left_series, right_series)
+            if fraction_shift is not None:
+                control_fraction_shift_abs.append(abs(fraction_shift))
             if len(frame_medians) == len(frame_indices):
                 left_normalized = [
                     float(value) / frame_medians[frame]
@@ -439,6 +482,9 @@ def run_pair_flux_covariance_audit(
             if below_fraction_median is not None and above_fraction_median is not None
             else None
         )
+        absolute_fraction_shift = (
+            abs(primary_fraction_shift) if primary_fraction_shift is not None else None
+        )
         metrics_out.append(
             PairFluxCovarianceMetric(
                 metric_name=metric_name,
@@ -469,6 +515,12 @@ def run_pair_flux_covariance_audit(
                 below_pair_total_median_primary_fraction_median=below_fraction_median,
                 above_pair_total_median_primary_fraction_median=above_fraction_median,
                 primary_fraction_shift_high_minus_low=primary_fraction_shift,
+                control_fraction_shift_pair_count=len(control_fraction_shift_abs),
+                control_fraction_shift_abs_median=_percentile(control_fraction_shift_abs, 50.0),
+                control_fraction_shift_abs_p95=_percentile(control_fraction_shift_abs, 95.0),
+                absolute_fraction_shift_upper_tail_fraction=_upper_tail(
+                    absolute_fraction_shift, control_fraction_shift_abs
+                ),
             )
         )
 
@@ -502,6 +554,10 @@ def run_pair_flux_covariance_audit(
             "primary_fraction_definition": "primary metric / (primary metric + secondary metric) per common frame",
             "primary_fraction_mad_scale": 1.4826,
             "pair_total_split": "below < median and above >= median of the target pair total",
+            "control_fraction_shift_definition": (
+                "absolute median(f_high) - median(f_low) over complete control pairs"
+            ),
+            "control_fraction_shift_upper_tail_is_not_p_value": True,
         },
         conclusion=conclusion,
     )
