@@ -605,6 +605,19 @@ rst19-pair-audit doc/00-项目资料/原始数据 `
 
 命令输出逐帧源级候选/质量状态、原始孔径中的重复值、精确 `-1`、极端正负码和单/双 PSF `ΔBIC`；固定 detector 坐标只用于伪影/编码结构审计，不是注册坐标或星表匹配。默认坐标对应本次截图复核，其他近邻应显式传入坐标；结果不能把两个局部峰直接写成两颗物理恒星。
 
+若要继续拆解“两个框”在匹配滤波中由哪些像素支撑，可运行局部响应反事实归因：
+
+```powershell
+rst19-pair-response-attribution `
+  doc/00-项目资料/原始数据/20260330163205413_9901.fits `
+  --source-catalog tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  --primary-id 82931 --secondary-id 82934 `
+  --psf-fwhm 2 --negative-anomaly-threshold-adu -1000 `
+  --out-dir tmp/pair-response-attribution-code-pattern-current-v1
+```
+
+该命令在同一局部窗口比较 raw、重复码屏蔽、极端负值屏蔽和联合屏蔽的 Gaussian 响应，并输出目标响应、局部响应峰及普通像素/重复码/负异常的带符号核归因。它用于解释候选分裂机制，不改默认质量层、GUI 或缓存；响应贡献不是噪点概率、FDR、物理星数或伪影率。
+
 若要把首帧目标按 15 帧的累计平移带入注册 detector 坐标，可复用序列分析输出的 `cumulative_shifts`：
 
 ```powershell
