@@ -462,6 +462,18 @@ rst19-source-peak-consistency `
 
 该只读审计在 `3×3/5×5/7×7` raw 窗口中输出逐源峰一致性、类别汇总和目标明细。当前 `82931/82934` 在三个窗口都不是 raw 局部峰，且 `7×7` 共同指向 `(2438,4022)=13028 ADU`；这支持共享亮结构/值域异常导致的 detector response 重定位，但不把 raw 局部峰当作恒星充分条件，也不直接输出 precision、FDR 或物理源数。产物为 `tmp/source-peak-consistency-code-pattern-current-v1/`，实现为 `src/rst19/source_peak_consistency.py`，测试为 `tests/test_source_peak_consistency.py`。
 
+若要进一步检查“类别平均是否掩盖提议器来源差异”，可运行：
+
+```powershell
+rst19-source-proposal-peak-audit `
+  tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
+  tmp/source-peak-consistency-code-pattern-current-v1/source_peak_consistency.csv `
+  --target-id 82931 --target-id 82934 `
+  --out-dir tmp/source-proposal-peak-audit-code-pattern-current-v1
+```
+
+该命令按 `feature_class × method_group` 汇总 `all_three / gaussian_only / dog_only / partial` 的质量数、来源比例和 `3×3` raw 局部峰率。当前拥挤类总体 raw 峰率为 `902/905`，但目标 `82934` 所在 `gaussian_only` 子组为 `0/2`；`82931` 所在 `range_anomaly/partial` 子组为 `0/18`。来源组合共享同一原图，不是独立投票；结果只用于复核排序，不输出恒星概率、precision、FDR 或物理源数。产物为 `tmp/source-proposal-peak-audit-code-pattern-current-v1/`，实现为 `src/rst19/source_proposal_peak_audit.py`，测试为 `tests/test_source_proposal_peak_audit.py`。
+
 如需量化不同特征类别的“规则签名”而不是把它们混成一个 SNR 分数，可运行：
 
 ```powershell

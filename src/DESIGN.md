@@ -484,6 +484,8 @@ hard-negative 的跨帧回查复用 `forced_stability.py` 而不复制测量逻�
 
 该模块的输出分为逐候选、类别汇总和指定目标三层：`source_peak_consistency.csv`、`source_peak_consistency_class_summary.csv`、`source_peak_consistency_targets.csv` 和 `source_peak_consistency.json`。`raw_local_maximum` 只回答局部像素拓扑问题，不升级 `quality_passed`，不输出物理恒星概率、precision、FDR 或源数，也不接入默认检测、质量层、GUI 或缓存。当前目标 pair 的 `82931/82934` 在三个窗口均非 raw 局部峰，`r=3` 共同指向同一亮像素；该结果作为值域/共享结构/PSF 混叠的复核信号，不能单独判定噪点或真实星。
 
+`source_proposal_peak_audit.py` 在此结果之上按 `detection_id` 连接 `source_catalog.csv` 的 `proposal_methods`，把来源归一为 `all_three`、`gaussian_only`、`dog_only` 和 `partial`，输出 `source_proposal_peak_rows.csv`、`source_proposal_peak_summary.csv`、`source_proposal_peak_targets.csv` 与 JSON。该层只做类别—来源子组的 detector-level 对照，不能把来源交集当成独立投票或恒星概率，也不修改默认检测、质量层、GUI 和缓存；目标 pair 的来源尾部结果进入真实性研究 10.103 和实验记录 8.116。
+
 ### 2026-09-07 - 近邻 pair 原始像素拓扑审计
 
 新增 `pair_pixel_topology.py` 与 `rst19-pair-pixel-topology`。模块从未降噪 FITS 中截取指定 pair 的局部窗口，在多个阈值下对正值像素做 8 邻域连通分量分析，并以多个邻域半径寻找原始局部极大值；重复工程码和特殊负值只作为显式敏感性对照。它用于验证候选框是否共享同一片原始响应结构，以及检测器质心/峰坐标是否发生重定位，不把 `source_catalog.csv` 的两个 ID 当作两个物理真值。

@@ -163,6 +163,8 @@
 
 100. 候选峰与原始像素峰一致性类别审计：新增 `rst19-source-peak-consistency`，从当前 v3 `source_catalog.csv` 放回首帧原始 FITS，在 `3×3/5×5/7×7` 窗口统计 raw 局部峰及候选与窗口最大值的 ADU 差值。`r=1` 局部峰率依次为 `compact_quality 24,389/26,483=92.1%`、`crowded_blend 902/905=99.7%`、`linear_artifact 27/96=28.1%`、`masked_or_edge 11,089/11,971=92.6%`、`range_anomaly 8/44=18.2%`、`shape_outlier 19/21=90.5%`、`spike_or_support 23,010/23,824=96.6%`、`weak_or_background 18,124/21,250=85.3%`。目标 `82931/82934` 在三个窗口均不是 raw 局部峰：前者 `3992→13028 ADU`、`r=1 gap=9036`，后者 `569→6748 ADU`、`r=1 gap=6179`，且 `r=3` 指向共享的 `(2438,4022)=13028 ADU`。因此 `82934` 是拥挤类仅 `3/905` 个 raw 非局部点之一，目标 pair 更符合共享亮结构上的滤波响应重定位/分裂；这不是噪点率、FDR 或恒星概率。实现为 `src/rst19/source_peak_consistency.py`，测试为 `tests/test_source_peak_consistency.py`，产物为 `tmp/source-peak-consistency-code-pattern-current-v1/`，详细依据为真实性研究 10.102 与检测器实验记录 8.115。
 
+101. 提议器来源与 raw 峰交叉审计：新增 `rst19-source-proposal-peak-audit`，将 `proposal_methods` 与 raw 峰表按 `detection_id` 连接，按 `feature_class × method_group` 输出来源比例、质量数和 `3×3` raw 局部峰率。`crowded_blend` 中 `dog_only` 为 `902/902=100%`，而 `gaussian_only` 为 `0/2`；`range_anomaly/partial` 为 `0/18`。目标 `82934` 位于拥挤类仅 `2/905` 的 `gaussian_only` 子组，`82931` 位于范围异常 `partial` 子组，二者均为 raw 非局部峰。该结果说明类别总平均会遮蔽目标尾部，来源组合只能作为复核优先级，不是独立投票、precision、FDR 或恒星概率。实现为 `src/rst19/source_proposal_peak_audit.py`，测试为 `tests/test_source_proposal_peak_audit.py`，产物为 `tmp/source-proposal-peak-audit-code-pattern-current-v1/`，依据为真实性研究 10.103 与检测器实验记录 8.116。
+
 对应机器产物：
 
 - `tmp/pair-flux-ratio-multilevel-gui-default/pair_flux_ratio_audit.csv`
