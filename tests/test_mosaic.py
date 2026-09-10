@@ -5,6 +5,7 @@ import numpy as np
 from rst19.mosaic import (
     build_registered_mosaic,
     load_mosaic_cache,
+    render_mosaic_preview,
     save_mosaic_cache,
 )
 
@@ -27,6 +28,8 @@ def test_registered_mosaic_uses_union_footprint_and_coverage() -> None:
     assert np.allclose(result.image[1], np.array([20, 15, 15, 15, 10], dtype=np.float32))
     assert result.overlap_pixel_count == 6
     assert result.max_coverage == 2
+    assert result.covered_bbox_xy == (0, 1, 4, 2)
+    assert result.uncovered_pixel_count == 5
 
 
 def test_registered_mosaic_masks_auxiliary_and_zero_pixels() -> None:
@@ -53,3 +56,13 @@ def test_mosaic_cache_round_trip(tmp_path) -> None:
     assert restored.as_dict() == result.as_dict()
     assert np.array_equal(restored.coverage, result.coverage)
     assert np.allclose(restored.image, result.image, equal_nan=True)
+
+
+def test_preview_keeps_uncovered_footprint_transparent() -> None:
+    image = np.array([[1.0, np.nan], [2.0, 3.0]], dtype=np.float32)
+
+    preview = render_mosaic_preview(image, mode="raw", max_side=64)
+
+    assert preview.mode == "RGBA"
+    assert preview.getpixel((1, 0))[3] == 0
+    assert preview.getpixel((0, 0))[3] == 255

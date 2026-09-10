@@ -569,6 +569,10 @@ class StarfieldApp(tk.Tk):
         self.mosaic_canvas: tk.Canvas | None = None
         self.mosaic_preview: Image.Image | None = None
         self.mosaic_preview_photo: ImageTk.PhotoImage | None = None
+        self.mosaic_preview_mode_cache: str | None = None
+        self.mosaic_display_image: Image.Image | None = None
+        self.mosaic_display_cache_key: tuple[str, bool, bool] | None = None
+        self.mosaic_redraw_after_id: str | None = None
         self.mosaic_preview_mode = "enhanced"
         self.mosaic_preview_zoom = 1.0
         self.mosaic_preview_pan_x = 0.0
@@ -4816,6 +4820,11 @@ class StarfieldApp(tk.Tk):
 
         window = tk.Toplevel(self)
         self.mosaic_window = window
+        self.mosaic_preview = None
+        self.mosaic_preview_photo = None
+        self.mosaic_preview_mode_cache = None
+        self.mosaic_display_image = None
+        self.mosaic_display_cache_key = None
         window.title("RST19 · 15 帧注册合成大图")
         window.geometry("1360x860")
         window.minsize(1020, 680)
@@ -4868,7 +4877,7 @@ class StarfieldApp(tk.Tk):
             controls,
             text="覆盖数",
             variable=coverage_var,
-            command=self._draw_mosaic_preview,
+            command=self._request_mosaic_draw,
             bg=PAPER_LIGHT,
             fg=SKY,
             activebackground=PAPER_LIGHT,
@@ -4882,7 +4891,7 @@ class StarfieldApp(tk.Tk):
             controls,
             text="15 帧边界",
             variable=footprints_var,
-            command=self._draw_mosaic_preview,
+            command=self._request_mosaic_draw,
             bg=PAPER_LIGHT,
             fg=AMBER_LIGHT,
             activebackground=PAPER_LIGHT,
@@ -4918,7 +4927,7 @@ class StarfieldApp(tk.Tk):
         viewer.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
         canvas = tk.Canvas(viewer, bg=NAVY_DARK, highlightthickness=0)
         canvas.pack(fill="both", expand=True, padx=10, pady=10)
-        canvas.bind("<Configure>", lambda _event: self._draw_mosaic_preview())
+        canvas.bind("<Configure>", lambda _event: self._request_mosaic_draw())
         canvas.bind("<MouseWheel>", self._on_mosaic_mousewheel)
         canvas.bind("<Button-4>", lambda event: self._zoom_mosaic_at(event, 1.15))
         canvas.bind("<Button-5>", lambda event: self._zoom_mosaic_at(event, 1 / 1.15))
@@ -4937,6 +4946,7 @@ class StarfieldApp(tk.Tk):
             f"单帧尺寸     {result.source_shape[1]} × {result.source_shape[0]} px\n"
             f"输出尺寸     {result.output_shape[1]} × {result.output_shape[0]} px\n"
             f"覆盖像素     {result.covered_pixel_count:,}\n"
+            f"未覆盖像素   {result.uncovered_pixel_count:,}\n"
             f"重叠像素     {result.overlap_pixel_count:,}\n"
             f"最大覆盖     {result.max_coverage} 帧\n"
             f"平均覆盖     {result.mean_coverage:.2f} 帧\n"
@@ -4963,6 +4973,7 @@ class StarfieldApp(tk.Tk):
             side,
             "覆盖数：每个像素实际有多少帧贡献。\n\n"
             "暖色边缘通常只由 1 帧覆盖；青绿色重叠区由多帧融合。\n\n"
+            "透明区域表示没有任何输入帧覆盖；矩形只是数组存储画布，不代表那里有数据。\n\n"
             "15 帧边界用细线表示每个输入帧的真实注册 footprint；边界之外不会自动填充星光。\n\n"
             "合成图用于视场、背景和时序证据展示；定量星点仍回到原始 FITS 测量。",
             color=INK_SOFT,
@@ -4997,6 +5008,13 @@ class StarfieldApp(tk.Tk):
         self._draw_mosaic_preview()
 
     def _close_mosaic_window(self, window: tk.Toplevel) -> None:
+        pending = self.__dict__.get("mosaic_redraw_after_id")
+        if pending is not None:
+            try:
+                self.after_cancel(pending)
+            except tk.TclError:
+                pass
+            self.mosaic_redraw_after_id = None
         try:
             window.destroy()
         except tk.TclError:
@@ -5005,12 +5023,55 @@ class StarfieldApp(tk.Tk):
             self.mosaic_window = None
             self.mosaic_canvas = None
             self.mosaic_hover_var = None
+            self.mosaic_preview = None
+            self.mosaic_preview_photo = None
+            self.mosaic_display_image = None
+            self.mosaic_preview_mode_cache = None
+            self.mosaic_display_cache_key = None
 
     def _on_mosaic_display_mode_changed(self) -> None:
         variable = self.__dict__.get("mosaic_display_mode_var")
         if variable is not None:
             self.mosaic_preview_mode = str(variable.get())
+        self._request_mosaic_draw()
+
+    def _request_mosaic_draw(self) -> None:
+        """合并连续滚轮/拖动/窗口重绘事件，避免重复生成整张 PhotoImage。"""
+
+        if self.__dict__.get("mosaic_redraw_after_id") is not None:
+            return
+        try:
+            self.mosaic_redraw_after_id = self.after_idle(self._flush_mosaic_draw)
+        except tk.TclError:
+            self.mosaic_redraw_after_id = None
+
+    def _flush_mosaic_draw(self) -> None:
+        self.mosaic_redraw_after_id = None
         self._draw_mosaic_preview()
+
+    def _get_mosaic_display_image(self) -> Image.Image:
+        """缓存昂贵的整图拉伸/覆盖层，拖动时只裁剪当前视口。"""
+
+        result = self.mosaic_result
+        if result is None:
+            raise ValueError("mosaic result is not available")
+        if self.mosaic_preview is None or self.mosaic_preview_mode_cache != self.mosaic_preview_mode:
+            self.mosaic_preview = render_mosaic_preview(
+                result.image,
+                mode=self.mosaic_preview_mode,
+                max_side=4096,
+                transparent_outside=True,
+            )
+            self.mosaic_preview_mode_cache = self.mosaic_preview_mode
+            self.mosaic_display_image = None
+            self.mosaic_display_cache_key = None
+        show_coverage = bool(self.mosaic_show_coverage_var.get()) if self.mosaic_show_coverage_var is not None else False
+        show_footprints = bool(self.mosaic_show_footprints_var.get()) if self.mosaic_show_footprints_var is not None else False
+        key = (self.mosaic_preview_mode, show_coverage, show_footprints)
+        if self.mosaic_display_image is None or self.mosaic_display_cache_key != key:
+            self.mosaic_display_image = self._mosaic_composited_image(self.mosaic_preview)
+            self.mosaic_display_cache_key = key
+        return self.mosaic_display_image
 
     def _mosaic_composited_image(self, base: Image.Image) -> Image.Image:
         """把覆盖数和帧 footprint 作为可关闭的显示层叠加。"""
@@ -5062,10 +5123,9 @@ class StarfieldApp(tk.Tk):
         except tk.TclError:
             return
         try:
-            base = render_mosaic_preview(result.image, mode=self.mosaic_preview_mode, max_side=4096)
+            image = self._get_mosaic_display_image()
         except ValueError:
             return
-        image = self._mosaic_composited_image(base)
         fit_scale = min((canvas_width - 18) / max(1, image.width), (canvas_height - 18) / max(1, image.height))
         scale = max(0.01, fit_scale * float(self.mosaic_preview_zoom))
         origin_x = (canvas_width - image.width * scale) / 2.0 + self.mosaic_preview_pan_x
@@ -5094,8 +5154,7 @@ class StarfieldApp(tk.Tk):
         if result is None or canvas is None:
             return
         try:
-            base = render_mosaic_preview(result.image, mode=self.mosaic_preview_mode, max_side=4096)
-            image = self._mosaic_composited_image(base)
+            image = self._get_mosaic_display_image()
             width = max(1, int(canvas.winfo_width()))
             height = max(1, int(canvas.winfo_height()))
         except (tk.TclError, ValueError):
@@ -5110,7 +5169,7 @@ class StarfieldApp(tk.Tk):
         new_scale = max(0.01, fit_scale * float(self.mosaic_preview_zoom))
         self.mosaic_preview_pan_x = float(event.x) - image_x * new_scale - (width - image.width * new_scale) / 2.0
         self.mosaic_preview_pan_y = float(event.y) - image_y * new_scale - (height - image.height * new_scale) / 2.0
-        self._draw_mosaic_preview()
+        self._request_mosaic_draw()
 
     def _on_mosaic_mousewheel(self, event: tk.Event) -> None:
         self._zoom_mosaic_at(event, 1.15 if getattr(event, "delta", 0) > 0 else 1 / 1.15)
@@ -5125,7 +5184,7 @@ class StarfieldApp(tk.Tk):
         self.mosaic_preview_pan_x += int(event.x) - previous_x
         self.mosaic_preview_pan_y += int(event.y) - previous_y
         self.mosaic_drag_start = (int(event.x), int(event.y))
-        self._draw_mosaic_preview()
+        self._request_mosaic_draw()
 
     def _set_mosaic_hover(self, text: str | None) -> None:
         variable = self.mosaic_hover_var

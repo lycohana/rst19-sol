@@ -79,6 +79,19 @@ class MosaicResult:
         return float(np.mean(covered)) if covered.size else 0.0
 
     @property
+    def covered_bbox_xy(self) -> tuple[int, int, int, int] | None:
+        """返回有效 footprint 的紧包围盒 ``(x0, y0, x1, y1)``。"""
+
+        ys, xs = np.where(self.coverage > 0)
+        if xs.size == 0:
+            return None
+        return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+
+    @property
+    def uncovered_pixel_count(self) -> int:
+        return int(np.count_nonzero(self.coverage == 0))
+
+    @property
     def union_area_ratio(self) -> float:
         source_area = max(1, int(self.source_shape[0]) * int(self.source_shape[1]))
         return float(self.covered_pixel_count / source_area)
@@ -105,6 +118,8 @@ class MosaicResult:
             "overlap_pixel_count": self.overlap_pixel_count,
             "max_coverage": self.max_coverage,
             "mean_coverage": self.mean_coverage,
+            "covered_bbox_xy": list(self.covered_bbox_xy) if self.covered_bbox_xy is not None else None,
+            "uncovered_pixel_count": self.uncovered_pixel_count,
             "union_area_ratio": self.union_area_ratio,
         }
 
@@ -497,6 +512,8 @@ def load_mosaic_cache(cache_dir: Path, key: str) -> MosaicResult | None:
 def write_mosaic_artifacts(output_dir: Path, result: MosaicResult, *, preview: Any | None = None) -> Path:
     """写出可复核的大图数组、覆盖图、离散度和元数据。"""
 
+    from PIL import Image
+
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     np.save(output / "registered_mosaic_adu.npy", result.image.astype(np.float32, copy=False))
@@ -506,6 +523,11 @@ def write_mosaic_artifacts(output_dir: Path, result: MosaicResult, *, preview: A
         json.dumps(result.as_dict(), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    footprint_mask = Image.fromarray(
+        np.where(result.coverage > 0, 255, 0).astype(np.uint8),
+        mode="L",
+    )
+    footprint_mask.save(output / "registered_mosaic_footprint.png")
     if preview is not None:
         preview.save(output / "registered_mosaic_preview.png")
     return output
@@ -516,8 +538,14 @@ def render_mosaic_preview(
     *,
     mode: str = "enhanced",
     max_side: int = 4096,
+    transparent_outside: bool = True,
 ) -> Any:
-    """把 ADU 大图映射为观察用 PNG；不改变 ``image`` 的定量数据。"""
+    """把 ADU 大图映射为观察用 PNG；不改变 ``image`` 的定量数据。
+
+    无 coverage 的 NaN 区域默认使用透明 alpha，而不是黑色填充。这样
+    GUI/PNG 会显示真实 footprint 的形状；NumPy/ADU 数组仍保持矩形存储，
+    便于后续计算和复现。
+    """
 
     from PIL import Image, ImageFilter
 
@@ -525,6 +553,12 @@ def render_mosaic_preview(
     finite = values[np.isfinite(values)]
     if finite.size == 0:
         raise ValueError("mosaic image contains no finite pixel")
+    # 只用于显示拉伸的统计量不需要扫描排序全部 4098² 个像素。固定步长
+    # 抽取最多约 2^18 个样本，保持确定性，同时避免切换显示层时长时间卡住 UI。
+    preview_sample_limit = 1 << 18
+    if finite.size > preview_sample_limit:
+        sample_step = int(np.ceil(finite.size / preview_sample_limit))
+        finite = finite[::sample_step]
     low_percentile, q25, center, q75, high_percentile = np.percentile(
         finite,
         [1.0, 25.0, 50.0, 75.0, 99.5],
@@ -549,7 +583,13 @@ def render_mosaic_preview(
     normalized = np.power(normalized, gamma)
     normalized[~np.isfinite(normalized)] = 0.0
     rendered = Image.fromarray(np.rint(normalized * 255.0).astype(np.uint8), mode="L").convert("RGB")
-    if denoise_radius > 0:
+    # 合成图本身已经经过多帧稳健融合；在 4096² 原图上再做 Pillow 全图
+    # GaussianBlur 会阻塞 Tk 主线程。只有较小的预览图才保留轻度平滑。
+    if denoise_radius > 0 and max_side < 2048:
         rendered = rendered.filter(ImageFilter.GaussianBlur(denoise_radius))
+    if transparent_outside:
+        alpha = Image.fromarray(np.where(np.isfinite(values), 255, 0).astype(np.uint8), mode="L")
+        rendered = rendered.convert("RGBA")
+        rendered.putalpha(alpha)
     rendered.thumbnail((max(64, int(max_side)), max(64, int(max_side))), Image.Resampling.LANCZOS)
     return rendered

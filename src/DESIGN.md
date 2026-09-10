@@ -73,6 +73,8 @@ FITS bytes
 
 新增 `mosaic.py` 与 `mosaic_cli.py`。它们消费已经验证过的 15 帧累计平移，按共同 detector 坐标计算联合 footprint，在重叠区进行 MAD 裁剪稳健 ADU 融合，并同步保存 `coverage`、`scatter`、输入 footprint、掩膜口径和缓存键。GUI 通过独立的“15 帧合成大图”窗口显示增强/原始/增亮噪声三种观察层，支持覆盖数、帧边界、15×缩放、拖拽、像素悬停和证据导出。该图像产物不写回 FITS、不改检测结果、不把无覆盖区域填成数据；当前只做平移注册，旋转、仿射、畸变和完整 WCS 镶嵌仍是明确限制。
 
+显示层随后补充了透明无 coverage 区域、独立 footprint mask 和单次生成缓存：数组仍使用矩形索引空间，但 PNG/GUI 以 alpha 和 coverage 表示真实有效形状。拖动、滚轮和窗口重绘只裁剪已缓存的显示图，不再反复扫描 4098² 像素、缩放 coverage 和创建整图预览；合成 ADU、检测结果和原始 FITS 的科学口径不变。
+
 ### 2026-09-02 - 增加辅助姿态光轴审计
 
 新增 `attitude.py`、`attitude_cli.py` 和 `rst19-aux-audit` 入口。实现依据格式说明将辅助四元数按向量在前、标量在后的 Hamilton 约定转换为主动旋转，以机体系 `-Y` 轴恢复每帧光轴 RA/Dec，并输出逐帧 CSV/JSON 审计。15 张真实 FITS 的四元数模长、辅助 RA/Dec、FITS 头 `p_az/p_el` 均通过一致性检查；计算光轴与辅助 RA/Dec 最大残差约 `1.1e-10` 角秒。
