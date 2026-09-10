@@ -55,6 +55,16 @@ from .innovation import _fit_constant_velocity, _telemetry_consistency, _telemet
 from .photometry import instrumental_magnitude
 from .pipeline import FrameAnalysis, analyze_frame
 from .matching import MatchResult
+from .mosaic import (
+    MOSAIC_DEFAULT_CLIP_SIGMA,
+    MosaicResult,
+    build_registered_mosaic,
+    load_mosaic_cache,
+    mosaic_cache_key,
+    render_mosaic_preview,
+    save_mosaic_cache,
+    write_mosaic_artifacts,
+)
 from .sequence import (
     DEFAULT_FAST_POINT_FIT_RMS_PX,
     DEFAULT_FAST_POINT_GATE_PX,
@@ -554,6 +564,19 @@ class StarfieldApp(tk.Tk):
         self.catalog_frame_path: Path | None = None
         self.catalog_window: tk.Toplevel | None = None
         self.sequence_result: SequenceResult | None = None
+        self.mosaic_result: MosaicResult | None = None
+        self.mosaic_window: tk.Toplevel | None = None
+        self.mosaic_canvas: tk.Canvas | None = None
+        self.mosaic_preview: Image.Image | None = None
+        self.mosaic_preview_photo: ImageTk.PhotoImage | None = None
+        self.mosaic_preview_mode = "enhanced"
+        self.mosaic_preview_zoom = 1.0
+        self.mosaic_preview_pan_x = 0.0
+        self.mosaic_preview_pan_y = 0.0
+        self.mosaic_drag_start: tuple[int, int] | None = None
+        self.mosaic_show_coverage_var: tk.BooleanVar | None = None
+        self.mosaic_show_footprints_var: tk.BooleanVar | None = None
+        self.mosaic_hover_var: tk.StringVar | None = None
         self.long_trails: tuple[MotionFeatureTrack, ...] = ()
         self.sequence_evidence_window: tk.Toplevel | None = None
         self.sequence_source_audit_window: tk.Toplevel | None = None
@@ -1078,6 +1101,8 @@ class StarfieldApp(tk.Tk):
         self.cache_button.pack(side="left", padx=(15, 0))
         self.evidence_button = tk.Button(action_row, text="15 帧证据", command=self._show_sequence_evidence, bg=PAPER, fg=INK, activebackground="#dcecf0", activeforeground=NAVY_DARK, relief="flat", bd=0, padx=13, pady=9, font=(SANS, 9, "bold"), state="disabled")
         self.evidence_button.pack(side="right", padx=(8, 0))
+        self.mosaic_button = tk.Button(action_row, text="15 帧合成大图", command=self.run_mosaic_analysis, bg=AMBER, fg=NAVY_DARK, activebackground=AMBER_LIGHT, activeforeground=NAVY_DARK, relief="flat", bd=0, padx=13, pady=9, font=(SANS, 9, "bold"), state="disabled")
+        self.mosaic_button.pack(side="right", padx=(8, 0))
         self.motion_button = tk.Button(action_row, text="分析 15 帧", command=self.run_sequence_analysis, bg=SKY, fg=NAVY_DARK, activebackground=SKY_LIGHT, activeforeground=NAVY_DARK, relief="flat", bd=0, padx=14, pady=8, font=(SANS, 10, "bold"))
         self.motion_button.pack(side="right", padx=(8, 0))
         self.run_button = tk.Button(action_row, text="分析当前帧", command=self.run_analysis, bg=NAVY, fg=WHITE, activebackground=NAVY_SOFT, activeforeground=WHITE, relief="flat", bd=0, padx=15, pady=8, font=(SANS, 10, "bold"))
@@ -2733,11 +2758,16 @@ class StarfieldApp(tk.Tk):
             self.run_button.config(state="disabled", text="正在分析单张…")
             busy_text = "15 帧分析中…" if self.active_job_kind == "sequence" else "正在分析…"
             self.motion_button.config(state="disabled", text=busy_text)
+            self.mosaic_button.config(state="disabled", text="正在合成大图…" if self.active_job_kind == "mosaic" else "15 帧合成大图")
             self.cache_button.config(state="normal")
             self.evidence_button.config(state="disabled")
         else:
             self.run_button.config(state="normal", text="✦  一键分析单张")
             self.motion_button.config(state="normal", text="15 帧动目标")
+            self.mosaic_button.config(
+                state="normal" if self.sequence_result is not None else "disabled",
+                text="打开合成大图" if self.mosaic_result is not None else "15 帧合成大图",
+            )
             self.cache_button.config(state="normal")
             self.evidence_button.config(state="normal" if self.sequence_result is not None else "disabled")
         if "manual_apply_button" in self.__dict__:
@@ -2930,6 +2960,14 @@ class StarfieldApp(tk.Tk):
                     f"当前帧运行中 · {percent:.0f}%\n"
                     f"{progress_text}\n"
                     f"长线预检和全量星点精测分阶段完成"
+                )
+            )
+        elif self.active_job_kind == "mosaic":
+            label.config(
+                text=(
+                    f"15 帧合成中 · {percent:.0f}%\n"
+                    f"{progress_text}\n"
+                    f"重叠区做稳健融合，边缘保留覆盖数与 ADU 证据"
                 )
             )
 
@@ -3301,6 +3339,9 @@ class StarfieldApp(tk.Tk):
         self.hover_catalog_match = None
         # 旧序列结果在新一轮计算期间不能继续伪装成当前结果；完成后再写回。
         self.sequence_result = None
+        self.mosaic_result = None
+        if self.mosaic_window is not None:
+            self._close_mosaic_window(self.mosaic_window)
         self.long_trails = ()
         self.sequence_evidence_label.config(text=f"正在分析 {len(self.frames)} 帧 · 当前阶段和帧号会显示在此处")
         token = self.frame_token
@@ -3476,6 +3517,81 @@ class StarfieldApp(tk.Tk):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def run_mosaic_analysis(self) -> None:
+        """根据当前 15 帧序列的注册平移生成联合视场大图。"""
+
+        if self.busy:
+            return
+        if self.sequence_result is None:
+            messagebox.showinfo("15 帧合成大图", "请先完成“分析 15 帧”，再生成注册合成大图")
+            return
+        if self.mosaic_result is not None:
+            self._show_mosaic_window(self.mosaic_result, cache_state="内存结果")
+            return
+        frame_paths = tuple(self.frames)
+        shifts = tuple(self.sequence_result.cumulative_shifts)
+        if len(frame_paths) < 2 or len(frame_paths) != len(shifts):
+            messagebox.showerror("15 帧合成大图", "当前序列帧数与配准平移数量不一致，请重新分析 15 帧")
+            return
+        try:
+            key = mosaic_cache_key(
+                frame_paths,
+                shifts,
+                combine_mode="robust_mean",
+                clip_sigma=MOSAIC_DEFAULT_CLIP_SIGMA,
+                interpolation_order=1,
+            )
+        except OSError as exc:
+            messagebox.showerror("15 帧合成大图", f"无法读取 FITS 文件状态：{exc}")
+            return
+
+        token = self.frame_token
+        cache_generation = self.cache_generation
+        self.busy = True
+        self.active_job_kind = "mosaic"
+        self.active_job_token = token
+        self._set_job_controls()
+        self._set_progress(2.0, "准备合成大图")
+        self._set_sequence_progress(2.0, f"合成准备 · 0/{len(frame_paths)}")
+        self._render_running_progress(2.0, "检查合成缓存")
+        self.status_var.set("正在生成 15 帧注册合成大图 · 保留联合视场覆盖证据…")
+
+        def worker() -> None:
+            try:
+                with self.cache_lock:
+                    result = load_mosaic_cache(self.cache_dir, key)
+                cache_hit = result is not None
+                if result is None:
+                    def progress(value: float, label: str) -> None:
+                        self.result_queue.put(("mosaic-progress", token, (float(value), str(label))))
+
+                    result = build_registered_mosaic(
+                        frame_paths,
+                        shifts,
+                        combine_mode="robust_mean",
+                        clip_sigma=MOSAIC_DEFAULT_CLIP_SIGMA,
+                        interpolation_order=1,
+                        progress=progress,
+                    )
+                    try:
+                        with self.cache_lock:
+                            if token != self.frame_token or cache_generation != self.cache_generation:
+                                cache_state = "已跳过过期大图缓存写入"
+                            else:
+                                save_mosaic_cache(self.cache_dir, key, result)
+                                cache_state = "已写入大图缓存"
+                    except OSError as exc:
+                        cache_state = f"大图缓存写入失败：{exc}"
+                else:
+                    cache_state = "大图缓存命中"
+                    self.result_queue.put(("mosaic-progress", token, (100.0, "大图缓存命中")))
+                self.result_queue.put(("mosaic-progress", token, (100.0, "合成大图完成")))
+                self.result_queue.put(("mosaic", token, (result, cache_state, cache_hit)))
+            except Exception as exc:  # noqa: BLE001 - worker must return a user-facing error
+                self.result_queue.put(("mosaic-error", token, exc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _poll_result(self) -> None:
         if self.__dict__.get("_closing", False):
             return
@@ -3511,6 +3627,27 @@ class StarfieldApp(tk.Tk):
                     self._set_sequence_progress(float(value), f"单图 · {progress_text}")
                 self._render_running_progress(float(value), str(progress_text))
             self.after(60, self._poll_result)
+            return
+        if kind == "mosaic-progress":
+            if token == self.frame_token and self.active_job_kind == "mosaic":
+                value, progress_text = payload
+                self._set_progress(float(value), str(progress_text))
+                self._set_sequence_progress(float(value), f"合成 · {progress_text}")
+                self.status_var.set(f"{progress_text} · 原始 ADU 注册融合")
+                self._render_running_progress(float(value), str(progress_text))
+            self.after(60, self._poll_result)
+            return
+        if kind == "mosaic-export":
+            button, output = payload
+            button.config(state="normal", text="导出大图证据")
+            self.status_var.set(f"大图证据已导出 · {output}")
+            self.after(100, self._poll_result)
+            return
+        if kind == "mosaic-export-error":
+            button, error_text = payload
+            button.config(state="normal", text="重试导出")
+            self.status_var.set(f"大图证据导出失败 · {error_text}")
+            self.after(100, self._poll_result)
             return
         if kind == "trail-preview":
             # 单帧长线与全量星点检测并行推进。只有当前帧、当前单图任务
@@ -3792,7 +3929,14 @@ class StarfieldApp(tk.Tk):
             self.after(100, self._poll_result)
             return
         if token != self.frame_token:
-            if self.active_job_token == token and kind in {"analysis", "analysis-error", "sequence", "sequence-error"}:
+            if self.active_job_token == token and kind in {
+                "analysis",
+                "analysis-error",
+                "sequence",
+                "sequence-error",
+                "mosaic",
+                "mosaic-error",
+            }:
                 self.active_job_token = None
                 self.busy = False
                 self.active_job_kind = None
@@ -3829,6 +3973,9 @@ class StarfieldApp(tk.Tk):
             self.preview = self.preview_variants.get(self.preview_mode_var.get()) or self.preview_variants.get(PREVIEW_MODE_ENHANCED)
             # 单帧分析是新的证据上下文，不能继续显示上一次 15 帧分析的轨迹。
             self.sequence_result = None
+            self.mosaic_result = None
+            if self.mosaic_window is not None:
+                self._close_mosaic_window(self.mosaic_window)
             self._set_sequence_progress(100.0, "当前帧完成 · 序列待运行")
             self._set_job_controls()
             self.preview_shape = shape
@@ -3875,6 +4022,17 @@ class StarfieldApp(tk.Tk):
             )
             self.status_var.set(f"动目标分析失败 · {payload}")
             messagebox.showerror("动目标分析失败", str(payload))
+        elif kind == "mosaic-error":
+            self.active_job_token = None
+            self.busy = False
+            self.active_job_kind = None
+            self._set_job_controls()
+            self._set_progress(0.0, "失败")
+            self._set_sequence_progress(0.0, "大图合成失败 · 可重试")
+            if self.sequence_result is not None:
+                self._render_sequence_evidence(self.sequence_result)
+            self.status_var.set(f"15 帧合成大图失败 · {payload}")
+            messagebox.showerror("15 帧合成大图失败", str(payload))
         elif kind == "sequence":
             self.active_job_token = None
             self.busy = False
@@ -3883,6 +4041,7 @@ class StarfieldApp(tk.Tk):
             self._set_progress(100.0, "完成")
             result, cache_state, _cache_hit = payload
             self.sequence_result = result
+            self.mosaic_result = None
             self._set_sequence_progress(100.0, f"{len(result.frames)} 帧完成 · {len(result.frames)}/{len(result.frames)}")
             self._mark_sequence_ledger("completed")
             self.long_trails = ()
@@ -3905,6 +4064,20 @@ class StarfieldApp(tk.Tk):
             )
             self._render_sequence_evidence(result)
             self._draw_preview()
+        elif kind == "mosaic":
+            self.active_job_token = None
+            self.busy = False
+            self.active_job_kind = None
+            self._set_job_controls()
+            self._set_progress(100.0, "合成大图完成")
+            result, cache_state, _cache_hit = payload
+            self.mosaic_result = result
+            self._set_sequence_progress(100.0, f"合成大图完成 · {result.output_shape[1]}×{result.output_shape[0]} px")
+            self.status_var.set(
+                f"{cache_state} · 15 帧注册合成完成 · 输出 {result.output_shape[1]}×{result.output_shape[0]} px · "
+                f"覆盖 {result.covered_pixel_count:,} px · 重叠 {result.overlap_pixel_count:,} px"
+            )
+            self._show_mosaic_window(result, cache_state=cache_state)
         self.after(100, self._poll_result)
 
     def _reset_result_widgets(self) -> None:
@@ -4607,6 +4780,401 @@ class StarfieldApp(tk.Tk):
         calibrate_button.config(command=calibrate)
         export_calibration_button.config(command=export_calibration)
         validation_button.config(command=validate_sequence)
+
+    def _show_mosaic_window(self, result: MosaicResult, *, cache_state: str) -> None:
+        """打开 15 帧注册联合视场查看器。"""
+
+        window = self.mosaic_window
+        if window is not None:
+            try:
+                if window.winfo_exists():
+                    window.deiconify()
+                    window.lift()
+                    window.focus_force()
+                    self._draw_mosaic_preview()
+                    return
+            except tk.TclError:
+                pass
+
+        window = tk.Toplevel(self)
+        self.mosaic_window = window
+        window.title("RST19 · 15 帧注册合成大图")
+        window.geometry("1360x860")
+        window.minsize(1020, 680)
+        window.configure(bg=PAPER)
+        window.protocol("WM_DELETE_WINDOW", lambda: self._close_mosaic_window(window))
+        window.bind("<Escape>", lambda _event: self._close_mosaic_window(window))
+
+        header = tk.Frame(window, bg=PAPER)
+        header.pack(fill="x", padx=24, pady=(18, 12))
+        title_box = tk.Frame(header, bg=PAPER)
+        title_box.pack(side="left")
+        self._label(title_box, "15 帧注册合成大图", color=INK, size=17, bold=True, bg=PAPER).pack(anchor="w")
+        self._mono_label(
+            title_box,
+            "UNION FOOTPRINT  ·  原始 ADU 注册融合  ·  不是简单拼贴",
+            color=AMBER_LIGHT,
+            size=8,
+            bg=PAPER,
+        ).pack(anchor="w", pady=(4, 0))
+        self._mono_label(header, cache_state, color=MINT, size=8, bg=PAPER).pack(side="right", anchor="s")
+        tk.Frame(window, bg=PAPER_LINE, height=1).pack(fill="x", padx=24)
+
+        controls = tk.Frame(window, bg=PAPER_LIGHT, highlightbackground=PAPER_LINE, highlightthickness=1)
+        controls.pack(fill="x", padx=24, pady=(12, 10))
+        mode_label = self._mono_label(controls, "DISPLAY", color=INK_SOFT, size=8, bg=PAPER_LIGHT)
+        mode_label.pack(side="left", padx=(12, 8), pady=9)
+        mode_var = tk.StringVar(window, value="enhanced")
+        self.mosaic_display_mode_var = mode_var
+        for value, text in (("enhanced", "增强显示"), ("raw", "原始显示"), ("noise", "增亮噪声")):
+            tk.Radiobutton(
+                controls,
+                text=text,
+                value=value,
+                variable=mode_var,
+                command=self._on_mosaic_display_mode_changed,
+                bg=PAPER_LIGHT,
+                fg=INK,
+                activebackground=PAPER_LIGHT,
+                activeforeground=NAVY_DARK,
+                selectcolor=PAPER,
+                font=(SANS, 9),
+                bd=0,
+                highlightthickness=0,
+            ).pack(side="left", padx=(0, 10), pady=7)
+        coverage_var = tk.BooleanVar(window, value=True)
+        footprints_var = tk.BooleanVar(window, value=True)
+        self.mosaic_show_coverage_var = coverage_var
+        self.mosaic_show_footprints_var = footprints_var
+        tk.Checkbutton(
+            controls,
+            text="覆盖数",
+            variable=coverage_var,
+            command=self._draw_mosaic_preview,
+            bg=PAPER_LIGHT,
+            fg=SKY,
+            activebackground=PAPER_LIGHT,
+            activeforeground=NAVY_DARK,
+            selectcolor=PAPER,
+            font=(SANS, 9),
+            bd=0,
+            highlightthickness=0,
+        ).pack(side="left", padx=(8, 10), pady=7)
+        tk.Checkbutton(
+            controls,
+            text="15 帧边界",
+            variable=footprints_var,
+            command=self._draw_mosaic_preview,
+            bg=PAPER_LIGHT,
+            fg=AMBER_LIGHT,
+            activebackground=PAPER_LIGHT,
+            activeforeground=NAVY_DARK,
+            selectcolor=PAPER,
+            font=(SANS, 9),
+            bd=0,
+            highlightthickness=0,
+        ).pack(side="left", padx=(0, 10), pady=7)
+        export_button = tk.Button(
+            controls,
+            text="导出大图证据",
+            command=self._export_mosaic_artifacts,
+            bg=AMBER,
+            fg=NAVY_DARK,
+            activebackground=AMBER_LIGHT,
+            activeforeground=NAVY_DARK,
+            relief="flat",
+            bd=0,
+            padx=11,
+            pady=5,
+            font=(SANS, 9, "bold"),
+        )
+        export_button.pack(side="right", padx=10, pady=5)
+        self.mosaic_export_button = export_button
+
+        body = tk.Frame(window, bg=PAPER)
+        body.pack(fill="both", expand=True, padx=24, pady=(0, 20))
+        body.grid_columnconfigure(0, weight=4)
+        body.grid_columnconfigure(1, weight=1)
+        body.grid_rowconfigure(0, weight=1)
+        viewer = tk.Frame(body, bg=PAPER_LIGHT, highlightbackground=PAPER_LINE, highlightthickness=1)
+        viewer.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        canvas = tk.Canvas(viewer, bg=NAVY_DARK, highlightthickness=0)
+        canvas.pack(fill="both", expand=True, padx=10, pady=10)
+        canvas.bind("<Configure>", lambda _event: self._draw_mosaic_preview())
+        canvas.bind("<MouseWheel>", self._on_mosaic_mousewheel)
+        canvas.bind("<Button-4>", lambda event: self._zoom_mosaic_at(event, 1.15))
+        canvas.bind("<Button-5>", lambda event: self._zoom_mosaic_at(event, 1 / 1.15))
+        canvas.bind("<ButtonPress-1>", self._on_mosaic_pan_start)
+        canvas.bind("<B1-Motion>", self._on_mosaic_pan_move)
+        canvas.bind("<ButtonRelease-1>", lambda _event: setattr(self, "mosaic_drag_start", None))
+        canvas.bind("<Motion>", self._on_mosaic_motion)
+        canvas.bind("<Leave>", lambda _event: self._set_mosaic_hover(None))
+        self.mosaic_canvas = canvas
+
+        side = tk.Frame(body, bg=PAPER_LIGHT, highlightbackground=PAPER_LINE, highlightthickness=1)
+        side.grid(row=0, column=1, sticky="nsew")
+        self._mono_label(side, "MOSAIC AUDIT", color=AMBER_LIGHT, size=8, bg=PAPER_LIGHT).pack(anchor="w", padx=15, pady=(15, 7))
+        summary = (
+            f"输入帧       {result.frame_count}\n"
+            f"单帧尺寸     {result.source_shape[1]} × {result.source_shape[0]} px\n"
+            f"输出尺寸     {result.output_shape[1]} × {result.output_shape[0]} px\n"
+            f"覆盖像素     {result.covered_pixel_count:,}\n"
+            f"重叠像素     {result.overlap_pixel_count:,}\n"
+            f"最大覆盖     {result.max_coverage} 帧\n"
+            f"平均覆盖     {result.mean_coverage:.2f} 帧\n"
+            f"联合面积比   {result.union_area_ratio:.3f}\n"
+            f"融合模式     {result.combine_mode}\n"
+            f"插值阶数     {result.interpolation_order}\n"
+            f"零值屏蔽     {'是' if result.masked_zero_pixels else '否'}\n"
+            f"辅助字段屏蔽 {'是' if result.masked_auxiliary_pixels else '否'}"
+        )
+        self._mono_label(side, summary, color=INK, size=9, bg=PAPER_LIGHT, anchor="w", justify="left").pack(
+            fill="x", padx=15, pady=(0, 12)
+        )
+        tk.Frame(side, bg=PAPER_LINE, height=1).pack(fill="x", padx=15)
+        self._label(
+            side,
+            "怎么看这张图",
+            color=SKY,
+            size=10,
+            bold=True,
+            bg=PAPER_LIGHT,
+            anchor="w",
+        ).pack(fill="x", padx=15, pady=(12, 4))
+        self._label(
+            side,
+            "覆盖数：每个像素实际有多少帧贡献。\n\n"
+            "暖色边缘通常只由 1 帧覆盖；青绿色重叠区由多帧融合。\n\n"
+            "15 帧边界用细线表示每个输入帧的真实注册 footprint；边界之外不会自动填充星光。\n\n"
+            "合成图用于视场、背景和时序证据展示；定量星点仍回到原始 FITS 测量。",
+            color=INK_SOFT,
+            size=9,
+            bg=PAPER_LIGHT,
+            anchor="w",
+            justify="left",
+            wraplength=270,
+        ).pack(fill="x", padx=15, pady=(0, 12))
+        hover_var = tk.StringVar(window, value="鼠标移到图上查看联合坐标、ADU、覆盖数和帧间离散度")
+        self.mosaic_hover_var = hover_var
+        hover_label = tk.Label(
+            side,
+            textvariable=hover_var,
+            bg=NAVY,
+            fg=INK,
+            font=(MONO, 8),
+            anchor="w",
+            justify="left",
+            wraplength=270,
+            padx=10,
+            pady=9,
+        )
+        hover_label.pack(fill="x", padx=12, pady=(5, 12))
+        self._mono_label(side, "滚轮缩放 ≤15× · 左键拖拽平移 · Esc 关闭", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(
+            anchor="w", padx=15, pady=(0, 12)
+        )
+        self.mosaic_preview_zoom = 1.0
+        self.mosaic_preview_pan_x = 0.0
+        self.mosaic_preview_pan_y = 0.0
+        self.mosaic_preview_mode = "enhanced"
+        self._draw_mosaic_preview()
+
+    def _close_mosaic_window(self, window: tk.Toplevel) -> None:
+        try:
+            window.destroy()
+        except tk.TclError:
+            pass
+        if self.mosaic_window is window:
+            self.mosaic_window = None
+            self.mosaic_canvas = None
+            self.mosaic_hover_var = None
+
+    def _on_mosaic_display_mode_changed(self) -> None:
+        variable = self.__dict__.get("mosaic_display_mode_var")
+        if variable is not None:
+            self.mosaic_preview_mode = str(variable.get())
+        self._draw_mosaic_preview()
+
+    def _mosaic_composited_image(self, base: Image.Image) -> Image.Image:
+        """把覆盖数和帧 footprint 作为可关闭的显示层叠加。"""
+
+        result = self.mosaic_result
+        if result is None:
+            return base
+        image = base.convert("RGBA")
+        show_coverage = bool(self.mosaic_show_coverage_var.get()) if self.mosaic_show_coverage_var is not None else False
+        show_footprints = bool(self.mosaic_show_footprints_var.get()) if self.mosaic_show_footprints_var is not None else False
+        base_width, base_height = image.size
+        output_height, output_width = result.output_shape
+        if show_coverage:
+            coverage_small = Image.fromarray(
+                np.clip(result.coverage, 0, 255).astype(np.uint8),
+                mode="L",
+            ).resize((base_width, base_height), Image.Resampling.NEAREST)
+            coverage_array = np.asarray(coverage_small, dtype=np.uint8)
+            rgba = np.zeros((base_height, base_width, 4), dtype=np.uint8)
+            one_frame = coverage_array == 1
+            overlap = coverage_array >= 2
+            rgba[one_frame] = (255, 185, 77, 72)
+            rgba[overlap] = (92, 224, 193, 24)
+            image = Image.alpha_composite(image, Image.fromarray(rgba, mode="RGBA"))
+        if show_footprints:
+            draw = ImageDraw.Draw(image, "RGBA")
+            scale_x = base_width / max(1, output_width)
+            scale_y = base_height / max(1, output_height)
+            palette = ("#ffd166", "#77b8ff", "#65ddc0", "#ff6bd6", "#bba6ff")
+            for index, (origin_x, origin_y) in enumerate(result.frame_origins_xy):
+                x0 = origin_x * scale_x
+                y0 = origin_y * scale_y
+                x1 = (origin_x + result.source_shape[1]) * scale_x
+                y1 = (origin_y + result.source_shape[0]) * scale_y
+                color = palette[index % len(palette)]
+                draw.rectangle((x0, y0, x1, y1), outline=color, width=1)
+        return image
+
+    def _draw_mosaic_preview(self) -> None:
+        canvas = self.__dict__.get("mosaic_canvas")
+        result = self.mosaic_result
+        if canvas is None or result is None:
+            return
+        try:
+            if not canvas.winfo_exists():
+                return
+            canvas_width = max(1, int(canvas.winfo_width()))
+            canvas_height = max(1, int(canvas.winfo_height()))
+        except tk.TclError:
+            return
+        try:
+            base = render_mosaic_preview(result.image, mode=self.mosaic_preview_mode, max_side=4096)
+        except ValueError:
+            return
+        image = self._mosaic_composited_image(base)
+        fit_scale = min((canvas_width - 18) / max(1, image.width), (canvas_height - 18) / max(1, image.height))
+        scale = max(0.01, fit_scale * float(self.mosaic_preview_zoom))
+        origin_x = (canvas_width - image.width * scale) / 2.0 + self.mosaic_preview_pan_x
+        origin_y = (canvas_height - image.height * scale) / 2.0 + self.mosaic_preview_pan_y
+        left = max(0, int(np.floor(-origin_x / scale)))
+        top = max(0, int(np.floor(-origin_y / scale)))
+        right = min(image.width, int(np.ceil((canvas_width - origin_x) / scale)))
+        bottom = min(image.height, int(np.ceil((canvas_height - origin_y) / scale)))
+        if right <= left or bottom <= top:
+            left, top, right, bottom = 0, 0, image.width, image.height
+        cropped = image.crop((left, top, right, bottom))
+        scaled = cropped.resize(
+            (max(1, int(round(cropped.width * scale))), max(1, int(round(cropped.height * scale)))),
+            Image.Resampling.NEAREST if scale >= 5.0 else Image.Resampling.BILINEAR,
+        )
+        screen_x = origin_x + left * scale
+        screen_y = origin_y + top * scale
+        canvas.delete("all")
+        self.mosaic_preview_photo = ImageTk.PhotoImage(scaled)
+        canvas.create_image(screen_x, screen_y, image=self.mosaic_preview_photo, anchor="nw")
+        self.mosaic_view_geometry = (origin_x, origin_y, scale, image.size)
+
+    def _zoom_mosaic_at(self, event: tk.Event, factor: float) -> None:
+        result = self.mosaic_result
+        canvas = self.mosaic_canvas
+        if result is None or canvas is None:
+            return
+        try:
+            base = render_mosaic_preview(result.image, mode=self.mosaic_preview_mode, max_side=4096)
+            image = self._mosaic_composited_image(base)
+            width = max(1, int(canvas.winfo_width()))
+            height = max(1, int(canvas.winfo_height()))
+        except (tk.TclError, ValueError):
+            return
+        fit_scale = min((width - 18) / max(1, image.width), (height - 18) / max(1, image.height))
+        old_scale = max(0.01, fit_scale * float(self.mosaic_preview_zoom))
+        old_origin_x = (width - image.width * old_scale) / 2.0 + self.mosaic_preview_pan_x
+        old_origin_y = (height - image.height * old_scale) / 2.0 + self.mosaic_preview_pan_y
+        image_x = (float(event.x) - old_origin_x) / old_scale
+        image_y = (float(event.y) - old_origin_y) / old_scale
+        self.mosaic_preview_zoom = min(15.0, max(0.35, self.mosaic_preview_zoom * float(factor)))
+        new_scale = max(0.01, fit_scale * float(self.mosaic_preview_zoom))
+        self.mosaic_preview_pan_x = float(event.x) - image_x * new_scale - (width - image.width * new_scale) / 2.0
+        self.mosaic_preview_pan_y = float(event.y) - image_y * new_scale - (height - image.height * new_scale) / 2.0
+        self._draw_mosaic_preview()
+
+    def _on_mosaic_mousewheel(self, event: tk.Event) -> None:
+        self._zoom_mosaic_at(event, 1.15 if getattr(event, "delta", 0) > 0 else 1 / 1.15)
+
+    def _on_mosaic_pan_start(self, event: tk.Event) -> None:
+        self.mosaic_drag_start = (int(event.x), int(event.y))
+
+    def _on_mosaic_pan_move(self, event: tk.Event) -> None:
+        if self.mosaic_drag_start is None:
+            return
+        previous_x, previous_y = self.mosaic_drag_start
+        self.mosaic_preview_pan_x += int(event.x) - previous_x
+        self.mosaic_preview_pan_y += int(event.y) - previous_y
+        self.mosaic_drag_start = (int(event.x), int(event.y))
+        self._draw_mosaic_preview()
+
+    def _set_mosaic_hover(self, text: str | None) -> None:
+        variable = self.mosaic_hover_var
+        if variable is None:
+            return
+        variable.set(text or "鼠标移到图上查看联合坐标、ADU、覆盖数和帧间离散度")
+
+    def _on_mosaic_motion(self, event: tk.Event) -> None:
+        result = self.mosaic_result
+        canvas = self.mosaic_canvas
+        if result is None or canvas is None:
+            return
+        geometry = self.__dict__.get("mosaic_view_geometry")
+        if geometry is None:
+            return
+        origin_x, origin_y, scale, image_size = geometry
+        if scale <= 0:
+            return
+        image_x = (float(event.x) - origin_x) / scale
+        image_y = (float(event.y) - origin_y) / scale
+        base_width, base_height = image_size
+        output_height, output_width = result.output_shape
+        output_x = int(np.floor(image_x * output_width / max(1, base_width)))
+        output_y = int(np.floor(image_y * output_height / max(1, base_height)))
+        if not (0 <= output_x < output_width and 0 <= output_y < output_height):
+            self._set_mosaic_hover(None)
+            return
+        adu = float(result.image[output_y, output_x])
+        coverage = int(result.coverage[output_y, output_x])
+        scatter = float(result.scatter[output_y, output_x])
+        adu_text = f"{adu:.2f}" if np.isfinite(adu) else "—"
+        scatter_text = f"{scatter:.2f}" if np.isfinite(scatter) else "—"
+        common_x = result.common_origin_xy[0] + output_x
+        common_y = result.common_origin_xy[1] + output_y
+        self._set_mosaic_hover(
+            f"联合像素 X/Y  {output_x} / {output_y}\n"
+            f"参考坐标     {common_x:.2f} / {common_y:.2f}\n"
+            f"ADU          {adu_text}\n"
+            f"覆盖帧数     {coverage}/{result.frame_count}\n"
+            f"稳健离散度   {scatter_text} ADU"
+        )
+
+    def _export_mosaic_artifacts(self) -> None:
+        result = self.mosaic_result
+        button = self.__dict__.get("mosaic_export_button")
+        if result is None or button is None:
+            return
+        output = filedialog.askdirectory(
+            title="选择 15 帧合成大图输出目录",
+            initialdir=str(PROJECT_ROOT / "tmp"),
+            mustexist=False,
+        )
+        if not output:
+            return
+        output_dir = Path(output)
+        button.config(state="disabled", text="正在导出…")
+        preview = render_mosaic_preview(result.image, mode=self.mosaic_preview_mode, max_side=4096)
+        token = self.frame_token
+
+        def worker() -> None:
+            try:
+                written = write_mosaic_artifacts(output_dir, result, preview=preview)
+                self.result_queue.put(("mosaic-export", token, (button, written)))
+            except Exception as exc:  # noqa: BLE001 - export must return a user-facing error
+                self.result_queue.put(("mosaic-export-error", token, (button, exc)))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _show_sequence_evidence(self) -> None:
         """打开逐帧、逐轨迹和图表证据窗口。"""
@@ -6898,7 +7466,6 @@ class StarfieldApp(tk.Tk):
                     outline=NAVY_DARK,
                     width=1,
                 )
-
         for track in self.sequence_result.motion_features:
             if track.classification != "moving" or len(track.points) < 2:
                 continue
@@ -7506,6 +8073,9 @@ class StarfieldApp(tk.Tk):
         self.catalog_calibration = None
         self.catalog_frame_path = None
         self.sequence_result = None
+        self.mosaic_result = None
+        if self.mosaic_window is not None:
+            self._close_mosaic_window(self.mosaic_window)
         self.source_grid = {}
         self.hover_source = None
         self.hover_source_id = None

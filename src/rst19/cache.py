@@ -39,7 +39,9 @@ CACHE_VERSION = 17
 # 旧缓存不具备相同计算口径，必须重新计算，否则 UI 可能把不同精度的
 # 结果混在一起。
 SEQUENCE_CACHE_VERSION = 37
-CACHE_SUFFIXES = {".gz", ".json", ".tmp"}
+# 其中 ``.npz`` 是注册 15 帧大图的数组缓存；它和检测/序列 JSON 一样
+# 属于可随时删除的派生数据，绝不能与原始 FITS 混为一谈。
+CACHE_SUFFIXES = {".gz", ".json", ".tmp", ".npz"}
 
 
 def cache_key(

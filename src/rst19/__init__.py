@@ -407,6 +407,15 @@ from .contaminated_pair_class import (
 )
 from .matching import CatalogMatch, MatchResult, match_detections
 from .models import AuxiliaryData, FitsFrame
+from .mosaic import (
+    MosaicResult,
+    build_registered_mosaic,
+    load_mosaic_cache,
+    mosaic_cache_key,
+    render_mosaic_preview,
+    save_mosaic_cache,
+    write_mosaic_artifacts,
+)
 from .photometry import FaintestSource, find_faintest_source, instrumental_magnitude
 from .sequence import (
     FixedSentinelAudit,
@@ -443,6 +452,7 @@ __all__ = [
     "PAIR_SUPPORT_MASK_MODES",
     "FitsError",
     "FitsFrame",
+    "MosaicResult",
     "FaintestSource",
     "MatchResult",
     "TangentPlaneWCS",
@@ -517,6 +527,12 @@ __all__ = [
     "run_sequence_wcs_validation",
     "write_wcs_validation_artifacts",
     "read_fits",
+    "build_registered_mosaic",
+    "mosaic_cache_key",
+    "load_mosaic_cache",
+    "save_mosaic_cache",
+    "render_mosaic_preview",
+    "write_mosaic_artifacts",
     "load_detection_catalog_csv",
     "track_detections",
     "write_innovation_artifacts",
