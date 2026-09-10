@@ -1707,6 +1707,17 @@ class StarfieldApp(tk.Tk):
             state="disabled",
         )
         self.evidence_button.pack(side="right", padx=(8, 0))
+        self.mosaic_button = self._star_button(
+            header,
+            "15 帧合成大图",
+            self.run_mosaic_analysis,
+            kind="ghost",
+            padx=10,
+            pady=7,
+            size=8,
+            state="disabled",
+        )
+        self.mosaic_button.pack(side="right", padx=(8, 0))
         self.run_button = self._star_button(
             header,
             "✦  一键分析单张",
@@ -2758,16 +2769,23 @@ class StarfieldApp(tk.Tk):
             self.run_button.config(state="disabled", text="正在分析单张…")
             busy_text = "15 帧分析中…" if self.active_job_kind == "sequence" else "正在分析…"
             self.motion_button.config(state="disabled", text=busy_text)
-            self.mosaic_button.config(state="disabled", text="正在合成大图…" if self.active_job_kind == "mosaic" else "15 帧合成大图")
+            mosaic_button = self.__dict__.get("mosaic_button")
+            if mosaic_button is not None:
+                mosaic_button.config(
+                    state="disabled",
+                    text="正在合成大图…" if self.active_job_kind == "mosaic" else "15 帧合成大图",
+                )
             self.cache_button.config(state="normal")
             self.evidence_button.config(state="disabled")
         else:
             self.run_button.config(state="normal", text="✦  一键分析单张")
             self.motion_button.config(state="normal", text="15 帧动目标")
-            self.mosaic_button.config(
-                state="normal" if self.sequence_result is not None else "disabled",
-                text="打开合成大图" if self.mosaic_result is not None else "15 帧合成大图",
-            )
+            mosaic_button = self.__dict__.get("mosaic_button")
+            if mosaic_button is not None:
+                mosaic_button.config(
+                    state="normal" if self.sequence_result is not None else "disabled",
+                    text="打开合成大图" if self.mosaic_result is not None else "15 帧合成大图",
+                )
             self.cache_button.config(state="normal")
             self.evidence_button.config(state="normal" if self.sequence_result is not None else "disabled")
         if "manual_apply_button" in self.__dict__:
