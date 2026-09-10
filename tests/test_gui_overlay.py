@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rst19.gui import moving_points_for_frame, sequence_frame_index_for_frame, stable_points_for_frame
+from rst19.gui import moving_points_for_frame, sequence_frame_index_for_frame, stable_points_for_frame, trusted_points_for_frame
 from rst19.sequence import FrameSequenceSummary, SequenceResult, SourceTrack, TrackPoint
 
 
@@ -66,6 +66,15 @@ def test_stable_overlay_returns_static_and_persistent_points_only() -> None:
     points = stable_points_for_frame(result, 0)
 
     assert [(track.track_id, point.detection_id) for track, point in points] == [(8, 20), (9, 30)]
+
+
+def test_trusted_overlay_returns_quality_passed_points_including_moving_sources() -> None:
+    result = _sequence_result()
+
+    points = trusted_points_for_frame(result, 0)
+
+    assert [(track.track_id, point.detection_id) for track, point in points] == [(7, 10), (8, 20)]
+    assert trusted_points_for_frame(None, 0) == ()
 
 
 def test_sequence_frame_index_matches_relative_cached_path() -> None:

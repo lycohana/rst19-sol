@@ -19,6 +19,7 @@ from rst19.sequence import (
     _stack_faint_tracks,
     _stack_forced_frame_measure,
     _stack_forced_frame_measure_batch,
+    _track_fast_candidate_movers,
     _temporal_psf_fwhm_bank,
     _temporal_reference_candidate_frames,
     audit_fixed_sentinel,
@@ -26,6 +27,7 @@ from rst19.sequence import (
     detect_long_trails,
     detect_motion_features,
     detect_single_frame_long_trails,
+    track_fast_point_movers,
     track_detections,
 )
 from rst19.detection import DetectionResult
@@ -192,6 +194,123 @@ def test_track_detections_marks_stationary_half_sequence_as_persistent() -> None
     assert result.stable_field_candidate_count == 1
     assert result.tracks[0].classification == "persistent"
     assert result.persistent_min_presence == 3
+
+
+def test_track_fast_point_movers_recovers_a_point_source_beyond_static_link_radius() -> None:
+    frames = []
+    for frame_index in range(15):
+        frames.append(
+            (
+                _source(1000 + frame_index, 100.0, 100.0),
+                _source(2000 + frame_index, 300.0, 300.0),
+                _source(3000 + frame_index, 1795.0 + 8.0 * frame_index, 919.0 - 6.0 * frame_index, ),
+            )
+        )
+    existing = []
+    for detection_id, x, y in ((1000, 100.0, 100.0), (2000, 300.0, 300.0)):
+        points = tuple(
+            TrackPoint(frame_index, detection_id + frame_index, x, y, x, y, 25.0)
+            for frame_index in range(15)
+        )
+        existing.append(SourceTrack(detection_id, "static", points, 0.0, 0.0, 0.0))
+
+    tracks = track_fast_point_movers(
+        frames,
+        ((0.0, 0.0),) * 15,
+        link_radius_px=4.0,
+        min_presence=12,
+        min_flux_snr=7.0,
+        max_step_px=20.0,
+        gate_px=4.5,
+        max_fit_rms_px=1.5,
+        existing_tracks=existing,
+    )
+
+    assert len(tracks) == 1
+    moving = tracks[0]
+    assert moving.classification == "moving"
+    assert moving.evidence_level == "fast_point_motion"
+    assert moving.presence == 15
+    assert moving.speed_px_per_frame == pytest.approx(10.0, abs=0.01)
+    assert moving.displacement_px == pytest.approx(140.0, abs=0.1)
+
+
+def test_track_fast_point_movers_does_not_relabel_stationary_sources() -> None:
+    frames = [tuple(_source(100 + frame_index, 50.0, 50.0) for frame_index in range(5)) for _ in range(5)]
+
+    tracks = track_fast_point_movers(
+        frames,
+        ((0.0, 0.0),) * 5,
+        min_presence=5,
+        min_flux_snr=7.0,
+        max_step_px=20.0,
+        gate_px=4.5,
+        max_fit_rms_px=1.5,
+    )
+
+    assert tracks == ()
+
+
+def test_fast_candidate_movers_recovers_a_peak_omitted_from_source_working_set() -> None:
+    analyses = []
+    candidate_frames = []
+    yy, xx = np.mgrid[:256, :256]
+    for frame_index in range(15):
+        x = 22.0 + 8.0 * frame_index
+        y = 104.0 - 6.0 * frame_index
+        image = 10.0 + 90.0 * np.exp(-0.5 * (((xx - x) / 1.6) ** 2 + ((yy - y) / 1.6) ** 2))
+        detection = DetectionResult(
+            image_shape=image.shape,
+            background=10.0,
+            noise=1.0,
+            threshold=14.0,
+            candidate_count=2,
+            # 模拟 max_sources=1：真实移动点只在 candidate_peaks 中，
+            # 不出现在 sources/quality_sources 工作集。
+            sources=(),
+            parameters={
+                "mask_zero_pixels": 0,
+                "saturation_level": -1.0,
+                "min_psf_support_pixels": 3,
+                "aperture_radius": 4,
+                "min_fwhm": 0.8,
+                "max_fwhm": 12.0,
+                "max_ellipticity": 0.65,
+            },
+            quality_count=0,
+            candidate_peaks=np.asarray(((round(x), round(y), 40.0),), dtype=np.float32),
+        )
+        analyses.append(
+            FrameAnalysis(
+                FitsFrame(Path(f"fast-candidate-{frame_index}.fits"), {}, image, None, 0),
+                detection,
+                None,
+                None,
+            )
+        )
+        candidate_frames.append(detection.candidate_peaks)
+
+    tracks = _track_fast_candidate_movers(
+        candidate_frames,
+        analyses,
+        ((0.0, 0.0),) * 15,
+        link_radius_px=4.0,
+        min_presence=12,
+        motion_min_displacement_px=2.0,
+        min_filter_snr=7.0,
+        max_step_px=20.0,
+        gate_px=4.5,
+        max_fit_rms_px=1.5,
+    )
+
+    assert len(tracks) == 1
+    moving = tracks[0]
+    assert moving.evidence_level == "fast_point_motion"
+    assert moving.presence == 15
+    assert moving.quality_presence == 15
+    assert moving.points[0].candidate_snr == pytest.approx(40.0)
+    assert moving.points[0].flux_snr is not None and moving.points[0].flux_snr >= 7.0
+    assert moving.speed_px_per_frame == pytest.approx(10.0, abs=0.2)
 
 
 def test_candidate_consensus_keeps_repeated_peak_separate_from_quality_track() -> None:
@@ -943,6 +1062,8 @@ def test_analyze_sequence_reports_frame_and_stage_progress(monkeypatch: pytest.M
         ("frame", 2, 2),
         ("sentinel-audit", 2, 2),
         ("registration", 2, 2),
+        ("fast-point-motion", 0, 2),
+        ("fast-point-motion", 2, 2),
         ("stack-faint", 2, 2),
         ("consensus", 2, 2),
         ("motion-detail", 0, 100),

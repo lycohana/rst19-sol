@@ -186,7 +186,7 @@ def test_sequence_progress_is_visible_in_the_right_evidence_card() -> None:
     assert "逐帧检测完成后" in label.text
 
 
-def test_sequence_completion_shows_stable_overlay_by_default() -> None:
+def test_sequence_completion_shows_quality_overlay_by_default() -> None:
     frame = FrameSequenceSummary(0, "frame-0.fits", 10, 8, 3)
     result = SequenceResult(
         (frame, frame),
@@ -220,8 +220,8 @@ def test_sequence_completion_shows_stable_overlay_by_default() -> None:
 
     app._poll_result()
 
-    assert app.overlay_mode_var.value == "stable"
-    assert "当前显示稳定星场" in app.status_var.value
+    assert app.overlay_mode_var.value == "quality"
+    assert "当前显示可信源主层" in app.status_var.value
 
 
 def test_preview_zoom_caps_at_fifteen_times() -> None:
@@ -320,7 +320,7 @@ def test_preview_completion_clears_loading_status_and_refreshes_controls() -> No
     assert app.preview_zoom == 1.0
     assert "预览已载入" in app.status_var.value
     assert "正在载入" not in app.status_var.value
-    assert "分析当前帧" in app.hover_info_var.value
+    assert "一键分析单张" in app.hover_info_var.value
     assert calls == ["controls", "hint", "draw"]
 
 
@@ -451,8 +451,8 @@ def test_single_frame_trail_preview_is_rendered_before_full_analysis() -> None:
     app._poll_result()
 
     assert app.long_trails == (track,)
-    assert app.overlay_mode_var.value == "motion"
-    assert "单帧长线" in app.status_var.value
+    assert app.overlay_mode_var.value == "quality"
+    assert "已叠加在可信源上" in app.status_var.value
 
 
 def test_innovation_summary_rows_expose_motion_and_wcs_boundaries() -> None:

@@ -56,6 +56,10 @@ from .photometry import instrumental_magnitude
 from .pipeline import FrameAnalysis, analyze_frame
 from .matching import MatchResult
 from .sequence import (
+    DEFAULT_FAST_POINT_FIT_RMS_PX,
+    DEFAULT_FAST_POINT_GATE_PX,
+    DEFAULT_FAST_POINT_MAX_STEP_PX,
+    DEFAULT_FAST_POINT_MIN_SNR,
     DEFAULT_SEQUENCE_SOURCE_WORKING_LIMIT,
     DEFAULT_SEQUENCE_BACKGROUND_SAMPLE_LIMIT,
     DEFAULT_SEQUENCE_WORKERS,
@@ -74,34 +78,37 @@ from .wcs_validation import WCSValidationReport, run_sequence_wcs_validation, wr
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_DIR = PROJECT_ROOT / "doc" / "00-项目资料" / "原始数据"
 
-NAVY = "#20293d"
-NAVY_DARK = "#182033"
-NAVY_SOFT = "#33415b"
-PAPER = "#f4f0e7"
-PAPER_LIGHT = "#faf8f2"
-PAPER_LINE = "#ded8ca"
-INK = "#273147"
-INK_SOFT = "#626b7d"
-AMBER = "#d79432"
-AMBER_LIGHT = "#f0b34b"
-MINT = "#4f9b83"
-SKY = "#72b9d4"
-SKY_LIGHT = "#b9e4ef"
-# 预览图上的源标记单独使用高亮色，不复用纸面 UI 的琥珀/墨绿色。
-# 真实 FITS 预览通常是黑灰背景；青色在增强、原始和增亮噪声三种
-# 显示层上都比暗琥珀更容易辨认。候选层的紫红只表示“未通过质量层”，
-# 不与运动轨迹的洋红线混用。
-STAR_POINT = "#00e5ff"
-DOG_ONLY_POINT = "#ffe45c"
-STAR_POINT_REJECTED = "#d889ff"
-STATIC_STAR_POINT = "#5ff5d2"
-PERSISTENT_STAR_POINT = "#8bdcff"
-TEMPORAL_STAR_POINT = "#b89cff"
-STACK_FAINT_POINT = "#7ad0a8"
-MOTION_TRAIL = "#ff3bd4"
-MOTION_CANDIDATE = "#ef7d45"
-FORECAST = "#82d3b5"
-WHITE = "#f6f1e7"
+# 深空观测台主题：主背景是带蓝紫色相的近黑色，星点用暖白/金色，
+# 通过状态才使用青绿色。避免米白底、青灰卡片和“AI 仪表盘”式平均配色。
+# 这些常量仍沿用旧名字，是为了让研究弹窗和结果渲染代码共享同一套主题。
+NAVY = "#0b1224"
+NAVY_DARK = "#070c19"
+NAVY_SOFT = "#1b2b4a"
+PAPER = "#0a1020"
+PAPER_LIGHT = "#101a30"
+PAPER_LINE = "#263a5d"
+INK = "#e7edf9"
+INK_SOFT = "#91a6c9"
+AMBER = "#e2a84b"
+AMBER_LIGHT = "#ffd477"
+MINT = "#65ddc0"
+SKY = "#77b8ff"
+SKY_LIGHT = "#b9d7ff"
+# 预览图上的源标记单独使用高亮色，确保在黑灰 FITS 上有足够对比度。
+STAR_POINT = "#63e8ff"
+DOG_ONLY_POINT = "#ffe07a"
+STAR_POINT_REJECTED = "#c3a5ff"
+STATIC_STAR_POINT = "#67e4c3"
+PERSISTENT_STAR_POINT = "#90caff"
+TEMPORAL_STAR_POINT = "#bba6ff"
+STACK_FAINT_POINT = "#8bd6aa"
+MOTION_TRAIL = "#ff6bd6"
+MOTION_CANDIDATE = "#ff9a5c"
+# 点状高速目标使用金橙色，与可信源青色、线状候选洋红色分开；
+# 这条线代表逐帧点源质心拟合，不是把点源涂成长线。
+POINT_MOTION = "#ffd166"
+FORECAST = "#8edbbb"
+WHITE = "#f2f5ff"
 MONO = "Consolas"
 SANS = "Segoe UI"
 MAX_PREVIEW_ZOOM = 15.0
@@ -415,6 +422,29 @@ def stable_points_for_frame(
     )
 
 
+def trusted_points_for_frame(
+    result: SequenceResult | None,
+    frame_index: int,
+) -> tuple[tuple[SourceTrack, TrackPoint], ...]:
+    """Return per-frame quality-passed sources from a sequence result.
+
+    A ``SequenceResult`` intentionally drops the heavy frame-level
+    ``Detection`` objects after tracking.  The quality-passed ``TrackPoint``
+    flag is the compact provenance retained for restoring the trusted-source
+    layer in the GUI; consensus and stack-faint supplements remain excluded.
+    """
+
+    if result is None:
+        return ()
+    return tuple(
+        (track, point)
+        for track in result.tracks
+        if track.evidence_level == "quality"
+        for point in track.points
+        if point.frame_index == frame_index and point.quality_passed
+    )
+
+
 def stack_faint_points_for_frame(
     result: SequenceResult | None,
     frame_index: int,
@@ -545,6 +575,7 @@ class StarfieldApp(tk.Tk):
             SourceTrack | MotionFeatureTrack,
             TrackPoint | MotionFeaturePoint,
         ] | None = None
+        self.hover_trusted_track: tuple[SourceTrack, TrackPoint] | None = None
         self.hover_catalog_match: Any | None = None
         self.source_grid: dict[tuple[int, int], list[Any]] = {}
         self.exposure_s = 1.0
@@ -565,7 +596,7 @@ class StarfieldApp(tk.Tk):
         self.minsize(1120, 720)
         self.configure(bg=PAPER)
         self._configure_styles()
-        self._build_layout()
+        self._build_layout_starfield()
         self._load_frames()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(100, self._poll_result)
@@ -573,15 +604,20 @@ class StarfieldApp(tk.Tk):
     def _configure_styles(self) -> None:
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure("Treeview", background=PAPER_LIGHT, fieldbackground=PAPER_LIGHT, foreground=INK, rowheight=27, font=(MONO, 9))
-        style.configure("Treeview.Heading", background=PAPER, foreground=INK_SOFT, font=(MONO, 8, "bold"), relief="flat")
-        style.map("Treeview", background=[("selected", "#e9d8b7")], foreground=[("selected", NAVY_DARK)])
+        style.configure("Treeview", background=PAPER_LIGHT, fieldbackground=PAPER_LIGHT, foreground=INK, rowheight=27, font=(MONO, 9), borderwidth=0)
+        style.configure("Treeview.Heading", background=PAPER, foreground=INK_SOFT, font=(MONO, 8, "bold"), relief="flat", borderwidth=0)
+        style.map("Treeview", background=[("selected", NAVY_SOFT)], foreground=[("selected", WHITE)])
         style.configure("TScrollbar", background=PAPER_LINE, troughcolor=PAPER, bordercolor=PAPER, arrowcolor=INK_SOFT)
+        style.configure("RST19.TCombobox", fieldbackground=PAPER, background=PAPER_LIGHT, foreground=INK, arrowcolor=SKY, bordercolor=PAPER_LINE)
+        style.map("RST19.TCombobox", fieldbackground=[("readonly", PAPER)], foreground=[("readonly", INK)])
+        style.configure("RST19.TNotebook", background=PAPER_LIGHT, borderwidth=0)
+        style.configure("RST19.TNotebook.Tab", background=PAPER, foreground=INK_SOFT, padding=(12, 7), borderwidth=0)
+        style.map("RST19.TNotebook.Tab", background=[("selected", NAVY_SOFT)], foreground=[("selected", WHITE)])
         style.configure(
             "RST19.Horizontal.TProgressbar",
-            troughcolor=NAVY_SOFT,
+            troughcolor=PAPER_LINE,
             background=MINT,
-            bordercolor=NAVY_DARK,
+            bordercolor=PAPER,
             lightcolor=MINT,
             darkcolor=MINT,
         )
@@ -1294,6 +1330,1101 @@ class StarfieldApp(tk.Tk):
             self.faintest_note.pack(fill="x", padx=16, pady=(0, 15), before=evidence_section)
             self.detail_separator.pack(fill="x", padx=16, before=evidence_section)
 
+    # ------------------------------------------------------------------
+    # 星空观测台前端
+    #
+    # 旧版布局保留在上方作为历史实现，新的启动入口使用下面这组构建器。
+    # 后端分析、缓存、结果队列和研究弹窗不在这里重写；这里的工作只是
+    # 把“单张一键分析”提升为主任务，并让证据层级在视觉上可读。
+    # ------------------------------------------------------------------
+
+    def _star_button(
+        self,
+        parent: tk.Misc,
+        text: str,
+        command: Any,
+        *,
+        kind: str = "quiet",
+        padx: int = 12,
+        pady: int = 7,
+        size: int = 9,
+        state: str = "normal",
+    ) -> tk.Button:
+        palette = {
+            "primary": (AMBER, NAVY_DARK, AMBER_LIGHT, NAVY_DARK),
+            "secondary": (SKY, NAVY_DARK, SKY_LIGHT, NAVY_DARK),
+            "quiet": (PAPER, INK, NAVY_SOFT, WHITE),
+            "ghost": (PAPER_LIGHT, INK_SOFT, NAVY_SOFT, WHITE),
+        }
+        background, foreground, active_background, active_foreground = palette.get(
+            kind,
+            palette["quiet"],
+        )
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            state=state,
+            bg=background,
+            fg=foreground,
+            activebackground=active_background,
+            activeforeground=active_foreground,
+            disabledforeground="#52698f",
+            relief="flat",
+            bd=0,
+            padx=padx,
+            pady=pady,
+            font=(SANS, size, "bold"),
+            cursor="hand2",
+        )
+
+    @staticmethod
+    def _draw_star_motif(canvas: tk.Canvas) -> None:
+        """在标题旁绘制克制的星图标记，不使用渐变或装饰性大图。"""
+
+        canvas.delete("all")
+        width = max(1, int(canvas.winfo_reqwidth()))
+        height = max(1, int(canvas.winfo_reqheight()))
+        canvas.create_arc(
+            width - 150,
+            -45,
+            width + 42,
+            height + 105,
+            start=188,
+            extent=136,
+            outline=PAPER_LINE,
+            width=1,
+        )
+        canvas.create_arc(
+            width - 112,
+            -28,
+            width + 18,
+            height + 76,
+            start=188,
+            extent=136,
+            outline=NAVY_SOFT,
+            width=1,
+        )
+        stars = (
+            (24, 42, 1.3, STAR_POINT),
+            (61, 22, 1.0, AMBER_LIGHT),
+            (106, 51, 1.7, WHITE),
+            (151, 29, 1.0, SKY),
+            (190, 63, 1.4, AMBER_LIGHT),
+            (225, 35, 0.9, MINT),
+            (274, 55, 1.2, STAR_POINT),
+        )
+        for x, y, radius, color in stars:
+            canvas.create_oval(
+                x - radius,
+                y - radius,
+                x + radius,
+                y + radius,
+                fill=color,
+                outline="",
+            )
+        canvas.create_line(106, 51, 151, 29, fill=NAVY_SOFT, width=1)
+        canvas.create_line(151, 29, 190, 63, fill=NAVY_SOFT, width=1)
+
+    def _build_layout_starfield(self) -> None:
+        """构建以单张观测为主任务的深空分析台。"""
+
+        self.sidebar = tk.Frame(self, bg=NAVY, width=248)
+        self.sidebar.pack(side="left", fill="y")
+        self.sidebar.pack_propagate(False)
+        self.main = tk.Frame(self, bg=PAPER)
+        self.main.pack(side="left", fill="both", expand=True)
+
+        brand = tk.Frame(self.sidebar, bg=NAVY)
+        brand.pack(fill="x", padx=22, pady=(24, 0))
+        mark = tk.Canvas(brand, width=34, height=34, bg=NAVY, highlightthickness=0)
+        mark.pack(side="left", padx=(0, 11))
+        mark.create_oval(13, 13, 21, 21, fill=AMBER_LIGHT, outline="")
+        mark.create_oval(3, 4, 7, 8, fill=STAR_POINT, outline="")
+        mark.create_oval(27, 5, 31, 9, fill=MINT, outline="")
+        mark.create_line(7, 7, 14, 15, fill=NAVY_SOFT, width=1)
+        mark.create_line(21, 17, 28, 7, fill=NAVY_SOFT, width=1)
+        brand_text = tk.Frame(brand, bg=NAVY)
+        brand_text.pack(side="left")
+        self._label(brand_text, "RST19", color=WHITE, size=18, bold=True, bg=NAVY).pack(anchor="w")
+        self._mono_label(brand_text, "ORBITAL STARFIELD LAB", color=SKY_LIGHT, size=7, bg=NAVY).pack(anchor="w", pady=(4, 0))
+        self._mono_label(
+            self.sidebar,
+            "LOCAL OBSERVATION / NO UPLOAD",
+            color=INK_SOFT,
+            size=7,
+            bg=NAVY,
+        ).pack(anchor="w", padx=24, pady=(17, 0))
+        tk.Frame(self.sidebar, bg=NAVY_SOFT, height=1).pack(fill="x", padx=24, pady=(17, 18))
+
+        self._mono_label(
+            self.sidebar,
+            "DATASET  /  FRAME QUEUE",
+            color=SKY,
+            size=8,
+            bg=NAVY,
+        ).pack(anchor="w", padx=24)
+        self.frame_list = tk.Listbox(
+            self.sidebar,
+            bg=NAVY,
+            fg="#c7d7f1",
+            selectbackground=NAVY_SOFT,
+            selectforeground=WHITE,
+            activestyle="none",
+            bd=0,
+            highlightthickness=0,
+            font=(MONO, 8),
+            relief="flat",
+            selectborderwidth=0,
+        )
+        self.frame_list.pack(fill="both", expand=True, padx=18, pady=(8, 15))
+        self.frame_list.bind("<<ListboxSelect>>", self._on_frame_selected)
+
+        dataset = tk.Frame(
+            self.sidebar,
+            bg=PAPER_LIGHT,
+            highlightbackground=PAPER_LINE,
+            highlightthickness=1,
+        )
+        dataset.pack(fill="x", padx=20, pady=(0, 22))
+        self._mono_label(dataset, "LOCAL FITS SET", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            anchor="w",
+            padx=13,
+            pady=(13, 0),
+        )
+        dataset_line = tk.Frame(dataset, bg=PAPER_LIGHT)
+        dataset_line.pack(anchor="w", padx=13, pady=(5, 0))
+        self.frame_count_label = self._label(
+            dataset_line,
+            "—",
+            color=AMBER_LIGHT,
+            size=29,
+            bg=PAPER_LIGHT,
+        )
+        self.frame_count_label.pack(side="left")
+        self._mono_label(dataset_line, " FRAMES", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(5, 0),
+            pady=(14, 0),
+        )
+        self._mono_label(
+            dataset,
+            "开运一号  ·  1500 ms  ·  FITS / 16 bit",
+            color=INK_SOFT,
+            size=7,
+            bg=PAPER_LIGHT,
+        ).pack(anchor="w", padx=13, pady=(0, 0))
+        status = tk.Frame(dataset, bg=PAPER_LIGHT)
+        status.pack(anchor="w", padx=13, pady=(11, 13))
+        tk.Label(status, text="●", bg=PAPER_LIGHT, fg=MINT, font=(SANS, 8)).pack(side="left")
+        self._label(status, "原始数据已就绪", color=MINT, size=8, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(5, 0),
+        )
+
+        topbar = tk.Frame(self.main, bg=PAPER, height=45)
+        topbar.pack(fill="x", padx=32)
+        topbar.pack_propagate(False)
+        self._mono_label(topbar, "RST19  /  STARFIELD LAB", color=SKY, size=8, bg=PAPER).pack(
+            side="left",
+            pady=15,
+        )
+        self._mono_label(topbar, "PYTHON PIPELINE  ·  LOCAL FITS", color=INK_SOFT, size=8, bg=PAPER).pack(
+            side="right",
+            pady=15,
+        )
+        tk.Frame(self.main, bg=PAPER_LINE, height=1).pack(fill="x", padx=32)
+
+        header = tk.Frame(self.main, bg=PAPER)
+        header.pack(fill="x", padx=36, pady=(17, 11))
+        heading = tk.Frame(header, bg=PAPER)
+        heading.pack(side="left")
+        self._mono_label(heading, "SINGLE FRAME OBSERVATION", color=AMBER, size=8, bg=PAPER).pack(
+            anchor="w",
+        )
+        self._label(heading, "单张星图 · 证据分析", color=WHITE, size=25, bold=True, bg=PAPER).pack(
+            anchor="w",
+            pady=(4, 0),
+        )
+        self._label(
+            heading,
+            "按论文路线从原始 ADU 走到可复核源表：宽筛保召回，细筛辨机制。",
+            color=INK_SOFT,
+            size=9,
+            bg=PAPER,
+        ).pack(anchor="w", pady=(5, 0))
+        motif = tk.Canvas(header, width=310, height=84, bg=PAPER, highlightthickness=0)
+        motif.pack(side="right", anchor="e")
+        self._draw_star_motif(motif)
+
+        self._build_controls_starfield()
+        self._build_metrics_starfield()
+
+        self.status_var = tk.StringVar(value="就绪 · 请选择一张 FITS")
+        self.progress_percent_var = tk.DoubleVar(value=0.0)
+        self.progress_text_var = tk.StringVar(value="就绪")
+        status_bar = tk.Frame(self.main, bg=NAVY_DARK, height=31)
+        status_bar.pack(fill="x", side="bottom")
+        status_bar.pack_propagate(False)
+        tk.Label(status_bar, text="●", bg=NAVY_DARK, fg=MINT, font=(SANS, 9)).pack(
+            side="left",
+            padx=(14, 7),
+        )
+        tk.Label(
+            status_bar,
+            textvariable=self.status_var,
+            bg=NAVY_DARK,
+            fg=INK,
+            font=(MONO, 8),
+            anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        progress_group = tk.Frame(status_bar, bg=NAVY_DARK)
+        progress_group.pack(side="right", padx=(8, 14))
+        self.progress_text_label = tk.Label(
+            progress_group,
+            textvariable=self.progress_text_var,
+            bg=NAVY_DARK,
+            fg=INK_SOFT,
+            font=(MONO, 8),
+            width=24,
+            anchor="e",
+        )
+        self.progress_text_label.pack(side="left", padx=(0, 7))
+        self.progress_bar = ttk.Progressbar(
+            progress_group,
+            style="RST19.Horizontal.TProgressbar",
+            orient="horizontal",
+            mode="determinate",
+            maximum=100.0,
+            variable=self.progress_percent_var,
+            length=190,
+        )
+        self.progress_bar.pack(side="left", pady=8)
+        self._mono_label(
+            status_bar,
+            "FITS ADU  ·  NO WCS CLAIM",
+            color=INK_SOFT,
+            size=7,
+            bg=NAVY_DARK,
+        ).pack(side="right", padx=(12, 0))
+
+        self._build_content_starfield()
+
+    def _build_controls_starfield(self) -> None:
+        """只把复现关键参数常驻，复杂调参进入高级区。"""
+
+        controls = tk.Frame(
+            self.main,
+            bg=PAPER_LIGHT,
+            highlightbackground=PAPER_LINE,
+            highlightthickness=1,
+        )
+        controls.pack(fill="x", padx=36, pady=(0, 12))
+
+        header = tk.Frame(controls, bg=PAPER_LIGHT)
+        header.pack(fill="x", padx=16, pady=(12, 8))
+        heading = tk.Frame(header, bg=PAPER_LIGHT)
+        heading.pack(side="left")
+        self._mono_label(
+            heading,
+            "ANALYSIS ROUTE  /  ONE CLICK",
+            color=SKY,
+            size=8,
+            bg=PAPER_LIGHT,
+        ).pack(anchor="w")
+        self._label(
+            heading,
+            "一键分析当前帧",
+            color=WHITE,
+            size=13,
+            bold=True,
+            bg=PAPER_LIGHT,
+        ).pack(anchor="w", pady=(3, 0))
+
+        self.source_export_button = self._star_button(
+            header,
+            "研究工具 ▾",
+            self._show_research_menu,
+            kind="ghost",
+            padx=9,
+            pady=6,
+            size=8,
+        )
+        self.source_export_button.pack(side="right", padx=(8, 0))
+        self.cache_button = self._star_button(
+            header,
+            "清缓存",
+            self.clear_detection_cache,
+            kind="ghost",
+            padx=9,
+            pady=6,
+            size=8,
+        )
+        self.cache_button.pack(side="right", padx=(8, 0))
+        self.motion_button = self._star_button(
+            header,
+            "15 帧动目标",
+            self.run_sequence_analysis,
+            kind="secondary",
+            padx=11,
+            pady=8,
+            size=8,
+        )
+        self.motion_button.pack(side="right", padx=(8, 0))
+        self.evidence_button = self._star_button(
+            header,
+            "15 帧证据",
+            self._show_sequence_evidence,
+            kind="ghost",
+            padx=9,
+            pady=7,
+            size=8,
+            state="disabled",
+        )
+        self.evidence_button.pack(side="right", padx=(8, 0))
+        self.run_button = self._star_button(
+            header,
+            "✦  一键分析单张",
+            self.run_analysis,
+            kind="primary",
+            padx=17,
+            pady=9,
+            size=10,
+        )
+        self.run_button.pack(side="right", padx=(12, 0))
+
+        route = tk.Frame(controls, bg=PAPER_LIGHT)
+        route.pack(fill="x", padx=16, pady=(0, 10))
+        steps = (
+            ("01", "Gaussian + DoG 提案", AMBER_LIGHT),
+            ("02", "原始 ADU 细筛", SKY),
+            ("03", "PSF / 值域 / 去混叠", TEMPORAL_STAR_POINT),
+            ("04", "可信源输出", MINT),
+        )
+        for index, (number, label, color) in enumerate(steps):
+            step = tk.Frame(route, bg=PAPER_LIGHT)
+            step.pack(side="left", fill="x", expand=True)
+            self._mono_label(step, number, color=color, size=8, bg=PAPER_LIGHT).pack(anchor="w")
+            self._label(step, label, color=INK, size=8, bg=PAPER_LIGHT).pack(anchor="w", pady=(3, 0))
+            if index < len(steps) - 1:
+                self._mono_label(route, "→", color=PAPER_LINE, size=10, bg=PAPER_LIGHT).pack(
+                    side="left",
+                    padx=7,
+                    pady=(2, 0),
+                )
+
+        sequence_progress_row = tk.Frame(controls, bg=PAPER_LIGHT)
+        sequence_progress_row.pack(fill="x", padx=16, pady=(0, 8))
+        self.sequence_progress_scope_label = self._mono_label(
+            sequence_progress_row,
+            "SEQ / —",
+            color=SKY,
+            size=8,
+            bg=PAPER_LIGHT,
+        )
+        self.sequence_progress_scope_label.pack(side="left", padx=(0, 11))
+        self.sequence_progress_percent_var = tk.DoubleVar(value=0.0)
+        self.sequence_progress_text_var = tk.StringVar(value="15 帧任务待运行")
+        self.sequence_progress_bar = ttk.Progressbar(
+            sequence_progress_row,
+            style="RST19.Horizontal.TProgressbar",
+            orient="horizontal",
+            mode="determinate",
+            maximum=100.0,
+            variable=self.sequence_progress_percent_var,
+            length=220,
+        )
+        self.sequence_progress_bar.pack(side="left", fill="x", expand=True, pady=2)
+        self.sequence_progress_label = tk.Label(
+            sequence_progress_row,
+            textvariable=self.sequence_progress_text_var,
+            bg=PAPER_LIGHT,
+            fg=INK_SOFT,
+            font=(MONO, 8),
+            anchor="e",
+            width=31,
+        )
+        self.sequence_progress_label.pack(side="right", padx=(11, 0))
+
+        ledger_row = tk.Frame(controls, bg=PAPER_LIGHT)
+        ledger_row.pack(fill="x", padx=16, pady=(0, 10))
+        self._mono_label(ledger_row, "FRAME LEDGER", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(0, 11),
+        )
+        self.sequence_ledger_canvas = tk.Canvas(
+            ledger_row,
+            height=20,
+            bg=PAPER_LIGHT,
+            highlightthickness=0,
+            bd=0,
+        )
+        self.sequence_ledger_canvas.pack(side="left", fill="x", expand=True)
+        self.sequence_ledger_canvas.bind("<Configure>", lambda _event: self._draw_sequence_ledger())
+
+        profile = tk.Frame(controls, bg=NAVY_SOFT, highlightbackground=NAVY_SOFT, highlightthickness=1)
+        profile.pack(fill="x", padx=16, pady=(0, 11))
+        self._mono_label(profile, "论文默认口径", color=AMBER_LIGHT, size=8, bg=NAVY_SOFT).pack(
+            side="left",
+            padx=(12, 8),
+            pady=8,
+        )
+        self._label(
+            profile,
+            "hybrid  ·  Gaussian + DoG  ·  原图 ADU 细筛  ·  FWHM 2 px  ·  flux SNR 5",
+            color=WHITE,
+            size=8,
+            bg=NAVY_SOFT,
+        ).pack(side="left", pady=8)
+        self.advanced_controls_visible = False
+        self.advanced_toggle = self._star_button(
+            profile,
+            "高级参数  ＋",
+            self._toggle_advanced_controls,
+            kind="ghost",
+            padx=8,
+            pady=4,
+            size=8,
+        )
+        self.advanced_toggle.pack(side="right", padx=8, pady=4)
+
+        self.advanced_controls_panel = tk.Frame(controls, bg=PAPER_LIGHT)
+        advanced = self.advanced_controls_panel
+        self._mono_label(advanced, "ADVANCED / REPRODUCIBLE CONTROLS", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            anchor="w",
+            padx=16,
+            pady=(1, 7),
+        )
+        parameter_row = tk.Frame(advanced, bg=PAPER_LIGHT)
+        parameter_row.pack(fill="x", padx=16)
+        for column in range(6):
+            parameter_row.grid_columnconfigure(column, weight=1)
+
+        def entry_field(
+            column: int,
+            label: str,
+            variable: tk.StringVar,
+            suffix: str = "",
+            width: int = 5,
+            *,
+            focus_sync: bool = False,
+        ) -> None:
+            field = tk.Frame(parameter_row, bg=PAPER_LIGHT)
+            field.grid(row=0, column=column, sticky="w", padx=(0, 12))
+            self._mono_label(field, label, color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(anchor="w")
+            line = tk.Frame(field, bg=PAPER_LIGHT)
+            line.pack(anchor="w", pady=(4, 0))
+            entry = tk.Entry(
+                line,
+                textvariable=variable,
+                width=width,
+                bg=PAPER,
+                fg=INK,
+                insertbackground=WHITE,
+                relief="flat",
+                highlightbackground=PAPER_LINE,
+                highlightcolor=SKY,
+                highlightthickness=1,
+                font=(MONO, 9),
+            )
+            entry.pack(side="left")
+            if focus_sync:
+                entry.bind("<FocusOut>", lambda _event: self._sync_manual_controls_from_entries())
+            if suffix:
+                self._mono_label(line, suffix, color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+                    side="left",
+                    padx=(4, 0),
+                )
+
+        self.threshold_var = tk.StringVar(value=f"{GUI_DEFAULT_THRESHOLD_SIGMA:.1f}")
+        self.min_distance_var = tk.StringVar(value=str(GUI_DEFAULT_MIN_DISTANCE))
+        self.psf_fwhm_var = tk.StringVar(value=f"{GUI_DEFAULT_PSF_FWHM:.1f}")
+        self.min_flux_snr_var = tk.StringVar(value=f"{GUI_DEFAULT_MIN_FLUX_SNR:.1f}")
+        self.max_sources_var = tk.StringVar(value="")
+        self.zero_point_var = tk.StringVar(value="")
+        entry_field(0, "候选阈值", self.threshold_var, "σ", focus_sync=True)
+        entry_field(1, "最小峰距", self.min_distance_var, "px")
+        entry_field(2, "PSF FWHM", self.psf_fwhm_var, "px")
+        entry_field(3, "通量门", self.min_flux_snr_var, "σ", focus_sync=True)
+        entry_field(4, "单图源上限", self.max_sources_var, "留空=全量", width=7)
+        entry_field(5, "测光零点", self.zero_point_var, "可选", width=7)
+
+        proposal_row = tk.Frame(advanced, bg=PAPER_LIGHT)
+        proposal_row.pack(fill="x", padx=16, pady=(10, 0))
+        self._mono_label(proposal_row, "宽筛提案", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(0, 8),
+        )
+        self.proposal_mode_var = tk.StringVar(value=GUI_DEFAULT_PROPOSAL_MODE)
+        for value, label in (
+            ("hybrid", "hybrid / Gaussian+DoG"),
+            ("gaussian", "Gaussian 基线"),
+            ("ensemble", "Starlet 实验"),
+        ):
+            tk.Radiobutton(
+                proposal_row,
+                text=label,
+                value=value,
+                variable=self.proposal_mode_var,
+                command=self._mark_manual_tuning_dirty,
+                bg=PAPER_LIGHT,
+                fg=INK,
+                activebackground=PAPER_LIGHT,
+                activeforeground=WHITE,
+                selectcolor=NAVY_SOFT,
+                font=(MONO, 8),
+                highlightthickness=0,
+                bd=0,
+            ).pack(side="left", padx=(0, 12))
+        self.local_deblend_var = tk.BooleanVar(value=GUI_DEFAULT_LOCAL_DEBLEND)
+        tk.Checkbutton(
+            proposal_row,
+            text="局部联合 PSF（较慢）",
+            variable=self.local_deblend_var,
+            command=self._mark_manual_tuning_dirty,
+            bg=PAPER_LIGHT,
+            fg=INK,
+            activebackground=PAPER_LIGHT,
+            activeforeground=WHITE,
+            selectcolor=NAVY_SOFT,
+            font=(MONO, 8),
+            highlightthickness=0,
+            bd=0,
+        ).pack(side="left", padx=(3, 0))
+
+        temporal_row = tk.Frame(advanced, bg=PAPER_LIGHT)
+        temporal_row.pack(fill="x", padx=16, pady=(7, 0))
+        self._mono_label(temporal_row, "15 帧补提案", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(0, 8),
+        )
+        self.temporal_proposal_mode_var = tk.StringVar(value=GUI_DEFAULT_TEMPORAL_PROPOSAL_MODE)
+        for value, label in (
+            ("median", "稳健中值"),
+            ("coadd", "稳健叠加"),
+            ("both", "两者并集"),
+        ):
+            tk.Radiobutton(
+                temporal_row,
+                text=label,
+                value=value,
+                variable=self.temporal_proposal_mode_var,
+                command=self._mark_manual_tuning_dirty,
+                bg=PAPER_LIGHT,
+                fg=INK,
+                activebackground=PAPER_LIGHT,
+                activeforeground=WHITE,
+                selectcolor=NAVY_SOFT,
+                font=(MONO, 8),
+                highlightthickness=0,
+                bd=0,
+            ).pack(side="left", padx=(0, 11))
+        self._mono_label(temporal_row, "参考 SNR", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(5, 4),
+        )
+        self.temporal_reference_min_snr_var = tk.StringVar(
+            value=f"{GUI_DEFAULT_TEMPORAL_REFERENCE_MIN_SNR:.1f}",
+        )
+        tk.Entry(
+            temporal_row,
+            textvariable=self.temporal_reference_min_snr_var,
+            width=5,
+            bg=PAPER,
+            fg=INK,
+            insertbackground=WHITE,
+            relief="flat",
+            highlightbackground=PAPER_LINE,
+            highlightcolor=SKY,
+            highlightthickness=1,
+            font=(MONO, 8),
+        ).pack(side="left")
+        self.sequence_full_var = tk.BooleanVar(value=GUI_DEFAULT_SEQUENCE_FULL)
+        tk.Checkbutton(
+            temporal_row,
+            text="15 帧全量关联",
+            variable=self.sequence_full_var,
+            command=self._mark_manual_tuning_dirty,
+            bg=PAPER_LIGHT,
+            fg=INK,
+            activebackground=PAPER_LIGHT,
+            activeforeground=WHITE,
+            selectcolor=NAVY_SOFT,
+            font=(MONO, 8),
+            highlightthickness=0,
+            bd=0,
+        ).pack(side="left", padx=(14, 0))
+        self.stack_faint_recovery_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(
+            temporal_row,
+            text="叠加暗星恢复",
+            variable=self.stack_faint_recovery_var,
+            command=self._mark_manual_tuning_dirty,
+            bg=PAPER_LIGHT,
+            fg=INK,
+            activebackground=PAPER_LIGHT,
+            activeforeground=WHITE,
+            selectcolor=NAVY_SOFT,
+            font=(MONO, 8),
+            highlightthickness=0,
+            bd=0,
+        ).pack(side="left", padx=(12, 0))
+
+        manual_row = tk.Frame(advanced, bg=PAPER_LIGHT)
+        manual_row.pack(fill="x", padx=16, pady=(9, 1))
+        self._mono_label(manual_row, "人工复核", color=AMBER, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(0, 9),
+        )
+        threshold_tuning = tk.Frame(manual_row, bg=PAPER_LIGHT)
+        threshold_tuning.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self._mono_label(threshold_tuning, "候选 σ", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(0, 4),
+        )
+        self.manual_threshold_scale_var = tk.DoubleVar(value=GUI_DEFAULT_THRESHOLD_SIGMA)
+        self.manual_threshold_scale = tk.Scale(
+            threshold_tuning,
+            from_=MANUAL_THRESHOLD_MIN,
+            to=MANUAL_THRESHOLD_MAX,
+            resolution=0.5,
+            orient="horizontal",
+            variable=self.manual_threshold_scale_var,
+            showvalue=False,
+            highlightthickness=0,
+            bd=0,
+            bg=PAPER_LIGHT,
+            fg=INK_SOFT,
+            troughcolor=PAPER_LINE,
+            activebackground=AMBER_LIGHT,
+            sliderlength=15,
+            width=12,
+            command=self._on_manual_threshold_changed,
+        )
+        self.manual_threshold_scale.pack(side="left", fill="x", expand=True)
+        self.manual_threshold_value_label = self._mono_label(
+            threshold_tuning,
+            "4.0σ",
+            color=AMBER_LIGHT,
+            size=7,
+            bg=PAPER_LIGHT,
+            width=5,
+            anchor="e",
+        )
+        self.manual_threshold_value_label.pack(side="left", padx=(4, 0))
+
+        snr_tuning = tk.Frame(manual_row, bg=PAPER_LIGHT)
+        snr_tuning.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self._mono_label(snr_tuning, "可信 SNR", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(0, 4),
+        )
+        self.manual_snr_scale_var = tk.DoubleVar(value=GUI_DEFAULT_MIN_FLUX_SNR)
+        self.manual_snr_scale = tk.Scale(
+            snr_tuning,
+            from_=MANUAL_SNR_MIN,
+            to=MANUAL_SNR_MAX,
+            resolution=0.5,
+            orient="horizontal",
+            variable=self.manual_snr_scale_var,
+            showvalue=False,
+            highlightthickness=0,
+            bd=0,
+            bg=PAPER_LIGHT,
+            fg=INK_SOFT,
+            troughcolor=PAPER_LINE,
+            activebackground=MINT,
+            sliderlength=15,
+            width=12,
+            command=self._on_manual_snr_changed,
+        )
+        self.manual_snr_scale.pack(side="left", fill="x", expand=True)
+        self.manual_snr_value_label = self._mono_label(
+            snr_tuning,
+            "5.0σ",
+            color=MINT,
+            size=7,
+            bg=PAPER_LIGHT,
+            width=5,
+            anchor="e",
+        )
+        self.manual_snr_value_label.pack(side="left", padx=(4, 0))
+
+        feedback_tuning = tk.Frame(manual_row, bg=PAPER_LIGHT)
+        feedback_tuning.pack(side="left", padx=(0, 7))
+        self._mono_label(feedback_tuning, "判断", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(0, 4),
+        )
+        self.manual_feedback_judgement_var = tk.StringVar(value="当前平衡")
+        self.manual_feedback_judgement = ttk.Combobox(
+            feedback_tuning,
+            textvariable=self.manual_feedback_judgement_var,
+            values=("保留弱星", "减少伪点", "当前平衡"),
+            state="readonly",
+            width=9,
+            style="RST19.TCombobox",
+        )
+        self.manual_feedback_judgement.pack(side="left")
+        self.manual_apply_button = self._star_button(
+            manual_row,
+            "应用并分析",
+            self.run_analysis,
+            kind="primary",
+            padx=10,
+            pady=6,
+            size=8,
+        )
+        self.manual_apply_button.pack(side="left", padx=(7, 5))
+        self.manual_feedback_button = self._star_button(
+            manual_row,
+            "记录反馈",
+            self._record_manual_feedback,
+            kind="ghost",
+            padx=9,
+            pady=6,
+            size=8,
+            state="disabled",
+        )
+        self.manual_feedback_button.pack(side="left")
+        self.manual_tuning_status_label = self._mono_label(
+            advanced,
+            "默认口径已锁定；高级参数只在展开后可改，反馈不会自动修改算法。",
+            color=INK_SOFT,
+            size=7,
+            bg=PAPER_LIGHT,
+        )
+        self.manual_tuning_status_label.pack(anchor="w", padx=90, pady=(2, 8))
+
+        self.research_menu = tk.Menu(
+            self,
+            tearoff=False,
+            bg=PAPER_LIGHT,
+            fg=INK,
+            activebackground=NAVY_SOFT,
+            activeforeground=WHITE,
+            bd=1,
+            relief="solid",
+            font=(SANS, 9),
+        )
+        self.research_menu.add_command(label="打开星表核验", command=self._show_catalog_match)
+        self.research_menu.add_separator()
+        self.research_menu.add_command(label="导出星点研究表", command=self.export_source_study, state="disabled")
+        self.research_export_menu_index = int(self.research_menu.index("end"))
+
+    def _toggle_advanced_controls(self) -> None:
+        panel = self.__dict__.get("advanced_controls_panel")
+        button = self.__dict__.get("advanced_toggle")
+        if panel is None or button is None:
+            return
+        if self.advanced_controls_visible:
+            panel.pack_forget()
+            self.advanced_controls_visible = False
+            button.config(text="高级参数  ＋")
+        else:
+            panel.pack(fill="x")
+            self.advanced_controls_visible = True
+            button.config(text="收起高级参数  −")
+
+    def _build_metrics_starfield(self) -> None:
+        metrics = tk.Frame(self.main, bg=PAPER)
+        metrics.pack(fill="x", padx=36, pady=(0, 12))
+        for column, weight in enumerate((5, 4, 4)):
+            metrics.grid_columnconfigure(column, weight=weight)
+        self.metric_values: dict[str, tk.Label] = {}
+
+        def card(
+            column: int,
+            eyebrow: str,
+            title: str,
+            accent: str,
+            background: str = PAPER_LIGHT,
+        ) -> tk.Frame:
+            panel = tk.Frame(
+                metrics,
+                bg=background,
+                highlightbackground=PAPER_LINE if accent != MINT else MINT,
+                highlightthickness=1,
+            )
+            panel.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 6, 0))
+            top = tk.Frame(panel, bg=background)
+            top.pack(fill="x", padx=14, pady=(10, 0))
+            self._mono_label(top, eyebrow, color=accent, size=7, bg=background).pack(side="left")
+            self._mono_label(top, title, color=INK_SOFT, size=7, bg=background).pack(side="right")
+            return panel
+
+        source_box = card(0, "DETECTION ACCOUNT", "not star truth", AMBER_LIGHT, NAVY_SOFT)
+        source_values = tk.Frame(source_box, bg=NAVY_SOFT)
+        source_values.pack(fill="x", padx=14, pady=(5, 11))
+        for key, title, color in (
+            ("candidate", "候选峰", AMBER_LIGHT),
+            ("returned", "可信源", WHITE),
+        ):
+            group = tk.Frame(source_values, bg=NAVY_SOFT)
+            group.pack(side="left", expand=True, fill="x")
+            self._mono_label(group, title, color=INK_SOFT, size=7, bg=NAVY_SOFT).pack(anchor="w")
+            value = self._label(group, "—", color=color, size=21, bg=NAVY_SOFT)
+            value.pack(anchor="w", pady=(2, 0))
+            self.metric_values[key] = value
+
+        baseline_box = card(1, "IMAGE BASELINE", "raw ADU", SKY)
+        baseline_values = tk.Frame(baseline_box, bg=PAPER_LIGHT)
+        baseline_values.pack(fill="x", padx=14, pady=(5, 11))
+        for key, title in (("background", "背景"), ("noise", "噪声")):
+            group = tk.Frame(baseline_values, bg=PAPER_LIGHT)
+            group.pack(side="left", expand=True, fill="x")
+            self._mono_label(group, title, color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(anchor="w")
+            value = self._label(group, "—", color=INK, size=19, bg=PAPER_LIGHT)
+            value.pack(anchor="w", pady=(2, 0))
+            self.metric_values[key] = value
+
+        faintest_box = card(2, "FAINTEST ACCEPTED", "m_inst", MINT)
+        faintest_value = self._label(faintest_box, "—", color=MINT, size=21, bg=PAPER_LIGHT)
+        faintest_value.pack(anchor="w", padx=14, pady=(5, 11))
+        self.metric_values["faintest"] = faintest_value
+
+    def _build_content_starfield(self) -> None:
+        content = tk.Frame(self.main, bg=PAPER)
+        self.content_panel = content
+        content.grid_columnconfigure(0, weight=3)
+        content.grid_columnconfigure(1, weight=2)
+        content.grid_rowconfigure(0, weight=1)
+        content.grid_rowconfigure(1, weight=0)
+
+        viewer = tk.Frame(
+            content,
+            bg=PAPER_LIGHT,
+            highlightbackground=PAPER_LINE,
+            highlightthickness=1,
+        )
+        viewer.grid(row=0, column=0, rowspan=2, sticky="nsew", padx=(0, 10))
+        viewer_header = tk.Frame(viewer, bg=PAPER_LIGHT)
+        viewer_header.pack(fill="x", padx=16, pady=(13, 9))
+        mode_box = tk.Frame(viewer_header, bg=PAPER_LIGHT)
+        mode_box.pack(side="right", anchor="s")
+        self.overlay_mode_var = tk.StringVar(value="quality")
+        # 可信源是主证据层；运动轨迹作为可叠加层，不再抢占整张图的显示权。
+        # 默认打开叠加，单帧长线/15 帧运动证据出现时可以直接对照星点。
+        self.motion_overlay_var = tk.BooleanVar(value=True)
+        self._mono_label(mode_box, "PRIMARY LAYER · COMPOSITE", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(anchor="e")
+        choice_row = tk.Frame(mode_box, bg=PAPER_LIGHT)
+        choice_row.pack(anchor="e", pady=(3, 0))
+        choices = (
+            ("quality", "可信源", MINT),
+            ("stable", "稳定星场", SKY),
+            ("stack-faint", "叠加暗星", STACK_FAINT_POINT),
+            ("candidates", "全部候选", AMBER_LIGHT),
+            ("motion", "运动候选", MOTION_TRAIL),
+            ("catalog", "星表匹配", TEMPORAL_STAR_POINT),
+        )
+        for value, label, color in choices:
+            tk.Radiobutton(
+                choice_row,
+                text=label,
+                variable=self.overlay_mode_var,
+                value=value,
+                command=self._on_overlay_mode_changed,
+                bg=PAPER_LIGHT,
+                fg=color,
+                activebackground=PAPER_LIGHT,
+                activeforeground=WHITE,
+                selectcolor=NAVY_SOFT,
+                relief="flat",
+                bd=0,
+                font=(SANS, 8),
+            ).pack(side="left", padx=(7, 0))
+        composite_row = tk.Frame(mode_box, bg=PAPER_LIGHT)
+        composite_row.pack(anchor="e", pady=(3, 0))
+        self._mono_label(composite_row, "叠加", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(side="left", padx=(0, 3))
+        self.motion_overlay_checkbutton = tk.Checkbutton(
+            composite_row,
+            text="运动轨迹",
+            variable=self.motion_overlay_var,
+            command=self._on_overlay_mode_changed,
+            bg=PAPER_LIGHT,
+            fg=MOTION_TRAIL,
+            activebackground=PAPER_LIGHT,
+            activeforeground=WHITE,
+            selectcolor=NAVY_SOFT,
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
+            font=(SANS, 8),
+        )
+        self.motion_overlay_checkbutton.pack(side="left")
+        self._mono_label(viewer_header, "FRAME VIEWER  /  RAW + OVERLAY", color=SKY, size=7, bg=PAPER_LIGHT).pack(anchor="w")
+        self.frame_title_label = self._label(
+            viewer_header,
+            "选择一个观测帧",
+            color=WHITE,
+            size=14,
+            bold=True,
+            bg=PAPER_LIGHT,
+        )
+        self.frame_title_label.pack(anchor="w", pady=(3, 0))
+
+        display_row = tk.Frame(viewer, bg=PAPER_LIGHT)
+        display_row.pack(fill="x", padx=16, pady=(0, 8))
+        self._mono_label(display_row, "DISPLAY", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+            padx=(0, 7),
+        )
+        self.preview_mode_var = tk.StringVar(value=PREVIEW_MODE_ENHANCED)
+        for value, label in PREVIEW_MODE_LABELS.items():
+            tk.Radiobutton(
+                display_row,
+                text=label,
+                variable=self.preview_mode_var,
+                value=value,
+                command=self._on_preview_mode_changed,
+                bg=PAPER_LIGHT,
+                fg=INK,
+                activebackground=PAPER_LIGHT,
+                activeforeground=WHITE,
+                selectcolor=NAVY_SOFT,
+                relief="flat",
+                bd=0,
+                font=(SANS, 8),
+            ).pack(side="left", padx=(7, 0))
+
+        self.canvas = tk.Canvas(
+            viewer,
+            bg=NAVY_DARK,
+            highlightbackground=PAPER_LINE,
+            highlightthickness=1,
+        )
+        self.canvas.pack(fill="both", expand=True, padx=10, pady=(0, 9))
+        self.canvas.bind("<Configure>", lambda _event: self._draw_preview())
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind("<Button-4>", lambda event: self._zoom_at(event, 1.15))
+        self.canvas.bind("<Button-5>", lambda event: self._zoom_at(event, 1 / 1.15))
+        self.canvas.bind("<ButtonPress-1>", self._on_pan_start)
+        self.canvas.bind("<B1-Motion>", self._on_pan_move)
+        self.canvas.bind("<ButtonRelease-1>", lambda _event: setattr(self, "drag_start", None))
+        self.canvas.bind("<Motion>", self._on_canvas_motion)
+        self.canvas.bind("<Leave>", lambda _event: self._clear_hover())
+        self.hover_info_var = tk.StringVar(value="将鼠标移到星点上查看 ID、SNR、形态、值域与落选原因")
+        self.hover_info_label = tk.Label(
+            viewer,
+            textvariable=self.hover_info_var,
+            bg=PAPER_LIGHT,
+            fg=INK_SOFT,
+            font=(MONO, 8),
+            anchor="w",
+            justify="left",
+            width=1,
+            height=4,
+            wraplength=640,
+        )
+        self.hover_info_label.pack(fill="x", padx=16, pady=(0, 3))
+        viewer.bind("<Configure>", self._on_viewer_configure)
+        self.overlay_hint_var = tk.StringVar(
+            value="显示：增强显示 · 可信源主层 · 洋红=运动轨迹叠加 · 滚轮缩放≤15×",
+        )
+        tk.Label(
+            viewer,
+            textvariable=self.overlay_hint_var,
+            bg=PAPER_LIGHT,
+            fg=INK_SOFT,
+            font=(MONO, 7),
+            anchor="w",
+        ).pack(anchor="w", padx=16, pady=(0, 12))
+
+        detail = tk.Frame(
+            content,
+            bg=PAPER_LIGHT,
+            highlightbackground=PAPER_LINE,
+            highlightthickness=1,
+        )
+        self.detail_panel = detail
+        detail.grid(row=0, column=1, sticky="nsew", pady=(0, 10))
+        self.faintest_section_label = self._mono_label(
+            detail,
+            "FAINTEST ACCEPTED SOURCE",
+            color=MINT,
+            size=7,
+            bg=PAPER_LIGHT,
+        )
+        self.faintest_section_label.pack(anchor="w", padx=16, pady=(14, 0))
+        self.faintest_detail = self._label(
+            detail,
+            "尚未运行分析",
+            color=WHITE,
+            size=14,
+            bold=True,
+            bg=PAPER_LIGHT,
+            justify="left",
+            anchor="w",
+            wraplength=280,
+        )
+        self.faintest_detail.pack(fill="x", padx=16, pady=(8, 3))
+        self.faintest_note = self._label(
+            detail,
+            "按通量 SNR、点源形状、边缘、掩膜和饱和状态筛选；m_inst 是仪器星等，有零点后才显示 m_cal。",
+            color=INK_SOFT,
+            size=8,
+            bg=PAPER_LIGHT,
+            justify="left",
+            wraplength=330,
+        )
+        self.faintest_note.pack(fill="x", padx=16, pady=(0, 14))
+        self.detail_separator = tk.Frame(detail, bg=PAPER_LINE, height=1)
+        self.detail_separator.pack(fill="x", padx=16)
+        self.evidence_section_label = self._mono_label(
+            detail,
+            "15-FRAME EVIDENCE",
+            color=SKY,
+            size=7,
+            bg=PAPER_LIGHT,
+        )
+        self.evidence_section_label.pack(anchor="w", padx=16, pady=(12, 5))
+        self.sequence_evidence_label = self._label(
+            detail,
+            "尚未完成序列分析\n点击“15 帧动目标”后显示时间、配准和轨迹摘要",
+            color=INK_SOFT,
+            size=8,
+            bg=PAPER_LIGHT,
+            justify="left",
+            anchor="w",
+            wraplength=330,
+        )
+        self.sequence_evidence_label.pack(fill="x", padx=16, pady=(0, 14))
+        detail.bind("<Configure>", self._on_detail_configure)
+
+        register = tk.Frame(
+            content,
+            bg=PAPER_LIGHT,
+            highlightbackground=PAPER_LINE,
+            highlightthickness=1,
+        )
+        self.source_register_panel = register
+        register.grid(row=1, column=1, sticky="nsew")
+        table_header = tk.Frame(register, bg=PAPER_LIGHT)
+        table_header.pack(fill="x", padx=16, pady=(11, 6))
+        self._mono_label(table_header, "SOURCE REGISTER  /  TOP FLUX SNR", color=SKY, size=7, bg=PAPER_LIGHT).pack(
+            side="left",
+        )
+        self.table_count_label = self._mono_label(table_header, "0 rows", color=AMBER_LIGHT, size=7, bg=PAPER_LIGHT)
+        self.table_count_label.pack(side="right")
+        columns = ("id", "xy", "peak", "snr", "mag")
+        self.source_tree = ttk.Treeview(register, columns=columns, show="headings", height=2)
+        for column, title, width in (
+            ("id", "ID", 40),
+            ("xy", "X / Y", 88),
+            ("peak", "PEAK", 52),
+            ("snr", "SNR", 48),
+            ("mag", "m_inst", 54),
+        ):
+            self.source_tree.heading(column, text=title)
+            self.source_tree.column(column, width=width, minwidth=34, anchor="w", stretch=True)
+        self.source_tree_scrollbar = ttk.Scrollbar(register, orient="vertical", command=self.source_tree.yview)
+        self.source_tree.configure(yscrollcommand=self.source_tree_scrollbar.set)
+        self.source_tree_scrollbar.pack(side="right", fill="y", padx=(0, 10), pady=(0, 10))
+        self.source_tree.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=(0, 10))
+        self.content_compact = False
+        content.bind("<Configure>", self._on_content_configure)
+        content.pack(fill="both", expand=True, padx=36, pady=(0, 15))
+
     def _set_progress(self, value: float, text: str | None = None) -> None:
         """更新底部进度条；所有后台线程只能通过主线程轮询调用本方法。"""
 
@@ -1450,6 +2581,7 @@ class StarfieldApp(tk.Tk):
         self.hover_source_id = None
         self.hover_source = None
         self.hover_motion_track = None
+        self.hover_trusted_track = None
         self.hover_catalog_match = None
         self.preview_zoom = 1.0
         self.preview_pan_x = 0.0
@@ -1598,14 +2730,14 @@ class StarfieldApp(tk.Tk):
         """根据当前后台任务状态同步按钮，避免切帧把旧任务误报成空闲。"""
 
         if self.busy:
-            self.run_button.config(state="disabled", text="正在分析…")
+            self.run_button.config(state="disabled", text="正在分析单张…")
             busy_text = "15 帧分析中…" if self.active_job_kind == "sequence" else "正在分析…"
             self.motion_button.config(state="disabled", text=busy_text)
             self.cache_button.config(state="normal")
             self.evidence_button.config(state="disabled")
         else:
-            self.run_button.config(state="normal", text="▶  分析当前帧")
-            self.motion_button.config(state="normal", text="✦  分析 15 帧动目标")
+            self.run_button.config(state="normal", text="✦  一键分析单张")
+            self.motion_button.config(state="normal", text="15 帧动目标")
             self.cache_button.config(state="normal")
             self.evidence_button.config(state="normal" if self.sequence_result is not None else "disabled")
         if "manual_apply_button" in self.__dict__:
@@ -1677,15 +2809,32 @@ class StarfieldApp(tk.Tk):
         self.preview_pan_x = 0.0
         self.preview_pan_y = 0.0
         mode_label = PREVIEW_MODE_LABELS.get(selected_mode, "增强显示")
-        self.hover_info_var.set(f"预览已载入 · {mode_label} · 点击“分析当前帧”运行检测")
+        self.hover_info_var.set(f"预览已载入 · {mode_label} · 点击“一键分析单张”运行检测")
         self.status_var.set(f"预览已载入 · {mode_label} · 检测使用原始 FITS ADU")
         self._set_job_controls()
         self._update_overlay_hint()
         self._draw_preview()
 
+    def _motion_overlay_enabled(self) -> bool:
+        """Return whether the motion evidence should be composited over the primary layer."""
+
+        # 部分 GUI 单元测试用 ``object.__new__`` 构造轻量对象，没有初始化
+        # Tk 的 ``self.tk``；不能用 getattr 触发 Tkinter 的属性回退链。
+        variable = self.__dict__.get("motion_overlay_var")
+        if variable is None:
+            return False
+        try:
+            return bool(variable.get())
+        except (AttributeError, tk.TclError):
+            return False
+
     def _on_overlay_mode_changed(self) -> None:
         mode = self.overlay_mode_var.get()
-        if mode == "motion" and self.sequence_result is None and not self.long_trails:
+        motion_overlay = self._motion_overlay_enabled()
+        if mode == "quality":
+            overlay_text = " + 运动轨迹叠加" if motion_overlay else ""
+            self.status_var.set(f"可信源主层{overlay_text} · 质量通过的星点优先显示")
+        elif mode == "motion" and self.sequence_result is None and not self.long_trails:
             self.status_var.set("尚未完成 15 帧动目标分析 · 请先点击“分析 15 帧动目标”")
         elif mode == "stable" and self.sequence_result is None:
             self.status_var.set("尚未完成 15 帧分析 · 稳定星场需要跨帧持续性证据")
@@ -1720,7 +2869,7 @@ class StarfieldApp(tk.Tk):
             if self.sequence_result is None:
                 self.status_var.set("单帧长轨迹层 · 当前橙线只是形状候选，需跨帧才能确认运动目标")
             else:
-                self.status_var.set("运动候选层 · 只显示跨帧线状目标、待复核线和严格 moving 点轨迹")
+                self.status_var.set("运动候选层 · 金橙=高速点源轨迹 · 洋红=线状目标 · 橙=待复核线")
         elif mode == "catalog":
             if self.catalog_match_result is None:
                 self.status_var.set("尚未完成星表核验 · 请打开“星表核验”输入目录和已标定 WCS")
@@ -1738,11 +2887,11 @@ class StarfieldApp(tk.Tk):
         display_value = display_mode.get() if display_mode is not None else PREVIEW_MODE_ENHANCED
         display_note = f"图像：{PREVIEW_MODE_LABELS.get(display_value, '增强显示')}"
         hints = {
-            "quality": f"{display_note} · 滚轮缩放≤15× · 高亮青点 = Gaussian质量源 · 亮黄点 = 补充算法质量源 · 绿色环 = 最暗可信源",
+            "quality": f"{display_note} · 滚轮缩放≤15× · 高亮青点 = Gaussian质量源 · 亮黄点 = 补充算法质量源 · 绿色环 = 最暗可信源{(' · 洋红线 = 运动轨迹叠加' if self._motion_overlay_enabled() else ' · 可勾选叠加运动轨迹')}",
             "candidates": f"{display_note} · 滚轮缩放≤15× · 青点 = Gaussian质量源 · 黄点 = 补充算法质量源 · 紫红点 = 被剔除候选（悬停查看原因）",
             "stable": f"{display_note} · 亮青绿点 = 严格静态源 · 亮蓝点 = 持续源候选 · 该层是序列工作集，不等于全图恒星总数",
             "stack-faint": f"{display_note} · 绿灰点 = 叠加参考图恢复的暗星 · 经逐帧强制测光确认 · 低置信待复核，非官方逐星真值",
-            "motion": f"{display_note} · 滚轮缩放≤15× · 洋红线 = 跨帧 moving 候选 · 青绿虚线 = 末帧 +5 帧图像平面外推 · 橙线 = 单帧/待复核",
+            "motion": f"{display_note} · 滚轮缩放≤15× · 金橙实线 = 高速点源 moving · 洋红线 = 线状 moving · 青绿虚线 = 末帧 +5 帧图像平面外推 · 橙线 = 单帧/待复核",
             "catalog": f"{display_note} · 滚轮缩放≤15× · 高亮青点 = 图像检测位置 · 绿色环 = 星表预测位置 · 仅用于身份核验",
         }
         self.overlay_hint_var.set(hints.get(self.overlay_mode_var.get(), hints["quality"]))
@@ -2201,6 +3350,11 @@ class StarfieldApp(tk.Tk):
             "motion_min_displacement_px": 2.0,
             "registration_radius_px": 8.0,
             "max_motion_fit_rms_px": 0.75,
+            "fast_point_motion": True,
+            "fast_point_min_snr": DEFAULT_FAST_POINT_MIN_SNR,
+            "fast_point_max_step_px": DEFAULT_FAST_POINT_MAX_STEP_PX,
+            "fast_point_gate_px": DEFAULT_FAST_POINT_GATE_PX,
+            "fast_point_max_fit_rms_px": DEFAULT_FAST_POINT_FIT_RMS_PX,
         }
         self.busy = True
         self.active_job_kind = "sequence"
@@ -2240,6 +3394,8 @@ class StarfieldApp(tk.Tk):
                             label = f"已完成 {index}/{total} 帧"
                         elif stage == "registration":
                             value, label = 84.0, "配准关联"
+                        elif stage == "fast-point-motion":
+                            value, label = 86.0, "高速点源关联"
                         elif stage == "sentinel-audit":
                             value, label = 83.5, "固定值异常码审计"
                         elif stage == "consensus":
@@ -2293,6 +3449,11 @@ class StarfieldApp(tk.Tk):
                         proposal_mode=proposal_mode,
                         reject_linear_artifacts=True,
                         refine_local_background=False,
+                        fast_point_motion=True,
+                        fast_point_min_snr=DEFAULT_FAST_POINT_MIN_SNR,
+                        fast_point_max_step_px=DEFAULT_FAST_POINT_MAX_STEP_PX,
+                        fast_point_gate_px=DEFAULT_FAST_POINT_GATE_PX,
+                        fast_point_max_fit_rms_px=DEFAULT_FAST_POINT_FIT_RMS_PX,
                         progress=progress,
                         detail_progress=detail_progress,
                     )
@@ -2357,10 +3518,11 @@ class StarfieldApp(tk.Tk):
             if token == self.frame_token and self.active_job_kind == "single":
                 self.long_trails = tuple(payload)
                 if self.long_trails:
-                    self.overlay_mode_var.set("motion")
+                    # 长线只是叠加证据，不能把可信源主层替换掉。
+                    self.overlay_mode_var.set("quality")
                     self._update_overlay_hint()
                     self.status_var.set(
-                        f"已先发现 {len(self.long_trails):,} 条单帧长线候选 · 星点精测继续进行"
+                        f"已先发现 {len(self.long_trails):,} 条单帧长线候选 · 已叠加在可信源上 · 星点精测继续进行"
                     )
                     self._draw_preview()
             self.after(60, self._poll_result)
@@ -2695,13 +3857,10 @@ class StarfieldApp(tk.Tk):
             self.sequence_evidence_label.config(text="\n".join(single_frame_lines))
             trail_text = f" · 单帧长线候选 {len(self.long_trails):,}" if self.long_trails else " · 未发现满足几何门槛的单帧长线"
             self.status_var.set(f"{cache_state} · 候选峰 {detection.candidate_count:,} · 可信星点 {detection.star_count:,} · 审计返回 {detection.returned_count:,}{trail_text}")
-            if self.long_trails:
-                self.overlay_mode_var.set("motion")
-                self._update_overlay_hint()
-            else:
-                # 上一次如果停留在运动层，当前帧没有长线时不能留下空视图。
-                self.overlay_mode_var.set("quality")
-                self._update_overlay_hint()
+            # 单帧分析完成后始终回到可信源主层。长线候选保留为叠加证据，
+            # 不再让“发现长线”把整张图切成只显示轨迹的模式。
+            self.overlay_mode_var.set("quality")
+            self._update_overlay_hint()
             self._render_analysis()
         elif kind == "sequence-error":
             self.active_job_token = None
@@ -2728,19 +3887,20 @@ class StarfieldApp(tk.Tk):
             self._mark_sequence_ledger("completed")
             self.long_trails = ()
             self._set_job_controls()
-            # 序列完成后先展示最能验证“恒星是否稳定”的结果。运动候选
-            # 仍保留在单独图层，用户可点击右上角“运动候选”查看，不再让
-            # 默认运动层把稳定星场误认为没有算出来。
-            self.overlay_mode_var.set("stable")
+            # 序列完成后仍以当前帧可信源作为主层；稳定星场和运动证据
+            # 都可以单独切换或通过“运动轨迹”勾选叠加查看。
+            self.overlay_mode_var.set("quality")
             self._update_overlay_hint()
+            display_layer = "可信源主层 + 运动轨迹叠加" if self._motion_overlay_enabled() else "可信源主层"
             moving_features = sum(track.classification == "moving" for track in result.motion_features)
             feature_candidates = sum(track.classification == "candidate" for track in result.motion_features)
             self.status_var.set(
                 f"{cache_state} · {len(result.frames)} 帧分析完成 · 严格静态 {result.stable_source_count:,} · "
                 f"持续候选 {result.persistent_source_count:,} · "
                 f"叠加暗星 {result.stack_faint_count:,} · "
-                f"点轨迹 {result.moving_track_count:,} · 线状目标 {moving_features:,} · "
-                f"待复核线 {feature_candidates:,} · 当前显示稳定星场 · "
+                f"点轨迹 {result.moving_track_count:,}（高速点 {result.fast_point_motion_count:,}） · "
+                f"线状目标 {moving_features:,} · "
+                f"待复核线 {feature_candidates:,} · 当前显示{display_layer} · "
                 f"配准工作集 {'≤' + format(result.source_working_limit, ',') if result.source_working_limit is not None else '全量'}"
             )
             self._render_sequence_evidence(result)
@@ -2846,6 +4006,7 @@ class StarfieldApp(tk.Tk):
         final_shift = result.cumulative_shifts[-1] if result.cumulative_shifts else (0.0, 0.0)
         shift_norm = float(np.hypot(final_shift[0], final_shift[1]))
         moving_features = [track for track in result.motion_features if track.classification == "moving"]
+        moving_point_tracks = [track for track in result.tracks if track.classification == "moving"]
         first_frame = frames[0]
         size_text = f"{first_frame.width_px}×{first_frame.height_px}" if first_frame.width_px and first_frame.height_px else "同尺寸"
         exposure_text = f"{first_frame.exposure_ms:g} ms" if first_frame.exposure_ms is not None else "曝光未知"
@@ -2905,13 +4066,13 @@ class StarfieldApp(tk.Tk):
             lines = [
                 f"{len(frames)} 帧 · {size_text} · {duration_text} · Δt {interval_text}",
                 f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集前 {result.source_working_limit:,}" if result.source_working_limit is not None else f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集全量",
-                f"配准 {shift_norm:.2f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}）",
+                f"配准 {shift_norm:.2f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · 点源 moving {len(moving_point_tracks):,}",
             ]
         else:
             lines = [
                 f"{len(frames)} 帧 · {size_text} · {duration_text} · Δt {interval_text} · 曝光 {exposure_text}",
                 f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集前 {result.source_working_limit:,}" if result.source_working_limit is not None else f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集全量",
-                f"配准末端 {shift_norm:.3f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · 线状 {group_text}",
+                f"配准末端 {shift_norm:.3f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · 点源 moving {len(moving_point_tracks):,} · 线状 {group_text}",
             ]
         if fixed_audit_text:
             lines.append(fixed_audit_text)
@@ -2931,6 +4092,21 @@ class StarfieldApp(tk.Tk):
             lines.append(f"快速路径：{sample_text} · {result.calculation_dtype} · {model_text} · 线审计保留")
         elif result.background_sample_limit is not None:
             lines.append(f"背景网格：每块最多 {result.background_sample_limit:,} 点 · 非快速路径")
+        if moving_point_tracks:
+            track = max(moving_point_tracks, key=lambda item: item.presence)
+            first = track.points[0]
+            last = track.points[-1]
+            kinematics = self._track_kinematics(result, track)
+            speed_text = f"{track.speed_px_per_frame:.3f}px/frame"
+            direction_text = f"{np.degrees(np.arctan2(last.aligned_y - first.aligned_y, last.aligned_x - first.aligned_x)):.1f}°"
+            if kinematics is not None:
+                speed_text = f"{float(kinematics['speed_px_per_s']):.2f}px/s"
+                direction_text = f"{float(kinematics['direction_deg_image']):.1f}°"
+            evidence_text = "高速点源补充关联" if track.evidence_level == "fast_point_motion" else "严格点轨迹"
+            lines.append(
+                f"点状 moving F{first.frame_index + 1:02d}–F{last.frame_index + 1:02d} · {evidence_text} · "
+                f"{speed_text} · 方向 {direction_text} · 位移 {track.displacement_px:.1f}px · 拟合 RMS {track.fit_rms_px:.2f}px"
+            )
         if moving_features:
             track = max(moving_features, key=lambda item: item.presence)
             point = track.points[0]
@@ -3500,7 +4676,7 @@ class StarfieldApp(tk.Tk):
             f"严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · "
             f"叠加暗星 {result.stack_faint_count:,} · "
             f"补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · "
-            f"点源 moving {result.moving_track_count:,} · "
+            f"点源 moving {result.moving_track_count:,}（高速点 {result.fast_point_motion_count:,}） · "
             f"点源工作集 {'≤' + format(result.source_working_limit, ',') if result.source_working_limit is not None else '全量'}"
         )
         self._mono_label(relation_box, relation_line, color=INK, size=8, bg=PAPER_LIGHT, anchor="w").pack(
@@ -3918,7 +5094,8 @@ class StarfieldApp(tk.Tk):
             ),
             ("固定星场", "严格静态点轨迹", f"{result.stable_source_count:,}", "至少约 80% 帧出现且未呈现运动的点轨迹"),
             ("固定星场", "持续点源候选", f"{result.persistent_source_count:,}", "至少约 50% 帧出现、无显著位移；不是恒星真值"),
-            ("运动证据", "点源 moving 轨迹", f"{result.moving_track_count:,}", "严格点轨迹分类，不等于物理真值"),
+            ("运动证据", "点源 moving 轨迹", f"{result.moving_track_count:,}", "包含普通关联与高速点源补充关联；不等于物理真值"),
+            ("运动证据", "高速点源补充轨迹", f"{result.fast_point_motion_count:,}", "宽筛候选 + 原图 flux SNR/PSF 复核；独立于固定星场 4 px 最近邻"),
             ("运动证据", "线状证据组", f"{len(result.motion_features):,}", "单帧候选与跨帧候选分开统计"),
         ]
         for track in result.motion_features:
@@ -5393,6 +6570,47 @@ class StarfieldApp(tk.Tk):
                             fill=color,
                         )
 
+            # 序列分析会释放每帧完整 Detection，只保留轨迹中的质量通过标记。
+            # 因此序列完成后从轻量 TrackPoint 恢复“可信源”主层，避免切回
+            # quality 后出现空图；候选共识/叠加暗星仍不会混进可信源。
+            if self.analysis is None and mode == "quality" and self.sequence_result is not None:
+                frame_index = self._sequence_frame_index()
+                trusted_points = trusted_points_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
+                marker_radius = max(1, min(3, int(round(max(1.0, scale) * 0.65))))
+                for _track, point in trusted_points:
+                    point_x = point.x * self.preview_scale_x
+                    point_y = point.y * self.preview_scale_y
+                    if not (left <= point_x < right and top <= point_y < bottom):
+                        continue
+                    x = (point_x - left) * scale
+                    y = (point_y - top) * scale
+                    center_x = int(round(x))
+                    center_y = int(round(y))
+                    if marker_radius == 1:
+                        draw.point((center_x, center_y), fill=STAR_POINT)
+                    else:
+                        draw.ellipse(
+                            (
+                                center_x - marker_radius - 1,
+                                center_y - marker_radius - 1,
+                                center_x + marker_radius + 1,
+                                center_y + marker_radius + 1,
+                            ),
+                            outline=NAVY_DARK,
+                            width=2,
+                        )
+                        draw.ellipse(
+                            (
+                                center_x - marker_radius,
+                                center_y - marker_radius,
+                                center_x + marker_radius,
+                                center_y + marker_radius,
+                            ),
+                            outline=STAR_POINT,
+                            width=max(1, min(2, marker_radius)),
+                        )
+                        draw.point((center_x, center_y), fill=STAR_POINT)
+
             if mode == "stable" and self.sequence_result is not None:
                 frame_index = self._sequence_frame_index()
                 stable_points = stable_points_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
@@ -5473,7 +6691,9 @@ class StarfieldApp(tk.Tk):
                     )
                     draw.point((center_x, center_y), fill=STACK_FAINT_POINT)
 
-            if mode == "motion":
+            # 运动证据默认叠加在可信源主层上；选择“运动候选”时即使用户
+            # 关闭复合开关也仍然只显示运动层，保持原有的专门审计视图。
+            if mode == "motion" or self._motion_overlay_enabled():
                 frame_index = self._sequence_frame_index()
                 motion_points = moving_points_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
                 for track, point in motion_points:
@@ -5483,9 +6703,16 @@ class StarfieldApp(tk.Tk):
                         continue
                     x = (point_x - left) * scale
                     y = (point_y - top) * scale
-                    draw.ellipse((x - 7, y - 7, x + 7, y + 7), outline=SKY_LIGHT, width=2)
-                    draw.point((x, y), fill=SKY_LIGHT)
-                    self._draw_image_label(draw, f"MOV {track.track_id:04d}", x, y, image.size)
+                    point_color = (
+                        POINT_MOTION
+                        if track.evidence_level == "fast_point_motion"
+                        else SKY_LIGHT
+                    )
+                    draw.ellipse((x - 7, y - 7, x + 7, y + 7), outline=NAVY_DARK, width=4)
+                    draw.ellipse((x - 6, y - 6, x + 6, y + 6), outline=point_color, width=2)
+                    draw.point((x, y), fill=point_color)
+                    label = "POINT MOV" if track.evidence_level == "fast_point_motion" else "MOV"
+                    self._draw_image_label(draw, f"{label} {track.track_id:04d}", x, y, image.size)
                 self._draw_motion_trajectory_overlay(draw, frame_index, left, top, scale, image.size)
                 feature_points = self._motion_feature_points(frame_index) if frame_index is not None else ()
                 for track, point in feature_points:
@@ -5559,7 +6786,17 @@ class StarfieldApp(tk.Tk):
                         y,
                         image.size,
                     )
-            if mode in {"motion", "stable", "stack-faint"} and self.hover_motion_track is not None:
+            if mode == "quality" and self.hover_trusted_track is not None:
+                _track, trusted_point = self.hover_trusted_track
+                point_x = trusted_point.x * self.preview_scale_x
+                point_y = trusted_point.y * self.preview_scale_y
+                if left <= point_x < right and top <= point_y < bottom:
+                    x = (point_x - left) * scale
+                    y = (point_y - top) * scale
+                    draw.ellipse((x - 10, y - 10, x + 10, y + 10), outline=AMBER_LIGHT, width=2)
+                    snr_text = f"{trusted_point.flux_snr:.1f}" if trusted_point.flux_snr is not None else "-"
+                    self._draw_image_label(draw, f"SRC {_track.track_id:04d} · FSNR {snr_text}", x, y, image.size)
+            if (mode in {"motion", "stable", "stack-faint"} or self._motion_overlay_enabled()) and self.hover_motion_track is not None:
                 track, point = self.hover_motion_track
                 point_x = point.x * self.preview_scale_x
                 point_y = point.y * self.preview_scale_y
@@ -5633,6 +6870,34 @@ class StarfieldApp(tk.Tk):
             raw_x = (x + shift_x) * scale_x
             raw_y = (y + shift_y) * scale_y
             return (raw_x - left) * scale, (raw_y - top) * scale
+
+        # 点状 moving 轨迹与线状 streak 是两类证据。点目标每帧只占一个
+        # 小 PSF，之前这里只画当前帧圆圈，没有把历史点连起来，所以用户
+        # 看到的是“已标记但没有线”。现在用常速度关联得到的观测点画实线；
+        # 金橙色专门表示高速点源，洋红色仍保留给线状候选。
+        for track in self.sequence_result.tracks:
+            if track.classification != "moving" or len(track.points) < 2:
+                continue
+            observed = [
+                to_image(point.aligned_x, point.aligned_y, point.frame_index)
+                for point in track.points
+            ]
+            point_color = (
+                POINT_MOTION
+                if track.evidence_level == "fast_point_motion"
+                else SKY_LIGHT
+            )
+            line_width = max(2, min(6, int(round(2.0 * scale))))
+            draw.line(observed, fill=NAVY_DARK, width=line_width + 4, joint="curve")
+            draw.line(observed, fill=point_color, width=line_width, joint="curve")
+            radius = max(2, min(5, int(round(2.5 * scale))))
+            for point_x, point_y in observed:
+                draw.ellipse(
+                    (point_x - radius, point_y - radius, point_x + radius, point_y + radius),
+                    fill=point_color,
+                    outline=NAVY_DARK,
+                    width=1,
+                )
 
         for track in self.sequence_result.motion_features:
             if track.classification != "moving" or len(track.points) < 2:
@@ -5800,9 +7065,32 @@ class StarfieldApp(tk.Tk):
                         point_x = origin_x + source_x * scale_x * scale
                         point_y = origin_y + source_y * scale_y * scale
                         distance = (point_x - event.x) ** 2 + (point_y - event.y) ** 2
-                        if distance <= best_distance:
-                            best = source
-                            best_distance = distance
+                    if distance <= best_distance:
+                        best = source
+                        best_distance = distance
+        return best
+
+    def _find_trusted_track_at(self, event: tk.Event) -> tuple[SourceTrack, TrackPoint] | None:
+        """Find a quality-passed sequence source near the pointer."""
+
+        if self.preview is None or self.preview_shape is None or self.sequence_result is None:
+            return None
+        frame_index = self._sequence_frame_index()
+        if frame_index is None:
+            return None
+        scale, origin_x, origin_y, _ = self._view_transform()
+        original_height, original_width = self.preview_shape
+        scale_x = self.preview.width / original_width
+        scale_y = self.preview.height / original_height
+        best: tuple[SourceTrack, TrackPoint] | None = None
+        best_distance = 12.0 * 12.0
+        for track, point in trusted_points_for_frame(self.sequence_result, frame_index):
+            point_x = origin_x + point.x * scale_x * scale
+            point_y = origin_y + point.y * scale_y * scale
+            distance = (point_x - event.x) ** 2 + (point_y - event.y) ** 2
+            if distance <= best_distance:
+                best = (track, point)
+                best_distance = distance
         return best
 
     def _find_motion_track_at(
@@ -5920,6 +7208,106 @@ class StarfieldApp(tk.Tk):
                     best_distance = distance
         return best
 
+    def _update_trusted_hover(self, track_point: tuple[SourceTrack, TrackPoint] | None) -> None:
+        """Update hover information for a sequence quality-passed source."""
+
+        track_key = ("trusted", track_point[0].track_id) if track_point is not None else None
+        previous_key = (
+            ("trusted", self.hover_trusted_track[0].track_id)
+            if self.hover_trusted_track is not None
+            else None
+        )
+        if track_key == previous_key:
+            return
+        self.hover_trusted_track = track_point
+        self.hover_motion_track = None
+        self.hover_source = None
+        self.hover_source_id = None
+        self.hover_catalog_match = None
+        if track_point is None:
+            self.hover_info_var.set("可信源主层只显示当前帧通过单帧质量规则的源；将鼠标移到青色点查看 SNR 和跨帧证据")
+        else:
+            track, point = track_point
+            snr_text = f"{point.flux_snr:.1f}" if point.flux_snr is not None else "—"
+            frame_total = len(self.sequence_result.frames) if self.sequence_result is not None else 0
+            self.hover_info_var.set(
+                f"可信源 {track.track_id:04d}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
+                f"X {point.x:.1f} Y {point.y:.1f}  ·  flux SNR {snr_text}  ·  "
+                f"质量通过  ·  持续 {track.presence}/{frame_total} 帧  ·  "
+                f"分类 {track.classification}  ·  配准后位移 {track.displacement_px:.2f}px"
+            )
+        self._draw_preview()
+
+    def _update_motion_hover(
+        self,
+        track_point: tuple[SourceTrack | MotionFeatureTrack, TrackPoint | MotionFeaturePoint] | None,
+    ) -> None:
+        """Update hover information for a motion layer or a motion composite overlay."""
+
+        track_key = (
+            ("feature", track_point[0].track_id)
+            if track_point is not None and isinstance(track_point[1], MotionFeaturePoint)
+            else ("point", track_point[0].track_id)
+            if track_point is not None
+            else None
+        )
+        previous_key = (
+            ("feature", self.hover_motion_track[0].track_id)
+            if self.hover_motion_track is not None and isinstance(self.hover_motion_track[1], MotionFeaturePoint)
+            else ("point", self.hover_motion_track[0].track_id)
+            if self.hover_motion_track is not None
+            else None
+        )
+        if track_key == previous_key:
+            return
+        self.hover_motion_track = track_point
+        self.hover_trusted_track = None
+        self.hover_source = None
+        self.hover_source_id = None
+        self.hover_catalog_match = None
+        if track_point is None:
+            if self.overlay_mode_var.get() == "motion":
+                self.hover_info_var.set("运动层只显示跨帧线状候选和严格 moving 点轨迹；将鼠标移到洋红线或橙线查看信息")
+            else:
+                self.hover_info_var.set("叠加层只显示运动证据；将鼠标移到洋红线或橙线查看轨迹、SNR 和拟合误差")
+        else:
+            track, point = track_point
+            if isinstance(point, MotionFeaturePoint):
+                fit_text = f"{track.fit_rms_px:.2f}px" if track.fit_rms_px is not None else "—"
+                state_text = "moving" if track.classification == "moving" else "单帧候选"
+                selected_frame_index = self._selected_frame_index()
+                display_frame = point.frame_index + 1 if self.sequence_result is not None else ((selected_frame_index + 1) if selected_frame_index is not None else 1)
+                self.hover_info_var.set(
+                    f"TRAIL {track.track_id:04d}  ·  {state_text}  ·  当前帧 {display_frame:02d}  ·  "
+                    f"X {point.x:.1f}  Y {point.y:.1f}  ·  residual SNR {point.residual_snr:.1f}  ·  "
+                    f"长度 {point.length_px:.1f}px  / 宽度 {point.width_px:.1f}px  ·  "
+                    f"角度 {point.angle_deg:.1f}°  ·  位移 {track.displacement_px:.1f}px  ·  "
+                    f"拟合 RMS {fit_text}  ·  出现 {track.presence} 帧"
+                )
+            else:
+                fit_text = f"{track.fit_rms_px:.3f}px" if track.fit_rms_px is not None else "—"
+                snr_text = f"{point.flux_snr:.1f}" if point.flux_snr is not None else "—"
+                motion_type = (
+                    "高速点状运动 · 宽筛候选 + 原图复核"
+                    if track.evidence_level == "fast_point_motion" and point.candidate_snr is not None
+                    else "高速点状运动 · 逐帧质量通过"
+                    if track.evidence_level == "fast_point_motion"
+                    else "点源 moving"
+                )
+                candidate_snr_text = (
+                    f"  ·  filter SNR {point.candidate_snr:.1f}"
+                    if point.candidate_snr is not None
+                    else ""
+                )
+                self.hover_info_var.set(
+                    f"MOV {track.track_id:04d}  ·  {motion_type}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
+                    f"X {point.x:.1f}  Y {point.y:.1f}  ·  flux SNR {snr_text}  ·  "
+                    f"{candidate_snr_text}"
+                    f"位移 {track.displacement_px:.2f}px  ·  速度 {track.speed_px_per_frame:.3f}px/frame  ·  "
+                    f"拟合 RMS {fit_text}  ·  出现 {track.presence} 帧"
+                )
+        self._draw_preview()
+
     def _on_canvas_motion(self, event: tk.Event) -> None:
         if self.overlay_mode_var.get() == "catalog":
             match = self._find_catalog_match_at(event)
@@ -5931,6 +7319,7 @@ class StarfieldApp(tk.Tk):
             self.hover_source = None
             self.hover_source_id = None
             self.hover_motion_track = None
+            self.hover_trusted_track = None
             if match is None:
                 self.hover_info_var.set("星表核验层只显示匹配成功的源；将鼠标移到绿色预测环或黄色检测点查看残差")
             else:
@@ -5955,6 +7344,7 @@ class StarfieldApp(tk.Tk):
             if track_key == previous_key:
                 return
             self.hover_motion_track = track_point
+            self.hover_trusted_track = None
             self.hover_source = None
             self.hover_source_id = None
             self.hover_catalog_match = None
@@ -6000,6 +7390,7 @@ class StarfieldApp(tk.Tk):
             if track_key == previous_key:
                 return
             self.hover_motion_track = track_point
+            self.hover_trusted_track = None
             self.hover_source = None
             self.hover_source_id = None
             self.hover_catalog_match = None
@@ -6022,60 +7413,28 @@ class StarfieldApp(tk.Tk):
                 )
             self._draw_preview()
             return
-        if self.overlay_mode_var.get() == "motion":
+        mode = self.overlay_mode_var.get()
+        if mode == "motion" or self._motion_overlay_enabled():
             track_point = self._find_motion_track_at(event)
-            track_key = (
-                ("feature", track_point[0].track_id)
-                if track_point is not None and isinstance(track_point[1], MotionFeaturePoint)
-                else ("point", track_point[0].track_id)
-                if track_point is not None
-                else None
-            )
-            previous_key = (
-                ("feature", self.hover_motion_track[0].track_id)
-                if self.hover_motion_track is not None and isinstance(self.hover_motion_track[1], MotionFeaturePoint)
-                else ("point", self.hover_motion_track[0].track_id)
-                if self.hover_motion_track is not None
-                else None
-            )
-            if track_key == previous_key:
+            if track_point is not None or mode == "motion":
+                self._update_motion_hover(track_point)
                 return
-            self.hover_motion_track = track_point
-            self.hover_source = None
-            self.hover_source_id = None
-            if track_point is None:
-                self.hover_info_var.set("运动层只显示跨帧线状候选和严格 moving 点轨迹；将鼠标移到洋红线或橙线查看信息")
-            else:
-                track, point = track_point
-                if isinstance(point, MotionFeaturePoint):
-                    fit_text = f"{track.fit_rms_px:.2f}px" if track.fit_rms_px is not None else "—"
-                    state_text = "moving" if track.classification == "moving" else "单帧候选"
-                    selected_frame_index = self._selected_frame_index()
-                    display_frame = point.frame_index + 1 if self.sequence_result is not None else ((selected_frame_index + 1) if selected_frame_index is not None else 1)
-                    self.hover_info_var.set(
-                        f"TRAIL {track.track_id:04d}  ·  {state_text}  ·  当前帧 {display_frame:02d}  ·  "
-                        f"X {point.x:.1f}  Y {point.y:.1f}  ·  residual SNR {point.residual_snr:.1f}  ·  "
-                        f"长度 {point.length_px:.1f}px  / 宽度 {point.width_px:.1f}px  ·  "
-                        f"角度 {point.angle_deg:.1f}°  ·  位移 {track.displacement_px:.1f}px  ·  "
-                        f"拟合 RMS {fit_text}  ·  出现 {track.presence} 帧"
-                    )
-                else:
-                    fit_text = f"{track.fit_rms_px:.3f}px" if track.fit_rms_px is not None else "—"
-                    snr_text = f"{point.flux_snr:.1f}" if point.flux_snr is not None else "—"
-                    self.hover_info_var.set(
-                        f"MOV {track.track_id:04d}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
-                        f"X {point.x:.1f}  Y {point.y:.1f}  ·  flux SNR {snr_text}  ·  "
-                        f"位移 {track.displacement_px:.2f}px  ·  速度 {track.speed_px_per_frame:.3f}px/frame  ·  "
-                        f"拟合 RMS {fit_text}  ·  出现 {track.presence} 帧"
-                    )
-            self._draw_preview()
-            return
+            # 复合层没有命中轨迹时，继续向下寻找可信源，而不是让轨迹
+            # 的空命中信息遮住星点本身的 SNR/质量说明。
+            self.hover_motion_track = None
+        if mode == "quality" and self.analysis is None and self.sequence_result is not None:
+            trusted_track = self._find_trusted_track_at(event)
+            if trusted_track is not None:
+                self._update_trusted_hover(trusted_track)
+                return
+            self.hover_trusted_track = None
         source = self._find_source_at(event)
         source_id = source.detection_id if source is not None else None
         if source_id == self.hover_source_id:
             return
         self.hover_source_id = source_id
         self.hover_source = source
+        self.hover_trusted_track = None
         if source is None:
             self.hover_info_var.set("将鼠标移到候选点查看坐标、通量、误差、SNR、形状和仪器星等")
         else:
@@ -6124,11 +7483,12 @@ class StarfieldApp(tk.Tk):
         self._draw_preview()
 
     def _clear_hover(self) -> None:
-        if self.hover_source_id is None and self.hover_motion_track is None and self.hover_catalog_match is None:
+        if self.hover_source_id is None and self.hover_motion_track is None and self.hover_trusted_track is None and self.hover_catalog_match is None:
             return
         self.hover_source_id = None
         self.hover_source = None
         self.hover_motion_track = None
+        self.hover_trusted_track = None
         self.hover_catalog_match = None
         self.hover_info_var.set("将鼠标移到候选点查看坐标、通量、误差、SNR、形状和仪器星等")
         self._draw_preview()
@@ -6150,6 +7510,7 @@ class StarfieldApp(tk.Tk):
         self.hover_source = None
         self.hover_source_id = None
         self.hover_motion_track = None
+        self.hover_trusted_track = None
         self.hover_catalog_match = None
         self._reset_result_widgets()
         self._set_job_controls()

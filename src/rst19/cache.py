@@ -30,9 +30,15 @@ CACHE_VERSION = 17
 # 重复码与局部异常负值联合门控，以及极近 Gaussian 双 PSF 质量门。
 # 本轮（35）新增叠加参考图暗星恢复层（evidence_level="stack_faint"）：
 # 序列结果现在含 stack_faint 轨迹及其参数，旧缓存不具备该口径。
+# 本轮（36）新增高速点状目标补充关联（evidence_level="fast_point_motion"），
+# 旧序列缓存没有该轨迹层，必须重新计算，不能把旧的 transient 结果冒充
+# 当前的点源运动判定。
+# 本轮（37）把高速点源的宽筛从截断后的 quality_sources 扩展到完整候选峰
+# 工作集，并回到原始 ADU 做选择性 PSF/flux SNR 复核；旧的 36 缓存可能
+# 漏掉被 6000 条源级工作集截断的高速点，不能继续复用。
 # 旧缓存不具备相同计算口径，必须重新计算，否则 UI 可能把不同精度的
 # 结果混在一起。
-SEQUENCE_CACHE_VERSION = 35
+SEQUENCE_CACHE_VERSION = 37
 CACHE_SUFFIXES = {".gz", ".json", ".tmp"}
 
 

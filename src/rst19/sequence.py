@@ -36,6 +36,31 @@ DEFAULT_SEQUENCE_BACKGROUND_SAMPLE_LIMIT = 4_096
 # 响应，后续仍必须通过逐帧原图支持、形状和持续性细筛。
 TEMPORAL_PSF_FWHM_FACTORS = (0.65, 1.0, 1.35)
 
+# 点状高速目标与固定星场使用不同的关联尺度。普通星场关联仍保持
+# ``link_radius_px=4``，避免在密集星场中把相邻恒星串成轨迹；高速点源
+# 先用相邻帧的速度种子宽筛，再用常速度拟合和逐帧质量源细筛。
+DEFAULT_FAST_POINT_MIN_SNR = 7.0
+DEFAULT_FAST_POINT_MAX_STEP_PX = 20.0
+DEFAULT_FAST_POINT_GATE_PX = 4.5
+DEFAULT_FAST_POINT_FIT_RMS_PX = 1.5
+# 宽筛候选峰可能有数万条/帧。高速点源关联不需要把全部候选都做
+# 源级测光；按匹配滤波响应取前一层工作集，再对形成轨迹的少量点回到
+# 原图细筛。这个上限独立于单帧星点输出上限，也不改变 candidate_count。
+DEFAULT_FAST_POINT_CANDIDATE_WORKING_LIMIT = 20_000
+FAST_POINT_MOTION_EVIDENCE = "fast_point_motion"
+
+
+@dataclass(frozen=True, slots=True)
+class _FastCandidateRecord:
+    """一个尚未做原图孔径测光的宽筛候选峰。"""
+
+    row_index: int
+    raw_x: float
+    raw_y: float
+    aligned_x: float
+    aligned_y: float
+    filter_snr: float
+
 
 def _temporal_psf_fwhm_bank(psf_fwhm: float) -> tuple[float, ...]:
     """返回时间宽筛使用的 PSF FWHM 尺度组。"""
@@ -590,6 +615,16 @@ class SequenceResult:
         return sum(track.classification == "moving" for track in self.tracks)
 
     @property
+    def fast_point_motion_count(self) -> int:
+        """由高速点源补充关联确认的 moving 轨迹数。"""
+
+        return sum(
+            track.classification == "moving"
+            and track.evidence_level == FAST_POINT_MOTION_EVIDENCE
+            for track in self.tracks
+        )
+
+    @property
     def transient_track_count(self) -> int:
         return sum(track.classification == "transient" for track in self.tracks)
 
@@ -646,6 +681,7 @@ class SequenceResult:
             "temporal_reference_count": self.temporal_reference_count,
             "stack_faint_count": self.stack_faint_count,
             "moving_track_count": self.moving_track_count,
+            "fast_point_motion_count": self.fast_point_motion_count,
             "transient_track_count": self.transient_track_count,
             "link_radius_px": self.link_radius_px,
             "min_presence": self.min_presence,
@@ -752,6 +788,776 @@ def _fit_track(points: Sequence[TrackPoint]) -> tuple[float, float, float | None
     displacement = float(np.hypot(x_slope * duration, y_slope * duration))
     speed = float(np.hypot(x_slope, y_slope))
     return displacement, speed, rms
+
+
+def track_fast_point_movers(
+    frame_sources: Sequence[Sequence[Detection]],
+    cumulative_shifts: Sequence[tuple[float, float]],
+    *,
+    link_radius_px: float = 4.0,
+    min_presence: int | None = None,
+    motion_min_displacement_px: float = 2.0,
+    min_flux_snr: float = DEFAULT_FAST_POINT_MIN_SNR,
+    max_step_px: float = DEFAULT_FAST_POINT_MAX_STEP_PX,
+    gate_px: float = DEFAULT_FAST_POINT_GATE_PX,
+    max_fit_rms_px: float = DEFAULT_FAST_POINT_FIT_RMS_PX,
+    existing_tracks: Sequence[SourceTrack] = (),
+) -> tuple[SourceTrack, ...]:
+    """补充关联超出普通最近邻半径的点状运动目标。
+
+    普通 ``track_detections`` 的 4 px 最近邻关联是固定星场的保守基线：
+    它能避免在高密度星场中误连，但一个每帧移动 8--10 px 的点目标会被
+    拆成许多 ``transient``。本函数只处理这类“单帧质量已通过、但没有被
+    普通关联串起来”的源，流程是：
+
+    1. 在注册坐标中，以相邻帧源对的位移作为宽筛速度种子；
+    2. 按常速度预测，在每帧 ``gate_px`` 邻域内选一个未占用的质量源；
+    3. 要求至少达到序列持续性、最小速度、逐点残差和常速度拟合 RMS；
+    4. 对已被普通多点轨迹占用的源不再复用，并合并同一条轨迹的不同种子。
+
+    这不是把 ``link_radius_px`` 全局放大：静态星场仍按原有关联口径，
+    高速点源则单独写入 ``evidence_level='fast_point_motion'``，便于 UI、
+    缓存和答辩材料区分“严格质量点源”与“速度关联补充证据”。默认
+    ``min_flux_snr=7``、``max_fit_rms_px=1.5`` 是补充层门槛，不降低单帧
+    的 SNR/PSF/掩膜/线状伪迹规则。返回轨迹的点仍然全部来自
+    ``quality_sources``，因此不会把候选噪点直接升级为运动目标。
+
+    ``cumulative_shifts`` 使用与 :class:`TrackPoint` 相同的约定：原始坐标
+    减去全局平移得到注册坐标。该函数不读取或写入 FITS/cache，方便单元
+    测试，也避免在序列结果已经释放单帧对象后重复计算。
+    """
+
+    if not frame_sources:
+        return ()
+    frame_count = len(frame_sources)
+    if len(cumulative_shifts) != frame_count:
+        raise ValueError("cumulative_shifts length must match frame_sources")
+    if link_radius_px <= 0 or motion_min_displacement_px <= 0:
+        raise ValueError("link radius and minimum displacement must be positive")
+    if min_flux_snr <= 0 or max_step_px <= 0 or gate_px <= 0 or max_fit_rms_px <= 0:
+        raise ValueError("fast point motion thresholds must be positive")
+    required_presence = (
+        int(min_presence)
+        if min_presence is not None
+        else max(3, int(np.ceil(frame_count * 0.8)))
+    )
+    if required_presence < 2 or required_presence > frame_count:
+        raise ValueError("min_presence must be within 2..frame count")
+    if max_step_px <= link_radius_px:
+        raise ValueError("max_step_px must exceed link_radius_px")
+
+    # 只让“没有在普通轨迹中形成多帧证据”的质量点进入补充层。这样一
+    # 颗固定星即使在相邻帧有一次误配，也不会同时出现在静态层和高速层。
+    reserved: set[tuple[int, int]] = set()
+    for track in existing_tracks:
+        if track.presence < 2:
+            continue
+        reserved.update(
+            (int(point.frame_index), int(point.detection_id))
+            for point in track.points
+        )
+
+    # 先按补充层的最低 SNR 做廉价宽筛，并将坐标转换到注册坐标。质量源
+    # 数量通常远小于全量候选，KD-tree 查询不会把数万噪点带入速度搜索。
+    frame_records: list[list[tuple[Detection, float, float, float]]] = []
+    trees: list[cKDTree | None] = []
+    for frame_index, sources in enumerate(frame_sources):
+        shift_x, shift_y = cumulative_shifts[frame_index]
+        records: list[tuple[Detection, float, float, float]] = []
+        for source in sources:
+            if not bool(source.quality_passed):
+                continue
+            if (frame_index, int(source.detection_id)) in reserved:
+                continue
+            signal_snr = _signal_snr(source)
+            if not np.isfinite(signal_snr) or signal_snr < float(min_flux_snr):
+                continue
+            records.append(
+                (
+                    source,
+                    float(source.x) - float(shift_x),
+                    float(source.y) - float(shift_y),
+                    float(signal_snr),
+                )
+            )
+        frame_records.append(records)
+        if records:
+            trees.append(cKDTree(np.asarray([(item[1], item[2]) for item in records], dtype=np.float64)))
+        else:
+            trees.append(None)
+
+    if not any(frame_records):
+        return ()
+
+    def to_point(frame_index: int, record: tuple[Detection, float, float, float]) -> TrackPoint:
+        source, aligned_x, aligned_y, signal_snr = record
+        return TrackPoint(
+            frame_index=frame_index,
+            detection_id=int(source.detection_id),
+            x=float(source.x),
+            y=float(source.y),
+            aligned_x=aligned_x,
+            aligned_y=aligned_y,
+            flux_snr=signal_snr,
+            quality_passed=bool(source.quality_passed),
+        )
+
+    def fit_prediction(
+        observations: Sequence[tuple[int, tuple[Detection, float, float, float]]],
+    ) -> tuple[np.ndarray, np.ndarray]:
+        times = np.asarray([item[0] for item in observations], dtype=np.float64)
+        coordinates = np.asarray([(item[1][1], item[1][2]) for item in observations], dtype=np.float64)
+        design = np.column_stack((np.ones(times.size, dtype=np.float64), times))
+        x_coefficients = np.linalg.lstsq(design, coordinates[:, 0], rcond=None)[0]
+        y_coefficients = np.linalg.lstsq(design, coordinates[:, 1], rcond=None)[0]
+        return x_coefficients, y_coefficients
+
+    def choose_nearby(
+        frame_index: int,
+        predicted: tuple[float, float],
+        used: set[tuple[int, int]],
+    ) -> tuple[Detection, float, float, float] | None:
+        tree = trees[frame_index]
+        if tree is None:
+            return None
+        candidate_indices = tree.query_ball_point(predicted, float(gate_px))
+        choices: list[tuple[float, float, int]] = []
+        for candidate_index in candidate_indices:
+            record = frame_records[frame_index][int(candidate_index)]
+            source = record[0]
+            key = (frame_index, int(source.detection_id))
+            if key in used:
+                continue
+            distance = float(np.hypot(record[1] - predicted[0], record[2] - predicted[1]))
+            # 预测距离优先；同距离时优先 SNR 更高的质量源，避免密集
+            # 区域的弱噪点抢占真实点目标的位置。
+            choices.append((distance, -record[3], int(candidate_index)))
+        if not choices:
+            return None
+        choices.sort()
+        return frame_records[frame_index][choices[0][2]]
+
+    def follow_seed(
+        start_frame: int,
+        first: tuple[Detection, float, float, float],
+        second: tuple[Detection, float, float, float],
+    ) -> tuple[tuple[int, tuple[Detection, float, float, float]], ...]:
+        observations: dict[int, tuple[Detection, float, float, float]] = {
+            start_frame: first,
+            start_frame + 1: second,
+        }
+        used = {
+            (start_frame, int(first[0].detection_id)),
+            (start_frame + 1, int(second[0].detection_id)),
+        }
+
+        # 允许分散的一帧缺测，但不允许连续缺测。required_presence 仍是
+        # 主要持续性门槛；这个额外限制能显著降低随机峰“跳跃拼线”的概率。
+        missed = 0
+        for frame_index in range(start_frame + 2, frame_count):
+            x_coefficients, y_coefficients = fit_prediction(tuple(sorted(observations.items())))
+            predicted = (
+                float(x_coefficients[0] + x_coefficients[1] * frame_index),
+                float(y_coefficients[0] + y_coefficients[1] * frame_index),
+            )
+            selected = choose_nearby(frame_index, predicted, used)
+            if selected is None:
+                missed += 1
+                if missed > 1:
+                    break
+                continue
+            missed = 0
+            observations[frame_index] = selected
+            used.add((frame_index, int(selected[0].detection_id)))
+
+        missed = 0
+        for frame_index in range(start_frame - 1, -1, -1):
+            x_coefficients, y_coefficients = fit_prediction(tuple(sorted(observations.items())))
+            predicted = (
+                float(x_coefficients[0] + x_coefficients[1] * frame_index),
+                float(y_coefficients[0] + y_coefficients[1] * frame_index),
+            )
+            selected = choose_nearby(frame_index, predicted, used)
+            if selected is None:
+                missed += 1
+                if missed > 1:
+                    break
+                continue
+            missed = 0
+            observations[frame_index] = selected
+            used.add((frame_index, int(selected[0].detection_id)))
+        return tuple(sorted(observations.items()))
+
+    min_step_px = max(float(link_radius_px) * 1.01, float(motion_min_displacement_px) / max(1, frame_count - 1))
+    raw_candidates: list[tuple[tuple[int, float, float, float], tuple[TrackPoint, ...]]] = []
+    for start_frame in range(frame_count - 1):
+        tree = trees[start_frame + 1]
+        if tree is None:
+            continue
+        for first in frame_records[start_frame]:
+            for second_index in tree.query_ball_point((first[1], first[2]), float(max_step_px)):
+                second = frame_records[start_frame + 1][int(second_index)]
+                step = float(np.hypot(second[1] - first[1], second[2] - first[2]))
+                if step < min_step_px or step > float(max_step_px):
+                    continue
+                observations = follow_seed(start_frame, first, second)
+                if len(observations) < required_presence:
+                    continue
+                points = tuple(to_point(frame_index, record) for frame_index, record in observations)
+                displacement, speed, fit_rms = _fit_track(points)
+                if fit_rms is None or fit_rms > float(max_fit_rms_px):
+                    continue
+                if speed < min_step_px or speed > float(max_step_px):
+                    continue
+                if displacement < float(motion_min_displacement_px):
+                    continue
+                x_coefficients, y_coefficients = fit_prediction(observations)
+                residuals = np.asarray(
+                    [
+                        np.hypot(
+                            point.aligned_x - (x_coefficients[0] + x_coefficients[1] * point.frame_index),
+                            point.aligned_y - (y_coefficients[0] + y_coefficients[1] * point.frame_index),
+                        )
+                        for point in points
+                    ],
+                    dtype=np.float64,
+                )
+                if residuals.size == 0 or float(np.max(residuals)) > float(gate_px):
+                    continue
+                frame_indices = [item[0] for item in observations]
+                if any((right - left) > 2 for left, right in zip(frame_indices, frame_indices[1:])):
+                    continue
+                median_snr = float(np.median([point.flux_snr for point in points if point.flux_snr is not None]))
+                raw_candidates.append(
+                    (
+                        (len(points), -float(fit_rms), median_snr, -float(speed)),
+                        points,
+                    )
+                )
+
+    if not raw_candidates:
+        return ()
+
+    # 同一条目标会由每一对相邻帧重复播种。先按完整性、拟合残差和
+    # SNR 排序，再按观测键去重；两个真实目标即便靠近，也不会因为空间
+    # 距离小而合并，只要它们使用的是不同逐帧检测源即可。
+    raw_candidates.sort(key=lambda item: item[0], reverse=True)
+    accepted: list[SourceTrack] = []
+    accepted_keys: list[set[tuple[int, int]]] = []
+    for _score, points in raw_candidates:
+        keys = {(point.frame_index, point.detection_id) for point in points}
+        if any(
+            len(keys & previous_keys) >= max(2, int(np.ceil(0.5 * min(len(keys), len(previous_keys)))))
+            for previous_keys in accepted_keys
+        ):
+            continue
+        displacement, speed, fit_rms = _fit_track(points)
+        accepted.append(
+            SourceTrack(
+                track_id=-1,
+                classification="moving",
+                points=points,
+                displacement_px=float(displacement),
+                speed_px_per_frame=float(speed),
+                fit_rms_px=float(fit_rms) if fit_rms is not None else None,
+                evidence_level=FAST_POINT_MOTION_EVIDENCE,
+            )
+        )
+        accepted_keys.append(keys)
+    return tuple(accepted)
+
+
+def _associate_fast_candidate_records(
+    frame_records: Sequence[Sequence[_FastCandidateRecord]],
+    cumulative_shifts: Sequence[tuple[float, float]],
+    *,
+    link_radius_px: float,
+    min_presence: int,
+    motion_min_displacement_px: float,
+    max_step_px: float,
+    gate_px: float,
+    max_fit_rms_px: float,
+) -> tuple[tuple[tuple[int, _FastCandidateRecord], ...], ...]:
+    """在候选峰坐标上寻找常速度点源轨迹。
+
+    这是宽筛候选的纯坐标关联层，不读取图像，也不把匹配滤波分数当成
+    最终 flux SNR。为了不让每帧数万候选产生大量无意义的后续拟合，先
+    要求三个连续候选点满足同一速度方向，再向前/向后跟踪；最终仍由
+    ``_track_fast_candidate_movers`` 回到原始 ADU 做孔径、PSF 和值域复核。
+    """
+
+    frame_count = len(frame_records)
+    if frame_count < 3 or len(cumulative_shifts) != frame_count:
+        return ()
+    if min_presence < 3 or min_presence > frame_count:
+        raise ValueError("min_presence must be within 3..frame count")
+    if link_radius_px <= 0 or max_step_px <= link_radius_px or gate_px <= 0 or max_fit_rms_px <= 0:
+        raise ValueError("invalid fast candidate association thresholds")
+    required_presence = int(min_presence)
+    min_step_px = max(
+        float(link_radius_px) * 1.01,
+        float(motion_min_displacement_px) / max(1, frame_count - 1),
+    )
+
+    trees: list[cKDTree | None] = []
+    for records in frame_records:
+        if records:
+            trees.append(
+                cKDTree(
+                    np.asarray(
+                        [(record.aligned_x, record.aligned_y) for record in records],
+                        dtype=np.float64,
+                    )
+                )
+            )
+        else:
+            trees.append(None)
+    if not any(frame_records):
+        return ()
+
+    def fit_prediction(
+        observations: Sequence[tuple[int, _FastCandidateRecord]],
+    ) -> tuple[np.ndarray, np.ndarray]:
+        times = np.asarray([item[0] for item in observations], dtype=np.float64)
+        coordinates = np.asarray(
+            [(item[1].aligned_x, item[1].aligned_y) for item in observations],
+            dtype=np.float64,
+        )
+        design = np.column_stack((np.ones(times.size, dtype=np.float64), times))
+        x_coefficients = np.linalg.lstsq(design, coordinates[:, 0], rcond=None)[0]
+        y_coefficients = np.linalg.lstsq(design, coordinates[:, 1], rcond=None)[0]
+        return x_coefficients, y_coefficients
+
+    def choose_nearby(
+        frame_index: int,
+        predicted: tuple[float, float],
+        used: set[tuple[int, int]],
+    ) -> _FastCandidateRecord | None:
+        tree = trees[frame_index]
+        if tree is None:
+            return None
+        candidate_indices = tree.query_ball_point(predicted, float(gate_px))
+        choices: list[tuple[float, float, int]] = []
+        for candidate_index in candidate_indices:
+            record = frame_records[frame_index][int(candidate_index)]
+            if (frame_index, record.row_index) in used:
+                continue
+            distance = float(
+                np.hypot(
+                    record.aligned_x - predicted[0],
+                    record.aligned_y - predicted[1],
+                )
+            )
+            choices.append((distance, -record.filter_snr, int(candidate_index)))
+        if not choices:
+            return None
+        choices.sort()
+        return frame_records[frame_index][choices[0][2]]
+
+    def follow_seed(
+        seed: Sequence[tuple[int, _FastCandidateRecord]],
+    ) -> tuple[tuple[int, _FastCandidateRecord], ...]:
+        observations = {int(frame_index): record for frame_index, record in seed}
+        used = {(int(frame_index), record.row_index) for frame_index, record in seed}
+        first_frame = min(observations)
+        last_frame = max(observations)
+
+        missed = 0
+        for frame_index in range(last_frame + 1, frame_count):
+            x_coefficients, y_coefficients = fit_prediction(tuple(sorted(observations.items())))
+            predicted = (
+                float(x_coefficients[0] + x_coefficients[1] * frame_index),
+                float(y_coefficients[0] + y_coefficients[1] * frame_index),
+            )
+            selected = choose_nearby(frame_index, predicted, used)
+            if selected is None:
+                missed += 1
+                if missed > 1:
+                    break
+                continue
+            missed = 0
+            observations[frame_index] = selected
+            used.add((frame_index, selected.row_index))
+
+        missed = 0
+        for frame_index in range(first_frame - 1, -1, -1):
+            x_coefficients, y_coefficients = fit_prediction(tuple(sorted(observations.items())))
+            predicted = (
+                float(x_coefficients[0] + x_coefficients[1] * frame_index),
+                float(y_coefficients[0] + y_coefficients[1] * frame_index),
+            )
+            selected = choose_nearby(frame_index, predicted, used)
+            if selected is None:
+                missed += 1
+                if missed > 1:
+                    break
+                continue
+            missed = 0
+            observations[frame_index] = selected
+            used.add((frame_index, selected.row_index))
+        return tuple(sorted(observations.items()))
+
+    def track_metrics(
+        observations: Sequence[tuple[int, _FastCandidateRecord]],
+    ) -> tuple[float, float, float, float]:
+        times = np.asarray([item[0] for item in observations], dtype=np.float64)
+        coordinates = np.asarray(
+            [(item[1].aligned_x, item[1].aligned_y) for item in observations],
+            dtype=np.float64,
+        )
+        design = np.column_stack((np.ones(times.size, dtype=np.float64), times))
+        x_coefficients = np.linalg.lstsq(design, coordinates[:, 0], rcond=None)[0]
+        y_coefficients = np.linalg.lstsq(design, coordinates[:, 1], rcond=None)[0]
+        fitted = np.column_stack(
+            (
+                x_coefficients[0] + x_coefficients[1] * times,
+                y_coefficients[0] + y_coefficients[1] * times,
+            )
+        )
+        residuals = np.linalg.norm(coordinates - fitted, axis=1)
+        duration = float(times[-1] - times[0])
+        speed = float(np.hypot(x_coefficients[1], y_coefficients[1]))
+        displacement = float(np.hypot(x_coefficients[1] * duration, y_coefficients[1] * duration))
+        fit_rms = float(np.sqrt(np.mean(residuals**2)))
+        max_residual = float(np.max(residuals)) if residuals.size else np.inf
+        return displacement, speed, fit_rms, max_residual
+
+    # 三点种子比逐个二点种子少一个数量级的后续预测调用。候选峰本身
+    # 是整像素坐标，第三点允许在 gate 内有少量局部测量抖动。
+    raw_candidates: list[tuple[tuple[int, float, float, float], tuple[tuple[int, _FastCandidateRecord], ...]]] = []
+    for start_frame in range(frame_count - 2):
+        first_records = frame_records[start_frame]
+        second_tree = trees[start_frame + 1]
+        third_tree = trees[start_frame + 2]
+        if not first_records or second_tree is None or third_tree is None:
+            continue
+        first_points = np.asarray(
+            [(record.aligned_x, record.aligned_y) for record in first_records],
+            dtype=np.float64,
+        )
+        second_neighbors = second_tree.query_ball_point(first_points, float(max_step_px))
+        for first_index, second_indices in enumerate(second_neighbors):
+            first = first_records[first_index]
+            for second_index in second_indices:
+                second = frame_records[start_frame + 1][int(second_index)]
+                step_x = second.aligned_x - first.aligned_x
+                step_y = second.aligned_y - first.aligned_y
+                step = float(np.hypot(step_x, step_y))
+                if step < min_step_px or step > float(max_step_px):
+                    continue
+                predicted_third = (
+                    second.aligned_x + step_x,
+                    second.aligned_y + step_y,
+                )
+                third_indices = third_tree.query_ball_point(predicted_third, float(gate_px))
+                third_choices: list[tuple[float, float, int]] = []
+                for third_index in third_indices:
+                    third = frame_records[start_frame + 2][int(third_index)]
+                    step_two = float(
+                        np.hypot(
+                            third.aligned_x - second.aligned_x,
+                            third.aligned_y - second.aligned_y,
+                        )
+                    )
+                    if step_two < 0.55 * min_step_px or step_two > float(max_step_px):
+                        continue
+                    distance = float(
+                        np.hypot(
+                            third.aligned_x - predicted_third[0],
+                            third.aligned_y - predicted_third[1],
+                        )
+                    )
+                    third_choices.append((distance, -third.filter_snr, int(third_index)))
+                if not third_choices:
+                    continue
+                third_choices.sort()
+                third = frame_records[start_frame + 2][third_choices[0][2]]
+                observations = follow_seed(
+                    (
+                        (start_frame, first),
+                        (start_frame + 1, second),
+                        (start_frame + 2, third),
+                    )
+                )
+                if len(observations) < required_presence:
+                    continue
+                frame_indices = [item[0] for item in observations]
+                if any((right - left) > 2 for left, right in zip(frame_indices, frame_indices[1:])):
+                    continue
+                displacement, speed, fit_rms, max_residual = track_metrics(observations)
+                if speed < min_step_px or speed > float(max_step_px):
+                    continue
+                if displacement < float(motion_min_displacement_px):
+                    continue
+                if fit_rms > float(max_fit_rms_px) or max_residual > float(gate_px):
+                    continue
+                median_snr = float(np.median([item[1].filter_snr for item in observations]))
+                raw_candidates.append(
+                    (
+                        (len(observations), -fit_rms, median_snr, -speed),
+                        observations,
+                    )
+                )
+
+    if not raw_candidates:
+        return ()
+    raw_candidates.sort(key=lambda item: item[0], reverse=True)
+    accepted: list[tuple[tuple[int, _FastCandidateRecord], ...]] = []
+    accepted_keys: list[set[tuple[int, int]]] = []
+    for _score, observations in raw_candidates:
+        keys = {(frame_index, record.row_index) for frame_index, record in observations}
+        if any(
+            len(keys & previous_keys) >= max(2, int(np.ceil(0.5 * min(len(keys), len(previous_keys)))))
+            for previous_keys in accepted_keys
+        ):
+            continue
+        accepted.append(observations)
+        accepted_keys.append(keys)
+    return tuple(accepted)
+
+
+def _track_fast_candidate_movers(
+    candidate_peak_frames: Sequence[object],
+    frame_analyses: Sequence[FrameAnalysis],
+    cumulative_shifts: Sequence[tuple[float, float]],
+    *,
+    link_radius_px: float,
+    min_presence: int,
+    motion_min_displacement_px: float,
+    min_filter_snr: float,
+    max_step_px: float,
+    gate_px: float,
+    max_fit_rms_px: float,
+    candidate_limit: int = DEFAULT_FAST_POINT_CANDIDATE_WORKING_LIMIT,
+    existing_tracks: Sequence[SourceTrack] = (),
+    aperture_radius: int = 4,
+    min_psf_support_pixels: int = 3,
+    min_fwhm: float = 0.8,
+    max_fwhm: float = 12.0,
+    max_ellipticity: float = 0.65,
+    line_artifact_frames: Sequence[object] | None = None,
+) -> tuple[SourceTrack, ...]:
+    """从完整匹配滤波候选中恢复被源级工作集截断的高速点源。
+
+    ``DetectionResult.candidate_peaks`` 保留了 ``max_sources`` 截断前的
+    峰坐标。本函数只把其中响应较强的一层作为高速轨迹宽筛，不对这层
+    的每个峰做昂贵测光；只有满足三点常速度、至少约 80% 帧出现、拟合
+    残差和线状掩膜规则的轨迹，才批量回到每帧原始 FITS 做强制孔径测光。
+    最终输出的 ``flux_snr`` 来自原图，``candidate_snr`` 才是匹配滤波
+    宽筛分数，因此不会把候选峰分数误报成星点 SNR。
+    """
+
+    frame_count = len(candidate_peak_frames)
+    if frame_count < 3 or len(frame_analyses) != frame_count or len(cumulative_shifts) != frame_count:
+        return ()
+    if min_filter_snr <= 0 or candidate_limit < 1:
+        raise ValueError("candidate working limit and filter SNR must be positive")
+
+    # 已由普通质量轨迹解释的位置不参加高速候选关联；否则固定星的
+    # 强匹配滤波峰会成为数量巨大的零速度/伪速度种子。
+    explained_trees: list[cKDTree | None] = []
+    for frame_index in range(frame_count):
+        points = [
+            (point.aligned_x, point.aligned_y)
+            for track in existing_tracks
+            if track.presence >= 2
+            for point in track.points
+            if point.frame_index == frame_index
+        ]
+        explained_trees.append(cKDTree(np.asarray(points, dtype=np.float64)) if points else None)
+
+    line_trees: list[cKDTree | None] = []
+    for frame_index in range(frame_count):
+        if line_artifact_frames is None or frame_index >= len(line_artifact_frames):
+            line_trees.append(None)
+            continue
+        values = np.asarray(line_artifact_frames[frame_index])
+        if values.ndim != 2 or values.shape[1] < 2 or values.size == 0:
+            line_trees.append(None)
+            continue
+        line_trees.append(cKDTree(np.asarray(values[:, :2], dtype=np.float64)))
+
+    frame_records: list[list[_FastCandidateRecord]] = []
+    for frame_index, raw_value in enumerate(candidate_peak_frames):
+        raw = np.asarray(raw_value, dtype=np.float64)
+        if raw.ndim != 2 or raw.shape[1] < 3 or raw.size == 0:
+            frame_records.append([])
+            continue
+        finite = np.isfinite(raw[:, 0]) & np.isfinite(raw[:, 1]) & np.isfinite(raw[:, 2])
+        keep = finite & (raw[:, 2] >= float(min_filter_snr))
+        row_indices = np.flatnonzero(keep)
+        if row_indices.size == 0:
+            frame_records.append([])
+            continue
+        if row_indices.size > int(candidate_limit):
+            scores = raw[row_indices, 2]
+            chosen = np.argpartition(scores, -int(candidate_limit))[-int(candidate_limit):]
+            row_indices = row_indices[chosen]
+        # 对每个帧只保留前一层响应候选；排序让相同距离时的优先级
+        # 稳定，也便于审计“候选工作集”到底覆盖到哪一个响应分数。
+        row_indices = row_indices[np.argsort(raw[row_indices, 2])[::-1]]
+        shift_x, shift_y = cumulative_shifts[frame_index]
+        image_height, image_width = frame_analyses[frame_index].frame.data.shape
+        safe_margin = int(aperture_radius) + 4
+        records: list[_FastCandidateRecord] = []
+        explained_tree = explained_trees[frame_index]
+        line_tree = line_trees[frame_index]
+        for row_index in row_indices:
+            raw_x, raw_y, filter_snr = (float(value) for value in raw[int(row_index), :3])
+            if not (
+                safe_margin <= raw_x < float(image_width - safe_margin)
+                and safe_margin <= raw_y < float(image_height - safe_margin)
+            ):
+                continue
+            aligned_x = raw_x - float(shift_x)
+            aligned_y = raw_y - float(shift_y)
+            if explained_tree is not None and explained_tree.query((aligned_x, aligned_y), k=1)[0] <= float(link_radius_px):
+                continue
+            if line_tree is not None and line_tree.query((raw_x, raw_y), k=1)[0] <= float(aperture_radius) + 0.5:
+                continue
+            records.append(
+                _FastCandidateRecord(
+                    row_index=int(row_index),
+                    raw_x=raw_x,
+                    raw_y=raw_y,
+                    aligned_x=aligned_x,
+                    aligned_y=aligned_y,
+                    filter_snr=filter_snr,
+                )
+            )
+        frame_records.append(records)
+
+    associated = _associate_fast_candidate_records(
+        frame_records,
+        cumulative_shifts,
+        link_radius_px=link_radius_px,
+        min_presence=min_presence,
+        motion_min_displacement_px=motion_min_displacement_px,
+        max_step_px=max_step_px,
+        gate_px=gate_px,
+        max_fit_rms_px=max_fit_rms_px,
+    )
+    if not associated:
+        return ()
+
+    # 轨迹候选的数量通常只有个位数/几十条；每个帧只对这些坐标做一次
+    # 向量化强制测光，并按帧释放有效掩膜，避免复制 15 张 4096² bool 图。
+    unique_by_frame: list[dict[int, _FastCandidateRecord]] = [dict() for _ in range(frame_count)]
+    for observations in associated:
+        for frame_index, record in observations:
+            unique_by_frame[frame_index][record.row_index] = record
+    measured: list[dict[int, tuple[float, int, bool, float, float]]] = [dict() for _ in range(frame_count)]
+    for frame_index, records_by_id in enumerate(unique_by_frame):
+        if not records_by_id:
+            continue
+        analysis = frame_analyses[frame_index]
+        image = np.asarray(analysis.frame.data)
+        parameters = analysis.detection.parameters
+        saturation_value = parameters.get("saturation_level")
+        saturation_level = None
+        if saturation_value is not None:
+            try:
+                candidate_saturation = float(saturation_value)
+            except (TypeError, ValueError):
+                candidate_saturation = -1.0
+            if candidate_saturation > 0:
+                saturation_level = candidate_saturation
+        effective_mask, _inferred_saturation, _mask_zero_pixels = _working_mask(
+            image,
+            auxiliary_mask(image.shape),
+            background=float(analysis.detection.background),
+            mask_zero_pixels=(
+                bool(parameters.get("mask_zero_pixels"))
+                if parameters.get("mask_zero_pixels") is not None
+                else None
+            ),
+            saturation_level=saturation_level,
+            numeric=np.asarray(image, dtype=np.float32),
+        )
+        records = tuple(records_by_id.values())
+        xs = np.asarray([record.raw_x for record in records], dtype=np.float64)
+        ys = np.asarray([record.raw_y for record in records], dtype=np.float64)
+        flux_snr, support, center_valid, fwhm, ellipticity = _stack_forced_frame_measure_batch(
+            image,
+            effective_mask,
+            xs,
+            ys,
+            aperture_radius=int(aperture_radius),
+            min_psf_support_pixels=int(min_psf_support_pixels),
+            global_background=float(analysis.detection.background),
+            global_noise=float(analysis.detection.noise),
+        )
+        for index, record in enumerate(records):
+            measured[frame_index][record.row_index] = (
+                float(flux_snr[index]),
+                int(support[index]),
+                bool(center_valid[index]),
+                float(fwhm[index]),
+                float(ellipticity[index]),
+            )
+
+    rendered: list[SourceTrack] = []
+    rendered_keys: list[set[tuple[int, int]]] = []
+    for observations in associated:
+        points: list[TrackPoint] = []
+        for frame_index, record in observations:
+            value = measured[frame_index].get(record.row_index)
+            if value is None:
+                continue
+            flux_snr, support, center_valid, fwhm, ellipticity = value
+            if not center_valid or support < int(min_psf_support_pixels):
+                continue
+            if not np.isfinite(flux_snr) or flux_snr < float(min_filter_snr):
+                continue
+            if not np.isfinite(fwhm) or not float(min_fwhm) <= fwhm <= float(max_fwhm):
+                continue
+            if not np.isfinite(ellipticity) or ellipticity > float(max_ellipticity):
+                continue
+            shift_x, shift_y = cumulative_shifts[frame_index]
+            points.append(
+                TrackPoint(
+                    frame_index=int(frame_index),
+                    detection_id=-1 - int(record.row_index),
+                    x=float(record.raw_x),
+                    y=float(record.raw_y),
+                    aligned_x=float(record.aligned_x),
+                    aligned_y=float(record.aligned_y),
+                    flux_snr=float(flux_snr),
+                    quality_passed=True,
+                    candidate_snr=float(record.filter_snr),
+                )
+            )
+        if len(points) < int(min_presence):
+            continue
+        frame_indices = [point.frame_index for point in points]
+        if any((right - left) > 2 for left, right in zip(frame_indices, frame_indices[1:])):
+            continue
+        displacement, speed, fit_rms = _fit_track(points)
+        if fit_rms is None or fit_rms > float(max_fit_rms_px):
+            continue
+        if speed < max(float(link_radius_px) * 1.01, float(motion_min_displacement_px) / max(1, frame_count - 1)):
+            continue
+        if speed > float(max_step_px) or displacement < float(motion_min_displacement_px):
+            continue
+        keys = {(point.frame_index, point.detection_id) for point in points}
+        if any(
+            len(keys & previous_keys) >= max(2, int(np.ceil(0.5 * min(len(keys), len(previous_keys)))))
+            for previous_keys in rendered_keys
+        ):
+            continue
+        rendered.append(
+            SourceTrack(
+                track_id=-1,
+                classification="moving",
+                points=tuple(points),
+                displacement_px=float(displacement),
+                speed_px_per_frame=float(speed),
+                fit_rms_px=float(fit_rms),
+                evidence_level=FAST_POINT_MOTION_EVIDENCE,
+            )
+        )
+        rendered_keys.append(keys)
+    return tuple(rendered)
 
 
 def _fit_motion_feature_track(points: Sequence[MotionFeaturePoint]) -> tuple[float, float, float | None]:
@@ -2976,6 +3782,11 @@ def analyze_sequence(
     registration_radius_px: float = 8.0,
     max_motion_fit_rms_px: float = 0.75,
     persistent_min_presence: int | None = None,
+    fast_point_motion: bool = True,
+    fast_point_min_snr: float = DEFAULT_FAST_POINT_MIN_SNR,
+    fast_point_max_step_px: float = DEFAULT_FAST_POINT_MAX_STEP_PX,
+    fast_point_gate_px: float = DEFAULT_FAST_POINT_GATE_PX,
+    fast_point_max_fit_rms_px: float = DEFAULT_FAST_POINT_FIT_RMS_PX,
     sequence_max_sources: int | None = DEFAULT_SEQUENCE_SOURCE_WORKING_LIMIT,
     sequence_workers: int = DEFAULT_SEQUENCE_WORKERS,
     candidate_consensus_min_snr: float = 15.0,
@@ -3022,6 +3833,8 @@ def analyze_sequence(
         raise ValueError("sequence_max_sources must be positive or None")
     if sequence_workers < 1:
         raise ValueError("sequence_workers must be positive")
+    if fast_point_min_snr <= 0 or fast_point_max_step_px <= 0 or fast_point_gate_px <= 0 or fast_point_max_fit_rms_px <= 0:
+        raise ValueError("fast point motion thresholds must be positive")
     if candidate_consensus_min_snr <= 0:
         raise ValueError("candidate_consensus_min_snr must be positive")
     temporal_proposal_mode = str(temporal_proposal_mode).strip().lower()
@@ -3170,6 +3983,22 @@ def analyze_sequence(
         max_motion_fit_rms_px=max_motion_fit_rms_px,
         persistent_min_presence=persistent_min_presence,
     )
+    fast_point_quality_tracks: tuple[SourceTrack, ...] = ()
+    if fast_point_motion and total >= 2:
+        if progress is not None:
+            progress("fast-point-motion", 0, total)
+        fast_point_quality_tracks = track_fast_point_movers(
+            [analysis.detection.quality_sources for analysis in resolved_analyses],
+            result.cumulative_shifts,
+            link_radius_px=link_radius_px,
+            min_presence=result.min_presence,
+            motion_min_displacement_px=motion_min_displacement_px,
+            min_flux_snr=fast_point_min_snr,
+            max_step_px=fast_point_max_step_px,
+            gate_px=fast_point_gate_px,
+            max_fit_rms_px=fast_point_max_fit_rms_px,
+            existing_tracks=result.tracks,
+        )
     # 线状层本来就需要注册时间中值参考；提前构建一次并复用到候选补检，
     # 避免为了补回单帧 Gaussian 漏掉的稳定源而再复制/计算一遍 4096² 参考图。
     temporal_reference = _registered_median_reference(
@@ -3219,6 +4048,7 @@ def analyze_sequence(
         if progress is not None:
             progress("temporal-coadd", total, total)
     candidate_peak_frames: list[np.ndarray] = []
+    fast_candidate_frames: list[np.ndarray] = []
     for analysis, temporal_rows in zip(resolved_analyses, temporal_candidate_frames, strict=True):
         raw = np.asarray(analysis.detection.candidate_peaks, dtype=np.float32)
         if raw.size == 0:
@@ -3228,6 +4058,10 @@ def analyze_sequence(
         else:
             # 旧/非快速结果没有临时候选峰证据；不要把异常数组猜成坐标。
             base_rows = np.empty((0, 3), dtype=np.float32)
+        # 高速点源宽筛只使用当前帧的匹配滤波峰。时间中值/叠加补提案
+        # 用于稳定暗星恢复，不能混入高速点源的速度种子，否则一条静态
+        # 补提案可能与瞬态噪点串成伪高速轨迹。
+        fast_candidate_frames.append(base_rows)
         if base_rows.size:
             base_rows = np.column_stack(
                 (
@@ -3242,6 +4076,34 @@ def analyze_sequence(
             candidate_peak_frames.append(temporal_rows)
         else:
             candidate_peak_frames.append(np.vstack((base_rows, temporal_rows)).astype(np.float32, copy=False))
+    if fast_point_motion and total >= 3:
+        fast_point_candidate_tracks = _track_fast_candidate_movers(
+            fast_candidate_frames,
+            resolved_analyses,
+            result.cumulative_shifts,
+            link_radius_px=link_radius_px,
+            min_presence=result.min_presence,
+            motion_min_displacement_px=motion_min_displacement_px,
+            min_filter_snr=fast_point_min_snr,
+            max_step_px=fast_point_max_step_px,
+            gate_px=fast_point_gate_px,
+            max_fit_rms_px=fast_point_max_fit_rms_px,
+            existing_tracks=result.tracks + fast_point_quality_tracks,
+            aperture_radius=int(detector_kwargs.get("aperture_radius", 4)),
+            min_psf_support_pixels=int(detector_kwargs.get("min_psf_support_pixels", 3)),
+            min_fwhm=float(detector_kwargs.get("min_fwhm", 0.8)),
+            max_fwhm=float(detector_kwargs.get("max_fwhm", 12.0)),
+            max_ellipticity=float(detector_kwargs.get("max_ellipticity", 0.65)),
+            line_artifact_frames=[
+                analysis.detection.line_artifact_coordinates
+                for analysis in resolved_analyses
+            ],
+        )
+    else:
+        fast_point_candidate_tracks = ()
+    fast_point_tracks = fast_point_quality_tracks + fast_point_candidate_tracks
+    if progress is not None and fast_point_motion and total >= 2:
+        progress("fast-point-motion", total, total)
     candidate_audit: dict[str, int] = {}
     candidate_consensus = _candidate_consensus_tracks(
         candidate_peak_frames,
@@ -3272,7 +4134,7 @@ def analyze_sequence(
         audit_sink=candidate_audit,
     )
     quality_tracks = tuple(result.tracks)
-    candidate_tracks = tuple(
+    fast_point_tracks_with_ids = tuple(
         SourceTrack(
             track_id=len(quality_tracks) + index,
             classification=track.classification,
@@ -3282,9 +4144,22 @@ def analyze_sequence(
             fit_rms_px=track.fit_rms_px,
             evidence_level=track.evidence_level,
         )
+        for index, track in enumerate(fast_point_tracks)
+    )
+    all_tracks = quality_tracks + fast_point_tracks_with_ids
+    candidate_tracks = tuple(
+        SourceTrack(
+            track_id=len(all_tracks) + index,
+            classification=track.classification,
+            points=track.points,
+            displacement_px=track.displacement_px,
+            speed_px_per_frame=track.speed_px_per_frame,
+            fit_rms_px=track.fit_rms_px,
+            evidence_level=track.evidence_level,
+        )
         for index, track in enumerate(candidate_consensus)
     )
-    all_tracks = quality_tracks + candidate_tracks
+    all_tracks = all_tracks + candidate_tracks
     resolved_stack_min_presence = (
         int(getattr(result, "persistent_min_presence", max(3, int(np.ceil(total * 0.5)))))
         if stack_min_presence is None
