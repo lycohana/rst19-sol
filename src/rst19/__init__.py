@@ -416,7 +416,15 @@ from .mosaic import (
     save_mosaic_cache,
     write_mosaic_artifacts,
 )
-from .photometry import FaintestSource, find_faintest_source, instrumental_magnitude
+from .photometry import (
+    FaintestSource,
+    absolute_magnitude_from_apparent,
+    absolute_magnitude_from_parallax,
+    calibrated_apparent_magnitude,
+    find_faintest_source,
+    inferred_zero_point_for_comparison,
+    instrumental_magnitude,
+)
 from .sequence import (
     FixedSentinelAudit,
     FixedSentinelImpactAudit,
@@ -435,6 +443,7 @@ from .sequence import (
     detect_single_frame_long_trails,
     track_detections,
 )
+from .sequence_brief import BriefTarget, SequenceBrief, build_sequence_brief
 from .wcs import AffineWCSCalibration, TangentPlaneWCS, fit_affine_wcs_from_matches
 from .wcs_validation import WCSFrameValidation, WCSValidationReport, run_sequence_wcs_validation, validate_frame_matches, write_wcs_validation_artifacts
 
@@ -466,6 +475,9 @@ __all__ = [
     "MotionFrameAudit",
     "SourceTrack",
     "TrackPoint",
+    "BriefTarget",
+    "SequenceBrief",
+    "build_sequence_brief",
     "analyze_sequence",
     "audit_fixed_sentinel",
     "audit_fixed_sentinel_impacts",
@@ -506,7 +518,11 @@ __all__ = [
     "DetectionPSFSweepRow",
     "detect_sources",
     "build_background_model",
+    "absolute_magnitude_from_apparent",
+    "absolute_magnitude_from_parallax",
+    "calibrated_apparent_magnitude",
     "find_faintest_source",
+    "inferred_zero_point_for_comparison",
     "instrumental_magnitude",
     "load_catalog_csv",
     "audit_auxiliary_boresight",

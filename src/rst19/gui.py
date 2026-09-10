@@ -52,7 +52,7 @@ from .experiments import (
 from .feedback import ManualThresholdFeedback, append_manual_feedback, load_manual_feedback
 from .fits import auxiliary_mask, read_fits
 from .innovation import _fit_constant_velocity, _telemetry_consistency, _telemetry_prediction, build_innovation_report_from_payload, write_innovation_artifacts
-from .photometry import instrumental_magnitude
+from .photometry import inferred_zero_point_for_comparison, instrumental_magnitude
 from .pipeline import FrameAnalysis, analyze_frame
 from .matching import MatchResult
 from .mosaic import (
@@ -82,6 +82,7 @@ from .sequence import (
     analyze_sequence,
     detect_single_frame_long_trails,
 )
+from .sequence_brief import SequenceBrief, build_sequence_brief
 from .wcs import AffineWCSCalibration, TangentPlaneWCS, fit_affine_wcs_from_matches
 from .wcs_validation import WCSValidationReport, run_sequence_wcs_validation, write_wcs_validation_artifacts
 
@@ -564,6 +565,7 @@ class StarfieldApp(tk.Tk):
         self.catalog_frame_path: Path | None = None
         self.catalog_window: tk.Toplevel | None = None
         self.sequence_result: SequenceResult | None = None
+        self.sequence_brief: SequenceBrief | None = None
         self.mosaic_result: MosaicResult | None = None
         self.mosaic_window: tk.Toplevel | None = None
         self.mosaic_canvas: tk.Canvas | None = None
@@ -609,6 +611,7 @@ class StarfieldApp(tk.Tk):
         self.frame_token = 0
         self.result_queue: queue.Queue[tuple[str, int, Any]] = queue.Queue()
         self.sequence_frame_states: list[str] = []
+        self.task_mode = "single"
         self.busy = False
         self.active_job_token: int | None = None
         self.active_job_kind: str | None = None
@@ -1568,23 +1571,61 @@ class StarfieldApp(tk.Tk):
         header.pack(fill="x", padx=36, pady=(17, 11))
         heading = tk.Frame(header, bg=PAPER)
         heading.pack(side="left")
-        self._mono_label(heading, "SINGLE FRAME OBSERVATION", color=AMBER, size=8, bg=PAPER).pack(
+        self.header_mode_label = self._mono_label(heading, "SINGLE FRAME OBSERVATION", color=AMBER, size=8, bg=PAPER)
+        self.header_mode_label.pack(
             anchor="w",
         )
-        self._label(heading, "单张星图 · 证据分析", color=WHITE, size=25, bold=True, bg=PAPER).pack(
+        self.header_title_label = self._label(heading, "单帧识别 · 证据分析", color=WHITE, size=25, bold=True, bg=PAPER)
+        self.header_title_label.pack(
             anchor="w",
             pady=(4, 0),
         )
-        self._label(
+        self.header_subtitle_label = self._label(
             heading,
             "按论文路线从原始 ADU 走到可复核源表：宽筛保召回，细筛辨机制。",
             color=INK_SOFT,
             size=9,
             bg=PAPER,
-        ).pack(anchor="w", pady=(5, 0))
+        )
+        self.header_subtitle_label.pack(anchor="w", pady=(5, 0))
         motif = tk.Canvas(header, width=310, height=84, bg=PAPER, highlightthickness=0)
         motif.pack(side="right", anchor="e")
         self._draw_star_motif(motif)
+
+        mode_bar = tk.Frame(self.main, bg=PAPER_LIGHT, highlightbackground=PAPER_LINE, highlightthickness=1)
+        mode_bar.pack(fill="x", padx=36, pady=(0, 10))
+        self._mono_label(mode_bar, "WORKSPACE", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(side="left", padx=(14, 10), pady=8)
+        self.task_mode_var = tk.StringVar(value="single")
+        self.single_mode_button = tk.Button(
+            mode_bar,
+            text="单帧识别",
+            command=lambda: self._set_task_mode("single"),
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=5,
+            font=(SANS, 9, "bold"),
+        )
+        self.single_mode_button.pack(side="left", padx=(0, 5), pady=4)
+        self.sequence_mode_button = tk.Button(
+            mode_bar,
+            text="15 帧分析",
+            command=lambda: self._set_task_mode("sequence"),
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=5,
+            font=(SANS, 9, "bold"),
+        )
+        self.sequence_mode_button.pack(side="left", padx=(0, 12), pady=4)
+        self.task_mode_hint_label = self._mono_label(
+            mode_bar,
+            "当前只解释一张图；跨帧结论请切换到 15 帧分析",
+            color=INK_SOFT,
+            size=8,
+            bg=PAPER_LIGHT,
+        )
+        self.task_mode_hint_label.pack(side="left", pady=8)
 
         self._build_controls_starfield()
         self._build_metrics_starfield()
@@ -1638,6 +1679,84 @@ class StarfieldApp(tk.Tk):
         ).pack(side="right", padx=(12, 0))
 
         self._build_content_starfield()
+        self._set_task_mode("single")
+
+    def _set_task_mode(self, mode: str) -> None:
+        """在单帧识别和 15 帧序列之间切换工作语义。"""
+
+        if mode not in {"single", "sequence"}:
+            mode = "single"
+        self.task_mode = mode
+        task_mode_var = self.__dict__.get("task_mode_var")
+        if task_mode_var is not None:
+            task_mode_var.set(mode)
+
+        single_active = mode == "single"
+        single_button = self.__dict__.get("single_mode_button")
+        sequence_button = self.__dict__.get("sequence_mode_button")
+        if single_button is not None:
+            single_button.config(
+                bg=NAVY_SOFT if single_active else PAPER_LIGHT,
+                fg=WHITE if single_active else INK_SOFT,
+                activebackground=NAVY_SOFT if single_active else PAPER_LINE,
+                activeforeground=WHITE if single_active else INK,
+            )
+        if sequence_button is not None:
+            sequence_button.config(
+                bg=SKY if not single_active else PAPER_LIGHT,
+                fg=NAVY_DARK if not single_active else INK_SOFT,
+                activebackground=SKY if not single_active else PAPER_LINE,
+                activeforeground=NAVY_DARK if not single_active else INK,
+            )
+
+        if single_active:
+            eyebrow = "SINGLE FRAME OBSERVATION"
+            title = "单帧识别 · 证据分析"
+            subtitle = "当前只回答一张图：星点、最暗可信候选和质量原因；不把 m_inst 当成 M_V。"
+            hint = "当前只解释一张图；跨帧结论请切换到 15 帧分析"
+        else:
+            eyebrow = "SEQUENCE ANALYSIS / 15 FRAMES"
+            title = "15 帧分析 · 运动与合成简报"
+            subtitle = "当前回答连续 15 帧：稳定星场、运动候选、运行方向和注册合成的意义。"
+            hint = "当前解释跨帧证据；单张星点详情请切换回单帧识别"
+        for name, value in (
+            ("header_mode_label", eyebrow),
+            ("header_title_label", title),
+            ("header_subtitle_label", subtitle),
+            ("task_mode_hint_label", hint),
+        ):
+            widget = self.__dict__.get(name)
+            if widget is not None:
+                widget.config(text=value)
+        header_mode_label = self.__dict__.get("header_mode_label")
+        if header_mode_label is not None:
+            header_mode_label.config(fg=AMBER if single_active else SKY)
+        brief_label = self.__dict__.get("sequence_brief_label")
+        if brief_label is not None:
+            if single_active:
+                brief_label.config(text="当前为单帧任务\n切换到“15 帧分析”后生成跨帧简报")
+            elif self.sequence_brief is not None:
+                brief_label.config(text=self.sequence_brief.text())
+            else:
+                brief_label.config(text="尚未完成序列分析\n点击“15 帧动目标”后生成通俗简报")
+
+        # 15 帧进度、账本和动作按钮只在序列工作区出现，避免把两种
+        # 证据层混在同一张“当前结果”里。按钮仍由 _set_job_controls
+        # 统一管理状态，切换时不会改变已有缓存或分析结果。
+        for name in ("sequence_action_group", "sequence_progress_row", "sequence_ledger_row"):
+            widget = self.__dict__.get(name)
+            if widget is None:
+                continue
+            if single_active:
+                widget.pack_forget()
+            elif not widget.winfo_manager():
+                if name == "sequence_action_group":
+                    widget.pack(side="right", padx=(0, 4))
+                else:
+                    widget.pack(fill="x", padx=16, pady=(0, 8 if name == "sequence_progress_row" else 10))
+
+        if hasattr(self, "overlay_hint_var"):
+            self._update_overlay_hint()
 
     def _build_controls_starfield(self) -> None:
         """只把复现关键参数常驻，复杂调参进入高级区。"""
@@ -1690,8 +1809,10 @@ class StarfieldApp(tk.Tk):
             size=8,
         )
         self.cache_button.pack(side="right", padx=(8, 0))
+        self.sequence_action_group = tk.Frame(header, bg=PAPER_LIGHT)
+        self.sequence_action_group.pack(side="right", padx=(0, 4))
         self.motion_button = self._star_button(
-            header,
+            self.sequence_action_group,
             "15 帧动目标",
             self.run_sequence_analysis,
             kind="secondary",
@@ -1699,9 +1820,9 @@ class StarfieldApp(tk.Tk):
             pady=8,
             size=8,
         )
-        self.motion_button.pack(side="right", padx=(8, 0))
+        self.motion_button.pack(side="left", padx=(0, 6))
         self.evidence_button = self._star_button(
-            header,
+            self.sequence_action_group,
             "15 帧证据",
             self._show_sequence_evidence,
             kind="ghost",
@@ -1710,9 +1831,9 @@ class StarfieldApp(tk.Tk):
             size=8,
             state="disabled",
         )
-        self.evidence_button.pack(side="right", padx=(8, 0))
+        self.evidence_button.pack(side="left", padx=(0, 6))
         self.mosaic_button = self._star_button(
-            header,
+            self.sequence_action_group,
             "15 帧合成大图",
             self.run_mosaic_analysis,
             kind="ghost",
@@ -1721,7 +1842,7 @@ class StarfieldApp(tk.Tk):
             size=8,
             state="disabled",
         )
-        self.mosaic_button.pack(side="right", padx=(8, 0))
+        self.mosaic_button.pack(side="left")
         self.run_button = self._star_button(
             header,
             "✦  一键分析单张",
@@ -1754,6 +1875,7 @@ class StarfieldApp(tk.Tk):
                 )
 
         sequence_progress_row = tk.Frame(controls, bg=PAPER_LIGHT)
+        self.sequence_progress_row = sequence_progress_row
         sequence_progress_row.pack(fill="x", padx=16, pady=(0, 8))
         self.sequence_progress_scope_label = self._mono_label(
             sequence_progress_row,
@@ -1787,6 +1909,7 @@ class StarfieldApp(tk.Tk):
         self.sequence_progress_label.pack(side="right", padx=(11, 0))
 
         ledger_row = tk.Frame(controls, bg=PAPER_LIGHT)
+        self.sequence_ledger_row = ledger_row
         ledger_row.pack(fill="x", padx=16, pady=(0, 10))
         self._mono_label(ledger_row, "FRAME LEDGER", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(
             side="left",
@@ -2218,10 +2341,18 @@ class StarfieldApp(tk.Tk):
             value.pack(anchor="w", pady=(2, 0))
             self.metric_values[key] = value
 
-        faintest_box = card(2, "FAINTEST ACCEPTED", "m_inst", MINT)
+        faintest_box = card(2, "FAINTEST ACCEPTED", "m_inst / M_V", MINT)
         faintest_value = self._label(faintest_box, "—", color=MINT, size=21, bg=PAPER_LIGHT)
-        faintest_value.pack(anchor="w", padx=14, pady=(5, 11))
+        faintest_value.pack(anchor="w", padx=14, pady=(5, 1))
         self.metric_values["faintest"] = faintest_value
+        self.faintest_physical_label = self._mono_label(
+            faintest_box,
+            "M_V = 待标定",
+            color=AMBER_LIGHT,
+            size=7,
+            bg=PAPER_LIGHT,
+        )
+        self.faintest_physical_label.pack(anchor="w", padx=14, pady=(0, 9))
 
     def _build_content_starfield(self) -> None:
         content = tk.Frame(self.main, bg=PAPER)
@@ -2410,10 +2541,29 @@ class StarfieldApp(tk.Tk):
         self.faintest_note.pack(fill="x", padx=16, pady=(0, 14))
         self.detail_separator = tk.Frame(detail, bg=PAPER_LINE, height=1)
         self.detail_separator.pack(fill="x", padx=16)
+        self.sequence_brief_section_label = self._mono_label(
+            detail,
+            "15-FRAME BRIEF",
+            color=SKY,
+            size=7,
+            bg=PAPER_LIGHT,
+        )
+        self.sequence_brief_section_label.pack(anchor="w", padx=16, pady=(12, 5))
+        self.sequence_brief_label = self._label(
+            detail,
+            "尚未完成序列分析\n切换到“15 帧分析”后，这里用通俗语言说明运动候选、方向和合成图意义",
+            color=INK,
+            size=8,
+            bg=PAPER_LIGHT,
+            justify="left",
+            anchor="w",
+            wraplength=330,
+        )
+        self.sequence_brief_label.pack(fill="x", padx=16, pady=(0, 10))
         self.evidence_section_label = self._mono_label(
             detail,
-            "15-FRAME EVIDENCE",
-            color=SKY,
+            "TECHNICAL EVIDENCE",
+            color=INK_SOFT,
             size=7,
             bg=PAPER_LIGHT,
         )
@@ -2769,29 +2919,41 @@ class StarfieldApp(tk.Tk):
     def _set_job_controls(self) -> None:
         """根据当前后台任务状态同步按钮，避免切帧把旧任务误报成空闲。"""
 
+        run_button = self.__dict__.get("run_button")
+        motion_button = self.__dict__.get("motion_button")
+        cache_button = self.__dict__.get("cache_button")
+        evidence_button = self.__dict__.get("evidence_button")
         if self.busy:
-            self.run_button.config(state="disabled", text="正在分析单张…")
+            if run_button is not None:
+                run_button.config(state="disabled", text="正在分析单张…")
             busy_text = "15 帧分析中…" if self.active_job_kind == "sequence" else "正在分析…"
-            self.motion_button.config(state="disabled", text=busy_text)
+            if motion_button is not None:
+                motion_button.config(state="disabled", text=busy_text)
             mosaic_button = self.__dict__.get("mosaic_button")
             if mosaic_button is not None:
                 mosaic_button.config(
                     state="disabled",
                     text="正在合成大图…" if self.active_job_kind == "mosaic" else "15 帧合成大图",
                 )
-            self.cache_button.config(state="normal")
-            self.evidence_button.config(state="disabled")
+            if cache_button is not None:
+                cache_button.config(state="normal")
+            if evidence_button is not None:
+                evidence_button.config(state="disabled")
         else:
-            self.run_button.config(state="normal", text="✦  一键分析单张")
-            self.motion_button.config(state="normal", text="15 帧动目标")
+            if run_button is not None:
+                run_button.config(state="normal", text="✦  一键分析单张")
+            if motion_button is not None:
+                motion_button.config(state="normal", text="15 帧动目标")
             mosaic_button = self.__dict__.get("mosaic_button")
             if mosaic_button is not None:
                 mosaic_button.config(
                     state="normal" if self.sequence_result is not None else "disabled",
                     text="打开合成大图" if self.mosaic_result is not None else "15 帧合成大图",
                 )
-            self.cache_button.config(state="normal")
-            self.evidence_button.config(state="normal" if self.sequence_result is not None else "disabled")
+            if cache_button is not None:
+                cache_button.config(state="normal")
+            if evidence_button is not None:
+                evidence_button.config(state="normal" if self.sequence_result is not None else "disabled")
         if "manual_apply_button" in self.__dict__:
             self.manual_apply_button.config(state="disabled" if self.busy or self.selected_frame is None else "normal")
             self.manual_feedback_button.config(
@@ -2959,6 +3121,8 @@ class StarfieldApp(tk.Tk):
         wraplength = max(180, int(event.width) - 32)
         self.faintest_detail.config(wraplength=wraplength)
         self.faintest_note.config(wraplength=wraplength)
+        if self.__dict__.get("sequence_brief_label") is not None:
+            self.sequence_brief_label.config(wraplength=wraplength)
         self.sequence_evidence_label.config(wraplength=wraplength)
 
     def _render_running_progress(self, value: float, progress_text: str) -> None:
@@ -2969,6 +3133,15 @@ class StarfieldApp(tk.Tk):
             return
         percent = max(0.0, min(100.0, float(value)))
         if self.active_job_kind == "sequence":
+            brief_label = self.__dict__.get("sequence_brief_label")
+            if brief_label is not None:
+                brief_label.config(
+                    text=(
+                        f"15 帧简报生成中 · {percent:.0f}%\n"
+                        f"{progress_text}\n"
+                        "完成后会把算法结果翻译成运动、方向和合成图的通俗结论"
+                    )
+                )
             label.config(
                 text=(
                     f"运行中 · {percent:.0f}%\n"
@@ -2977,6 +3150,9 @@ class StarfieldApp(tk.Tk):
                 )
             )
         elif self.active_job_kind == "single":
+            brief_label = self.__dict__.get("sequence_brief_label")
+            if brief_label is not None:
+                brief_label.config(text="当前为单帧任务\n切换到“15 帧分析”后生成跨帧简报")
             label.config(
                 text=(
                     f"当前帧运行中 · {percent:.0f}%\n"
@@ -2985,6 +3161,9 @@ class StarfieldApp(tk.Tk):
                 )
             )
         elif self.active_job_kind == "mosaic":
+            brief_label = self.__dict__.get("sequence_brief_label")
+            if brief_label is not None:
+                brief_label.config(text="15 帧注册合成进行中\n完成后会在这里补充覆盖和重叠的通俗说明")
             label.config(
                 text=(
                     f"15 帧合成中 · {percent:.0f}%\n"
@@ -2999,6 +3178,7 @@ class StarfieldApp(tk.Tk):
                 show_message = "请先选择数据目录中的 FITS 文件"
                 messagebox.showinfo("RST19", show_message)
             return
+        self._set_task_mode("single")
         # 允许用户直接编辑输入框后点击“分析当前帧”，不要求先碰一下滑块。
         self._sync_manual_controls_from_entries()
         try:
@@ -3020,6 +3200,9 @@ class StarfieldApp(tk.Tk):
         self.catalog_calibration = None
         self.catalog_frame_path = None
         self.hover_catalog_match = None
+        self.sequence_brief = None
+        if self.__dict__.get("sequence_brief_label") is not None:
+            self.sequence_brief_label.config(text="当前为单帧任务\n切换到“15 帧分析”后生成跨帧简报")
         self.busy = True
         self.active_job_kind = "single"
         self.active_job_token = self.frame_token
@@ -3335,6 +3518,7 @@ class StarfieldApp(tk.Tk):
         if len(self.frames) < 2:
             messagebox.showinfo("动目标分析", "至少需要 2 帧 FITS 才能进行跨帧运动判定")
             return
+        self._set_task_mode("sequence")
         try:
             threshold, min_distance, max_sources, zero_point, psf_fwhm, min_flux_snr = self._read_parameters()
         except ValueError as exc:
@@ -3361,10 +3545,13 @@ class StarfieldApp(tk.Tk):
         self.hover_catalog_match = None
         # 旧序列结果在新一轮计算期间不能继续伪装成当前结果；完成后再写回。
         self.sequence_result = None
+        self.sequence_brief = None
         self.mosaic_result = None
         if self.mosaic_window is not None:
             self._close_mosaic_window(self.mosaic_window)
         self.long_trails = ()
+        if self.__dict__.get("sequence_brief_label") is not None:
+            self.sequence_brief_label.config(text=f"正在分析 {len(self.frames)} 帧\n完成后生成运动、方向和合成图简报")
         self.sequence_evidence_label.config(text=f"正在分析 {len(self.frames)} 帧 · 当前阶段和帧号会显示在此处")
         token = self.frame_token
         frame_paths = tuple(self.frames)
@@ -3547,6 +3734,7 @@ class StarfieldApp(tk.Tk):
         if self.sequence_result is None:
             messagebox.showinfo("15 帧合成大图", "请先完成“分析 15 帧”，再生成注册合成大图")
             return
+        self._set_task_mode("sequence")
         if self.mosaic_result is not None:
             self._show_mosaic_window(self.mosaic_result, cache_state="内存结果")
             return
@@ -3995,10 +4183,13 @@ class StarfieldApp(tk.Tk):
             self.preview = self.preview_variants.get(self.preview_mode_var.get()) or self.preview_variants.get(PREVIEW_MODE_ENHANCED)
             # 单帧分析是新的证据上下文，不能继续显示上一次 15 帧分析的轨迹。
             self.sequence_result = None
+            self.sequence_brief = None
             self.mosaic_result = None
             if self.mosaic_window is not None:
                 self._close_mosaic_window(self.mosaic_window)
             self._set_sequence_progress(100.0, "当前帧完成 · 序列待运行")
+            if self.__dict__.get("sequence_brief_label") is not None:
+                self.sequence_brief_label.config(text="当前为单帧任务\n切换到“15 帧分析”后生成跨帧简报")
             self._set_job_controls()
             self.preview_shape = shape
             self.preview_zoom = 1.0
@@ -4039,6 +4230,9 @@ class StarfieldApp(tk.Tk):
             self._set_progress(0.0, "失败")
             self._set_sequence_progress(0.0, f"{len(self.frames)} 帧失败 · 可重试")
             self._mark_sequence_ledger("error")
+            self.sequence_brief = None
+            if self.__dict__.get("sequence_brief_label") is not None:
+                self.sequence_brief_label.config(text=f"15 帧分析失败\n{payload}")
             self.sequence_evidence_label.config(
                 text=f"15 帧分析失败\n{payload}\n请检查帧序列、参数和缓存后重试"
             )
@@ -4063,6 +4257,7 @@ class StarfieldApp(tk.Tk):
             self._set_progress(100.0, "完成")
             result, cache_state, _cache_hit = payload
             self.sequence_result = result
+            self.sequence_brief = None
             self.mosaic_result = None
             self._set_sequence_progress(100.0, f"{len(result.frames)} 帧完成 · {len(result.frames)}/{len(result.frames)}")
             self._mark_sequence_ledger("completed")
@@ -4094,6 +4289,8 @@ class StarfieldApp(tk.Tk):
             self._set_progress(100.0, "合成大图完成")
             result, cache_state, _cache_hit = payload
             self.mosaic_result = result
+            if self.sequence_result is not None:
+                self._render_sequence_evidence(self.sequence_result)
             self._set_sequence_progress(100.0, f"合成大图完成 · {result.output_shape[1]}×{result.output_shape[0]} px")
             self.status_var.set(
                 f"{cache_state} · 15 帧注册合成完成 · 输出 {result.output_shape[1]}×{result.output_shape[0]} px · "
@@ -4105,12 +4302,17 @@ class StarfieldApp(tk.Tk):
     def _reset_result_widgets(self) -> None:
         for value in self.metric_values.values():
             value.config(text="—")
+        if self.__dict__.get("faintest_physical_label") is not None:
+            self.faintest_physical_label.config(text="m_std = 待标定 · M_V = 不可计算")
         self.faintest_detail.config(text="尚未运行分析")
         self.faintest_note.config(
-            text="按局部通量 SNR、点源形状、边缘、掩膜和饱和状态筛选；m_inst 为仪器星等。"
+            text="m_inst = -2.5 log10(ADU/s) 只是仪器星等；没有零点、波段、距离和消光时，不输出 m_V 或 M_V。"
         )
         if self.sequence_result is None:
-            self.sequence_evidence_label.config(text="尚未完成序列分析\n点击“分析 15 帧动目标”后显示时间、配准和轨迹摘要")
+            self.sequence_brief = None
+            if self.__dict__.get("sequence_brief_label") is not None:
+                self.sequence_brief_label.config(text="尚未完成序列分析\n切换到“15 帧分析”后生成跨帧简报")
+            self.sequence_evidence_label.config(text="尚未完成序列分析\n点击“15 帧动目标”后显示时间、配准和轨迹摘要")
         else:
             self._render_sequence_evidence(self.sequence_result)
         self.table_count_label.config(text="0 rows")
@@ -4148,18 +4350,44 @@ class StarfieldApp(tk.Tk):
         faintest = self.analysis.faintest
         if faintest is None:
             self.metric_values["faintest"].config(text="—")
+            if self.__dict__.get("faintest_physical_label") is not None:
+                self.faintest_physical_label.config(text="m_std = 待标定 · M_V = 不可计算")
             self.faintest_detail.config(text="没有满足质量条件的源")
-            self.faintest_note.config(text="请降低阈值或检查掩膜/边缘筛选结果；m_inst 只在质量源上定义。")
+            self.faintest_note.config(
+                text="请检查阈值、掩膜和边缘筛选；m_inst 只在质量源上定义，仍不能代替标准表观星等。"
+            )
         else:
             self.metric_values["faintest"].config(text=f"{faintest.instrumental_magnitude:.2f}")
-            calibrated = f"\n校准星等：{faintest.calibrated_magnitude:.2f}" if faintest.calibrated_magnitude is not None else ""
-            self.faintest_detail.config(text=f"ID {faintest.detection_id:04d}\nm_inst = {faintest.instrumental_magnitude:.3f}{calibrated}\nX {faintest.x:.1f}  /  Y {faintest.y:.1f}")
+            if faintest.calibrated_magnitude is not None:
+                calibrated_line = f"m_cal = {faintest.calibrated_magnitude:.3f}（未指定波段）"
+                physical_line = f"m_cal = {faintest.calibrated_magnitude:.2f} · M_V = 不可计算"
+            else:
+                calibrated_line = "m_std = 待标定"
+                physical_line = "m_std = 待标定 · M_V = 不可计算"
+            if self.__dict__.get("faintest_physical_label") is not None:
+                self.faintest_physical_label.config(text=physical_line)
+            self.faintest_detail.config(
+                text=(
+                    f"ID {faintest.detection_id:04d}\n"
+                    f"m_inst = {faintest.instrumental_magnitude:.3f}\n"
+                    f"{calibrated_line}\n"
+                    "M_V = 不可计算（缺距离/视差与消光）\n"
+                    f"X {faintest.x:.1f}  /  Y {faintest.y:.1f}"
+                )
+            )
             signal_snr = faintest.flux_snr if faintest.flux_snr is not None else faintest.snr
             rate_text = f"{faintest.flux_rate:.1f}" if faintest.flux_rate is not None else "—"
+            comparison_zp = inferred_zero_point_for_comparison(faintest.instrumental_magnitude, 13.56)
+            comparison_text = (
+                f"若把外部示例 13.56 暂当同源表观星等，诊断零点约 {comparison_zp:.2f} mag；不构成标定。"
+                if comparison_zp is not None
+                else "外部 13.56 未参与本次标定。"
+            )
             self.faintest_note.config(
                 text=(
                     f"通量 {faintest.flux:.1f} ADU ({rate_text} ADU/s) · flux SNR {signal_snr:.1f}\n"
-                    "m_inst 为仪器星等；无波段转换时不称 Mv。已在左侧用绿色环标出"
+                    "m_inst 是仪器星等，不是 m_V，更不是 M_V；已在左侧用绿色环标出。\n"
+                    f"{comparison_text}"
                 )
             )
         table_count = min(40, detection.star_count)
@@ -4179,8 +4407,14 @@ class StarfieldApp(tk.Tk):
 
         frames = result.frames
         if not frames:
+            self.sequence_brief = build_sequence_brief(result, self.__dict__.get("mosaic_result"))
+            if self.__dict__.get("sequence_brief_label") is not None:
+                self.sequence_brief_label.config(text=self.sequence_brief.text())
             self.sequence_evidence_label.config(text="序列结果为空")
             return
+        self.sequence_brief = build_sequence_brief(result, self.__dict__.get("mosaic_result"))
+        if self.__dict__.get("sequence_brief_label") is not None:
+            self.sequence_brief_label.config(text=self.sequence_brief.text())
         timestamps: list[datetime] = []
         for frame in frames:
             if not frame.timestamp:
@@ -8150,6 +8384,7 @@ class StarfieldApp(tk.Tk):
         self.catalog_calibration = None
         self.catalog_frame_path = None
         self.sequence_result = None
+        self.sequence_brief = None
         self.mosaic_result = None
         if self.mosaic_window is not None:
             self._close_mosaic_window(self.mosaic_window)
