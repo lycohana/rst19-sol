@@ -243,6 +243,22 @@ def test_load_catalog_csv_records_generic_magnitude_provenance(tmp_path) -> None
     assert source.photometric_band == "unknown"
 
 
+def test_load_catalog_csv_infers_bailer_jones_distance_provenance(tmp_path) -> None:
+    path = tmp_path / "bailer-jones-distance.csv"
+    path.write_text(
+        "source_id,ra,dec,phot_g_mean_mag,r_med_geo,r_lo_geo,r_hi_geo\n"
+        "s1,10.0,20.0,12.5,100.0,95.0,106.0\n",
+        encoding="utf-8",
+    )
+
+    source = load_catalog_csv(path)[0]
+
+    assert source.distance_pc == 100.0
+    assert source.distance_lower_pc == 95.0
+    assert source.distance_upper_pc == 106.0
+    assert source.distance_source == "Bailer-Jones Gaia DR3 geometric posterior"
+
+
 def test_fit_affine_wcs_recovers_local_scale_rotation_and_rejects_outlier() -> None:
     reference = TangentPlaneWCS(
         center_ra_deg=10.0,

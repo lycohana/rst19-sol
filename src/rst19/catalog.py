@@ -587,22 +587,60 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
                 field="extinction_error_mag",
                 row_number=row_number,
             )
+            distance_field, distance_raw = _first_named_value(
+                row,
+                (
+                    "distance_pc",
+                    "distance_gspphot",
+                    "distance",
+                    "r_med_geo",
+                    "r_med_photogeo",
+                    "r_med_photogeometric",
+                ),
+            )
             distance_pc = _optional_float(
-                _first_value(row, ("distance_pc", "distance_gspphot", "distance")),
+                distance_raw,
                 field="distance_pc",
                 row_number=row_number,
             )
             distance_lower_pc = _optional_float(
-                _first_value(row, ("distance_lower_pc", "distance_gspphot_lower", "distance_lower")),
+                _first_value(
+                    row,
+                    (
+                        "distance_lower_pc",
+                        "distance_gspphot_lower",
+                        "distance_lower",
+                        "r_lo_geo",
+                        "r_lo_photogeo",
+                        "r_lo_photogeometric",
+                    ),
+                ),
                 field="distance_lower_pc",
                 row_number=row_number,
             )
             distance_upper_pc = _optional_float(
-                _first_value(row, ("distance_upper_pc", "distance_gspphot_upper", "distance_upper")),
+                _first_value(
+                    row,
+                    (
+                        "distance_upper_pc",
+                        "distance_gspphot_upper",
+                        "distance_upper",
+                        "r_hi_geo",
+                        "r_hi_photogeo",
+                        "r_hi_photogeometric",
+                    ),
+                ),
                 field="distance_upper_pc",
                 row_number=row_number,
             )
             distance_source = _first_value(row, ("distance_source", "distance_method"))
+            if distance_source is None:
+                if distance_field == "distance_gspphot":
+                    distance_source = "Gaia DR3 GSP-Phot"
+                elif distance_field == "r_med_geo":
+                    distance_source = "Bailer-Jones Gaia DR3 geometric posterior"
+                elif distance_field in {"r_med_photogeo", "r_med_photogeometric"}:
+                    distance_source = "Bailer-Jones Gaia DR3 photogeometric posterior"
             phot_g_mean_flux_over_error = _optional_float(
                 _first_value(row, ("phot_g_mean_flux_over_error", "g_flux_over_error", "g_snr")),
                 field="phot_g_mean_flux_over_error",
