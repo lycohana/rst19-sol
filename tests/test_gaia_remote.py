@@ -46,6 +46,22 @@ def test_build_gaia_adql_supports_explicit_g_magnitude_window() -> None:
     assert "phot_g_mean_mag <= 18.5" in query
 
 
+def test_build_gaia_adql_can_join_gspphot_model_absolute_magnitude_table() -> None:
+    query = build_gaia_adql(129.5, -1.25, 0.2, limit=25, include_gspphot_model=True)
+
+    assert "FROM gaiadr3.gaia_source AS g" in query
+    assert "LEFT OUTER JOIN gaiadr3.astrophysical_parameters AS ap" in query
+    assert "ON g.source_id = ap.source_id" in query
+    for column in gaia_remote.GAIA_GSPPHOT_MODEL_COLUMNS:
+        assert f"ap.{column} AS {column}" in query
+    assert "POINT('ICRS', g.ra, g.dec)" in query
+
+
+def test_build_gaia_adql_rejects_non_boolean_gspphot_model_switch() -> None:
+    with pytest.raises(GaiaInputError, match="include_gspphot_model"):
+        build_gaia_adql(129.5, -1.25, 0.2, include_gspphot_model=1)  # type: ignore[arg-type]
+
+
 def test_build_gaia_adql_rejects_an_inverted_or_unbounded_magnitude_window() -> None:
     with pytest.raises(GaiaInputError, match="min_g_mag"):
         build_gaia_adql(129.5, -1.25, 0.2, min_g_mag=19, max_g_mag=18)
@@ -102,6 +118,18 @@ def test_parse_gaia_csv_returns_catalog_compatible_aliases() -> None:
     assert row["color"] == "0.9"
     assert row["color_name"] == "BP-RP"
     assert row["catalog_name"] == "Gaia DR3"
+
+
+def test_parse_gaia_csv_preserves_gspphot_model_absolute_magnitude_and_bounds() -> None:
+    columns = [*gaia_remote.GAIA_REQUIRED_COLUMNS, *gaia_remote.GAIA_GSPPHOT_MODEL_COLUMNS]
+    values = [*GAIA_ROW.split(","), "4.2", "3.9", "4.5"]
+
+    rows = parse_gaia_csv(f"{','.join(columns)}\n{','.join(values)}\n")
+
+    assert rows[0]["mg_gspphot"] == "4.2"
+    assert rows[0]["mg_gspphot_lower"] == "3.9"
+    assert rows[0]["mg_gspphot_upper"] == "4.5"
+    assert rows[0]["mg_gspphot_source"] == "Gaia DR3 GSP-Phot: mg_gspphot"
 
 
 def test_parse_gaia_json_supports_metadata_and_array_rows() -> None:
@@ -236,6 +264,37 @@ def test_cli_dry_run_prints_adql_without_network_or_output_file(
     assert not output.exists()
 
 
+def test_cli_dry_run_can_request_gspphot_model_absolute_magnitude(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path
+) -> None:
+    def fail(*args: object, **kwargs: object) -> object:
+        raise AssertionError("dry-run must not open a network connection")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fail)
+
+    assert (
+        gaia_remote_cli.main(
+            [
+                "--ra",
+                "1",
+                "--dec",
+                "2",
+                "--radius",
+                "0.1",
+                "--include-gspphot-model",
+                "--out",
+                str(tmp_path / "should-not-exist.csv"),
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    captured = capsys.readouterr()
+    assert "JOIN gaiadr3.astrophysical_parameters AS ap" in captured.out
+    assert "ap.mg_gspphot AS mg_gspphot" in captured.out
+    assert captured.err == ""
+
+
 def test_write_catalog_csv_keeps_downstream_columns(tmp_path) -> None:
     rows = parse_gaia_csv(f"{GAIA_HEADER}\n{GAIA_ROW}\n")
     path = write_catalog_csv(rows, tmp_path / "gaia.csv")
@@ -261,6 +320,20 @@ def test_write_catalog_csv_round_trips_gspphot_distance_and_extinction(tmp_path)
     assert source.extinction_band == "G"
     assert source.extinction_system == "Gaia"
     assert source.extinction_source == "Gaia DR3 GSP-Phot: ag_gspphot"
+
+
+def test_write_catalog_csv_round_trips_gspphot_model_absolute_magnitude(tmp_path) -> None:
+    columns = [*gaia_remote.GAIA_REQUIRED_COLUMNS, *gaia_remote.GAIA_GSPPHOT_MODEL_COLUMNS]
+    values = [*GAIA_ROW.split(","), "4.2", "3.9", "4.5"]
+    rows = parse_gaia_csv(f"{','.join(columns)}\n{','.join(values)}\n")
+    path = write_catalog_csv(rows, tmp_path / "gaia-mg-gspphot.csv")
+
+    source = load_catalog_csv(path)[0]
+
+    assert source.mg_gspphot == pytest.approx(4.2)
+    assert source.mg_gspphot_lower == pytest.approx(3.9)
+    assert source.mg_gspphot_upper == pytest.approx(4.5)
+    assert source.mg_gspphot_source == "Gaia DR3 GSP-Phot: mg_gspphot"
 
 
 def test_load_catalog_csv_keeps_legacy_generic_extinction_unknown(tmp_path) -> None:

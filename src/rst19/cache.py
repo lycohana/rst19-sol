@@ -843,6 +843,10 @@ def load_analysis(cache_dir: Path, key: str, frame: FitsFrame) -> Any | None:
                 ),
                 photometric_outlier_reason=row.get("photometric_outlier_reason"),
                 calibration_sample_role=row.get("calibration_sample_role"),
+                catalog_mg_gspphot=_float_or_none(row.get("catalog_mg_gspphot")),
+                catalog_mg_gspphot_lower=_float_or_none(row.get("catalog_mg_gspphot_lower")),
+                catalog_mg_gspphot_upper=_float_or_none(row.get("catalog_mg_gspphot_upper")),
+                catalog_mg_gspphot_source=row.get("catalog_mg_gspphot_source"),
             )
             for row in payload.get("source_photometry", [])
         )

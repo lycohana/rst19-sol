@@ -276,6 +276,16 @@ class CatalogSource:
     extinction_band: str = "unknown"
     extinction_system: str = "unknown"
     extinction_source: str = "unknown"
+    # Optional Gaia DR3 GSP-Phot model absolute magnitude in the Gaia G band.
+    # Keep these new fields at the end of the dataclass so older positional
+    # construction remains compatible. This is deliberately not named
+    # ``absolute_magnitude``: that name belongs to the photometry layer for an
+    # image-derived value after applying apparent magnitude, distance and
+    # extinction.
+    mg_gspphot: float | None = None
+    mg_gspphot_lower: float | None = None
+    mg_gspphot_upper: float | None = None
+    mg_gspphot_source: str | None = None
 
     def __post_init__(self) -> None:
         if not self.source_id:
@@ -296,6 +306,9 @@ class CatalogSource:
             self.distance_pc,
             self.distance_lower_pc,
             self.distance_upper_pc,
+            self.mg_gspphot,
+            self.mg_gspphot_lower,
+            self.mg_gspphot_upper,
             self.phot_g_mean_flux_over_error,
             self.phot_bp_rp_excess_factor,
             self.ruwe,
@@ -342,6 +355,17 @@ class CatalogSource:
                 raise ValueError(f"catalog source {self.source_id!r} has inverted distance interval")
         if self.distance_source is not None and not str(self.distance_source).strip():
             raise ValueError("distance_source cannot be empty when provided")
+        if self.mg_gspphot_lower is not None and self.mg_gspphot_upper is not None:
+            if float(self.mg_gspphot_lower) > float(self.mg_gspphot_upper):
+                raise ValueError(f"catalog source {self.source_id!r} has inverted mg_gspphot interval")
+        if self.mg_gspphot is not None and self.mg_gspphot_lower is not None:
+            if float(self.mg_gspphot) < float(self.mg_gspphot_lower):
+                raise ValueError(f"catalog source {self.source_id!r} has mg_gspphot below lower bound")
+        if self.mg_gspphot is not None and self.mg_gspphot_upper is not None:
+            if float(self.mg_gspphot) > float(self.mg_gspphot_upper):
+                raise ValueError(f"catalog source {self.source_id!r} has mg_gspphot above upper bound")
+        if self.mg_gspphot_source is not None and not str(self.mg_gspphot_source).strip():
+            raise ValueError("mg_gspphot_source cannot be empty when provided")
         if not -90.0 <= self.dec_deg <= 90.0:
             raise ValueError(f"catalog declination out of range: {self.dec_deg}")
         if not -360.0 <= self.ra_deg <= 360.0:
@@ -407,6 +431,10 @@ class CatalogSource:
             distance_lower_pc=self.distance_lower_pc,
             distance_upper_pc=self.distance_upper_pc,
             distance_source=self.distance_source,
+            mg_gspphot=self.mg_gspphot,
+            mg_gspphot_lower=self.mg_gspphot_lower,
+            mg_gspphot_upper=self.mg_gspphot_upper,
+            mg_gspphot_source=self.mg_gspphot_source,
             phot_g_mean_flux_over_error=self.phot_g_mean_flux_over_error,
             phot_bp_rp_excess_factor=self.phot_bp_rp_excess_factor,
             ruwe=self.ruwe,
@@ -442,6 +470,10 @@ class CatalogSource:
             "distance_lower_pc": self.distance_lower_pc,
             "distance_upper_pc": self.distance_upper_pc,
             "distance_source": self.distance_source,
+            "mg_gspphot": self.mg_gspphot,
+            "mg_gspphot_lower": self.mg_gspphot_lower,
+            "mg_gspphot_upper": self.mg_gspphot_upper,
+            "mg_gspphot_source": self.mg_gspphot_source,
             "phot_g_mean_flux_over_error": self.phot_g_mean_flux_over_error,
             "phot_bp_rp_excess_factor": self.phot_bp_rp_excess_factor,
             "ruwe": self.ruwe,
@@ -641,6 +673,31 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
                     distance_source = "Bailer-Jones Gaia DR3 geometric posterior"
                 elif distance_field in {"r_med_photogeo", "r_med_photogeometric"}:
                     distance_source = "Bailer-Jones Gaia DR3 photogeometric posterior"
+            mg_gspphot_field, mg_gspphot_raw = _first_named_value(
+                row,
+                ("mg_gspphot", "mg_g", "gsp_phot_mg"),
+            )
+            mg_gspphot = _optional_float(
+                mg_gspphot_raw,
+                field="mg_gspphot",
+                row_number=row_number,
+            )
+            mg_gspphot_lower = _optional_float(
+                _first_value(row, ("mg_gspphot_lower", "mg_g_lower", "gsp_phot_mg_lower")),
+                field="mg_gspphot_lower",
+                row_number=row_number,
+            )
+            mg_gspphot_upper = _optional_float(
+                _first_value(row, ("mg_gspphot_upper", "mg_g_upper", "gsp_phot_mg_upper")),
+                field="mg_gspphot_upper",
+                row_number=row_number,
+            )
+            mg_gspphot_source = _first_value(
+                row,
+                ("mg_gspphot_source", "mg_g_source", "model_absolute_magnitude_source"),
+            )
+            if mg_gspphot_source is None and mg_gspphot_field == "mg_gspphot":
+                mg_gspphot_source = "Gaia DR3 GSP-Phot: mg_gspphot"
             phot_g_mean_flux_over_error = _optional_float(
                 _first_value(row, ("phot_g_mean_flux_over_error", "g_flux_over_error", "g_snr")),
                 field="phot_g_mean_flux_over_error",
@@ -699,6 +756,10 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
                     distance_lower_pc=distance_lower_pc,
                     distance_upper_pc=distance_upper_pc,
                     distance_source=distance_source,
+                    mg_gspphot=mg_gspphot,
+                    mg_gspphot_lower=mg_gspphot_lower,
+                    mg_gspphot_upper=mg_gspphot_upper,
+                    mg_gspphot_source=mg_gspphot_source,
                     phot_g_mean_flux_over_error=phot_g_mean_flux_over_error,
                     phot_bp_rp_excess_factor=phot_bp_rp_excess_factor,
                     ruwe=ruwe,

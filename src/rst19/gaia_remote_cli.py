@@ -25,6 +25,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit", type=int, help="可选的 Gaia TOP 行数限制（正整数）")
     parser.add_argument("--min-g-mag", type=float, help="可选 Gaia G 星等下限；用于排除过亮饱和参考星")
     parser.add_argument("--max-g-mag", type=float, help="可选 Gaia G 星等上限；建议按图像检测极限控制返回量")
+    parser.add_argument(
+        "--include-gspphot-model",
+        action="store_true",
+        help=(
+            "额外连接 gaiadr3.astrophysical_parameters，获取 Gaia GSP-Phot 的 "
+            "mg_gspphot 及 16/84%% 分位界；默认不连接以保持基础查询兼容"
+        ),
+    )
     parser.add_argument("--timeout", type=float, default=30.0, help="HTTP 超时秒数，默认 30")
     parser.add_argument("--dry-run", action="store_true", help="只输出 ADQL，不联网、不写文件")
     return parser
@@ -40,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
             min_g_mag=args.min_g_mag,
             max_g_mag=args.max_g_mag,
+            include_gspphot_model=args.include_gspphot_model,
         )
         if args.dry_run:
             print(adql)
@@ -60,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
             timeout=args.timeout,
             min_g_mag=args.min_g_mag,
             max_g_mag=args.max_g_mag,
+            include_gspphot_model=args.include_gspphot_model,
         )
         output_path = write_catalog_csv(rows, args.out)
         metadata_path = output_path.with_suffix(output_path.suffix + ".meta.json")
@@ -67,7 +77,11 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "catalog": "Gaia DR3",
-                    "table": "gaiadr3.gaia_source",
+                    "table": (
+                        "gaiadr3.gaia_source LEFT OUTER JOIN gaiadr3.astrophysical_parameters"
+                        if args.include_gspphot_model
+                        else "gaiadr3.gaia_source"
+                    ),
                     "query_center_ra_deg": args.ra,
                     "query_center_dec_deg": args.dec,
                     "query_radius_deg": args.radius,
@@ -83,7 +97,13 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     "gspphot_fields": (
                         "distance_gspphot/ag_gspphot and their 16th/84th percentile bounds "
-                        "are preserved when available; they are model-based single-star estimates"
+                        "are preserved when available; they are model-based single-star estimates; "
+                        + (
+                            "mg_gspphot and its 16th/84th percentile bounds are included from "
+                            "gaiadr3.astrophysical_parameters"
+                            if args.include_gspphot_model
+                            else "mg_gspphot is omitted unless --include-gspphot-model is set"
+                        )
                     ),
                     "coverage_warning": (
                         "broad cone result requires completeness audit"

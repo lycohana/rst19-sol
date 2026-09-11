@@ -164,6 +164,29 @@ def test_tiled_query_filters_scope_deduplicates_and_records_each_tile() -> None:
     assert '"complete": true' in encoded
 
 
+def test_tiled_query_forwards_optional_gspphot_model_switch() -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_query(*args: object, **kwargs: object):
+        calls.append(kwargs)
+        return ({"source_id": "1", "ra_deg": "0.0", "dec_deg": "0.0"},)
+
+    result = query_gaia_tiled(
+        0.0,
+        0.0,
+        0.1,
+        tile_radius_deg=0.2,
+        tile_limit=100,
+        strategy="small_circle",
+        include_gspphot_model=True,
+        query_fn=fake_query,
+    )
+
+    assert result.complete
+    assert calls[0]["include_gspphot_model"] is True
+    assert "LEFT OUTER JOIN gaiadr3.astrophysical_parameters AS ap" in result.tile_records[0].adql
+
+
 def test_saturated_tile_is_subdivided_and_children_can_complete() -> None:
     calls: list[tuple[float, float, float, int | None]] = []
 

@@ -50,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--min-g-mag", type=float, help="排除过亮参考星的 Gaia G 星等下限")
     parser.add_argument("--max-g-mag", type=float, help="按图像极限限制 Gaia G 星等上限")
+    parser.add_argument(
+        "--include-gspphot-model",
+        action="store_true",
+        help="额外连接 Gaia astrophysical_parameters，保留 GSP-Phot mg_gspphot 及 16/84%% 分位界",
+    )
     parser.add_argument("--max-depth", type=int, default=2, help="饱和块的最大自适应细分深度，默认 2")
     parser.add_argument("--max-queries", type=int, default=10000, help="最大块查询数，默认 10000")
     parser.add_argument(
@@ -71,7 +76,11 @@ def _write_result_artifacts(result: object, output_path: Path, args: argparse.Na
     metadata_path = csv_path.with_suffix(csv_path.suffix + ".tiled.meta.json")
     metadata = {
         "catalog": "Gaia DR3",
-        "table": "gaiadr3.gaia_source",
+        "table": (
+            "gaiadr3.gaia_source LEFT OUTER JOIN gaiadr3.astrophysical_parameters"
+            if args.include_gspphot_model
+            else "gaiadr3.gaia_source"
+        ),
         "query_center_ra_deg": args.ra,
         "query_center_dec_deg": args.dec,
         "query_radius_deg": args.radius,
@@ -96,6 +105,12 @@ def _write_result_artifacts(result: object, output_path: Path, args: argparse.Na
         "magnitude_error_source": (
             "local first-order approximation from phot_g_mean_flux_error; "
             "Gaia does not publish a symmetric phot_g_mean_mag_error column"
+        ),
+        "gspphot_fields": (
+            "mg_gspphot, mg_gspphot_lower and mg_gspphot_upper are included from "
+            "gaiadr3.astrophysical_parameters"
+            if args.include_gspphot_model
+            else "mg_gspphot is not requested"
         ),
     }
     metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -140,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             strategy=args.strategy,
             min_g_mag=args.min_g_mag,
             max_g_mag=args.max_g_mag,
+            include_gspphot_model=args.include_gspphot_model,
             timeout=args.timeout,
             endpoint=args.endpoint,
             saturated_policy=args.saturated_policy,
@@ -179,4 +195,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

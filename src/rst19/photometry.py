@@ -469,6 +469,15 @@ class SourcePhotometry:
     photometric_consistent: bool | None = None
     photometric_outlier_reason: str | None = None
     calibration_sample_role: str | None = None
+    # Gaia DR3 GSP-Phot's model absolute magnitude is an external catalogue
+    # datum.  Keep it separate from ``absolute_magnitude``, which is computed
+    # here from the image-calibrated apparent magnitude, distance and
+    # extinction.  The percentile bounds are retained as published rather
+    # than collapsed into a symmetric sigma.
+    catalog_mg_gspphot: float | None = None
+    catalog_mg_gspphot_lower: float | None = None
+    catalog_mg_gspphot_upper: float | None = None
+    catalog_mg_gspphot_source: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -493,6 +502,10 @@ class SourcePhotometry:
             "photometric_consistent": self.photometric_consistent,
             "photometric_outlier_reason": self.photometric_outlier_reason,
             "calibration_sample_role": self.calibration_sample_role,
+            "catalog_mg_gspphot": self.catalog_mg_gspphot,
+            "catalog_mg_gspphot_lower": self.catalog_mg_gspphot_lower,
+            "catalog_mg_gspphot_upper": self.catalog_mg_gspphot_upper,
+            "catalog_mg_gspphot_source": self.catalog_mg_gspphot_source,
         }
 
 
@@ -1904,6 +1917,10 @@ def build_source_photometry(
         photometric_system = None
         photometric_band = None
         magnitude_source = None
+        catalog_mg_gspphot = None
+        catalog_mg_gspphot_lower = None
+        catalog_mg_gspphot_upper = None
+        catalog_mg_gspphot_source = None
         photometric_residual = None
         photometric_residual_limit = None
         photometric_consistent = None
@@ -1917,6 +1934,10 @@ def build_source_photometry(
             photometric_system = catalog_source.photometric_system
             photometric_band = catalog_source.photometric_band
             magnitude_source = catalog_source.magnitude_source
+            catalog_mg_gspphot = catalog_source.mg_gspphot
+            catalog_mg_gspphot_lower = catalog_source.mg_gspphot_lower
+            catalog_mg_gspphot_upper = catalog_source.mg_gspphot_upper
+            catalog_mg_gspphot_source = catalog_source.mg_gspphot_source
         if match is not None:
             if catalog_magnitude is None:
                 catalog_magnitude = match.catalog_magnitude
@@ -2044,6 +2065,10 @@ def build_source_photometry(
                 photometric_consistent=photometric_consistent,
                 photometric_outlier_reason=photometric_outlier_reason,
                 calibration_sample_role=calibration_sample_role,
+                catalog_mg_gspphot=catalog_mg_gspphot,
+                catalog_mg_gspphot_lower=catalog_mg_gspphot_lower,
+                catalog_mg_gspphot_upper=catalog_mg_gspphot_upper,
+                catalog_mg_gspphot_source=catalog_mg_gspphot_source,
             )
         )
     return tuple(result)

@@ -172,6 +172,10 @@ def test_analysis_cache_round_trips_photometry_layers(tmp_path: Path) -> None:
         absolute_magnitude=absolute,
         status="CALIBRATED",
         flags=("EXTINCTION_NOT_PROVIDED",),
+        catalog_mg_gspphot=4.2,
+        catalog_mg_gspphot_lower=4.0,
+        catalog_mg_gspphot_upper=4.4,
+        catalog_mg_gspphot_source="Gaia DR3 GSP-Phot: mg_gspphot",
     )
     matching = MatchResult(
         matches=(
@@ -218,6 +222,13 @@ def test_analysis_cache_round_trips_photometry_layers(tmp_path: Path) -> None:
     assert restored.photometric_calibration.zero_point == 20.0
     assert restored.photometric_calibration.catalog_filter_counts == (("HIGH_RUWE", 2), ("VARIABLE_SOURCE", 1))
     assert restored.source_photometry[0].status == "CALIBRATED"
+    assert restored.source_photometry[0].catalog_mg_gspphot == 4.2
+    assert restored.source_photometry[0].catalog_mg_gspphot_lower == 4.0
+    assert restored.source_photometry[0].catalog_mg_gspphot_upper == 4.4
+    assert (
+        restored.source_photometry[0].catalog_mg_gspphot_source
+        == "Gaia DR3 GSP-Phot: mg_gspphot"
+    )
     assert restored.source_photometry[0].absolute_magnitude is not None
     assert restored.source_photometry[0].absolute_magnitude.value == 4.2
     assert restored.source_photometry[0].absolute_magnitude.distance_source == "parallax"

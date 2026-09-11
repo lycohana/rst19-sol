@@ -27,6 +27,12 @@ from typing import Any
 
 DEFAULT_GAIA_TAP_SYNC_URL = "https://gea.esac.esa.int/tap-server/tap/sync"
 GAIA_DR3_TABLE = "gaiadr3.gaia_source"
+GAIA_DR3_ASTROPHYSICAL_PARAMETERS_TABLE = "gaiadr3.astrophysical_parameters"
+GAIA_GSPPHOT_MODEL_COLUMNS = (
+    "mg_gspphot",
+    "mg_gspphot_lower",
+    "mg_gspphot_upper",
+)
 
 # Keep this list in the SELECT clause and in the response contract.  The
 # columns are deliberately explicit so a later schema change cannot silently
@@ -83,6 +89,10 @@ CATALOG_COMPAT_COLUMNS = (
     "distance_lower_pc",
     "distance_upper_pc",
     "distance_source",
+    "mg_gspphot",
+    "mg_gspphot_lower",
+    "mg_gspphot_upper",
+    "mg_gspphot_source",
     "extinction_mag",
     "extinction_error_mag",
     "extinction_band",
@@ -138,6 +148,9 @@ _NUMERIC_RESPONSE_COLUMNS = (
     "distance_gspphot",
     "distance_gspphot_lower",
     "distance_gspphot_upper",
+    "mg_gspphot",
+    "mg_gspphot_lower",
+    "mg_gspphot_upper",
     "ag_gspphot",
     "ag_gspphot_lower",
     "ag_gspphot_upper",
@@ -315,6 +328,7 @@ def build_gaia_adql(
     limit: object | None = None,
     min_g_mag: object | None = None,
     max_g_mag: object | None = None,
+    include_gspphot_model: bool = False,
 ) -> str:
     """构造 Gaia DR3 cone-search ADQL。
 
@@ -329,22 +343,42 @@ def build_gaia_adql(
     max_g_value = _validate_magnitude_limit(max_g_mag, name="max_g_mag")
     if min_g_value is not None and max_g_value is not None and min_g_value > max_g_value:
         raise GaiaInputError("min_g_mag cannot be greater than max_g_mag")
+    if not isinstance(include_gspphot_model, bool):
+        raise GaiaInputError("include_gspphot_model must be a boolean")
     top = f"TOP {limit_value} " if limit_value is not None else ""
-    selected_columns = ",\n       ".join(GAIA_REQUIRED_COLUMNS)
+    if include_gspphot_model:
+        selected_columns = ",\n       ".join(
+            [f"g.{column}" for column in GAIA_REQUIRED_COLUMNS]
+            + [f"ap.{column} AS {column}" for column in GAIA_GSPPHOT_MODEL_COLUMNS]
+        )
+        from_clause = (
+            f"FROM {GAIA_DR3_TABLE} AS g\n"
+            f"LEFT OUTER JOIN {GAIA_DR3_ASTROPHYSICAL_PARAMETERS_TABLE} AS ap\n"
+            "  ON g.source_id = ap.source_id"
+        )
+        ra_column = "g.ra"
+        dec_column = "g.dec"
+        g_mag_column = "g.phot_g_mean_mag"
+    else:
+        selected_columns = ",\n       ".join(GAIA_REQUIRED_COLUMNS)
+        from_clause = f"FROM {GAIA_DR3_TABLE}"
+        ra_column = "ra"
+        dec_column = "dec"
+        g_mag_column = "phot_g_mean_mag"
     conditions = [
         "1 = CONTAINS(\n"
-        "  POINT('ICRS', ra, dec),\n"
+        f"  POINT('ICRS', {ra_column}, {dec_column}),\n"
         f"  CIRCLE('ICRS', {_format_adql_float(ra_value)}, "
         f"{_format_adql_float(dec_value)}, {_format_adql_float(radius_value)})\n"
         ")"
     ]
     if min_g_value is not None:
-        conditions.append(f"phot_g_mean_mag >= {_format_adql_float(min_g_value)}")
+        conditions.append(f"{g_mag_column} >= {_format_adql_float(min_g_value)}")
     if max_g_value is not None:
-        conditions.append(f"phot_g_mean_mag <= {_format_adql_float(max_g_value)}")
+        conditions.append(f"{g_mag_column} <= {_format_adql_float(max_g_value)}")
     return (
         f"SELECT {top}{selected_columns}\n"
-        f"FROM {GAIA_DR3_TABLE}\n"
+        f"{from_clause}\n"
         "WHERE " + "\n  AND ".join(conditions)
     )
 
@@ -444,6 +478,7 @@ def download_gaia(
     response_format: str = "csv",
     min_g_mag: object | None = None,
     max_g_mag: object | None = None,
+    include_gspphot_model: bool = False,
     opener: Callable[..., Any] | None = None,
 ) -> bytes:
     """显式执行一次 Gaia TAP 下载并返回原始响应字节。
@@ -461,6 +496,7 @@ def download_gaia(
         limit=limit,
         min_g_mag=min_g_mag,
         max_g_mag=max_g_mag,
+        include_gspphot_model=include_gspphot_model,
     )
     url = build_tap_request_url(
         adql,
@@ -830,6 +866,21 @@ def _normalise_rows(
         output["distance_source"] = (
             "Gaia DR3 GSP-Phot" if row.get("distance_gspphot", "") else ""
         )
+        model_field, model_value = _first_response_value(
+            row,
+            ("mg_gspphot", "mg_g", "gsp_phot_mg"),
+        )
+        output["mg_gspphot"] = model_value or ""
+        output["mg_gspphot_lower"] = row.get("mg_gspphot_lower", "")
+        output["mg_gspphot_upper"] = row.get("mg_gspphot_upper", "")
+        model_source = _first_response_value(
+            row,
+            ("mg_gspphot_source", "mg_g_source", "model_absolute_magnitude_source"),
+        )[1]
+        output["mg_gspphot_source"] = (
+            model_source
+            or ("Gaia DR3 GSP-Phot: mg_gspphot" if model_field == "mg_gspphot" else "")
+        )
         (
             extinction_field,
             extinction_value,
@@ -1051,6 +1102,7 @@ def query_gaia(
     response_format: str = "csv",
     min_g_mag: object | None = None,
     max_g_mag: object | None = None,
+    include_gspphot_model: bool = False,
     opener: Callable[..., Any] | None = None,
 ) -> tuple[dict[str, str], ...]:
     """执行 Gaia TAP cone query 并解析成 CatalogSource 兼容行。"""
@@ -1066,6 +1118,7 @@ def query_gaia(
         response_format=format_value,
         min_g_mag=min_g_mag,
         max_g_mag=max_g_mag,
+        include_gspphot_model=include_gspphot_model,
         opener=opener,
     )
     rows = parse_gaia_response(payload, response_format=format_value)
@@ -1097,7 +1150,9 @@ def write_catalog_csv(rows: Iterable[Mapping[str, object]], path: str | Path) ->
 __all__ = [
     "CATALOG_COMPAT_COLUMNS",
     "DEFAULT_GAIA_TAP_SYNC_URL",
+    "GAIA_DR3_ASTROPHYSICAL_PARAMETERS_TABLE",
     "GAIA_DR3_TABLE",
+    "GAIA_GSPPHOT_MODEL_COLUMNS",
     "GAIA_REQUIRED_COLUMNS",
     "GaiaError",
     "GaiaHTTPError",

@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tile-limit", type=int, default=DEFAULT_GAIA_TILE_LIMIT, help="每块 TOP/MAXREC 上限")
     parser.add_argument("--max-depth", type=int, default=DEFAULT_GAIA_MAX_SUBDIVIDE_DEPTH, help="饱和块最大细分深度")
     parser.add_argument("--max-queries", type=int, default=DEFAULT_GAIA_MAX_QUERIES, help="最大块查询数")
+    parser.add_argument(
+        "--include-gspphot-model",
+        action="store_true",
+        help="额外连接 Gaia astrophysical_parameters，保留 GSP-Phot mg_gspphot 及 16/84%% 分位界",
+    )
     parser.add_argument("--timeout", type=float, default=30.0, help="单块 HTTP 超时秒数")
     return parser
 
@@ -57,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
             tile_limit=args.tile_limit,
             max_subdivide_depth=args.max_depth,
             max_queries=args.max_queries,
+            include_gspphot_model=args.include_gspphot_model,
             timeout=args.timeout,
             progress=lambda message: print(message, file=sys.stderr),
         )

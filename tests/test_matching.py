@@ -259,6 +259,44 @@ def test_load_catalog_csv_infers_bailer_jones_distance_provenance(tmp_path) -> N
     assert source.distance_source == "Bailer-Jones Gaia DR3 geometric posterior"
 
 
+def test_load_catalog_csv_preserves_gspphot_model_absolute_magnitude(tmp_path) -> None:
+    path = tmp_path / "gspphot-magnitude.csv"
+    path.write_text(
+        "source_id,ra,dec,phot_g_mean_mag,mg_gspphot,mg_gspphot_lower,mg_gspphot_upper\n"
+        "s1,10.0,20.0,12.5,4.2,3.9,4.5\n",
+        encoding="utf-8",
+    )
+
+    source = load_catalog_csv(path)[0]
+    propagated = source.at_epoch(2017.0)
+
+    assert source.mg_gspphot == pytest.approx(4.2)
+    assert source.mg_gspphot_lower == pytest.approx(3.9)
+    assert source.mg_gspphot_upper == pytest.approx(4.5)
+    assert source.mg_gspphot_source == "Gaia DR3 GSP-Phot: mg_gspphot"
+    assert propagated.mg_gspphot == source.mg_gspphot
+    assert propagated.as_dict()["mg_gspphot_upper"] == pytest.approx(4.5)
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "s1,10.0,20.0,12.5,4.2,4.6,4.8",
+        "s1,10.0,20.0,12.5,4.2,3.8,4.0",
+    ],
+)
+def test_load_catalog_csv_rejects_invalid_gspphot_model_interval(tmp_path, row: str) -> None:
+    path = tmp_path / "invalid-gspphot-magnitude.csv"
+    path.write_text(
+        "source_id,ra,dec,phot_g_mean_mag,mg_gspphot,mg_gspphot_lower,mg_gspphot_upper\n"
+        f"{row}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="mg_gspphot"):
+        load_catalog_csv(path)
+
+
 def test_fit_affine_wcs_recovers_local_scale_rotation_and_rejects_outlier() -> None:
     reference = TangentPlaneWCS(
         center_ra_deg=10.0,

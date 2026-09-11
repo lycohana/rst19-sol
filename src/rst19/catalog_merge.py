@@ -38,6 +38,9 @@ _CRITICAL_FIELDS = frozenset(
         "parallax_mas",
         "distance_pc",
         "distance_gspphot",
+        "mg_gspphot",
+        "mg_gspphot_lower",
+        "mg_gspphot_upper",
         "extinction_mag",
         "ag_gspphot",
     }

@@ -915,6 +915,10 @@ def test_build_source_photometry_keeps_instrumental_calibrated_and_absolute_laye
             parallax_mas=10.0,
             parallax_error_mas=0.1,
             extinction_mag=0.2,
+            mg_gspphot=4.2,
+            mg_gspphot_lower=4.0,
+            mg_gspphot_upper=4.4,
+            mg_gspphot_source="Gaia DR3 GSP-Phot: mg_gspphot",
             extinction_band="G",
             extinction_system="Gaia",
             extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
@@ -951,5 +955,9 @@ def test_build_source_photometry_keeps_instrumental_calibrated_and_absolute_laye
     assert rows[0].calibrated_magnitude == pytest.approx(instrumental + 20.15)
     assert rows[0].catalog_magnitude_error == pytest.approx(0.02)
     assert rows[0].magnitude_source == "Gaia DR3 phot_g_mean_mag"
+    assert rows[0].catalog_mg_gspphot == pytest.approx(4.2)
+    assert rows[0].catalog_mg_gspphot_lower == pytest.approx(4.0)
+    assert rows[0].catalog_mg_gspphot_upper == pytest.approx(4.4)
+    assert rows[0].catalog_mg_gspphot_source == "Gaia DR3 GSP-Phot: mg_gspphot"
     assert rows[0].absolute_magnitude is not None
     assert rows[0].absolute_magnitude.status == "VALID"

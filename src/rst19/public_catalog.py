@@ -91,6 +91,7 @@ class PublicCatalogDownload:
     duplicate_count: int
     outside_scope_count: int
     tiled_result: GaiaTiledResult
+    include_gspphot_model: bool = False
 
     def as_dict(self) -> dict[str, object]:
         # The CSV is the row-level artifact.  Keep the sidecar audit compact;
@@ -100,7 +101,11 @@ class PublicCatalogDownload:
         tiled_audit.pop("rows", None)
         return {
             "catalog": "Gaia DR3",
-            "table": "gaiadr3.gaia_source",
+            "table": (
+                "gaiadr3.gaia_source LEFT OUTER JOIN gaiadr3.astrophysical_parameters"
+                if self.include_gspphot_model
+                else "gaiadr3.gaia_source"
+            ),
             "frame_path": str(self.frame_path) if self.frame_path is not None else None,
             "output_path": str(self.output_path),
             "audit_path": str(self.audit_path),
@@ -129,7 +134,12 @@ class PublicCatalogDownload:
                 ),
                 "gspphot_fields": (
                     "distance_gspphot and ag_gspphot, with 16th/84th percentile bounds; "
-                    "these are Gaia DR3 GSP-Phot model estimates under a single-star assumption"
+                    "these are Gaia DR3 GSP-Phot model estimates under a single-star assumption; "
+                    + (
+                        "mg_gspphot and its 16th/84th percentile bounds are included"
+                        if self.include_gspphot_model
+                        else "mg_gspphot is not requested"
+                    )
                 ),
             },
             "interpretation": (
@@ -162,6 +172,7 @@ def download_public_gaia_catalog(
     tile_limit: object | None = DEFAULT_GAIA_TILE_LIMIT,
     max_subdivide_depth: object = DEFAULT_GAIA_MAX_SUBDIVIDE_DEPTH,
     max_queries: object = DEFAULT_GAIA_MAX_QUERIES,
+    include_gspphot_model: bool = False,
     timeout: object = 30.0,
     endpoint: str = DEFAULT_GAIA_TAP_SYNC_URL,
     frame_path: str | Path | None = None,
@@ -212,6 +223,7 @@ def download_public_gaia_catalog(
         max_g_mag=max_g_mag,
         max_subdivide_depth=max_subdivide_depth,
         max_queries=max_queries,
+        include_gspphot_model=include_gspphot_model,
         timeout=timeout,
         endpoint=endpoint,
         raise_on_error=False,
@@ -236,6 +248,7 @@ def download_public_gaia_catalog(
         duplicate_count=result.duplicate_count,
         outside_scope_count=result.outside_scope_count,
         tiled_result=result,
+        include_gspphot_model=include_gspphot_model,
     )
     _write_audit(download)
     return download

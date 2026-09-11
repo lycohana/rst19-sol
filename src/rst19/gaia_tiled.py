@@ -583,6 +583,7 @@ def build_tile_adql(
     tile_limit: int | None,
     min_g_mag: object | None = None,
     max_g_mag: object | None = None,
+    include_gspphot_model: bool = False,
 ) -> str:
     """用现有 ``build_gaia_adql`` 构造一块的可审计 ADQL。"""
 
@@ -593,6 +594,7 @@ def build_tile_adql(
         limit=tile_limit,
         min_g_mag=min_g_mag,
         max_g_mag=max_g_mag,
+        include_gspphot_model=include_gspphot_model,
     )
 
 
@@ -698,6 +700,7 @@ def query_gaia_tiled(
     saturated_policy: object = "subdivide",
     max_subdivide_depth: object = 2,
     max_queries: object = 10000,
+    include_gspphot_model: bool = False,
     raise_on_error: bool = True,
     on_tile: Callable[[TileQueryRecord], object] | None = None,
 ) -> GaiaTiledResult:
@@ -729,6 +732,8 @@ def query_gaia_tiled(
     policy = _normalise_saturated_policy(saturated_policy)
     if not isinstance(raise_on_error, bool):
         raise GaiaTilingError("raise_on_error must be a boolean")
+    if not isinstance(include_gspphot_model, bool):
+        raise GaiaTilingError("include_gspphot_model must be a boolean")
     if on_tile is not None and not callable(on_tile):
         raise GaiaTilingError("on_tile must be callable or None")
 
@@ -782,20 +787,26 @@ def query_gaia_tiled(
             tile_limit=tile_limit_value,
             min_g_mag=min_g_mag,
             max_g_mag=max_g_mag,
+            include_gspphot_model=include_gspphot_model,
         )
         try:
+            query_kwargs = {
+                "limit": tile_limit_value,
+                "timeout": timeout,
+                "endpoint": endpoint,
+                "response_format": response_format,
+                "min_g_mag": min_g_mag,
+                "max_g_mag": max_g_mag,
+                "opener": opener,
+            }
+            if include_gspphot_model:
+                query_kwargs["include_gspphot_model"] = True
             raw_rows = _materialise_query_rows(
                 query_callable(
                     tile.ra_deg,
                     tile.dec_deg,
                     tile.radius_deg,
-                    limit=tile_limit_value,
-                    timeout=timeout,
-                    endpoint=endpoint,
-                    response_format=response_format,
-                    min_g_mag=min_g_mag,
-                    max_g_mag=max_g_mag,
-                    opener=opener,
+                    **query_kwargs,
                 )
             )
             returned_rows = len(raw_rows)

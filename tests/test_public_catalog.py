@@ -53,3 +53,43 @@ def test_public_catalog_download_is_explicit_and_writes_audit(tmp_path: Path) ->
     assert metadata["csv_byte_count"] == output.stat().st_size
     assert metadata["provenance"]["photometric_band"] == "G"
     assert "rows" not in metadata["tiled"]
+
+
+def test_public_catalog_can_preserve_gspphot_model_absolute_magnitude(tmp_path: Path) -> None:
+    seen: list[dict[str, object]] = []
+
+    def query_rows(*_args: object, **kwargs: object) -> tuple[dict[str, object], ...]:
+        seen.append(kwargs)
+        return (
+            {
+                "source_id": "43",
+                "ra": 129.5,
+                "dec": -1.8,
+                "phot_g_mean_mag": 11.2,
+                "phot_bp_mean_mag": 11.7,
+                "phot_rp_mean_mag": 10.9,
+                "mg_gspphot": 4.2,
+                "mg_gspphot_lower": 3.9,
+                "mg_gspphot_upper": 4.5,
+            },
+        )
+
+    result = download_public_gaia_catalog(
+        129.5,
+        -1.8,
+        tmp_path / "gaia-mg.csv",
+        search_radius_deg=0.1,
+        tile_radius_deg=1.0,
+        include_gspphot_model=True,
+        query_fn=query_rows,
+    )
+
+    assert seen[0]["include_gspphot_model"] is True
+    assert result.as_dict()["table"] == (
+        "gaiadr3.gaia_source LEFT OUTER JOIN gaiadr3.astrophysical_parameters"
+    )
+    assert result.as_dict()["provenance"]["gspphot_fields"].startswith("distance_gspphot")
+    assert "mg_gspphot" in result.as_dict()["provenance"]["gspphot_fields"]
+    csv_text = result.output_path.read_text(encoding="utf-8")
+    assert "mg_gspphot" in csv_text
+    assert ",4.2," in csv_text
