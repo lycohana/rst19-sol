@@ -7,6 +7,7 @@
 """
 
 from .catalog import CatalogSource, load_catalog_csv
+from .catalog_merge import CatalogMergeError, CatalogMergeResult, merge_catalog_csvs
 from .attitude import (
     AuxiliaryBoresightAudit,
     audit_auxiliary_boresight,
@@ -560,6 +561,9 @@ __all__ = [
     "AuxiliaryBoresightAudit",
     "CatalogMatch",
     "CatalogSource",
+    "CatalogMergeError",
+    "CatalogMergeResult",
+    "merge_catalog_csvs",
     "PlateSolveCandidate",
     "PlateSolveResult",
     "PlateTransform",
