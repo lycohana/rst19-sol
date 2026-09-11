@@ -12,6 +12,9 @@ from rst19.experiments import (
     _inject_source_signal,
     _empirical_source,
     EmpiricalPSF,
+    _local_patch_stats,
+    _RealInjectionSite,
+    _real_injection_special_mask,
     _fixed_position_multi_psf_fit,
     _free_position_multi_psf_fit,
     classify_source_feature,
@@ -685,6 +688,120 @@ def test_stratified_real_background_injection_separates_conditions_and_writes_ar
     assert (output / "stratified_real_background_injection.csv").is_file()
     assert (output / "stratified_real_background_injection.json").is_file()
     assert (output / "stratified_real_background_injection.png").is_file()
+
+
+def test_stratified_real_background_injection_reuses_run_immutable_selection_state(monkeypatch) -> None:
+    image = np.full((96, 96), 21.0, dtype=np.int16)
+    frame = FitsFrame(path="stratified.fits", header={}, data=image, auxiliary=None, data_offset=0)
+    baseline_source = Detection(
+        detection_id=1,
+        x=20.0,
+        y=20.0,
+        peak=120.0,
+        flux=800.0,
+        background=21.0,
+        noise=5.0,
+        snr=20.0,
+        fwhm=2.0,
+        flags=(),
+        quality_passed=True,
+    )
+    baseline = DetectionResult(
+        image_shape=image.shape,
+        background=21.0,
+        noise=5.0,
+        threshold=41.0,
+        candidate_count=1,
+        sources=(baseline_source,),
+        parameters={"saturation_level": -1.0, "mask_zero_pixels": 0},
+        quality_count=1,
+    )
+    empty = DetectionResult(
+        image_shape=image.shape,
+        background=21.0,
+        noise=5.0,
+        threshold=41.0,
+        candidate_count=0,
+        sources=(),
+        parameters={},
+        quality_count=0,
+    )
+    detect_calls = 0
+    injected_image_ids: list[int] = []
+
+    def fake_detect(*_args, **_kwargs):
+        nonlocal detect_calls
+        detect_calls += 1
+        if detect_calls > 1:
+            injected_image_ids.append(id(_args[0]))
+        return baseline if detect_calls == 1 else empty
+
+    special_mask_calls = 0
+
+    def fake_special_mask(values):
+        nonlocal special_mask_calls
+        special_mask_calls += 1
+        return np.zeros(values.shape, dtype=bool)
+
+    seen_selection_state: list[tuple[object, object]] = []
+    site = _RealInjectionSite(
+        x=70.0,
+        y=70.0,
+        local_background_adu=21.0,
+        local_noise_adu=5.0,
+        upper_excess_adu=0.0,
+        special_pixel_fraction=0.0,
+        baseline_neighbor_count=0,
+        nearest_baseline_source_px=None,
+    )
+
+    def fake_select(*_args, **kwargs):
+        seen_selection_state.append((kwargs["_special_mask"], kwargs["_baseline_tree"]))
+        return (site,)
+
+    monkeypatch.setattr("rst19.experiments.detect_sources", fake_detect)
+    monkeypatch.setattr("rst19.experiments._real_injection_special_mask", fake_special_mask)
+    monkeypatch.setattr("rst19.experiments._select_stratified_real_injection_sites", fake_select)
+
+    rows = run_stratified_real_background_injection(
+        frame,
+        strata=("blank", "edge"),
+        peak_levels=(80.0,),
+        trials_per_level=1,
+        sources_per_trial=1,
+    )
+
+    assert len(rows) == 2
+    assert detect_calls == 3
+    assert special_mask_calls == 1
+    assert len(seen_selection_state) == 2
+    assert seen_selection_state[0][0] is seen_selection_state[1][0]
+    assert seen_selection_state[0][1] is seen_selection_state[1][1]
+    assert len(set(injected_image_ids)) == 1
+    assert seen_selection_state[0][0].flags.writeable is False
+    assert np.array_equal(frame.data, image)
+
+
+def test_local_patch_stats_integer_pixels_match_float64_reference() -> None:
+    image = np.arange(81, dtype=np.int16).reshape(9, 9)
+    result = _local_patch_stats(image, 4.0, 4.0, radius=2)
+
+    patch = image[2:7, 2:7].astype(np.float64)
+    median = float(np.median(patch))
+    mad_noise = max(1.4826 * float(np.median(np.abs(patch - median))), np.finfo(np.float64).eps)
+    upper_excess = float(np.quantile(patch, 0.98) - median)
+
+    assert result == (median, mad_noise, upper_excess)
+
+
+def test_real_injection_special_mask_integer_pixels_matches_reference() -> None:
+    image = np.array([[-32768, -30000, -1, 0, 32700, 32767]], dtype=np.int16)
+    numeric = image.astype(np.float64)
+    expected = numeric == -1.0
+    expected |= numeric <= -0.9 * float(np.iinfo(image.dtype).max)
+    expected |= numeric >= float(np.iinfo(image.dtype).max - 32)
+
+    assert np.array_equal(_real_injection_special_mask(image), expected)
 
 
 def test_proposal_mode_comparison_uses_same_injection_population_and_writes_artifacts(tmp_path) -> None:

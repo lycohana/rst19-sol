@@ -23,8 +23,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--sequence-report", type=Path, help="可选：15 帧 innovation_report.json，仅作为基础任务支撑")
     parser.add_argument("--feature-matrix", type=Path, help="可选：特征证据矩阵 JSON，仅作为诊断证据")
-    parser.add_argument("--min-injections", type=int, default=8, help="进入主剖面的最小无歧义注入数，默认 8")
-    parser.add_argument("--min-levels", type=int, default=3, help="进入主剖面的最小共同强度层数，默认 3")
+    parser.add_argument("--min-injections", type=int, default=8, help="进入主剖面的最小无歧义注入数，默认 8（主门槛不会低于 8）")
+    parser.add_argument("--min-levels", type=int, default=3, help="进入主剖面的最小共同强度层数，默认 3（主门槛不会低于 3）")
+    parser.add_argument("--min-trials", type=int, default=3, help="每个主剖面单元的最小独立布局数，默认 3（主门槛不会低于 3）")
     parser.add_argument(
         "--require-defensible",
         action="store_true",
@@ -43,6 +44,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             feature_matrix=args.feature_matrix,
             min_injections=args.min_injections,
             min_levels=args.min_levels,
+            min_trials=args.min_trials,
         )
         paths = write_innovation_package(package, args.out_dir)
     except (OSError, ValueError) as exc:

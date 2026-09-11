@@ -23,10 +23,14 @@ def _row(
     quality: int,
     *,
     ambiguous: int = 0,
-    unambiguous: int = 8,
+    unambiguous: int | None = None,
     noise: float = 5.0,
     trial_count: int = 1,
 ) -> dict[str, object]:
+    injected_total = 8 * trial_count
+    candidate_total = candidate * trial_count
+    quality_total = quality * trial_count
+    unambiguous_total = injected_total if unambiguous is None else unambiguous
     return {
         "source_path": "fixture.fits",
         "stratum": stratum,
@@ -34,13 +38,13 @@ def _row(
         "proposal_mode": "hybrid",
         "psf_model": "empirical",
         "peak_excess_adu": level,
-        "injected_count": 8,
-        "candidate_recovered_count": candidate,
-        "quality_recovered_count": quality,
-        "candidate_recall": candidate / 8,
-        "quality_recall": quality / 8,
+        "injected_count": injected_total,
+        "candidate_recovered_count": candidate_total,
+        "quality_recovered_count": quality_total,
+        "candidate_recall": candidate_total / injected_total,
+        "quality_recall": quality_total / injected_total,
         "ambiguous_injection_count": ambiguous,
-        "unambiguous_injected_count": unambiguous,
+        "unambiguous_injected_count": unambiguous_total,
         "local_noise_adu": noise,
         "trial_count": trial_count,
         "baseline_candidate_count": 100,
@@ -54,7 +58,7 @@ def _write_artifact(tmp_path: Path, rows: list[dict[str, object]], name: str = "
     return path
 
 
-def _core_rows() -> list[dict[str, object]]:
+def _core_rows(*, trial_count: int = 1) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     values = {
         "blank": (0, 8, 0, 5.0),
@@ -63,12 +67,12 @@ def _core_rows() -> list[dict[str, object]]:
     }
     for stratum, (low, middle, high, noise) in values.items():
         for level, candidate, quality in ((24.0, low, 0), (56.0, middle, 0), (128.0, 8, high)):
-            rows.append(_row(stratum, level, candidate, quality, noise=noise))
+            rows.append(_row(stratum, level, candidate, quality, noise=noise, trial_count=trial_count))
     return rows
 
 
 def test_build_selects_conditional_primary_and_keeps_wide_quality_layers_separate(tmp_path: Path) -> None:
-    rows = _core_rows()
+    rows = _core_rows(trial_count=3)
     rows.extend(
         [
             _row("crowded", 24.0, 1, 0, ambiguous=8, unambiguous=8, noise=20.0),
@@ -85,14 +89,19 @@ def test_build_selects_conditional_primary_and_keeps_wide_quality_layers_separat
     assert len(primary_rows) == 9
     blank_56 = next(row for row in primary_rows if row["stratum"] == "blank" and row["peak_excess_adu"] == 56.0)
     assert blank_56["denominator_kind"] == "unambiguous_injected"
-    assert blank_56["denominator_count"] == 8
+    assert blank_56["denominator_count"] == 24
+    assert blank_56["minimum_unambiguous_positions_required"] == 24
     assert blank_56["candidate_recall"] == pytest.approx(1.0)
     assert blank_56["quality_recall"] == pytest.approx(0.0)
     assert blank_56["quality_filter_gap"] == pytest.approx(1.0)
-    low, high = wilson_interval(8, 8)
+    low, high = wilson_interval(24, 24)
     assert blank_56["candidate_recall_wilson95_low"] == pytest.approx(low)
     assert blank_56["candidate_recall_wilson95_high"] == pytest.approx(high)
     assert package["audit"]["checks"][-1]["status"] == "NOT_AVAILABLE"
+    special = next(row for row in package["rows"] if row["stratum"] == "special_code")
+    assert special["candidate_recall"] is None
+    assert special["quality_recall"] is None
+    assert special["candidate_recall_wilson95_low"] is None
 
 
 def test_controls_are_retained_as_diagnostic_not_primary(tmp_path: Path) -> None:
@@ -155,7 +164,7 @@ def test_optional_evidence_is_explicitly_classified(tmp_path: Path) -> None:
 
 
 def test_writer_outputs_stable_json_csv_and_markdown(tmp_path: Path) -> None:
-    package = build_innovation_package(_write_artifact(tmp_path, _core_rows()))
+    package = build_innovation_package(_write_artifact(tmp_path, _core_rows(trial_count=3)))
     output = tmp_path / "out"
     paths = write_innovation_package(package, output)
 
@@ -172,15 +181,46 @@ def test_writer_outputs_stable_json_csv_and_markdown(tmp_path: Path) -> None:
         csv_rows = list(csv.DictReader(handle))
     assert len(csv_rows) == len(package["rows"])
     assert csv_rows[0]["denominator_kind"] == "unambiguous_injected"
+    assert csv_rows[0]["rate_semantics"] == "primary_unambiguous_recall"
+    assert csv_rows[0]["minimum_unambiguous_positions_required"] == "24"
+    assert "trial_count=1" not in markdown_path.read_text(encoding="utf-8")
 
 
 def test_cli_main_writes_package_and_require_defensible(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    injection_path = _write_artifact(tmp_path, _core_rows())
+    injection_path = _write_artifact(tmp_path, _core_rows(trial_count=3))
     output = tmp_path / "cli-out"
     assert main([str(injection_path), "--out-dir", str(output), "--require-defensible"]) == 0
     stdout = capsys.readouterr().out
     assert "status: CONDITIONAL_DEFENSIBLE" in stdout
     assert (output / "innovation_package.json").is_file()
+
+
+def test_single_layout_is_diagnostic_and_strict_cli_rejects(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    injection_path = _write_artifact(tmp_path, _core_rows())
+    package = build_innovation_package(injection_path)
+
+    assert package["status"] == "DIAGNOSTIC_ONLY"
+    assert package["data_summary"]["replication_status"] == "SINGLE_LAYOUT"
+    assert package["audit"]["checks"][4]["status"] == "FAIL"
+
+    output = tmp_path / "diagnostic-cli-out"
+    assert main([str(injection_path), "--out-dir", str(output), "--require-defensible"]) == 2
+    stdout = capsys.readouterr().out
+    assert "status: DIAGNOSTIC_ONLY" in stdout
+
+
+def test_primary_gates_cannot_be_lowered_by_callers(tmp_path: Path) -> None:
+    package = build_innovation_package(
+        _write_artifact(tmp_path, _core_rows()),
+        min_injections=1,
+        min_levels=1,
+        min_trials=1,
+    )
+
+    assert package["status"] == "DIAGNOSTIC_ONLY"
+    assert package["data_summary"]["min_injections_gate"] == 8
+    assert package["data_summary"]["min_levels_gate"] == 3
+    assert package["data_summary"]["min_trials_gate"] == 3
 
 
 def test_wilson_interval_validates_counts() -> None:

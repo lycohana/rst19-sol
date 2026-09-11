@@ -29,6 +29,9 @@ from typing import Any, Iterable, Mapping, Sequence
 SCHEMA_VERSION = 1
 PRIMARY_INNOVATION_ID = "conditional_detectability"
 PRIMARY_STATUS = "CONDITIONAL_DEFENSIBLE"
+MIN_PRIMARY_INJECTIONS = 8
+MIN_PRIMARY_LEVELS = 3
+MIN_PRIMARY_TRIALS = 3
 
 _REQUIRED_FIELDS = (
     "stratum",
@@ -274,25 +277,36 @@ def _derived_row(row: Mapping[str, Any], min_injections: int) -> dict[str, Any]:
     injected = int(row["injected_count"])
     candidate_count = int(row["candidate_recovered_count"])
     quality_count = int(row["quality_recovered_count"])
+    trial_count = int(row["trial_count"])
     is_core = ambiguous == 0 and unambiguous > 0
-    primary_eligible = is_core and unambiguous >= min_injections
+    minimum_unambiguous_positions = min_injections * trial_count
+    primary_eligible = is_core and unambiguous >= minimum_unambiguous_positions
     if is_core:
         denominator = unambiguous
         denominator_kind = "unambiguous_injected"
+        rate_semantics = "primary_unambiguous_recall"
         candidate_recall = _safe_rate(candidate_count, denominator)
         quality_recall = _safe_rate(quality_count, denominator)
+        candidate_ci = wilson_interval(candidate_count, denominator) if denominator > 0 else (None, None)
+        quality_ci = wilson_interval(quality_count, denominator) if denominator > 0 else (None, None)
     else:
         denominator = injected
         denominator_kind = "all_injected_diagnostic"
-        candidate_recall = _normalise_float(row.get("candidate_recall"))
-        quality_recall = _normalise_float(row.get("quality_recall"))
-        if candidate_recall is None:
-            candidate_recall = _safe_rate(candidate_count, denominator)
-        if quality_recall is None:
-            quality_recall = _safe_rate(quality_count, denominator)
-
-    candidate_ci = wilson_interval(candidate_count, denominator) if denominator > 0 else (None, None)
-    quality_ci = wilson_interval(quality_count, denominator) if denominator > 0 else (None, None)
+        rate_semantics = "diagnostic_all_injected_rate"
+        # 困难条件的注入位置不能独立归因时，不输出看起来像普通召回率的
+        # 0/8；保留原始计数和 denominator_kind 供机制审计即可。
+        if unambiguous > 0:
+            candidate_recall = _normalise_float(row.get("candidate_recall"))
+            quality_recall = _normalise_float(row.get("quality_recall"))
+            if candidate_recall is None:
+                candidate_recall = _safe_rate(candidate_count, denominator)
+            if quality_recall is None:
+                quality_recall = _safe_rate(quality_count, denominator)
+        else:
+            candidate_recall = None
+            quality_recall = None
+        candidate_ci = (None, None)
+        quality_ci = (None, None)
     noise = _normalise_float(row.get("local_noise_adu"))
     peak = float(row["peak_excess_adu"])
     return {
@@ -312,7 +326,10 @@ def _derived_row(row: Mapping[str, Any], min_injections: int) -> dict[str, Any]:
         "unambiguous_injected_count": unambiguous,
         "ambiguous_injection_count": ambiguous,
         "denominator_kind": denominator_kind,
+        "rate_semantics": rate_semantics,
+        "ambiguous_count_is_nonexclusive": True,
         "denominator_count": denominator,
+        "minimum_unambiguous_positions_required": minimum_unambiguous_positions,
         "candidate_recovered_count": candidate_count,
         "quality_recovered_count": quality_count,
         "candidate_recall": candidate_recall,
@@ -331,7 +348,7 @@ def _derived_row(row: Mapping[str, Any], min_injections: int) -> dict[str, Any]:
         "nominal_level_over_local_noise": _safe_ratio(peak, noise),
         "special_pixel_fraction": _normalise_float(row.get("special_pixel_fraction")),
         "nearest_baseline_source_px": _normalise_float(row.get("nearest_baseline_source_px")),
-        "trial_count": int(row["trial_count"]),
+        "trial_count": trial_count,
         "baseline_candidate_count": row.get("baseline_candidate_count"),
         "baseline_quality_count": row.get("baseline_quality_count"),
         "net_candidate_delta": _normalise_float(row.get("net_candidate_delta")),
@@ -487,21 +504,33 @@ def build_innovation_package(
     feature_matrix: str | Path | Mapping[str, Any] | None = None,
     min_injections: int = 8,
     min_levels: int = 3,
+    min_trials: int = 3,
 ) -> dict[str, Any]:
     """构建创新交付包。
 
     ``min_injections`` 和 ``min_levels`` 是“进入主结论”的审计门槛，不是
-    检测算法的阈值。当前数据按 8 个无歧义注入位置、3 个强度层进行条件化
-    描述；困难条件会被保留，但不会混入主剖面。
+    检测算法的阈值。``min_trials`` 是每个主剖面条件/强度单元要求的独立
+    位置布局数。为防止调用参数把交付门槛悄悄调低，主结论始终不会低于
+    8 个位置/布局、3 个共同强度层和 3 个独立布局；更低的参数只会用于
+    生成诊断数据，不能让 ``CONDITIONAL_DEFENSIBLE`` 通过。
     """
 
     if not isinstance(min_injections, int) or isinstance(min_injections, bool) or min_injections <= 0:
         raise ValueError("min_injections must be a positive integer")
     if not isinstance(min_levels, int) or isinstance(min_levels, bool) or min_levels <= 0:
         raise ValueError("min_levels must be a positive integer")
+    if not isinstance(min_trials, int) or isinstance(min_trials, bool) or min_trials <= 0:
+        raise ValueError("min_trials must be a positive integer")
+
+    primary_min_injections = max(min_injections, MIN_PRIMARY_INJECTIONS)
+    primary_min_levels = max(min_levels, MIN_PRIMARY_LEVELS)
+    primary_min_trials = max(min_trials, MIN_PRIMARY_TRIALS)
 
     raw_rows = load_stratified_rows(injection_artifact)
-    derived_rows = [_derived_row({**row, "row_index": index}, min_injections) for index, row in enumerate(raw_rows)]
+    derived_rows = [
+        _derived_row({**row, "row_index": index}, primary_min_injections)
+        for index, row in enumerate(raw_rows)
+    ]
     all_strata = sorted({str(row["stratum"]) for row in derived_rows})
     all_levels = sorted({float(row["peak_excess_adu"]) for row in derived_rows})
     core_rows_by_stratum: dict[str, list[dict[str, Any]]] = {}
@@ -520,11 +549,23 @@ def build_innovation_package(
     level_sets = [set(float(row["peak_excess_adu"]) for row in rows) for rows in core_rows_by_stratum.values()]
     shared_levels = sorted(set.intersection(*level_sets)) if level_sets else []
     eligible_for_profile = {
-        name: rows for name, rows in core_rows_by_stratum.items() if len({float(row["peak_excess_adu"]) for row in rows}) >= min_levels
+        name: rows
+        for name, rows in core_rows_by_stratum.items()
+        if len({float(row["peak_excess_adu"]) for row in rows}) >= primary_min_levels
     }
     profile_level_sets = [set(float(row["peak_excess_adu"]) for row in rows) for rows in eligible_for_profile.values()]
     profile_shared_levels = sorted(set.intersection(*profile_level_sets)) if profile_level_sets else []
-    if len(eligible_for_profile) >= 2 and len(profile_shared_levels) >= min_levels:
+    profile_cells = [
+        row
+        for rows in eligible_for_profile.values()
+        for row in rows
+        if float(row["peak_excess_adu"]) in profile_shared_levels
+    ]
+    profile_trial_counts = [int(row["trial_count"]) for row in profile_cells]
+    profile_denominators = [int(row["denominator_count"]) for row in profile_cells]
+    structure_ready = len(eligible_for_profile) >= 2 and len(profile_shared_levels) >= primary_min_levels
+    replication_ready = bool(profile_trial_counts) and min(profile_trial_counts) >= primary_min_trials
+    if structure_ready and replication_ready:
         status = PRIMARY_STATUS
     elif eligible_for_profile:
         status = "DIAGNOSTIC_ONLY"
@@ -536,10 +577,10 @@ def build_innovation_package(
         for name, rows in sorted(eligible_for_profile.items())
     ]
     contrasts = _condition_contrasts(eligible_for_profile)
-    trial_counts = [int(row["trial_count"]) for row in derived_rows]
-    if min(trial_counts) >= 3:
+    all_trial_counts = [int(row["trial_count"]) for row in derived_rows]
+    if profile_trial_counts and min(profile_trial_counts) >= primary_min_trials:
         replication_status = "REPLICATED"
-    elif max(trial_counts) >= 2:
+    elif profile_trial_counts and max(profile_trial_counts) >= 2:
         replication_status = "LIMITED_REPLICATION"
     else:
         replication_status = "SINGLE_LAYOUT"
@@ -558,13 +599,18 @@ def build_innovation_package(
         {
             "id": "known_injection_denominator",
             "status": "PASS" if eligible_for_profile else "FAIL",
-            "observed": {"eligible_strata": sorted(eligible_for_profile), "min_injections": min_injections},
+            "observed": {
+                "eligible_strata": sorted(eligible_for_profile),
+                "min_injections_per_layout": primary_min_injections,
+                "profile_denominator_min": min(profile_denominators) if profile_denominators else None,
+                "profile_denominator_max": max(profile_denominators) if profile_denominators else None,
+            },
             "meaning": "主剖面只使用无歧义已知注入源作为召回率分母。",
         },
         {
             "id": "shared_strength_grid",
-            "status": "PASS" if len(profile_shared_levels) >= min_levels else "WARN",
-            "observed": {"shared_levels": profile_shared_levels, "required_levels": min_levels},
+            "status": "PASS" if len(profile_shared_levels) >= primary_min_levels else "WARN",
+            "observed": {"shared_levels": profile_shared_levels, "required_levels": primary_min_levels},
             "meaning": "不同背景条件在共同注入强度上做描述性对照。",
         },
         {
@@ -575,9 +621,14 @@ def build_innovation_package(
         },
         {
             "id": "independent_replication",
-            "status": "PASS" if replication_status == "REPLICATED" else "WARN",
-            "observed": {"trial_count_min": min(trial_counts), "trial_count_max": max(trial_counts), "status": replication_status},
-            "meaning": "当前 8 个位置属于一个布局时，结论必须标注为小样本/单布局条件结果。",
+            "status": "PASS" if replication_ready else "FAIL",
+            "observed": {
+                "profile_trial_count_min": min(profile_trial_counts) if profile_trial_counts else None,
+                "profile_trial_count_max": max(profile_trial_counts) if profile_trial_counts else None,
+                "required_min_trials": primary_min_trials,
+                "status": replication_status,
+            },
+            "meaning": "主剖面每个条件/强度单元必须有足够的独立位置布局；单布局只能作为诊断结果。",
         },
         {
             "id": "false_positive_truth",
@@ -611,11 +662,21 @@ def build_innovation_package(
             "role": "HARD_CONTROL_ONLY",
         })
 
+    profile_trial_min = min(profile_trial_counts) if profile_trial_counts else None
+    profile_trial_max = max(profile_trial_counts) if profile_trial_counts else None
+    profile_n_min = min(profile_denominators) if profile_denominators else None
+    profile_n_max = max(profile_denominators) if profile_denominators else None
     selected_claim = (
-        "在当前真实背景、当前 PSF/检测参数和每个条件 8 个无歧义注入位置的实验口径下，"
+        "在当前真实背景、当前 PSF/检测参数、每个主条件/强度单元至少 "
+        f"{profile_n_min}–{profile_n_max} 个无歧义注入位置和 "
+        f"{profile_trial_min}–{profile_trial_max} 个独立布局的实验口径下，"
         "局部背景条件与候选层/质量层回收存在可见差异；严格质量层在困难条件或弱注入下更容易损失源。"
         if status == PRIMARY_STATUS
-        else "当前分层注入结果尚未满足主创新交付门槛，只能作为实验诊断。"
+        else (
+            "主剖面结构已经形成，但当前独立布局数为 "
+            f"{profile_trial_min if profile_trial_min is not None else '—'}，"
+            f"未达到交付所需的至少 {primary_min_trials} 个布局；本包只能作为实验诊断。"
+        )
     )
     package: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -658,11 +719,19 @@ def build_innovation_package(
             "all_levels": all_levels,
             "shared_levels_all_core_candidates": shared_levels,
             "shared_levels_primary_profile": profile_shared_levels,
-            "min_injections_gate": min_injections,
-            "min_levels_gate": min_levels,
+            "requested_min_injections": min_injections,
+            "requested_min_levels": min_levels,
+            "requested_min_trials": min_trials,
+            "min_injections_gate": primary_min_injections,
+            "min_levels_gate": primary_min_levels,
+            "min_trials_gate": primary_min_trials,
             "replication_status": replication_status,
-            "trial_count_min": min(trial_counts),
-            "trial_count_max": max(trial_counts),
+            "trial_count_min": min(all_trial_counts) if all_trial_counts else None,
+            "trial_count_max": max(all_trial_counts) if all_trial_counts else None,
+            "profile_trial_count_min": profile_trial_min,
+            "profile_trial_count_max": profile_trial_max,
+            "profile_denominator_min": profile_n_min,
+            "profile_denominator_max": profile_n_max,
         },
         "profiles": profile_summaries,
         "condition_contrasts": contrasts,
@@ -682,7 +751,7 @@ def build_innovation_package(
                     "按背景条件分层",
                 ],
                 "weaknesses": [
-                    "每个条件当前只有 8 个位置且 trial_count=1",
+                    f"主剖面每个条件/强度单元要求至少 {primary_min_injections} 个无歧义位置/布局和 {primary_min_trials} 个独立布局；当前 profile 为 {profile_n_min if profile_n_min is not None else '—'}–{profile_n_max if profile_n_max is not None else '—'} 个位置、{profile_trial_min if profile_trial_min is not None else '—'}–{profile_trial_max if profile_trial_max is not None else '—'} 个布局",
                     "注入源是模型源，不等同于所有真实恒星",
                     "没有独立逐星标签，因此不能计算全图误检率",
                     "没有完整相机响应/增益/平场/颜色项校准",
@@ -761,7 +830,8 @@ def _markdown(package: Mapping[str, Any]) -> str:
         f"测量对象：{selected['measurement']}",
         "",
         "计算口径：`recall = recovered_injected_sources / unambiguous_injected_sources`；"
-        "质量筛选损失为 `candidate_recall - quality_recall`。Wilson 区间只表达当前二项小样本的不确定度。",
+        "质量筛选损失为 `candidate_recall - quality_recall`。Wilson 区间只表达当前聚合二项计数的不确定度，"
+        "不替代独立布局之间的重复性评估。",
         "",
         "## 2. 当前数据证据",
         "",
@@ -808,11 +878,19 @@ def _markdown(package: Mapping[str, Any]) -> str:
         "",
         "## 3. 哪些可以答辩，哪些只能诊断",
         "",
-        "### 可以答辩的主结果",
+        "### 可以答辩的主结果" if package["status"] == PRIMARY_STATUS else "### 当前只能作为诊断",
         "",
-        "1. 在明确的真实背景、PSF 模型、检测参数和注入分母下，给出分层经验召回率。",
+        (
+            f"1. 在明确的真实背景、PSF 模型、检测参数和注入分母下，给出分层经验召回率；每个主剖面单元的聚合分母为 {summary['profile_denominator_min']}–{summary['profile_denominator_max']}。"
+            if package["status"] == PRIMARY_STATUS
+            else "1. 主剖面结构已经形成，但独立布局门槛尚未满足，当前结果不能作为最终答辩主曲线。"
+        ),
         "2. 同一注入强度下比较候选层与质量层，说明“宽筛保召回、严筛保可靠性”的数据依据。",
-        "3. 用 Wilson 区间如实展示 n=8 带来的不确定性，并主动说明当前是单布局小样本。",
+        (
+            f"3. 用 Wilson 区间展示聚合 n={summary['profile_denominator_min']}–{summary['profile_denominator_max']} 的不确定性，并同时报告 {summary['profile_trial_count_min']}–{summary['profile_trial_count_max']} 个独立布局。"
+            if package["status"] == PRIMARY_STATUS
+            else f"3. 当前 profile 的独立布局数为 {summary['profile_trial_count_min'] if summary['profile_trial_count_min'] is not None else '—'}–{summary['profile_trial_count_max'] if summary['profile_trial_count_max'] is not None else '—'}，要求至少 {summary['min_trials_gate']}。"
+        ),
         "",
         "### 支撑证据，不单独算创新得分",
         "",
@@ -834,7 +912,8 @@ def _markdown(package: Mapping[str, Any]) -> str:
         "",
         "## 5. 当前未完成项",
         "",
-        "- 每个条件至少 3 个独立位置布局，并扩大空间采样；当前 `trial_count=1`。",
+        f"- 每个主条件/强度单元至少 {summary['min_trials_gate']} 个独立位置布局，并扩大空间采样；当前 profile `trial_count` 为 {summary['profile_trial_count_min'] if summary['profile_trial_count_min'] is not None else '—'}–{summary['profile_trial_count_max'] if summary['profile_trial_count_max'] is not None else '—'}。",
+        f"- 每个独立布局至少 {summary['min_injections_gate']} 个无歧义位置；当前 profile 聚合分母为 {summary['profile_denominator_min'] if summary['profile_denominator_min'] is not None else '—'}–{summary['profile_denominator_max'] if summary['profile_denominator_max'] is not None else '—'}。",
         "- 获取官方逐星真值或构造独立负样本，才能审计 precision/FDR。",
         "- 以真实相机响应、增益、暗场/平场、波段和标准星零点补足绝对光度链路。",
         "- 用留出星表匹配和空间变 PSF 对照验证跨区域稳定性；当前注入源仍是实验模型源。",
@@ -842,7 +921,7 @@ def _markdown(package: Mapping[str, Any]) -> str:
         "",
         "## 6. 推荐答辩表述",
         "",
-        "> 我们没有把全图检测数直接称为恒星数，而是在真实 FITS 背景中注入已知源，按空白、高背景、边缘等条件分层，分别统计候选层和质量层的回收率。结果表明，检测阈值与质量筛选对弱源的影响依赖局部背景条件；因此我们把它定义为当前数据和当前参数下的条件化经验可探测性剖面。由于每格只有 8 个注入位置且尚无官方逐星真值，我们不把它外推为普适完备率、误检率或物理灵敏度。",
+        f"> 我们没有把全图检测数直接称为恒星数，而是在真实 FITS 背景中注入已知源，按空白、高背景、边缘等条件分层，分别统计候选层和质量层的回收率。结果表明，检测阈值与质量筛选对弱源的影响依赖局部背景条件；因此我们把它定义为当前数据和当前参数下的条件化经验可探测性剖面。每个独立布局要求至少 {summary['min_injections_gate']} 个无歧义位置，并要求至少 {summary['min_trials_gate']} 个独立布局；尚无官方逐星真值时，我们不把它外推为普适完备率、误检率或物理灵敏度。",
         "",
         "## 7. 生成与复核",
         "",
@@ -886,6 +965,9 @@ _CSV_FIELDS = (
     "quality_recall_wilson95_low",
     "quality_recall_wilson95_high",
     "quality_filter_gap",
+    "rate_semantics",
+    "ambiguous_count_is_nonexclusive",
+    "minimum_unambiguous_positions_required",
     "local_background_adu",
     "local_noise_adu",
     "nominal_level_over_local_noise",
@@ -915,6 +997,9 @@ def write_innovation_package(package: Mapping[str, Any], out_dir: str | Path) ->
 
 
 __all__ = [
+    "MIN_PRIMARY_INJECTIONS",
+    "MIN_PRIMARY_LEVELS",
+    "MIN_PRIMARY_TRIALS",
     "PRIMARY_INNOVATION_ID",
     "PRIMARY_STATUS",
     "SCHEMA_VERSION",

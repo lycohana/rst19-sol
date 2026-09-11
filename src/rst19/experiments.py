@@ -2976,8 +2976,15 @@ def _local_patch_stats(image: np.ndarray, x: float, y: float, *, radius: int = 5
     y1 = min(image.shape[0], center_y + radius + 1)
     x0 = max(0, center_x - radius)
     x1 = min(image.shape[1], center_x + radius + 1)
-    patch = np.asarray(image[y0:y1, x0:x1], dtype=np.float64)
-    finite = patch[np.isfinite(patch)]
+    raw_patch = image[y0:y1, x0:x1]
+    if np.issubdtype(raw_patch.dtype, np.integer):
+        # Integer FITS pixels are all finite.  The float64 conversion keeps
+        # the existing exact ADU statistics while avoiding a boolean mask
+        # and a second indexed copy for every sampled position.
+        finite = np.asarray(raw_patch, dtype=np.float64).reshape(-1)
+    else:
+        patch = np.asarray(raw_patch, dtype=np.float64)
+        finite = patch[np.isfinite(patch)]
     if finite.size < 16:
         return None
     median = float(np.median(finite))
@@ -3122,14 +3129,22 @@ def _real_injection_special_mask(image: np.ndarray) -> np.ndarray:
     """
 
     values = np.asarray(image)
+    if np.issubdtype(values.dtype, np.integer):
+        # Integer FITS values are finite by construction.  Keep the same
+        # comparison thresholds without allocating a full float64 image and
+        # repeated finite masks just to discover that fact.
+        special = values == -1
+        negative_limit = _default_negative_overflow_limit(values)
+        if negative_limit is not None:
+            special |= values <= float(negative_limit)
+        dtype_info = np.iinfo(values.dtype)
+        special |= values >= float(dtype_info.max - 32)
+        return special
     numeric = np.asarray(values, dtype=np.float64)
     special = np.isfinite(numeric) & (numeric == -1.0)
     negative_limit = _default_negative_overflow_limit(values)
     if negative_limit is not None:
         special |= np.isfinite(numeric) & (numeric <= float(negative_limit))
-    if np.issubdtype(values.dtype, np.integer):
-        dtype_info = np.iinfo(values.dtype)
-        special |= np.isfinite(numeric) & (numeric >= float(dtype_info.max - 32))
     return special
 
 
@@ -3141,6 +3156,8 @@ def _real_injection_site(
     baseline_tree: cKDTree | None,
     special_mask: np.ndarray,
     neighborhood_radius: int,
+    baseline_neighbor_count: int | None = None,
+    nearest_baseline_source_px: float | None = None,
 ) -> _RealInjectionSite | None:
     """计算注入位置的原始背景、特殊值域和基线邻域描述。"""
 
@@ -3157,9 +3174,14 @@ def _real_injection_site(
     x1 = min(width, center_x + neighborhood_radius + 1)
     local_special = special_mask[y0:y1, x0:x1]
     special_fraction = float(np.mean(local_special)) if local_special.size else 0.0
-    if baseline_tree is None:
+    if baseline_neighbor_count is not None:
+        neighbor_count = int(baseline_neighbor_count)
+        nearest_distance = (
+            None if nearest_baseline_source_px is None else float(nearest_baseline_source_px)
+        )
+    elif baseline_tree is None:
         neighbor_count = 0
-        nearest_distance: float | None = None
+        nearest_distance = None
     else:
         neighbor_indices = baseline_tree.query_ball_point((x, y), r=float(neighborhood_radius))
         neighbor_count = len(neighbor_indices)
@@ -3207,6 +3229,8 @@ def _select_stratified_real_injection_sites(
     noise_adu: float,
     psf_fwhm: float,
     aperture_radius: int,
+    _special_mask: np.ndarray | None = None,
+    _baseline_tree: cKDTree | None = None,
 ) -> tuple[_RealInjectionSite, ...]:
     """从真实 FITS 中选取一个明确的注入条件层。
 
@@ -3232,9 +3256,20 @@ def _select_stratified_real_injection_sites(
         neighborhood_radius + 2,
         int(math.ceil(4.0 * float(psf_fwhm) / 2.354820045)) + 2,
     )
-    special_mask = _real_injection_special_mask(values)
-    baseline_points = np.asarray([(source.x, source.y) for source in existing_sources], dtype=np.float64)
-    baseline_tree = cKDTree(baseline_points) if baseline_points.size else None
+    # These structures depend only on the unmodified frame and baseline
+    # detections.  The public runner builds them once per run and passes them
+    # back read-only for every stratum; the fallback keeps this helper's
+    # standalone behavior unchanged.
+    if _special_mask is None:
+        special_mask = _real_injection_special_mask(values)
+    else:
+        special_mask = np.asarray(_special_mask, dtype=bool)
+        if special_mask.shape != values.shape:
+            raise ValueError(f"special_mask shape {special_mask.shape} does not match image shape {values.shape}")
+    baseline_tree = _baseline_tree
+    if baseline_tree is None:
+        baseline_points = np.asarray([(source.x, source.y) for source in existing_sources], dtype=np.float64)
+        baseline_tree = cKDTree(baseline_points) if baseline_points.size else None
 
     def is_inside(x: float, y: float, margin: int = 0) -> bool:
         return margin <= x < width - margin and margin <= y < height - margin
@@ -3262,6 +3297,7 @@ def _select_stratified_real_injection_sites(
                 baseline_tree=baseline_tree,
                 special_mask=special_mask,
                 neighborhood_radius=neighborhood_radius,
+                baseline_neighbor_count=0,
             )
             if site is None or site.special_pixel_fraction > 0.0:
                 continue
@@ -6922,6 +6958,13 @@ def run_stratified_real_background_injection(
     )
     injected_detector_options["mask_zero_pixels"] = bool(int(baseline.parameters.get("mask_zero_pixels", 0)))
 
+    base_image_float32 = np.asarray(image, dtype=np.float32)
+    selection_special_mask = _real_injection_special_mask(image)
+    selection_special_mask.setflags(write=False)
+    baseline_points = np.asarray([(source.x, source.y) for source in baseline.sources], dtype=np.float64)
+    selection_baseline_tree = cKDTree(baseline_points) if baseline_points.size else None
+    test_image = np.empty_like(base_image_float32)
+
     rng = np.random.default_rng(seed)
     site_layouts: dict[str, list[tuple[_RealInjectionSite, ...]]] = {}
     for stratum in resolved_strata:
@@ -6935,6 +6978,8 @@ def run_stratified_real_background_injection(
                 noise_adu=float(baseline.noise),
                 psf_fwhm=psf_fwhm,
                 aperture_radius=aperture_radius,
+                _special_mask=selection_special_mask,
+                _baseline_tree=selection_baseline_tree,
             )
             for _trial in range(trials_per_level)
         ]
@@ -6986,7 +7031,7 @@ def run_stratified_real_background_injection(
             special_fractions: list[float] = []
             nearest_distances: list[float] = []
             for sites in site_layouts[stratum]:
-                test_image = np.asarray(image, dtype=np.float32).copy()
+                np.copyto(test_image, base_image_float32)
                 positions = [(site.x, site.y) for site in sites]
                 unambiguous_sites = tuple(
                     site
