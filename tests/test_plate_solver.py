@@ -193,3 +193,95 @@ def test_solve_plate_excludes_quality_rejected_and_structural_points() -> None:
     assert result.status == "REJECTED"
     assert result.best is not None
     assert "留一验证无有效样本" in result.reason
+
+
+def test_solve_plate_prefers_bright_sources_inside_wide_field_catalog() -> None:
+    reference_wcs = TangentPlaneWCS(
+        center_ra_deg=129.5,
+        center_dec_deg=-1.8,
+        pixel_scale_arcsec=8.5,
+        crpix_x=1000.0,
+        crpix_y=1000.0,
+    )
+    in_field_tangent = np.asarray(
+        (
+            (-6500.0, -5200.0),
+            (-5200.0, 6100.0),
+            (-3000.0, 2400.0),
+            (-800.0, -6800.0),
+            (1500.0, 7000.0),
+            (3400.0, -2600.0),
+            (5600.0, 4300.0),
+            (7000.0, -1200.0),
+        ),
+        dtype=np.float64,
+    )
+    in_field = _catalog_for_tangent_points(reference_wcs, in_field_tangent)
+    out_of_field_tangent = np.asarray(
+        (
+            (-18000.0, -14000.0),
+            (-12000.0, 18000.0),
+            (14000.0, -16000.0),
+            (19000.0, 9000.0),
+            (22000.0, -3000.0),
+            (-21000.0, 7000.0),
+            (11000.0, 21000.0),
+            (-16000.0, -19000.0),
+        ),
+        dtype=np.float64,
+    )
+    out_of_field_sources: list[CatalogSource] = []
+    for index, (east, north) in enumerate(out_of_field_tangent):
+        ra, dec = reference_wcs.pixel_to_world(
+            reference_wcs.crpix_x + east / reference_wcs.pixel_scale_arcsec,
+            reference_wcs.crpix_y + north / reference_wcs.pixel_scale_arcsec,
+        )
+        out_of_field_sources.append(
+            CatalogSource(
+                source_id=f"outside-{index}",
+                ra_deg=float(ra),
+                dec_deg=float(dec),
+                magnitude=5.0 + index * 0.1,
+                color=0.8,
+                color_name="BP-RP",
+                catalog_name="Gaia DR3",
+                photometric_system="Gaia Vega",
+                photometric_band="G",
+            )
+        )
+    out_of_field = tuple(out_of_field_sources)
+    catalog = out_of_field + in_field
+    matrix = np.asarray(((1.0 / 8.5, 0.0), (0.0, -1.0 / 8.5)), dtype=np.float64)
+    transform = PlateTransform(
+        matrix_px_per_arcsec=(tuple(matrix[0]), tuple(matrix[1])),
+        offset_px=(1000.0, 1000.0),
+        plate_scale_arcsec_per_pixel=8.5,
+        rotation_deg=0.0,
+        parity=-1,
+        anisotropy_ratio=1.0,
+    )
+    detections = tuple(
+        _detection(index, *transform.project_tangent(point), snr=100.0)
+        for index, point in enumerate(in_field_tangent, start=1)
+    )
+
+    result = solve_plate(
+        detections,
+        catalog,
+        reference_wcs,
+        image_shape=(2000, 2000),
+        scale_tolerance=0.04,
+        min_pair_distance_px=20.0,
+        match_radius_px=1.0,
+        min_matches=6,
+        min_coverage_area=0.01,
+        max_rms_residual_px=0.5,
+        max_leave_one_out_rms_px=1.0,
+        max_image_points=16,
+        max_catalog_points=8,
+    )
+
+    assert result.valid, result.as_dict()
+    assert result.catalog_points_considered == 8
+    assert result.best is not None
+    assert all(str(match.source_id).startswith("gaia-") for match in result.best.matches)

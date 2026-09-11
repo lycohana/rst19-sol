@@ -241,9 +241,35 @@ def _select_detections(
 def _select_catalog(
     catalog: Sequence[CatalogSource],
     *,
+    reference_wcs: TangentPlaneWCS | None = None,
+    image_shape: tuple[int, int] | None = None,
+    epoch: float | None = None,
     max_points: int,
 ) -> tuple[CatalogSource, ...]:
     selected = [source for source in catalog if source.magnitude is not None and _finite(source.magnitude)]
+    if reference_wcs is not None and image_shape is not None and len(image_shape) == 2:
+        image_height, image_width = (int(value) for value in image_shape)
+        if image_height > 0 and image_width > 0:
+            # The inscribed circle is guaranteed to lie inside the square
+            # footprint regardless of the unknown image rotation.  Prefer
+            # bright sources from that circle so a wide, truncated public
+            # catalog cannot spend the solver's small point budget on stars
+            # outside the actual camera field.
+            inner_radius_arcsec = (
+                min(image_height, image_width)
+                * float(reference_wcs.pixel_scale_arcsec)
+                * 0.5
+                * 1.05
+            )
+            inner_sources: list[CatalogSource] = []
+            for source in selected:
+                at_epoch = source.at_epoch(epoch)
+                east, north = reference_wcs.world_to_tangent_arcsec(at_epoch.ra_deg, at_epoch.dec_deg)
+                if math.isfinite(float(east)) and math.isfinite(float(north)):
+                    if math.hypot(float(east), float(north)) <= inner_radius_arcsec:
+                        inner_sources.append(source)
+            if len(inner_sources) >= min(8, max_points):
+                selected = inner_sources
     selected.sort(key=lambda source: (_rank_catalog(source), str(source.source_id)))
     return tuple(selected[:max_points])
 
@@ -533,7 +559,13 @@ def solve_plate(
     if max_image_points < 2 or max_catalog_points < 2 or max_pair_hypotheses < 1:
         raise ValueError("point and hypothesis limits are too small")
     image_sources = _select_detections(detections, max_points=max_image_points, quality_only=quality_only)
-    catalog_sources = _select_catalog(catalog, max_points=max_catalog_points)
+    catalog_sources = _select_catalog(
+        catalog,
+        reference_wcs=reference_wcs,
+        image_shape=image_shape,
+        epoch=epoch,
+        max_points=max_catalog_points,
+    )
     acceptance = {
         "min_matches": int(min_matches),
         "min_coverage_area": float(min_coverage_area),
