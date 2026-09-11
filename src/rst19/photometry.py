@@ -323,6 +323,7 @@ class AbsoluteMagnitudeEstimate:
             "extinction_source": self.extinction_source,
             "error_status": self.error_status,
             "is_strict": self.is_strict,
+            "is_strict_with_uncertainty": self.is_strict_with_uncertainty,
         }
 
     @property
@@ -422,6 +423,19 @@ class AbsoluteMagnitudeEstimate:
             and self.distance_interval_status in {"PROVIDED", "DERIVED_FROM_PARALLAX_ERROR"}
             and not {"EXTINCTION_SEMANTICS_REQUIRED", "DISTANCE_SOURCE_REQUIRED"}.intersection(self.flags)
         )
+
+    @property
+    def is_strict_with_uncertainty(self) -> bool:
+        """Whether a strict numeric M also carries a complete error budget.
+
+        ``is_strict`` answers whether the value has a declared physical
+        interpretation and distance interval.  A model distance can satisfy
+        that gate while the image magnitude or extinction uncertainty is
+        absent, so this stricter property is the gate for quoting an error
+        bar or ranking results by formal uncertainty.
+        """
+
+        return bool(self.is_strict and self.error_status == "AVAILABLE" and self.error is not None)
 
 
 @dataclass(frozen=True, slots=True)

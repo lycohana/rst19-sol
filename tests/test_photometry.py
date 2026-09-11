@@ -533,6 +533,7 @@ def test_absolute_magnitude_estimate_has_quality_gate_and_error() -> None:
     )
     assert estimate.error_status == "AVAILABLE"
     assert estimate.is_strict is True
+    assert estimate.is_strict_with_uncertainty is True
 
     rejected = absolute_magnitude_estimate_from_parallax(
         13.56,
@@ -755,6 +756,8 @@ def test_low_snr_parallax_falls_back_to_declared_model_distance() -> None:
     assert estimate.status == "VALID_MODEL_DISTANCE"
     assert estimate.value == pytest.approx(8.36)
     assert "PARALLAX_QUALITY_FALLBACK_TO_MODEL_DISTANCE" in estimate.flags
+    assert estimate.is_strict is True
+    assert estimate.is_strict_with_uncertainty is False
 
 
 def test_model_distance_requires_explicit_provenance() -> None:
