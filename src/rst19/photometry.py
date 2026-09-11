@@ -54,6 +54,12 @@ def _photometric_metadata_declared(system: str | None, band: str | None) -> bool
     return _normalise_photometric_label(system) is not None and _normalise_photometric_label(band) is not None
 
 
+def _provenance_declared(value: str | None) -> bool:
+    """Return whether a text provenance value carries an actual declaration."""
+
+    return _normalise_photometric_label(value) is not None
+
+
 def _photometric_metadata_matches(
     expected_system: str | None,
     expected_band: str | None,
@@ -308,10 +314,114 @@ class AbsoluteMagnitudeEstimate:
             "distance_source": self.distance_source,
             "distance_lower_pc": self.distance_lower_pc,
             "distance_upper_pc": self.distance_upper_pc,
+            "distance_interval_status": self.distance_interval_status,
+            "distance_error_pc": self.distance_error_pc,
+            "distance_error_lower_pc": self.distance_error_lower_pc,
+            "distance_error_upper_pc": self.distance_error_upper_pc,
             "extinction_band": self.extinction_band,
             "extinction_system": self.extinction_system,
             "extinction_source": self.extinction_source,
+            "error_status": self.error_status,
+            "is_strict": self.is_strict,
         }
+
+    @property
+    def distance_interval_status(self) -> str:
+        """Describe the distance uncertainty carried by this result.
+
+        The status is derived from the existing flags and bounds so older
+        cache payloads remain readable.  A central ``distance_pc`` alone is
+        deliberately not treated as an interval.
+        """
+
+        flags = set(self.flags)
+        if "DISTANCE_INTERVAL_INVALID" in flags:
+            return "INVALID"
+        if "DISTANCE_INTERVAL_DERIVED_FROM_PARALLAX_ERROR" in flags:
+            return "DERIVED_FROM_PARALLAX_ERROR"
+        if "DISTANCE_INTERVAL_USED" in flags:
+            return "PROVIDED"
+        if "DISTANCE_INTERVAL_ONE_SIDED" in flags:
+            return "ONE_SIDED"
+        if "DISTANCE_INTERVAL_REQUIRED" in flags:
+            return "REQUIRED"
+        if "DISTANCE_ERROR_NOT_PROVIDED" in flags:
+            return "NOT_PROVIDED"
+        if self.distance_lower_pc is not None or self.distance_upper_pc is not None:
+            return "PRESENT_UNCLASSIFIED"
+        return "NOT_AVAILABLE"
+
+    @property
+    def distance_error_lower_pc(self) -> float | None:
+        """Lower-side distance deviation from the central estimate."""
+
+        if self.distance_pc is None or self.distance_lower_pc is None:
+            return None
+        if not all(_finite(value) for value in (self.distance_pc, self.distance_lower_pc)):
+            return None
+        deviation = float(self.distance_pc) - float(self.distance_lower_pc)
+        return deviation if deviation >= 0 else None
+
+    @property
+    def distance_error_upper_pc(self) -> float | None:
+        """Upper-side distance deviation from the central estimate."""
+
+        if self.distance_pc is None or self.distance_upper_pc is None:
+            return None
+        if not all(_finite(value) for value in (self.distance_pc, self.distance_upper_pc)):
+            return None
+        deviation = float(self.distance_upper_pc) - float(self.distance_pc)
+        return deviation if deviation >= 0 else None
+
+    @property
+    def distance_error_pc(self) -> float | None:
+        """Symmetric distance error when both bounds are available.
+
+        For a one-sided diagnostic bound, return that side's deviation.  The
+        structured estimate itself still remains non-strict unless a complete
+        interval passed its quality gate.
+        """
+
+        lower_error = self.distance_error_lower_pc
+        upper_error = self.distance_error_upper_pc
+        if lower_error is not None and upper_error is not None:
+            return 0.5 * (lower_error + upper_error)
+        return lower_error if lower_error is not None else upper_error
+
+    @property
+    def error_status(self) -> str:
+        """State whether ``error`` is complete, partial, or unavailable."""
+
+        incomplete_flags = {
+            "APPARENT_MAGNITUDE_ERROR_NOT_PROVIDED",
+            "EXTINCTION_ERROR_NOT_PROVIDED",
+            "DISTANCE_ERROR_NOT_PROVIDED",
+            "DISTANCE_INTERVAL_REQUIRED",
+            "PARALLAX_ERROR_REQUIRED",
+            "PARALLAX_ZERO_POINT_ERROR_NOT_PROVIDED",
+        }
+        if incomplete_flags.intersection(self.flags):
+            return "INCOMPLETE"
+        return "AVAILABLE" if self.error is not None else "NOT_AVAILABLE"
+
+    @property
+    def is_strict(self) -> bool:
+        """Whether the result is safe to consume as a strict numeric M.
+
+        ``value`` is intentionally not the only gate: a value can be retained
+        by a legacy payload while its provenance is incomplete.  A strict
+        result needs a declared extinction semantics, a declared distance
+        source, and a complete two-sided/derived distance interval.
+        """
+
+        return bool(
+            self.value is not None
+            and self.status in {"VALID", "VALID_MODEL_DISTANCE"}
+            and _provenance_declared(self.distance_source)
+            and _photometric_metadata_declared(self.extinction_system, self.extinction_band)
+            and self.distance_interval_status in {"PROVIDED", "DERIVED_FROM_PARALLAX_ERROR"}
+            and not {"EXTINCTION_SEMANTICS_REQUIRED", "DISTANCE_SOURCE_REQUIRED"}.intersection(self.flags)
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -981,7 +1091,9 @@ def absolute_magnitude_from_apparent(
 
     定义为 ``M = m - 5 log10(d / 10 pc) - A``。这里的 ``m`` 必须已经
     属于明确的标准波段（例如 V），而不是 ``m_inst``。距离可以来自
-    可靠视差或独立测量；检测到多少颗星不能提供这个距离。
+    可靠视差或独立测量；检测到多少颗星不能提供这个距离。这个旧的
+    浮点接口只做兼容性算术，不携带质量/来源状态；需要严格语义时使用
+    ``absolute_magnitude_estimate_from_distance`` 或其视差版本。
     """
 
     if not math.isfinite(float(apparent_magnitude)):
@@ -1002,7 +1114,8 @@ def absolute_magnitude_from_parallax(
     """由毫角秒视差换算绝对星等。
 
     仅接受正视差；负视差或零视差不能被当作距离使用，应由调用方保留
-    为“绝对星等不可计算”而不是制造一个数值。
+    为“绝对星等不可计算”而不是制造一个数值。这个旧的浮点接口不做
+    视差质量或消光来源审计；严格路径使用结构化 estimate 接口。
     """
 
     if not math.isfinite(float(parallax_mas)) or parallax_mas <= 0:
@@ -1013,6 +1126,19 @@ def absolute_magnitude_from_parallax(
         distance_pc=distance_pc,
         extinction_mag=extinction_mag,
     )
+
+
+def _distance_interval_from_parallax(
+    corrected_parallax_mas: float,
+    parallax_error_mas: float,
+) -> tuple[float | None, float | None]:
+    """Convert a positive parallax +/- error into a finite distance interval."""
+
+    lower_parallax = float(corrected_parallax_mas) + float(parallax_error_mas)
+    upper_parallax = float(corrected_parallax_mas) - float(parallax_error_mas)
+    if lower_parallax <= 0 or upper_parallax <= 0:
+        return None, None
+    return 1000.0 / lower_parallax, 1000.0 / upper_parallax
 
 
 def absolute_magnitude_estimate_from_parallax(
@@ -1033,7 +1159,9 @@ def absolute_magnitude_estimate_from_parallax(
 
     这是低视差误差场景下的可解释近似，不是对低信噪比视差做简单倒数。
     当视差误差超过 ``max_fractional_parallax_error`` 时，函数拒绝生成
-    一个看似精确的绝对星等，调用方应改用带先验的距离后验。
+    一个看似精确的绝对星等，调用方应改用带先验的距离后验。结构化
+    结果还要求消光波段/系统已声明；仅有数值 A 不能证明它属于当前表观
+    星等的波段。正视差和误差会派生一个有限的距离区间并写入结果。
     """
 
     if not math.isfinite(float(apparent_magnitude)):
@@ -1079,7 +1207,7 @@ def absolute_magnitude_estimate_from_parallax(
 
     distance_pc = 1000.0 / corrected_parallax
     if parallax_error_mas is None:
-        flags = ["PARALLAX_ERROR_REQUIRED"]
+        flags = ["PARALLAX_ERROR_REQUIRED", "DISTANCE_ERROR_NOT_PROVIDED"]
         if extinction_mag is None:
             flags.append("EXTINCTION_NOT_PROVIDED")
         return _absolute_unavailable(
@@ -1094,8 +1222,18 @@ def absolute_magnitude_estimate_from_parallax(
         )
     if not math.isfinite(float(parallax_error_mas)) or parallax_error_mas < 0:
         raise ValueError("parallax_error_mas must be finite and non-negative")
-    fractional_error = float(parallax_error_mas) / corrected_parallax
-    if fractional_error > max_fractional_parallax_error:
+    parallax_error = float(parallax_error_mas)
+    fractional_error = parallax_error / corrected_parallax
+    distance_lower_pc, distance_upper_pc = _distance_interval_from_parallax(
+        corrected_parallax,
+        parallax_error,
+    )
+    distance_interval_flags = (
+        ("DISTANCE_INTERVAL_DERIVED_FROM_PARALLAX_ERROR",)
+        if distance_lower_pc is not None and distance_upper_pc is not None
+        else ()
+    )
+    if fractional_error > max_fractional_parallax_error or distance_upper_pc is None:
         flags = ["USE_DISTANCE_POSTERIOR"]
         if extinction_mag is None:
             flags.append("EXTINCTION_NOT_PROVIDED")
@@ -1104,7 +1242,9 @@ def absolute_magnitude_estimate_from_parallax(
             distance_pc=distance_pc,
             extinction_mag=extinction_mag,
             status="LOW_PARALLAX_SNR",
-            flags=tuple(flags),
+            flags=tuple(flags) + distance_interval_flags,
+            distance_lower_pc=distance_lower_pc,
+            distance_upper_pc=distance_upper_pc,
             extinction_band=extinction_band,
             extinction_system=extinction_system,
             extinction_source=extinction_source,
@@ -1119,31 +1259,55 @@ def absolute_magnitude_estimate_from_parallax(
             distance_pc=distance_pc,
             extinction_mag=None,
             status="VALID_NO_EXTINCTION",
-            flags=("EXTINCTION_NOT_PROVIDED",),
+            flags=("EXTINCTION_NOT_PROVIDED",) + distance_interval_flags,
+            distance_lower_pc=distance_lower_pc,
+            distance_upper_pc=distance_upper_pc,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
+        )
+
+    if not _photometric_metadata_declared(extinction_system, extinction_band):
+        return _absolute_unavailable(
+            corrected_parallax_mas=corrected_parallax,
+            distance_pc=distance_pc,
+            extinction_mag=extinction_mag,
+            status="EXTINCTION_SEMANTICS_REQUIRED",
+            flags=("EXTINCTION_SEMANTICS_REQUIRED",) + distance_interval_flags,
+            distance_lower_pc=distance_lower_pc,
+            distance_upper_pc=distance_upper_pc,
             extinction_band=extinction_band,
             extinction_system=extinction_system,
             extinction_source=extinction_source,
         )
 
     value = float(apparent_magnitude) - 5.0 * math.log10(distance_pc / 10.0) - float(extinction_mag)
-    variance = (float(apparent_magnitude_error) if apparent_magnitude_error is not None else 0.0) ** 2
-    variance += (5.0 / math.log(10.0) * float(parallax_error_mas) / corrected_parallax) ** 2
-    if extinction_error_mag is not None:
-        variance += float(extinction_error_mag) ** 2
-    flags: list[str] = []
-    if parallax_zero_point_mas:
-        flags.append("PARALLAX_ZERO_POINT_CORRECTED")
+    flags: list[str] = list(distance_interval_flags)
+    variance = (5.0 / math.log(10.0) * parallax_error / corrected_parallax) ** 2
+    errors_complete = True
+    if apparent_magnitude_error is None:
+        flags.append("APPARENT_MAGNITUDE_ERROR_NOT_PROVIDED")
+        errors_complete = False
+    else:
+        variance += float(apparent_magnitude_error) ** 2
     if extinction_error_mag is None:
         flags.append("EXTINCTION_ERROR_NOT_PROVIDED")
+        errors_complete = False
+    else:
+        variance += float(extinction_error_mag) ** 2
+    if parallax_zero_point_mas:
+        flags.append("PARALLAX_ZERO_POINT_CORRECTED")
     return AbsoluteMagnitudeEstimate(
         value=value,
-        error=math.sqrt(variance) if variance > 0 else None,
+        error=math.sqrt(variance) if errors_complete and variance > 0 else None,
         distance_pc=distance_pc,
         corrected_parallax_mas=corrected_parallax,
         extinction_mag=extinction_mag,
         status="VALID" if extinction_mag is not None else "VALID_NO_EXTINCTION",
         flags=tuple(flags),
         distance_source="parallax",
+        distance_lower_pc=distance_lower_pc,
+        distance_upper_pc=distance_upper_pc,
         extinction_band=extinction_band,
         extinction_system=extinction_system,
         extinction_source=extinction_source,
@@ -1169,29 +1333,37 @@ def absolute_magnitude_estimate_from_distance(
     This path is intentionally separate from the parallax path.  Gaia
     GSP-Phot, for example, publishes a model distance and 16th/84th-percentile
     bounds; it is useful when a direct parallax is absent or has poor S/N, but
-    it must remain visibly model-based.  The central value is used only when
-    the apparent band and extinction band are already declared by the caller.
-    ``distance_lower_pc``/``distance_upper_pc`` are interpreted as an
-    approximate 16th/84th interval and are propagated in log-distance space.
+    it must remain visibly model-based.  A declared ``distance_source``, a
+    complete lower/upper interval, and declared extinction system/band are
+    required before a numeric value is returned.  The central value is used
+    only when the apparent band and extinction band are already declared by
+    the caller. ``distance_lower_pc``/``distance_upper_pc`` are interpreted as
+    an approximate 16th/84th interval and are propagated in log-distance
+    space; a missing or one-sided interval remains a diagnostic-only result.
     """
 
     if not math.isfinite(float(apparent_magnitude)):
         raise ValueError("apparent_magnitude must be finite")
     if not math.isfinite(float(distance_pc)) or distance_pc <= 0:
         raise ValueError("distance_pc must be finite and positive")
+    distance_value = float(distance_pc)
+    lower = None
+    upper = None
     for name, value in (
         ("distance_lower_pc", distance_lower_pc),
         ("distance_upper_pc", distance_upper_pc),
     ):
         if value is not None and (not math.isfinite(float(value)) or float(value) <= 0):
             raise ValueError(f"{name} must be finite and positive when provided")
-    if distance_lower_pc is not None and distance_upper_pc is not None:
+    if distance_lower_pc is not None:
         lower = float(distance_lower_pc)
+    if distance_upper_pc is not None:
         upper = float(distance_upper_pc)
-        if lower > upper or not lower <= float(distance_pc) <= upper:
+    if lower is not None and upper is not None:
+        if lower > upper or not lower <= distance_value <= upper:
             return _absolute_unavailable(
                 corrected_parallax_mas=None,
-                distance_pc=float(distance_pc),
+                distance_pc=distance_value,
                 extinction_mag=extinction_mag,
                 status="INVALID_DISTANCE_INTERVAL",
                 flags=("DISTANCE_INTERVAL_INVALID",),
@@ -1202,22 +1374,57 @@ def absolute_magnitude_estimate_from_distance(
                 extinction_system=extinction_system,
                 extinction_source=extinction_source,
             )
+    elif (lower is not None and lower > distance_value) or (upper is not None and upper < distance_value):
+        return _absolute_unavailable(
+            corrected_parallax_mas=None,
+            distance_pc=distance_value,
+            extinction_mag=extinction_mag,
+            status="INVALID_DISTANCE_INTERVAL",
+            flags=("DISTANCE_INTERVAL_INVALID",),
+            distance_source=distance_source,
+            distance_lower_pc=lower,
+            distance_upper_pc=upper,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
+        )
+    if lower is not None and upper is not None:
+        interval_flags = ("DISTANCE_INTERVAL_USED",)
+    elif lower is not None or upper is not None:
+        interval_flags = ("DISTANCE_INTERVAL_ONE_SIDED", "DISTANCE_INTERVAL_REQUIRED")
+    else:
+        interval_flags = ("DISTANCE_ERROR_NOT_PROVIDED", "DISTANCE_INTERVAL_REQUIRED")
     for name, value in (
         ("apparent_magnitude_error", apparent_magnitude_error),
         ("extinction_error_mag", extinction_error_mag),
     ):
         if value is not None and (not math.isfinite(float(value)) or float(value) < 0):
             raise ValueError(f"{name} must be finite and non-negative")
-    if extinction_mag is None:
+    if not _provenance_declared(distance_source):
         return _absolute_unavailable(
             corrected_parallax_mas=None,
-            distance_pc=float(distance_pc),
+            distance_pc=distance_value,
+            extinction_mag=extinction_mag,
+            status="MODEL_DISTANCE_SOURCE_REQUIRED",
+            flags=("DISTANCE_SOURCE_REQUIRED", *interval_flags),
+            distance_source=distance_source,
+            distance_lower_pc=lower,
+            distance_upper_pc=upper,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
+        )
+    if extinction_mag is None:
+        flags = ["DISTANCE_MODEL_USED", "EXTINCTION_NOT_PROVIDED", *interval_flags]
+        return _absolute_unavailable(
+            corrected_parallax_mas=None,
+            distance_pc=distance_value,
             extinction_mag=None,
             status="MODEL_DISTANCE_NO_EXTINCTION",
-            flags=("DISTANCE_MODEL_USED", "EXTINCTION_NOT_PROVIDED"),
+            flags=tuple(flags),
             distance_source=distance_source,
-            distance_lower_pc=distance_lower_pc,
-            distance_upper_pc=distance_upper_pc,
+            distance_lower_pc=lower,
+            distance_upper_pc=upper,
             extinction_band=extinction_band,
             extinction_system=extinction_system,
             extinction_source=extinction_source,
@@ -1227,51 +1434,75 @@ def absolute_magnitude_estimate_from_distance(
     if float(extinction_mag) < 0:
         return _absolute_unavailable(
             corrected_parallax_mas=None,
-            distance_pc=float(distance_pc),
+            distance_pc=distance_value,
             extinction_mag=float(extinction_mag),
             status="INVALID_EXTINCTION",
-            flags=("NEGATIVE_EXTINCTION", "DISTANCE_MODEL_USED"),
+            flags=("NEGATIVE_EXTINCTION", "DISTANCE_MODEL_USED", *interval_flags),
             distance_source=distance_source,
-            distance_lower_pc=distance_lower_pc,
-            distance_upper_pc=distance_upper_pc,
+            distance_lower_pc=lower,
+            distance_upper_pc=upper,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
+        )
+    if not _photometric_metadata_declared(extinction_system, extinction_band):
+        return _absolute_unavailable(
+            corrected_parallax_mas=None,
+            distance_pc=distance_value,
+            extinction_mag=float(extinction_mag),
+            status="EXTINCTION_SEMANTICS_REQUIRED",
+            flags=("DISTANCE_MODEL_USED", "EXTINCTION_SEMANTICS_REQUIRED", *interval_flags),
+            distance_source=distance_source,
+            distance_lower_pc=lower,
+            distance_upper_pc=upper,
             extinction_band=extinction_band,
             extinction_system=extinction_system,
             extinction_source=extinction_source,
         )
 
-    value = float(apparent_magnitude) - 5.0 * math.log10(float(distance_pc) / 10.0) - float(extinction_mag)
-    variance = (float(apparent_magnitude_error) if apparent_magnitude_error is not None else 0.0) ** 2
+    if lower is None or upper is None:
+        return _absolute_unavailable(
+            corrected_parallax_mas=None,
+            distance_pc=distance_value,
+            extinction_mag=float(extinction_mag),
+            status="MODEL_DISTANCE_INTERVAL_REQUIRED",
+            flags=("DISTANCE_MODEL_USED", *interval_flags),
+            distance_source=distance_source,
+            distance_lower_pc=lower,
+            distance_upper_pc=upper,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
+        )
+
+    value = float(apparent_magnitude) - 5.0 * math.log10(distance_value / 10.0) - float(extinction_mag)
+    variance = 0.0
     flags = ["DISTANCE_MODEL_USED"]
-    distance_log_error: float | None = None
-    if distance_lower_pc is not None and distance_upper_pc is not None:
-        distance_log_error = 0.5 * abs(math.log(float(distance_upper_pc) / float(distance_lower_pc)))
-        flags.append("DISTANCE_INTERVAL_USED")
-    elif distance_lower_pc is not None:
-        distance_log_error = abs(math.log(float(distance_pc) / float(distance_lower_pc)))
-        flags.append("DISTANCE_INTERVAL_ONE_SIDED")
-    elif distance_upper_pc is not None:
-        distance_log_error = abs(math.log(float(distance_upper_pc) / float(distance_pc)))
-        flags.append("DISTANCE_INTERVAL_ONE_SIDED")
+    distance_log_error = 0.5 * math.log(upper / lower)
+    flags.append("DISTANCE_INTERVAL_USED")
+    variance += (5.0 / math.log(10.0) * distance_log_error) ** 2
+    errors_complete = True
+    if apparent_magnitude_error is None:
+        flags.append("APPARENT_MAGNITUDE_ERROR_NOT_PROVIDED")
+        errors_complete = False
     else:
-        flags.append("DISTANCE_ERROR_NOT_PROVIDED")
-    if distance_log_error is not None:
-        variance += (5.0 / math.log(10.0) * distance_log_error) ** 2
-    if extinction_error_mag is not None:
-        variance += float(extinction_error_mag) ** 2
-    else:
+        variance += float(apparent_magnitude_error) ** 2
+    if extinction_error_mag is None:
         flags.append("EXTINCTION_ERROR_NOT_PROVIDED")
-    status = "VALID_MODEL_DISTANCE" if distance_log_error is not None else "VALID_MODEL_DISTANCE_NO_INTERVAL"
+        errors_complete = False
+    else:
+        variance += float(extinction_error_mag) ** 2
     return AbsoluteMagnitudeEstimate(
         value=value,
-        error=math.sqrt(variance) if variance > 0 else None,
-        distance_pc=float(distance_pc),
+        error=math.sqrt(variance) if errors_complete and variance > 0 else None,
+        distance_pc=distance_value,
         corrected_parallax_mas=None,
         extinction_mag=float(extinction_mag),
-        status=status,
+        status="VALID_MODEL_DISTANCE",
         flags=tuple(flags),
         distance_source=distance_source,
-        distance_lower_pc=(float(distance_lower_pc) if distance_lower_pc is not None else None),
-        distance_upper_pc=(float(distance_upper_pc) if distance_upper_pc is not None else None),
+        distance_lower_pc=lower,
+        distance_upper_pc=upper,
         extinction_band=extinction_band,
         extinction_system=extinction_system,
         extinction_source=extinction_source,
@@ -1281,11 +1512,9 @@ def absolute_magnitude_estimate_from_distance(
 def _catalog_extinction_gate(source: CatalogSource) -> tuple[str, tuple[str, ...]] | None:
     """Return an explicit failure for catalog extinction with unsafe semantics.
 
-    The generic distance/parallax helpers intentionally accept a bare numeric
-    extinction for backward compatibility.  A ``CatalogSource`` is different:
-    its numeric extinction is provenance-bearing input, so it must agree with
+    The numeric extinction is provenance-bearing input, so it must agree with
     the source's declared photometric system and band before it can enter the
-    strict catalog-backed path.  ``CatalogSource.extinction_compatibility`` is
+    strict catalog-backed path. ``CatalogSource.extinction_compatibility`` is
     the single source of truth for aliases such as Gaia Vega/Gaia G.
     """
 
@@ -1354,27 +1583,24 @@ def absolute_magnitude_from_catalog(
             extinction_source=extinction_source,
         )
 
-    # A bare ``absolute_magnitude_from_catalog(source)`` call is a legacy
-    # diagnostic API and does not establish which photometric system/band the
-    # caller intends to use.  Apply the extinction compatibility gate only on
-    # the strict, explicitly declared photometric path; otherwise an old
-    # caller with a numeric but unlabelled extinction would unexpectedly stop
-    # working.  The partial-metadata case has already returned above and can
-    # never produce a strict value.
-    if required_photometric_system is not None and required_photometric_band is not None:
-        extinction_failure = _catalog_extinction_gate(source)
-        if extinction_failure is not None:
-            status, flags = extinction_failure
-            return _absolute_unavailable(
-                corrected_parallax_mas=None,
-                distance_pc=None,
-                extinction_mag=source.extinction_mag,
-                status=status,
-                flags=flags,
-                extinction_band=extinction_band,
-                extinction_system=extinction_system,
-                extinction_source=extinction_source,
-            )
+    # A structured catalog result is an auditable M candidate even when the
+    # caller uses the historical no-argument form.  Do not let that form
+    # bypass the extinction gate: a numeric A with unknown semantics could be
+    # A_G, A_V, A_0, or a custom-band value, and none may silently become A in
+    # the source's apparent band.
+    extinction_failure = _catalog_extinction_gate(source)
+    if extinction_failure is not None:
+        status, flags = extinction_failure
+        return _absolute_unavailable(
+            corrected_parallax_mas=None,
+            distance_pc=None,
+            extinction_mag=source.extinction_mag,
+            status=status,
+            flags=flags,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
+        )
 
     magnitude_from_catalog = apparent_magnitude is None
     magnitude = source.magnitude if magnitude_from_catalog else apparent_magnitude
@@ -1687,6 +1913,8 @@ def build_source_photometry(
             calibration_sample_role = calibration_roles.get(str(match.source_id))
 
         flags = list(str(flag) for flag in detection.flags)
+        if catalog_magnitude is not None and catalog_magnitude_error is None:
+            flags.append("CATALOG_MAGNITUDE_ERROR_NOT_PROVIDED")
         calibrated = None
         calibrated_error = None
         absolute = None

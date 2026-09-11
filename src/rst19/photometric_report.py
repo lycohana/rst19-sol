@@ -196,13 +196,13 @@ def _normalised_mapping(value: Mapping[object, object]) -> dict[str, object]:
 def _as_mapping(value: object) -> dict[str, object] | None:
     if isinstance(value, Mapping):
         return dict(value)
-    if is_dataclass(value):
-        return {field.name: getattr(value, field.name) for field in fields(value)}
     as_dict = getattr(value, "as_dict", None)
     if callable(as_dict):
         converted = as_dict()
         if isinstance(converted, Mapping):
             return dict(converted)
+    if is_dataclass(value):
+        return {field.name: getattr(value, field.name) for field in fields(value)}
     attributes = getattr(value, "__dict__", None)
     if isinstance(attributes, Mapping):
         return dict(attributes)
@@ -1134,6 +1134,23 @@ class PhotometricAuditRow:
     missing_inputs: tuple[str, ...] = ()
     provenance: dict[str, object] | None = None
     error_budget: dict[str, float] | None = None
+    # ``absolute_magnitude`` is retained as a diagnostic value for backwards
+    # compatibility.  Consumers that need a publishable/physics-facing value
+    # must use ``strict_absolute_magnitude`` and check the explicit role.
+    strict_absolute_magnitude: float | None = None
+    absolute_magnitude_is_strict: bool = False
+    absolute_magnitude_value_role: str = "ABSENT"
+    absolute_magnitude_band: str | None = None
+    absolute_magnitude_system: str | None = None
+    absolute_magnitude_source: str | None = None
+    absolute_magnitude_distance_pc: float | None = None
+    absolute_magnitude_distance_lower_pc: float | None = None
+    absolute_magnitude_distance_upper_pc: float | None = None
+    absolute_magnitude_distance_interval_status: str | None = None
+    absolute_magnitude_extinction_mag: float | None = None
+    absolute_magnitude_extinction_band: str | None = None
+    absolute_magnitude_extinction_system: str | None = None
+    absolute_magnitude_extinction_source: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -1152,6 +1169,21 @@ class PhotometricAuditRow:
             "calibrated_magnitude": self.m_cal,
             "M": self.absolute_magnitude,
             "absolute_magnitude": self.absolute_magnitude,
+            "strict_M": self.strict_absolute_magnitude,
+            "strict_absolute_magnitude": self.strict_absolute_magnitude,
+            "absolute_magnitude_is_strict": self.absolute_magnitude_is_strict,
+            "absolute_magnitude_value_role": self.absolute_magnitude_value_role,
+            "absolute_magnitude_band": self.absolute_magnitude_band,
+            "absolute_magnitude_system": self.absolute_magnitude_system,
+            "absolute_magnitude_source": self.absolute_magnitude_source,
+            "absolute_magnitude_distance_pc": self.absolute_magnitude_distance_pc,
+            "absolute_magnitude_distance_lower_pc": self.absolute_magnitude_distance_lower_pc,
+            "absolute_magnitude_distance_upper_pc": self.absolute_magnitude_distance_upper_pc,
+            "absolute_magnitude_distance_interval_status": self.absolute_magnitude_distance_interval_status,
+            "absolute_magnitude_extinction_mag": self.absolute_magnitude_extinction_mag,
+            "absolute_magnitude_extinction_band": self.absolute_magnitude_extinction_band,
+            "absolute_magnitude_extinction_system": self.absolute_magnitude_extinction_system,
+            "absolute_magnitude_extinction_source": self.absolute_magnitude_extinction_source,
             "wcs_available": self.wcs_available,
             "catalog_available": self.catalog_available,
             "flags": list(self.flags),
@@ -1262,6 +1294,229 @@ def _row_key(row: Mapping[str, object], index: int) -> tuple[str, str | None, st
     return f"{frame_id or 'frame?'}:{source_id or f'row-{index}'}", frame_id, source_id
 
 
+def _absolute_value_details(
+    row: Mapping[str, object],
+    absolute: Mapping[str, object],
+) -> tuple[bool, float | None, str | None, str | None, str | None, str | None]:
+    """Extract retained M plus its identity without collapsing aliases.
+
+    ``absolute_magnitude`` remains the backwards-compatible diagnostic value.
+    The additional identity is needed because ``M_G``/``M_V`` and a generic
+    ``M`` are different claims.  Nested per-source results take precedence,
+    followed by indexed/global results and finally row-level context.
+    """
+
+    raw_found, raw = _lookup(row, ("absolute_magnitude", "absolute", "absolute_result"))
+    nested = _as_mapping(raw) if raw_found else None
+    mappings = tuple(mapping for mapping in (nested, absolute, row) if mapping is not None)
+    value_aliases = (
+        "strict_absolute_magnitude",
+        "strict_M",
+        "M_G",
+        "M_V",
+        "value",
+        "M",
+        "absolute_magnitude_value",
+        "absolute_mag",
+        "m_abs",
+    )
+    present = False
+    value: float | None = None
+    value_alias: str | None = None
+    for mapping in mappings:
+        for alias in value_aliases:
+            found, raw_value = _lookup(mapping, (alias,))
+            if not found:
+                continue
+            present = True
+            value_alias = alias
+            nested_value = _as_mapping(raw_value)
+            if nested_value is not None:
+                for nested_alias in value_aliases:
+                    nested_found, nested_raw = _lookup(nested_value, (nested_alias,))
+                    if nested_found:
+                        value_alias = nested_alias
+                        raw_value = nested_raw
+                        break
+            value = _number(raw_value)
+            if value is not None:
+                break
+        if present and value is not None:
+            break
+
+    def first_nonempty(aliases: Sequence[str]) -> object | None:
+        for mapping in mappings:
+            found, candidate = _lookup(mapping, aliases)
+            if found and _nonempty(candidate):
+                return candidate
+        return None
+
+    band = first_nonempty(
+        (
+            "absolute_magnitude_band",
+            "absolute_band",
+            "M_band",
+            "absolute_passband",
+            "photometric_band",
+            "band",
+        )
+    )
+    system = first_nonempty(
+        (
+            "absolute_magnitude_system",
+            "absolute_system",
+            "photometric_system",
+            "system",
+        )
+    )
+    source = first_nonempty(
+        (
+            "absolute_magnitude_source",
+            "absolute_source",
+            "absolute_method",
+            "distance_source",
+            "photometric_source",
+            "catalog_name",
+        )
+    )
+    # An explicit field wins.  Alias-derived identity is only a fallback for
+    # old rows that contain M_G/M_V but no separate band field.
+    if band is None and value_alias is not None:
+        alias_key = str(value_alias).strip().upper()
+        if alias_key == "M_G":
+            band = "G"
+        elif alias_key == "M_V":
+            band = "V"
+    canonical_band = _canonical_photometric_band(band)
+    canonical_system = _canonical_photometric_system(system)
+    return (
+        present,
+        value,
+        None if canonical_band == "unknown" else canonical_band,
+        None if canonical_system == "unknown" else canonical_system,
+        str(source).strip() if _nonempty(source) else None,
+        value_alias,
+    )
+
+
+def _absolute_support_details(
+    row: Mapping[str, object],
+    absolute: Mapping[str, object],
+) -> dict[str, object]:
+    """Carry the evidence needed to reproduce the strict-M decision.
+
+    The report is often serialized and then consumed by the innovation
+    summary.  A strict number without its distance interval and extinction
+    provenance would be an orphaned claim, so these fields travel with the
+    row instead of being left only in the original nested payload.
+    """
+
+    raw_found, raw = _lookup(row, ("absolute_magnitude", "absolute", "absolute_result"))
+    nested = _as_mapping(raw) if raw_found else None
+    mappings = tuple(mapping for mapping in (nested, absolute, row) if mapping is not None)
+
+    def first_number(aliases: Sequence[str]) -> float | None:
+        for mapping in mappings:
+            found, value = _lookup(mapping, aliases)
+            if found:
+                number = _number(value)
+                if number is not None:
+                    return number
+        return None
+
+    def first_text(aliases: Sequence[str]) -> str | None:
+        for mapping in mappings:
+            found, value = _lookup(mapping, aliases)
+            if found and _nonempty(value):
+                return str(value).strip()
+        return None
+
+    interval_status = first_text(
+        (
+            "absolute_magnitude_distance_interval_status",
+            "distance_interval_status",
+            "distance_interval_state",
+        )
+    )
+    if interval_status is None:
+        flag_values: list[str] = []
+        for mapping in mappings:
+            raw_flags = _value(mapping, ("flags", "flag"), default=())
+            if isinstance(raw_flags, str):
+                flag_values.append(_norm_status(raw_flags))
+            elif _is_sequence(raw_flags):
+                flag_values.extend(_norm_status(item) for item in raw_flags if _nonempty(item))
+        interval_from_flag = {
+            "DISTANCE_INTERVAL_INVALID": "INVALID",
+            "DISTANCE_INTERVAL_DERIVED_FROM_PARALLAX_ERROR": "DERIVED_FROM_PARALLAX_ERROR",
+            "DISTANCE_INTERVAL_USED": "PROVIDED",
+            "DISTANCE_INTERVAL_ONE_SIDED": "ONE_SIDED",
+            "DISTANCE_INTERVAL_REQUIRED": "REQUIRED",
+            "DISTANCE_ERROR_NOT_PROVIDED": "NOT_PROVIDED",
+        }
+        interval_status = next(
+            (interval_from_flag[flag] for flag in flag_values if flag in interval_from_flag),
+            None,
+        )
+    return {
+        "distance_pc": first_number(
+            ("absolute_magnitude_distance_pc", "distance_pc", "distance")
+        ),
+        "distance_lower_pc": first_number(
+            (
+                "absolute_magnitude_distance_lower_pc",
+                "distance_lower_pc",
+                "distance_gspphot_lower",
+                "distance_lower",
+            )
+        ),
+        "distance_upper_pc": first_number(
+            (
+                "absolute_magnitude_distance_upper_pc",
+                "distance_upper_pc",
+                "distance_gspphot_upper",
+                "distance_upper",
+            )
+        ),
+        "distance_interval_status": (
+            _norm_status(interval_status) if interval_status is not None else None
+        ),
+        "extinction_mag": first_number(
+            (
+                "absolute_magnitude_extinction_mag",
+                "extinction_mag",
+                "extinction",
+                "A_V",
+                "av",
+            )
+        ),
+        "extinction_band": first_text(
+            (
+                "absolute_magnitude_extinction_band",
+                "extinction_band",
+                "ext_band",
+                "extinction_passband",
+            )
+        ),
+        "extinction_system": first_text(
+            (
+                "absolute_magnitude_extinction_system",
+                "extinction_system",
+                "extinction_photometric_system",
+                "ext_system",
+            )
+        ),
+        "extinction_source": first_text(
+            (
+                "absolute_magnitude_extinction_source",
+                "extinction_source",
+                "extinction_provenance",
+                "ext_source",
+            )
+        ),
+    }
+
+
 def _audit_row(
     row: Mapping[str, object],
     *,
@@ -1304,18 +1559,15 @@ def _audit_row(
             calibration,
             ("m_cal", "calibrated_magnitude", "apparent_magnitude"),
         )
-    absolute_present, absolute_magnitude = _present_number(
-        row,
-        ("M", "absolute_magnitude_value", "absolute_mag", "M_V", "m_abs"),
-    )
-    if not absolute_present and absolute_raw_found and not isinstance(absolute_raw, Mapping):
-        absolute_present = absolute_raw is not None and absolute_raw != ""
-        absolute_magnitude = _number(absolute_raw)
-    if not absolute_present:
-        absolute_present, absolute_magnitude = _present_number(
-            absolute_value_mapping,
-            ("value", "M", "absolute_magnitude", "absolute_magnitude_value"),
-        )
+    (
+        absolute_present,
+        absolute_magnitude,
+        absolute_magnitude_band,
+        absolute_magnitude_system,
+        absolute_magnitude_source,
+        _absolute_value_alias,
+    ) = _absolute_value_details(row, absolute_value_mapping)
+    absolute_support = _absolute_support_details(row, absolute_value_mapping)
     if not m_inst_present and m_inst is None and _lookup(row, ("m_inst", "instrumental_magnitude"))[0]:
         m_inst_present = True
     if not m_cal_present and _lookup(row, ("m_cal", "calibrated_magnitude"))[0]:
@@ -1351,6 +1603,11 @@ def _audit_row(
         explicit_level=explicit_level,
         absolute=absolute_value_mapping,
     )
+    strict_flag_found, strict_flag = _lookup(
+        absolute_value_mapping,
+        ("absolute_magnitude_is_strict", "is_strict", "strict"),
+    )
+    strict_flag_value = _bool_value(strict_flag) if strict_flag_found else None
 
     parallax_present, parallax = _present_number(row, ("parallax_mas", "parallax", "corrected_parallax_mas"))
     if not parallax_present:
@@ -1480,6 +1737,8 @@ def _audit_row(
             missing.append("parallax")
         else:
             missing.append("distance")
+    if strict_flag_found and strict_flag_value is not True:
+        missing.append("strict_absolute_result")
     if not extinction_ok:
         missing.append("extinction")
     if absolute_magnitude is None:
@@ -1537,6 +1796,7 @@ def _audit_row(
         and distance_qualified
         and extinction_ok
         and geometry_sufficient_for_absolute
+        and strict_flag_value is not False
     )
 
     # A frame collection without a WCS is an explicit geometry failure.  For
@@ -1572,6 +1832,9 @@ def _audit_row(
         source_flags.append("FALSE_VALID_M_CAL")
     if absolute_magnitude is not None and not absolute_status_valid:
         source_flags.append("FALSE_VALID_M")
+    if strict_flag_found and strict_flag_value is not True:
+        source_flags.append("ABSOLUTE_NOT_STRICT")
+        reasons.append("ABSOLUTE_NOT_STRICT")
 
     unique_flags = tuple(sorted({flag for flag in source_flags if flag}))
     unique_reasons = tuple(sorted({reason for reason in reasons if reason}))
@@ -1604,6 +1867,24 @@ def _audit_row(
             missing_inputs=unique_missing,
             provenance=nested_provenance,
             error_budget=error_values,
+            strict_absolute_magnitude=(absolute_magnitude if absolute_valid and strict_flag_value is not False else None),
+            absolute_magnitude_is_strict=bool(absolute_valid and strict_flag_value is not False),
+            absolute_magnitude_value_role=(
+                "STRICT"
+                if absolute_valid and strict_flag_value is not False
+                else ("DIAGNOSTIC_ONLY" if absolute_magnitude is not None else "ABSENT")
+            ),
+            absolute_magnitude_band=absolute_magnitude_band,
+            absolute_magnitude_system=absolute_magnitude_system,
+            absolute_magnitude_source=absolute_magnitude_source,
+            absolute_magnitude_distance_pc=absolute_support["distance_pc"],
+            absolute_magnitude_distance_lower_pc=absolute_support["distance_lower_pc"],
+            absolute_magnitude_distance_upper_pc=absolute_support["distance_upper_pc"],
+            absolute_magnitude_distance_interval_status=absolute_support["distance_interval_status"],
+            absolute_magnitude_extinction_mag=absolute_support["extinction_mag"],
+            absolute_magnitude_extinction_band=absolute_support["extinction_band"],
+            absolute_magnitude_extinction_system=absolute_support["extinction_system"],
+            absolute_magnitude_extinction_source=absolute_support["extinction_source"],
         ),
         violations,
         geometry,

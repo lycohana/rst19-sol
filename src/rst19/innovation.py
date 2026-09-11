@@ -810,6 +810,129 @@ _PHOTOMETRIC_REPORT_ALIASES = (
     "photometry_report",
 )
 
+_ABSOLUTE_STRICT_STATUSES = frozenset({"VALID", "VALID_MODEL_DISTANCE"})
+_STRICT_DISTANCE_INTERVAL_STATUSES = frozenset({"PROVIDED", "DERIVED_FROM_PARALLAX_ERROR"})
+_ABSOLUTE_VALUE_ALIASES = (
+    "M_G",
+    "M_V",
+    "M",
+    "absolute_magnitude_value",
+    "absolute_mag",
+    "m_abs",
+)
+_STRICT_ABSOLUTE_VALUE_ALIASES = ("strict_absolute_magnitude", "strict_M")
+_ABSOLUTE_NESTED_VALUE_ALIASES = (*_ABSOLUTE_VALUE_ALIASES, "value", "absolute_magnitude")
+_ABSOLUTE_STATUS_ALIASES = ("absolute_status", "M_status", "absolute_magnitude_status")
+_PHOTOMETRIC_BAND_ALIASES = (
+    "absolute_magnitude_band",
+    "absolute_band",
+    "M_band",
+    "absolute_passband",
+    "magnitude_band",
+    "photometric_band",
+    "band",
+    "passband",
+)
+_EXTINCTION_BAND_ALIASES = (
+    "absolute_magnitude_extinction_band",
+    "extinction_band",
+    "ext_band",
+    "extinction_passband",
+)
+_PHOTOMETRIC_SYSTEM_ALIASES = (
+    "absolute_magnitude_system",
+    "absolute_system",
+    "photometric_system",
+    "system",
+)
+_EXTINCTION_SYSTEM_ALIASES = (
+    "absolute_magnitude_extinction_system",
+    "extinction_system",
+    "extinction_photometric_system",
+    "ext_system",
+)
+_EXTINCTION_VALUE_ALIASES = (
+    "absolute_magnitude_extinction_mag",
+    "extinction_mag",
+    "extinction",
+    "A_V",
+    "av",
+)
+_DISTANCE_SOURCE_ALIASES = (
+    "absolute_magnitude_source",
+    "absolute_magnitude_distance_source",
+    "distance_source",
+    "distance_method",
+    "distance_origin",
+    "absolute_source",
+    "absolute_method",
+)
+_DISTANCE_INTERVAL_ALIASES = (
+    "absolute_magnitude_distance_interval_status",
+    "distance_interval_status",
+    "distance_interval_state",
+)
+_REJECTED_PHOTOMETRIC_STATUSES = frozenset(
+    {
+        "CATALOG_INCONSISTENT",
+        "PHOTOMETRIC_OUTLIER",
+        "PHOTOMETRICALLY_INCONSISTENT",
+        "INSTRUMENTAL",
+        "INSTRUMENTAL_ONLY",
+        "CATALOG_MATCH_NO_CALIBRATION",
+        "CALIBRATION_MISSING_COLOR",
+        "CALIBRATION_INVALID",
+        "CALIBRATION_NOT_APPLIED",
+        "CALIBRATION_METADATA_MISMATCH",
+        "CALIBRATION_COLOR_METADATA_MISMATCH",
+        "NO_POSITIVE_FLUX",
+        "NO_PHOTOMETRY_ROW",
+        "NO_APPARENT_MAGNITUDE",
+        "PHOTOMETRY_REJECTED_QUALITY_GATE",
+        "PHOTOMETRIC_METADATA_REQUIRED",
+        "PHOTOMETRIC_METADATA_MISMATCH",
+        "QUALITY_REJECTED",
+        "REJECTED_QUALITY",
+        "INSUFFICIENT_CALIBRATORS",
+        "INSUFFICIENT_COLOR_RANGE",
+        "INSUFFICIENT_INLIERS",
+        "DUPLICATE_MATCHES",
+    }
+)
+_VALID_CALIBRATION_STATUSES = frozenset(
+    {
+        "VALID",
+        "VALID_NO_HOLDOUT",
+        "CALIBRATED",
+        "CALIBRATION_VALID",
+        "RELATIVE_CALIBRATED",
+        "APPARENT_CALIBRATED",
+        "ABSOLUTE_ELIGIBLE",
+    }
+)
+_STRICT_ABSOLUTE_REASON_TEXT = {
+    "ABSOLUTE_RESULT_MISSING": "没有绝对星等结果",
+    "ABSOLUTE_VALUE_INVALID": "绝对星等数值缺失或不是有限数",
+    "IS_STRICT_MISSING": "旧结果缺少 is_strict，不能确认严格绝对星等",
+    "IS_STRICT_FALSE": "绝对星等未通过 is_strict 严格质量门",
+    "ABSOLUTE_STATUS_MISSING": "缺少绝对星等状态",
+    "ABSOLUTE_STATUS_NOT_STRICT": "绝对星等状态不属于严格有效状态",
+    "MODEL_DISTANCE_INTERVAL_MISSING": "缺少完整距离区间数值（中心值、下界和上界）",
+    "DISTANCE_INTERVAL_STATUS_MISSING": "缺少完整距离区间状态",
+    "DISTANCE_INTERVAL_STATUS_INVALID": "距离区间状态不允许严格绝对星等",
+    "DISTANCE_SOURCE_REQUIRED": "缺少距离来源",
+    "DISTANCE_SOURCE_INVALID": "距离来源为空或不可用于严格结果",
+    "EXTINCTION_NOT_PROVIDED": "未提供消光修正",
+    "EXTINCTION_INVALID": "消光值无效",
+    "EXTINCTION_SEMANTICS_REQUIRED": "缺少消光系统/波段语义",
+    "EXTINCTION_BAND_MISMATCH": "绝对星等波段与消光波段不一致",
+    "EXTINCTION_SYSTEM_MISMATCH": "绝对星等系统与消光系统不一致",
+    "ABSOLUTE_BAND_REQUIRED": "未声明绝对星等波段",
+    "ABSOLUTE_BAND_MISMATCH": "M_G/M_V 的波段身份与输入波段不一致",
+    "ABSOLUTE_BAND_AMBIGUOUS": "同一结果同时包含不同波段的绝对星等，不能合并",
+    "ROW_PHOTOMETRY_REJECTED": "逐源光度状态已拒绝该结果",
+}
+
 
 def _evidence_mapping(value: object) -> dict[str, Any] | None:
     """把映射、结果对象或 ``as_dict`` 对象转为只读报告视图。
@@ -850,6 +973,109 @@ def _evidence_lookup(mapping: Mapping[str, Any] | None, aliases: Iterable[str]) 
 def _evidence_value(mapping: Mapping[str, Any] | None, aliases: Iterable[str], default: Any = None) -> Any:
     found, value = _evidence_lookup(mapping, aliases)
     return value if found else default
+
+
+def _evidence_lookup_with_alias(
+    mapping: Mapping[str, Any] | None,
+    aliases: Iterable[str],
+) -> tuple[str | None, Any]:
+    """Return the first matching alias together with its value.
+
+    The alias itself is part of the audit trail: ``M_G`` and ``M_V`` are not
+    interchangeable with a generic ``M`` even when their numeric values look
+    identical.
+    """
+
+    if mapping is None:
+        return None, None
+    values = {_evidence_key(key): value for key, value in mapping.items()}
+    for alias in aliases:
+        if (key := _evidence_key(alias)) in values:
+            return alias, values[key]
+    return None, None
+
+
+def _normalise_photometric_label(value: object) -> str | None:
+    """Keep declared photometric labels while rejecting placeholders."""
+
+    if value is None:
+        return None
+    text = " ".join(str(value).strip().split())
+    if not text or text.casefold() in {
+        "unknown",
+        "none",
+        "null",
+        "n/a",
+        "na",
+        "undefined",
+        "?",
+        "-",
+        "—",
+    }:
+        return None
+    return text
+
+
+def _normalise_photometric_band(value: object) -> str | None:
+    """Normalize only common G/V aliases; never infer a band from a catalog."""
+
+    text = _normalise_photometric_label(value)
+    if text is None:
+        return None
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in {"g", "gaiag", "gaiadr3g"}:
+        return "G"
+    if key in {"v", "johnsonv", "johnsoncousinsv"}:
+        return "V"
+    return text
+
+
+def _normalise_photometric_system(value: object) -> str | None:
+    """Normalize known system aliases without making a missing declaration."""
+
+    text = _normalise_photometric_label(value)
+    if text is None:
+        return None
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in {"gaia", "gaiavega", "gaiadr3", "gaiadr3vega"}:
+        return "Gaia"
+    if key in {"johnson", "johnsoncousins", "johnsonv", "johnsoncousinsv"}:
+        return "Johnson"
+    if key in {"monochromatic", "monochromatic5414nm", "a0"}:
+        return "monochromatic"
+    return text
+
+
+def _first_nonempty_evidence_field(
+    sources: Sequence[tuple[str, Mapping[str, Any] | None]],
+    aliases: Iterable[str],
+) -> tuple[Any, str | None]:
+    """Read one declared field from nested evidence before its row wrapper."""
+
+    for source_name, mapping in sources:
+        alias, value = _evidence_lookup_with_alias(mapping, aliases)
+        if alias is None:
+            continue
+        if _normalise_photometric_label(value) is None:
+            continue
+        return value, f"{source_name}.{alias}"
+    return None, None
+
+
+def _first_numeric_evidence_field(
+    sources: Sequence[tuple[str, Mapping[str, Any] | None]],
+    aliases: Iterable[str],
+) -> tuple[bool, float | None, str | None]:
+    """Read a finite numeric field while retaining whether it was present."""
+
+    for source_name, mapping in sources:
+        alias, value = _evidence_lookup_with_alias(mapping, aliases)
+        if alias is None:
+            continue
+        if value is None or value == "":
+            continue
+        return True, _as_float(value), f"{source_name}.{alias}"
+    return False, None, None
 
 
 def _evidence_bool(value: object) -> bool | None:
@@ -949,61 +1175,444 @@ def _normalise_evidence_level(value: object) -> str | None:
     return None
 
 
+def _absolute_magnitude_evidence(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Separate a numeric absolute-magnitude diagnostic from a strict value.
+
+    ``AbsoluteMagnitudeEstimate.as_dict`` now carries ``is_strict`` and a
+    distance-interval status.  Older sequence caches commonly contain only a
+    numeric ``M`` (or a numeric ``M_V``/``M_G``) and a broad status.  Such a
+    number remains useful for audit display, but it is never promoted here
+    unless the structured strict marker and its supporting metadata are
+    present and internally consistent.
+    """
+
+    row_mapping = dict(row)
+    absolute_alias, absolute_raw = _evidence_lookup_with_alias(
+        row_mapping, ("absolute_magnitude", "absolute", "absolute_result")
+    )
+    absolute_raw_found = absolute_alias is not None
+    absolute_mapping = _evidence_mapping(absolute_raw) if absolute_raw_found else None
+    absolute_source = absolute_alias if absolute_raw_found else None
+    sources: list[tuple[str, Mapping[str, Any] | None]] = []
+    if absolute_mapping is not None:
+        sources.append((absolute_source or "absolute_magnitude", absolute_mapping))
+    sources.append(("row", row_mapping))
+
+    def _candidate_records(
+        mapping: Mapping[str, Any] | None,
+        aliases: Iterable[str],
+        source_name: str,
+    ) -> list[dict[str, Any]]:
+        if mapping is None:
+            return []
+        records: list[dict[str, Any]] = []
+        for alias in aliases:
+            matched, raw_value = _evidence_lookup_with_alias(mapping, (alias,))
+            if matched is None:
+                continue
+            # A nested mapping is a container, not itself an M value.  This
+            # also prevents an arbitrary ``value`` object from being coerced.
+            if _evidence_mapping(raw_value) is not None:
+                continue
+            records.append(
+                {
+                    "raw": raw_value,
+                    "value": _as_float(raw_value),
+                    "source": f"{source_name}.{matched}",
+                    "named_band": matched.upper().split("_")[-1]
+                    if matched.upper() in {"M_G", "M_V"}
+                    else None,
+                }
+            )
+        return records
+
+    candidate_records: list[dict[str, Any]] = []
+    if absolute_mapping is not None:
+        named_records = _candidate_records(absolute_mapping, ("M_G", "M_V"), absolute_source or "absolute_magnitude")
+        candidate_records = named_records or _candidate_records(
+            absolute_mapping,
+            _ABSOLUTE_NESTED_VALUE_ALIASES[2:],
+            absolute_source or "absolute_magnitude",
+        )
+    elif absolute_raw_found and absolute_raw not in (None, "") and _evidence_mapping(absolute_raw) is None:
+        candidate_records = [
+            {
+                "raw": absolute_raw,
+                "value": _as_float(absolute_raw),
+                "source": absolute_source or "absolute_magnitude",
+                "named_band": None,
+            }
+        ]
+    if not candidate_records:
+        named_records = _candidate_records(row_mapping, ("M_G", "M_V"), "row")
+        candidate_records = named_records or _candidate_records(row_mapping, _ABSOLUTE_VALUE_ALIASES[2:], "row")
+
+    strict_candidate_records: list[dict[str, Any]] = []
+    for source_name, source_mapping in sources:
+        strict_candidate_records.extend(
+            _candidate_records(source_mapping, _STRICT_ABSOLUTE_VALUE_ALIASES, source_name)
+        )
+
+    value_found = bool(candidate_records or strict_candidate_records)
+    diagnostic_values: dict[str, float] = {}
+    for record in candidate_records:
+        value = record["value"]
+        if value is None:
+            continue
+        label = f"M_{record['named_band']}" if record["named_band"] else "M"
+        diagnostic_values.setdefault(label, value)
+    selected_record = next((record for record in candidate_records if record["value"] is not None), None)
+    diagnostic_value = selected_record["value"] if selected_record is not None else None
+    value_source = selected_record["source"] if selected_record is not None else None
+    strict_record = next((record for record in strict_candidate_records if record["value"] is not None), None)
+    strict_candidate_value = strict_record["value"] if strict_record is not None else None
+    strict_value_source = strict_record["source"] if strict_record is not None else None
+    strict_candidate_invalid = any(
+        record["value"] is None
+        and record["raw"] is not None
+        and not (isinstance(record["raw"], str) and not record["raw"].strip())
+        for record in strict_candidate_records
+    )
+    named_bands = {
+        record["named_band"]
+        for record in candidate_records
+        if record["named_band"] is not None and record["value"] is not None
+    }
+    selected_named_band = selected_record["named_band"] if selected_record is not None else None
+
+    explicit_band_raw, explicit_band_source = _first_nonempty_evidence_field(sources, _PHOTOMETRIC_BAND_ALIASES)
+    extinction_band_raw, extinction_band_source = _first_nonempty_evidence_field(sources, _EXTINCTION_BAND_ALIASES)
+    explicit_band = _normalise_photometric_band(explicit_band_raw)
+    extinction_band = _normalise_photometric_band(extinction_band_raw)
+    if selected_named_band is not None:
+        band = selected_named_band
+        band_source = value_source
+    else:
+        band = explicit_band or extinction_band
+        band_source = explicit_band_source if explicit_band is not None else extinction_band_source
+    if diagnostic_value is not None and not named_bands:
+        diagnostic_values = {f"M_{band}" if band is not None else "M": diagnostic_value}
+
+    explicit_system_raw, explicit_system_source = _first_nonempty_evidence_field(sources, _PHOTOMETRIC_SYSTEM_ALIASES)
+    extinction_system_raw, extinction_system_source = _first_nonempty_evidence_field(
+        sources, _EXTINCTION_SYSTEM_ALIASES
+    )
+    explicit_system = _normalise_photometric_system(explicit_system_raw)
+    extinction_system = _normalise_photometric_system(extinction_system_raw)
+    system = explicit_system or extinction_system
+    system_source = explicit_system_source if explicit_system is not None else extinction_system_source
+
+    status_raw, status_source = _first_nonempty_evidence_field(sources, _ABSOLUTE_STATUS_ALIASES)
+    if status_raw is None:
+        status_raw, status_source = _first_nonempty_evidence_field(sources, ("status", "state"))
+    absolute_status = _evidence_status(status_raw)
+    row_status = _evidence_status(_evidence_value(row_mapping, ("status", "state")))
+    calibration_status = _evidence_status(_evidence_value(row_mapping, ("calibration_status", "m_cal_status")))
+    photometric_consistent = _evidence_bool(_evidence_value(row_mapping, ("photometric_consistent",)))
+    quality_passed = _evidence_bool(_evidence_value(row_mapping, ("quality_passed", "quality_ok")))
+
+    strict_marker_raw, strict_marker_source = _first_nonempty_evidence_field(
+        sources, ("is_strict", "absolute_magnitude_is_strict")
+    )
+    strict_marker = _evidence_bool(strict_marker_raw) if strict_marker_source is not None else None
+
+    distance_source_raw, distance_source_field = _first_nonempty_evidence_field(sources, _DISTANCE_SOURCE_ALIASES)
+    distance_source = _normalise_photometric_label(distance_source_raw)
+    interval_raw, interval_source = _first_nonempty_evidence_field(sources, _DISTANCE_INTERVAL_ALIASES)
+    distance_interval_status = _evidence_status(interval_raw)
+
+    flags: list[str] = []
+    for _, mapping in sources:
+        flags.extend(
+            _evidence_status(flag) or str(flag)
+            for flag in _evidence_strings(_evidence_value(mapping, ("flags", "flag")))
+        )
+    if distance_interval_status is None:
+        interval_flag_statuses = {
+            "DISTANCE_INTERVAL_INVALID": "INVALID",
+            "DISTANCE_INTERVAL_DERIVED_FROM_PARALLAX_ERROR": "DERIVED_FROM_PARALLAX_ERROR",
+            "DISTANCE_INTERVAL_USED": "PROVIDED",
+            "DISTANCE_INTERVAL_ONE_SIDED": "ONE_SIDED",
+            "DISTANCE_INTERVAL_REQUIRED": "REQUIRED",
+            "DISTANCE_ERROR_NOT_PROVIDED": "NOT_PROVIDED",
+        }
+        for flag in flags:
+            if flag in interval_flag_statuses:
+                distance_interval_status = interval_flag_statuses[flag]
+                break
+    if distance_interval_status is None:
+        lower_found, lower, _ = _first_numeric_evidence_field(
+            sources,
+            (
+                "absolute_magnitude_distance_lower_pc",
+                "distance_lower_pc",
+                "distance_lower",
+            ),
+        )
+        upper_found, upper, _ = _first_numeric_evidence_field(
+            sources,
+            (
+                "absolute_magnitude_distance_upper_pc",
+                "distance_upper_pc",
+                "distance_upper",
+            ),
+        )
+        if lower_found or upper_found:
+            # Match AbsoluteMagnitudeEstimate.distance_interval_status: raw
+            # bounds without a provenance flag are retained but unclassified.
+            distance_interval_status = "PRESENT_UNCLASSIFIED"
+        else:
+            lower = upper = None
+    else:
+        _, lower, _ = _first_numeric_evidence_field(
+            sources,
+            (
+                "absolute_magnitude_distance_lower_pc",
+                "distance_lower_pc",
+                "distance_lower",
+            ),
+        )
+        _, upper, _ = _first_numeric_evidence_field(
+            sources,
+            (
+                "absolute_magnitude_distance_upper_pc",
+                "distance_upper_pc",
+                "distance_upper",
+            ),
+        )
+
+    extinction_found, extinction_value, extinction_value_source = _first_numeric_evidence_field(
+        sources, _EXTINCTION_VALUE_ALIASES
+    )
+    _, distance_pc, _ = _first_numeric_evidence_field(
+        sources,
+        ("absolute_magnitude_distance_pc", "distance_pc", "distance"),
+    )
+
+    reasons: list[str] = []
+    has_absolute_evidence = value_found or absolute_mapping is not None
+    gate_value = strict_candidate_value if strict_candidate_value is not None else diagnostic_value
+
+    def add_reason(code: str) -> None:
+        if code not in reasons:
+            reasons.append(code)
+
+    if gate_value is None:
+        add_reason("ABSOLUTE_VALUE_INVALID" if value_found else "ABSOLUTE_RESULT_MISSING")
+    if has_absolute_evidence:
+        if strict_candidate_invalid:
+            add_reason("ABSOLUTE_VALUE_INVALID")
+        if strict_marker_source is None:
+            add_reason("IS_STRICT_MISSING")
+        elif strict_marker is not True:
+            add_reason("IS_STRICT_FALSE")
+        elif strict_candidate_records and strict_candidate_value is None:
+            add_reason("ABSOLUTE_VALUE_INVALID")
+
+        if absolute_status is None:
+            add_reason("ABSOLUTE_STATUS_MISSING")
+        elif absolute_status not in _ABSOLUTE_STRICT_STATUSES:
+            if absolute_status == "VALID_MODEL_DISTANCE_NO_INTERVAL":
+                add_reason("MODEL_DISTANCE_INTERVAL_MISSING")
+            elif absolute_status in {"VALID_NO_EXTINCTION", "MODEL_DISTANCE_NO_EXTINCTION"}:
+                add_reason("EXTINCTION_NOT_PROVIDED")
+            elif absolute_status in {"MODEL_DISTANCE_SOURCE_REQUIRED", "NO_PARALLAX", "NO_DISTANCE"}:
+                add_reason("DISTANCE_SOURCE_REQUIRED")
+            elif absolute_status in {"MODEL_DISTANCE_INTERVAL_REQUIRED", "INVALID_DISTANCE_INTERVAL"}:
+                add_reason(
+                    "DISTANCE_INTERVAL_STATUS_INVALID"
+                    if absolute_status == "INVALID_DISTANCE_INTERVAL"
+                    else "MODEL_DISTANCE_INTERVAL_MISSING"
+                )
+            else:
+                add_reason("ABSOLUTE_STATUS_NOT_STRICT")
+
+        if distance_interval_status is None:
+            add_reason(
+                "MODEL_DISTANCE_INTERVAL_MISSING"
+                if absolute_status in {"VALID_MODEL_DISTANCE", "VALID_MODEL_DISTANCE_NO_INTERVAL"}
+                else "DISTANCE_INTERVAL_STATUS_MISSING"
+            )
+        elif distance_interval_status not in _STRICT_DISTANCE_INTERVAL_STATUSES:
+            if distance_interval_status == "INVALID" or "DISTANCE_INTERVAL_INVALID" in flags:
+                add_reason("DISTANCE_INTERVAL_STATUS_INVALID")
+            else:
+                add_reason("MODEL_DISTANCE_INTERVAL_MISSING")
+        if "DISTANCE_INTERVAL_INVALID" in flags:
+            add_reason("DISTANCE_INTERVAL_STATUS_INVALID")
+        if distance_interval_status in _STRICT_DISTANCE_INTERVAL_STATUSES and {
+            "DISTANCE_INTERVAL_ONE_SIDED",
+            "DISTANCE_INTERVAL_REQUIRED",
+            "DISTANCE_ERROR_NOT_PROVIDED",
+        }.intersection(flags):
+            add_reason("DISTANCE_INTERVAL_STATUS_INVALID")
+        interval_bounds_complete = distance_pc is not None and lower is not None and upper is not None
+        interval_bounds_valid = (
+            interval_bounds_complete
+            and distance_pc > 0
+            and lower > 0
+            and upper > 0
+            and lower <= upper
+            and lower <= distance_pc <= upper
+        )
+        if distance_interval_status in _STRICT_DISTANCE_INTERVAL_STATUSES:
+            if not interval_bounds_complete:
+                add_reason("MODEL_DISTANCE_INTERVAL_MISSING")
+            elif not interval_bounds_valid:
+                add_reason("DISTANCE_INTERVAL_STATUS_INVALID")
+
+        if distance_source is None:
+            add_reason("DISTANCE_SOURCE_REQUIRED")
+        if not extinction_found:
+            add_reason("EXTINCTION_NOT_PROVIDED")
+        elif extinction_value is None:
+            add_reason("EXTINCTION_INVALID")
+        elif extinction_value < 0:
+            add_reason("EXTINCTION_INVALID")
+        else:
+            if extinction_band is None or extinction_system is None:
+                add_reason("EXTINCTION_SEMANTICS_REQUIRED")
+            if band is not None and extinction_band is not None and band.casefold() != extinction_band.casefold():
+                add_reason("EXTINCTION_BAND_MISMATCH")
+            if (
+                system is not None
+                and extinction_system is not None
+                and system.casefold() != extinction_system.casefold()
+            ):
+                add_reason("EXTINCTION_SYSTEM_MISMATCH")
+
+        if band is None:
+            add_reason("ABSOLUTE_BAND_REQUIRED")
+        if len(named_bands) > 1:
+            add_reason("ABSOLUTE_BAND_AMBIGUOUS")
+        if (
+            selected_named_band is not None
+            and explicit_band is not None
+            and selected_named_band.casefold() != explicit_band.casefold()
+        ):
+            add_reason("ABSOLUTE_BAND_MISMATCH")
+        if row_status in _REJECTED_PHOTOMETRIC_STATUSES:
+            add_reason("ROW_PHOTOMETRY_REJECTED")
+        if calibration_status is not None and calibration_status not in _VALID_CALIBRATION_STATUSES:
+            add_reason("ROW_PHOTOMETRY_REJECTED")
+        if photometric_consistent is False:
+            add_reason("ROW_PHOTOMETRY_REJECTED")
+        if quality_passed is False:
+            add_reason("ROW_PHOTOMETRY_REJECTED")
+        if set(flags).intersection(_REJECTED_PHOTOMETRIC_STATUSES | {"PHOTOMETRIC_OUTLIER"}):
+            add_reason("ROW_PHOTOMETRY_REJECTED")
+
+    strict_value = gate_value if gate_value is not None and not reasons else None
+    if strict_value is not None:
+        gate_status = "STRICT"
+    elif diagnostic_value is not None or strict_candidate_value is not None:
+        gate_status = "DIAGNOSTIC_ONLY"
+    else:
+        gate_status = "NOT_AVAILABLE"
+    reason_text = "；".join(_STRICT_ABSOLUTE_REASON_TEXT.get(reason, reason) for reason in reasons)
+    magnitude_label = f"M_{band}" if band is not None else "M"
+    if len(named_bands) > 1:
+        magnitude_label = "M_G/M_V"
+
+    return {
+        "diagnostic_value": diagnostic_value,
+        "strict_value": strict_value,
+        "strict": strict_value is not None,
+        "gate_status": gate_status,
+        "strict_reasons": reasons,
+        "strict_reason": reason_text,
+        "value_source": value_source,
+        "strict_value_source": strict_value_source,
+        "value_found": value_found,
+        "has_evidence": has_absolute_evidence,
+        "strict_candidate_value": strict_candidate_value,
+        "strict_candidate_invalid": strict_candidate_invalid,
+        "numeric_value": gate_value,
+        "diagnostic_values": diagnostic_values,
+        "band": band,
+        "band_source": band_source,
+        "label": magnitude_label,
+        "system": system,
+        "system_source": system_source,
+        "status": absolute_status,
+        "status_source": status_source,
+        "is_strict": strict_marker,
+        "is_strict_source": strict_marker_source,
+        "distance_source": distance_source,
+        "distance_source_field": distance_source_field,
+        "distance_interval_status": distance_interval_status,
+        "distance_interval_source": interval_source,
+        "distance_pc": distance_pc,
+        "distance_lower_pc": lower,
+        "distance_upper_pc": upper,
+        "extinction_mag": extinction_value,
+        "extinction_value_source": extinction_value_source,
+        "extinction_band": extinction_band,
+        "extinction_system": extinction_system,
+        "extinction_band_source": extinction_band_source,
+        "extinction_system_source": extinction_system_source,
+        "flags": list(dict.fromkeys(flag for flag in flags if flag)),
+    }
+
+
 def _absolute_value_from_row(row: Mapping[str, Any]) -> float | None:
-    found, raw = _evidence_lookup(row, ("M", "absolute_magnitude", "absolute_magnitude_value", "absolute_mag", "M_V", "m_abs"))
-    if found:
-        nested = _evidence_mapping(raw)
-        if nested is not None:
-            return _as_float(_evidence_value(nested, ("value", "M", "absolute_magnitude", "absolute_magnitude_value")))
-        return _as_float(raw)
-    return None
+    """Return the retained numeric M diagnostic, never a strict claim."""
+
+    return _absolute_magnitude_evidence(row)["diagnostic_value"]
 
 
 def _row_evidence_level(row: Mapping[str, Any]) -> str | None:
     explicit = _normalise_evidence_level(_evidence_value(row, ("observability_level", "observability", "level")))
-    if explicit is not None:
-        return explicit
+    absolute = _absolute_magnitude_evidence(row)
     status = _evidence_status(_evidence_value(row, ("status", "state", "calibration_status")))
-    if status in {"CATALOG_INCONSISTENT", "PHOTOMETRIC_OUTLIER", "PHOTOMETRICALLY_INCONSISTENT"}:
+    calibration_status = _evidence_status(_evidence_value(row, ("calibration_status", "m_cal_status")))
+    if status is None:
+        status = absolute["status"]
+    quality_passed = _evidence_bool(_evidence_value(row, ("quality_passed", "quality_ok")))
+    row_flags = {
+        _evidence_status(flag) or str(flag)
+        for flag in _evidence_strings(_evidence_value(row, ("flags", "flag")))
+    }
+    if (
+        status in _REJECTED_PHOTOMETRIC_STATUSES
+        or row_flags.intersection(_REJECTED_PHOTOMETRIC_STATUSES | {"PHOTOMETRIC_OUTLIER"})
+        or quality_passed is False
+        or (
+            calibration_status is not None and calibration_status not in _VALID_CALIBRATION_STATUSES
+        )
+    ):
         # A retained numerical m_cal is diagnostic evidence only when its
-        # catalog residual failed the source-level gate; do not count it as a
-        # usable apparent magnitude in the innovation summary.
+        # source-level gate failed; do not count it as a usable apparent
+        # magnitude in the innovation summary.
         return "INSTRUMENTAL_ONLY"
-    absolute_raw_found, absolute_raw = _evidence_lookup(
-        row, ("absolute_magnitude", "absolute", "absolute_result")
-    )
-    absolute_mapping = _evidence_mapping(absolute_raw) if absolute_raw_found else None
-    absolute_status = _evidence_status(
-        _evidence_value(row, ("absolute_status", "M_status", "absolute_magnitude_status"))
-    )
-    if absolute_status is None and absolute_mapping is not None:
-        absolute_status = _evidence_status(_evidence_value(absolute_mapping, ("status", "state", "absolute_status")))
-    # SourcePhotometry keeps the row status as CALIBRATED while the stricter
-    # absolute status lives in the nested estimate.  Inspect the nested status
-    # before falling through to APPARENT_CALIBRATED, otherwise valid GSP-Phot
-    # model-distance estimates would disappear from the innovation counts.
-    if _absolute_value_from_row(row) is not None and absolute_status in {
-        "VALID",
-        "VALID_MODEL_DISTANCE",
-        "VALID_MODEL_DISTANCE_NO_INTERVAL",
-        "ABSOLUTE_VALID",
-        "ABSOLUTE_ELIGIBLE",
-        "CALIBRATED_ABSOLUTE",
-    }:
+    if absolute["strict"]:
         return "ABSOLUTE_ELIGIBLE"
     if status in {"RELATIVE_CALIBRATED", "RELATIVE", "RELATIVE_CALIBRATION"}:
         return "RELATIVE_CALIBRATED"
-    if status in {"CALIBRATED", "APPARENT_CALIBRATED", "APPARENT", "VALID_NO_HOLDOUT"}:
-        return "APPARENT_CALIBRATED"
-    if _absolute_value_from_row(row) is not None and status in {
+    if status in {
+        "CALIBRATED",
+        "APPARENT_CALIBRATED",
+        "APPARENT",
         "VALID",
+        "VALID_NO_HOLDOUT",
         "VALID_MODEL_DISTANCE",
         "VALID_MODEL_DISTANCE_NO_INTERVAL",
         "ABSOLUTE_VALID",
         "ABSOLUTE_ELIGIBLE",
         "CALIBRATED_ABSOLUTE",
     }:
-        return "ABSOLUTE_ELIGIBLE"
+        return "APPARENT_CALIBRATED"
+    # An old report may have claimed ABSOLUTE_ELIGIBLE while carrying only a
+    # numeric M.  Keep the accompanying m_cal as apparent/diagnostic evidence,
+    # but do not preserve the stronger absolute level.
+    if explicit == "ABSOLUTE_ELIGIBLE":
+        if _as_float(
+            _evidence_value(row, ("m_cal", "calibrated_magnitude", "apparent_magnitude", "m_std"))
+        ) is not None:
+            return "APPARENT_CALIBRATED"
+        explicit = None
+    if explicit is not None:
+        return explicit
     if _as_float(_evidence_value(row, ("m_inst", "instrumental_magnitude", "instrumental_mag"))) is not None:
         return "INSTRUMENTAL_ONLY"
     return None
@@ -1012,7 +1621,7 @@ def _row_evidence_level(row: Mapping[str, Any]) -> str | None:
 def _compact_photometric_row(row: Mapping[str, Any]) -> dict[str, Any]:
     """保留一小段逐源证据，避免把大型原始检测表复制进创新报告。"""
 
-    absolute = _absolute_value_from_row(row)
+    absolute = _absolute_magnitude_evidence(row)
     result: dict[str, Any] = {
         "row_key": _evidence_value(row, ("row_key", "key")),
         "frame_id": _evidence_value(row, ("frame_id", "frame")),
@@ -1021,7 +1630,39 @@ def _compact_photometric_row(row: Mapping[str, Any]) -> dict[str, Any]:
         "status": _evidence_value(row, ("status", "state")),
         "m_inst": _as_float(_evidence_value(row, ("m_inst", "instrumental_magnitude", "instrumental_mag"))),
         "m_cal": _as_float(_evidence_value(row, ("m_cal", "calibrated_magnitude", "apparent_magnitude", "m_std"))),
-        "absolute_magnitude": absolute,
+        # ``absolute_magnitude`` is retained as the historical diagnostic
+        # value.  The explicit fields below prevent a consumer from mistaking
+        # that compatibility value for a strict result.
+        "absolute_magnitude": absolute["diagnostic_value"],
+        "absolute_magnitude_diagnostic": absolute["diagnostic_value"],
+        "absolute_magnitude_strict": absolute["strict_value"],
+        "strict_absolute_magnitude": absolute["strict_value"],
+        "strict_M": absolute["strict_value"],
+        "absolute_magnitude_value_role": (
+            "STRICT"
+            if absolute["strict"]
+            else "DIAGNOSTIC_ONLY"
+            if absolute["numeric_value"] is not None
+            else "ABSENT"
+        ),
+        "absolute_magnitude_diagnostics": absolute["diagnostic_values"],
+        "absolute_magnitude_gate_status": absolute["gate_status"],
+        "absolute_magnitude_strict_reasons": absolute["strict_reasons"],
+        "absolute_magnitude_strict_reason": absolute["strict_reason"],
+        "absolute_magnitude_status": absolute["status"],
+        "absolute_magnitude_is_strict": absolute["is_strict"],
+        "absolute_magnitude_band": absolute["band"],
+        "absolute_magnitude_label": absolute["label"],
+        "absolute_magnitude_system": absolute["system"],
+        "absolute_magnitude_source": absolute["distance_source"],
+        "absolute_magnitude_band_source": absolute["band_source"],
+        "absolute_magnitude_distance_source": absolute["distance_source"],
+        "absolute_magnitude_distance_pc": absolute["distance_pc"],
+        "absolute_magnitude_distance_lower_pc": absolute["distance_lower_pc"],
+        "absolute_magnitude_distance_upper_pc": absolute["distance_upper_pc"],
+        "absolute_magnitude_distance_interval_status": absolute["distance_interval_status"],
+        "absolute_magnitude_extinction_band": absolute["extinction_band"],
+        "absolute_magnitude_extinction_system": absolute["extinction_system"],
         "photometric_residual_mag": _as_float(
             _evidence_value(row, ("photometric_residual_mag", "photometric_residual", "catalog_residual_mag"))
         ),
@@ -1071,8 +1712,17 @@ def _photometric_quality_summary(value: object, *, source_name: str) -> dict[str
     row_counts = {level: 0 for level in _PHOTOMETRIC_LEVELS}
     instrumental_count = 0
     apparent_count = 0
+    calibrated_apparent_count = 0
     absolute_value_count = 0
+    absolute_result_count = 0
+    absolute_diagnostic_only_count = 0
     absolute_eligible_count = 0
+    strict_marker_true_count = 0
+    strict_marker_false_count = 0
+    strict_marker_missing_count = 0
+    absolute_strict_reason_counts: dict[str, int] = {}
+    absolute_diagnostic_band_counts: dict[str, int] = {}
+    absolute_strict_band_counts: dict[str, int] = {}
     derived_reasons: dict[str, int] = {}
     derived_missing: dict[str, int] = {}
     status_counts: dict[str, int] = {}
@@ -1085,13 +1735,33 @@ def _photometric_quality_summary(value: object, *, source_name: str) -> dict[str
             row_counts[level] += 1
         if _as_float(_evidence_value(row, ("m_inst", "instrumental_magnitude", "instrumental_mag"))) is not None:
             instrumental_count += 1
-        if _as_float(_evidence_value(row, ("m_cal", "calibrated_magnitude", "apparent_magnitude", "m_std"))) is not None:
+        m_cal = _as_float(_evidence_value(row, ("m_cal", "calibrated_magnitude", "apparent_magnitude", "m_std")))
+        if m_cal is not None:
             apparent_count += 1
-        absolute = _absolute_value_from_row(row)
-        if absolute is not None:
+        if m_cal is not None and level in {"APPARENT_CALIBRATED", "ABSOLUTE_ELIGIBLE"}:
+            calibrated_apparent_count += 1
+        absolute = _absolute_magnitude_evidence(row)
+        if absolute["numeric_value"] is not None:
             absolute_value_count += 1
-        if level == "ABSOLUTE_ELIGIBLE":
+            absolute_diagnostic_band_counts[absolute["label"]] = (
+                absolute_diagnostic_band_counts.get(absolute["label"], 0) + 1
+            )
+        if absolute["has_evidence"]:
+            absolute_result_count += 1
+            for reason in absolute["strict_reasons"]:
+                absolute_strict_reason_counts[reason] = absolute_strict_reason_counts.get(reason, 0) + 1
+        if absolute["numeric_value"] is not None and not absolute["strict"]:
+            absolute_diagnostic_only_count += 1
+        if absolute["strict"]:
             absolute_eligible_count += 1
+            absolute_strict_band_counts[absolute["label"]] = absolute_strict_band_counts.get(absolute["label"], 0) + 1
+        if absolute["has_evidence"]:
+            if absolute["is_strict"] is True:
+                strict_marker_true_count += 1
+            elif absolute["is_strict"] is False:
+                strict_marker_false_count += 1
+            else:
+                strict_marker_missing_count += 1
         status = _evidence_status(_evidence_value(row, ("status", "state")))
         if status:
             status_counts[status] = status_counts.get(status, 0) + 1
@@ -1110,6 +1780,27 @@ def _photometric_quality_summary(value: object, *, source_name: str) -> dict[str
             derived_missing[missing] = derived_missing.get(missing, 0) + 1
 
     level_counts = declared_counts or {key: value for key, value in row_counts.items() if value}
+    explicit_absolute_claim_count = sum(
+        _normalise_evidence_level(_evidence_value(row, ("observability_level", "observability", "level")))
+        == "ABSOLUTE_ELIGIBLE"
+        for row in rows
+    )
+    reported_absolute_eligible_count = declared_counts.get(
+        "ABSOLUTE_ELIGIBLE", explicit_absolute_claim_count
+    )
+    if not rows:
+        legacy_diagnostic_count = _evidence_count(
+            _evidence_value(mapping, ("absolute_magnitude_diagnostic_count", "absolute_magnitude_value_count"))
+        )
+        if legacy_diagnostic_count is not None:
+            absolute_value_count = max(absolute_value_count, legacy_diagnostic_count)
+            absolute_diagnostic_only_count = max(absolute_diagnostic_only_count, legacy_diagnostic_count)
+        legacy_reported_claim = _evidence_count(
+            _evidence_value(mapping, ("reported_absolute_eligible_count", "absolute_eligible_count"))
+        )
+        if legacy_reported_claim is not None:
+            reported_absolute_eligible_count = max(reported_absolute_eligible_count, legacy_reported_claim)
+        absolute_result_count = max(absolute_result_count, absolute_value_count)
     false_valid = _evidence_bool(_evidence_value(mapping, ("false_valid",)))
     gate = _evidence_mapping(_evidence_value(mapping, ("false_valid_gate",)))
     gate_passed = _evidence_bool(_evidence_value(gate, ("passed",)))
@@ -1117,6 +1808,15 @@ def _photometric_quality_summary(value: object, *, source_name: str) -> dict[str
         false_valid = not gate_passed
     if gate_passed is None and false_valid is not None:
         gate_passed = not false_valid
+    absolute_gate_status = (
+        "REJECTED"
+        if false_valid is True
+        else "STRICT_AVAILABLE"
+        if absolute_eligible_count
+        else "DIAGNOSTIC_ONLY"
+        if absolute_value_count or reported_absolute_eligible_count
+        else "NOT_AVAILABLE"
+    )
 
     source_count = _evidence_count(_evidence_value(mapping, ("source_count",)))
     if source_count is None:
@@ -1150,14 +1850,41 @@ def _photometric_quality_summary(value: object, *, source_name: str) -> dict[str
         "source_count": source_count,
         "row_count": len(rows),
         "level_counts": {key: level_counts[key] for key in sorted(level_counts)},
+        # ``level_counts`` is retained as the input report's declared level
+        # summary.  ``derived_level_counts`` is recomputed from the row
+        # evidence so a legacy ABSOLUTE_ELIGIBLE claim cannot silently become
+        # a strict result.
+        "derived_level_counts": {key: value for key, value in sorted(row_counts.items()) if value},
         "status_counts": {key: status_counts[key] for key in sorted(status_counts)},
         "photometric_consistent_count": photometric_consistent_count,
         "photometric_inconsistent_count": photometric_inconsistent_count,
         "photometric_consistency_unknown_count": photometric_unknown_count,
         "instrumental_magnitude_count": instrumental_count,
         "apparent_magnitude_count": apparent_count,
+        "calibrated_apparent_magnitude_count": calibrated_apparent_count,
         "absolute_magnitude_value_count": absolute_value_count,
-        "absolute_eligible_count": absolute_eligible_count or level_counts.get("ABSOLUTE_ELIGIBLE", 0),
+        "absolute_magnitude_diagnostic_count": absolute_value_count,
+        "absolute_magnitude_result_count": absolute_result_count,
+        "absolute_magnitude_diagnostic_only_count": absolute_diagnostic_only_count,
+        "absolute_magnitude_strict_count": absolute_eligible_count,
+        "strict_absolute_magnitude_count": absolute_eligible_count,
+        "absolute_eligible_count": absolute_eligible_count,
+        "reported_absolute_eligible_count": reported_absolute_eligible_count,
+        "absolute_magnitude_gate_status": absolute_gate_status,
+        "absolute_magnitude_strict_reason_counts": {
+            key: absolute_strict_reason_counts[key] for key in sorted(absolute_strict_reason_counts)
+        },
+        "absolute_magnitude_diagnostic_band_counts": {
+            key: absolute_diagnostic_band_counts[key] for key in sorted(absolute_diagnostic_band_counts)
+        },
+        "absolute_magnitude_strict_band_counts": {
+            key: absolute_strict_band_counts[key] for key in sorted(absolute_strict_band_counts)
+        },
+        "absolute_magnitude_is_strict_counts": {
+            "true": strict_marker_true_count,
+            "false": strict_marker_false_count,
+            "missing": strict_marker_missing_count,
+        },
         "false_valid": false_valid,
         "false_valid_gate_passed": gate_passed,
         "flags": _evidence_strings(_evidence_value(mapping, ("flags",))),
@@ -1301,9 +2028,23 @@ def _photometric_evidence_section(payload: Mapping[str, Any] | object) -> dict[s
 
     quality_rejected = quality.get("false_valid") is True
     quality_level_count = sum(int(value) for value in quality.get("level_counts", {}).values()) if quality.get("present") else 0
-    apparent_evidence_count = int(quality.get("apparent_magnitude_count", 0)) + int(quality.get("absolute_magnitude_value_count", 0))
-    apparent_evidence_count += int(quality.get("level_counts", {}).get("APPARENT_CALIBRATED", 0))
-    apparent_evidence_count += int(quality.get("level_counts", {}).get("ABSOLUTE_ELIGIBLE", 0))
+    calibrated_apparent_count = int(quality.get("calibrated_apparent_magnitude_count", 0))
+    if calibrated_apparent_count == 0 and not quality.get("row_count"):
+        calibrated_apparent_count = int(quality.get("level_counts", {}).get("APPARENT_CALIBRATED", 0))
+    absolute_value_count = int(quality.get("absolute_magnitude_diagnostic_count", quality.get("absolute_magnitude_value_count", 0)))
+    raw_absolute_eligible_count = int(
+        quality.get("strict_absolute_magnitude_count", quality.get("absolute_magnitude_strict_count", quality.get("absolute_eligible_count", 0)))
+    )
+    absolute_eligible_count = 0 if quality_rejected else raw_absolute_eligible_count
+    strict_band_counts = (
+        {}
+        if quality_rejected
+        else quality.get("absolute_magnitude_strict_band_counts", {})
+    )
+    reported_absolute_eligible_count = int(
+        quality.get("reported_absolute_eligible_count", quality.get("absolute_eligible_count", 0))
+    )
+    apparent_evidence_count = calibrated_apparent_count + absolute_eligible_count
     available = bool(relative.get("usable") or apparent_evidence_count > 0 or calibration.get("status") in {"VALID", "VALID_NO_HOLDOUT"})
     if not sources:
         status = "NOT_PRESENT"
@@ -1319,22 +2060,39 @@ def _photometric_evidence_section(payload: Mapping[str, Any] | object) -> dict[s
     apparent_count = int(quality.get("apparent_magnitude_count", 0))
     if apparent_count == 0:
         apparent_count = int(quality.get("level_counts", {}).get("APPARENT_CALIBRATED", 0)) + int(quality.get("level_counts", {}).get("ABSOLUTE_ELIGIBLE", 0))
-    absolute_value_count = int(quality.get("absolute_magnitude_value_count", 0))
-    absolute_eligible_count = int(quality.get("absolute_eligible_count", 0))
+    absolute_gate_status = str(quality.get("absolute_magnitude_gate_status", "NOT_AVAILABLE"))
+    if absolute_gate_status == "NOT_AVAILABLE" and quality.get("absolute_magnitude_result_count", 0):
+        absolute_boundary_status = "PRESENT_BUT_INCOMPLETE"
+    elif absolute_gate_status == "NOT_AVAILABLE":
+        absolute_boundary_status = "NOT_INFERRED"
+    else:
+        absolute_boundary_status = absolute_gate_status
     return {
         "status": status,
         "evidence_sources": sources,
         "relative_photometry": relative,
         "photometric_quality": quality,
         "photometric_calibration": calibration,
+        "strict_absolute_magnitude": {
+            "status": "AVAILABLE" if absolute_eligible_count else "NOT_AVAILABLE",
+            "count": absolute_eligible_count,
+            "bands": strict_band_counts,
+            "reason_counts": quality.get("absolute_magnitude_strict_reason_counts", {}),
+            "note": "只有逐源绝对结果显式 is_strict=True 且通过状态、距离区间、距离来源和消光语义门时才计入。",
+        },
         "summary": {
             "relative_scale_usable": bool(relative.get("usable")),
             "relative_source_count": int(relative.get("relative_magnitude_count", 0)),
             "relative_frame_count": int(relative.get("frame_zero_point_count", 0)),
             "reported_apparent_magnitude_count": apparent_count,
             "reported_absolute_magnitude_value_count": absolute_value_count,
-            "reported_absolute_eligible_count": absolute_eligible_count,
-            "absolute_magnitude_status": "INPUT_EVIDENCE_ONLY" if absolute_value_count or absolute_eligible_count else "NOT_AVAILABLE",
+            "reported_absolute_magnitude_diagnostic_count": absolute_value_count,
+            "reported_absolute_magnitude_diagnostic_only_count": int(quality.get("absolute_magnitude_diagnostic_only_count", 0)),
+            "reported_strict_absolute_magnitude_count": absolute_eligible_count,
+            "reported_strict_absolute_magnitude_evidence_count": raw_absolute_eligible_count,
+            # This is the input report's claim, not the recomputed strict count.
+            "reported_absolute_eligible_count": reported_absolute_eligible_count,
+            "absolute_magnitude_status": absolute_gate_status,
         },
         "boundary": {
             "instrumental_magnitude": {
@@ -1351,15 +2109,23 @@ def _photometric_evidence_section(payload: Mapping[str, Any] | object) -> dict[s
                 "note": "只有输入质量报告明确提供并通过其自身状态门时才保留为表观星等证据；本模块不重新标定。",
             },
             "absolute_magnitude": {
-                "status": "INPUT_EVIDENCE_ONLY" if absolute_value_count or absolute_eligible_count else "NOT_INFERRED",
+                "status": absolute_boundary_status,
                 "value_count": absolute_value_count,
+                "diagnostic_count": absolute_value_count,
+                "diagnostic_only_count": int(quality.get("absolute_magnitude_diagnostic_only_count", 0)),
+                "strict_count": absolute_eligible_count,
                 "eligible_count": absolute_eligible_count,
-                "note": "创新模块不会从 m_inst、相对光度或亮度排序推导绝对星等；需要目录身份、距离/视差、消光和质量门。",
+                "reported_eligible_count": reported_absolute_eligible_count,
+                "strict_reason_counts": quality.get("absolute_magnitude_strict_reason_counts", {}),
+                "diagnostic_band_counts": quality.get("absolute_magnitude_diagnostic_band_counts", {}),
+                "strict_band_counts": strict_band_counts,
+                "note": "absolute_magnitude 是兼容旧输入的诊断值；正式绝对星等只使用 strict_absolute_magnitude。需要目录身份、距离/视差、完整距离区间、消光语义和质量门。",
             },
         },
         "notes": [
             "星等 section 是创新报告对已有光度证据的审计摘要，不是新的星表匹配或重新测光结果。",
             "运动目标没有被自动当作 Gaia 恒星；相对光度证据也不会改变运动/静态分类。",
+            "旧 payload 中的 numeric M、M_G 或 M_V 只作为带波段标识的诊断值保留；没有 is_strict=True 时不计入正式绝对星等。",
         ],
     }
 

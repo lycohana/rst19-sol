@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from rst19.catalog import CatalogSource
@@ -516,11 +518,21 @@ def test_absolute_magnitude_estimate_has_quality_gate_and_error() -> None:
         extinction_mag=0.2,
         apparent_magnitude_error=0.05,
         extinction_error_mag=0.03,
+        extinction_band="G",
+        extinction_system="Gaia",
     )
 
     assert estimate.status == "VALID"
     assert estimate.value == pytest.approx(8.36)
     assert estimate.error is not None and estimate.error > 0
+    assert estimate.distance_interval_status == "DERIVED_FROM_PARALLAX_ERROR"
+    assert estimate.distance_lower_pc == pytest.approx(1000.0 / 10.1)
+    assert estimate.distance_upper_pc == pytest.approx(1000.0 / 9.9)
+    assert estimate.distance_error_pc == pytest.approx(
+        (1000.0 / 9.9 - 1000.0 / 10.1) / 2.0
+    )
+    assert estimate.error_status == "AVAILABLE"
+    assert estimate.is_strict is True
 
     rejected = absolute_magnitude_estimate_from_parallax(
         13.56,
@@ -531,6 +543,19 @@ def test_absolute_magnitude_estimate_has_quality_gate_and_error() -> None:
     assert rejected.value is None
     assert rejected.status == "LOW_PARALLAX_SNR"
     assert "USE_DISTANCE_POSTERIOR" in rejected.flags
+
+    missing_parallax_error = absolute_magnitude_estimate_from_parallax(
+        13.56,
+        parallax_mas=10.0,
+        parallax_error_mas=None,
+        extinction_mag=0.2,
+        extinction_band="G",
+        extinction_system="Gaia",
+    )
+    assert missing_parallax_error.value is None
+    assert missing_parallax_error.status == "NO_PARALLAX_ERROR"
+    assert missing_parallax_error.distance_interval_status == "NOT_PROVIDED"
+    assert "DISTANCE_ERROR_NOT_PROVIDED" in missing_parallax_error.flags
 
 
 def test_generic_absolute_magnitude_helpers_carry_optional_extinction_provenance() -> None:
@@ -566,6 +591,10 @@ def test_generic_absolute_magnitude_helpers_carry_optional_extinction_provenance
     assert distance_estimate.extinction_band == "G"
     assert distance_estimate.extinction_system == "Gaia"
     assert distance_estimate.extinction_source == "test-catalog"
+    assert distance_estimate.error is None
+    assert distance_estimate.error_status == "INCOMPLETE"
+    assert "APPARENT_MAGNITUDE_ERROR_NOT_PROVIDED" in distance_estimate.flags
+    assert "EXTINCTION_ERROR_NOT_PROVIDED" in distance_estimate.flags
 
     # A bare numeric extinction remains a supported generic API input, but no
     # photometric semantics are invented for it.
@@ -575,10 +604,12 @@ def test_generic_absolute_magnitude_helpers_carry_optional_extinction_provenance
         parallax_error_mas=0.1,
         extinction_mag=0.2,
     )
-    assert legacy_estimate.status == "VALID"
+    assert legacy_estimate.status == "EXTINCTION_SEMANTICS_REQUIRED"
+    assert legacy_estimate.value is None
     assert legacy_estimate.extinction_band is None
     assert legacy_estimate.extinction_system is None
     assert legacy_estimate.extinction_source is None
+    assert legacy_estimate.distance_interval_status == "DERIVED_FROM_PARALLAX_ERROR"
 
 
 def test_catalog_absolute_magnitude_requires_distance_metadata() -> None:
@@ -649,20 +680,19 @@ def test_catalog_absolute_magnitude_rejects_mismatched_or_unknown_extinction_sem
     assert estimate.extinction_source == "test-extinction"
 
 
-def test_catalog_extinction_gate_is_limited_to_explicit_photometric_path() -> None:
+def test_catalog_extinction_gate_also_applies_to_legacy_no_argument_path() -> None:
     source = _catalog_source_with_forced_extinction_semantics(
         extinction_band="unknown",
         extinction_system="unknown",
         extinction_source="legacy-unlabelled-column",
     )
 
-    # The no-argument form is a legacy diagnostic path.  It has no declared
-    # band contract, so preserve its historical numeric result while carrying
-    # the unknown provenance; only the explicitly declared path is strict.
+    # A structured catalog result must not become strict merely because the
+    # caller used the historical no-argument form.
     legacy = absolute_magnitude_from_catalog(source)
 
-    assert legacy.status == "VALID"
-    assert legacy.value == pytest.approx(8.36)
+    assert legacy.status == "EXTINCTION_SEMANTICS_REQUIRED"
+    assert legacy.value is None
     assert legacy.extinction_band == "unknown"
     assert legacy.extinction_system == "unknown"
     assert legacy.extinction_source == "legacy-unlabelled-column"
@@ -764,6 +794,104 @@ def test_model_distance_without_extinction_keeps_distance_but_not_numeric_absolu
     assert "EXTINCTION_NOT_PROVIDED" in estimate.flags
 
 
+def test_model_distance_without_complete_interval_is_not_strict_absolute_magnitude() -> None:
+    estimate = absolute_magnitude_estimate_from_distance(
+        13.56,
+        distance_pc=100.0,
+        distance_source="Gaia DR3 GSP-Phot",
+        extinction_mag=0.2,
+        extinction_error_mag=0.03,
+        extinction_band="G",
+        extinction_system="Gaia",
+    )
+
+    assert estimate.value is None
+    assert estimate.status == "MODEL_DISTANCE_INTERVAL_REQUIRED"
+    assert estimate.distance_pc == pytest.approx(100.0)
+    assert estimate.distance_interval_status == "REQUIRED"
+    assert "DISTANCE_ERROR_NOT_PROVIDED" in estimate.flags
+    assert "DISTANCE_INTERVAL_REQUIRED" in estimate.flags
+    assert estimate.is_strict is False
+
+
+def test_model_distance_one_sided_interval_is_diagnostic_only() -> None:
+    estimate = absolute_magnitude_estimate_from_distance(
+        13.56,
+        distance_pc=100.0,
+        distance_lower_pc=95.0,
+        distance_source="Gaia DR3 GSP-Phot",
+        extinction_mag=0.2,
+        extinction_band="G",
+        extinction_system="Gaia",
+    )
+
+    assert estimate.value is None
+    assert estimate.status == "MODEL_DISTANCE_INTERVAL_REQUIRED"
+    assert estimate.distance_lower_pc == pytest.approx(95.0)
+    assert estimate.distance_upper_pc is None
+    assert estimate.distance_interval_status == "ONE_SIDED"
+    assert "DISTANCE_INTERVAL_ONE_SIDED" in estimate.flags
+    assert "DISTANCE_INTERVAL_REQUIRED" in estimate.flags
+
+
+def test_model_distance_requires_source_provenance_for_strict_result() -> None:
+    estimate = absolute_magnitude_estimate_from_distance(
+        13.56,
+        distance_pc=100.0,
+        distance_lower_pc=95.0,
+        distance_upper_pc=106.0,
+        extinction_mag=0.2,
+        extinction_band="G",
+        extinction_system="Gaia",
+    )
+
+    assert estimate.value is None
+    assert estimate.status == "MODEL_DISTANCE_SOURCE_REQUIRED"
+    assert estimate.distance_interval_status == "PROVIDED"
+    assert "DISTANCE_SOURCE_REQUIRED" in estimate.flags
+
+
+def test_catalog_absolute_magnitude_propagates_catalog_and_distance_uncertainty() -> None:
+    source = CatalogSource(
+        "g-error",
+        10.0,
+        20.0,
+        magnitude=13.56,
+        magnitude_error=0.04,
+        photometric_system="Gaia Vega",
+        photometric_band="G",
+        parallax_mas=10.0,
+        parallax_error_mas=0.1,
+        extinction_mag=0.2,
+        extinction_error_mag=0.03,
+        extinction_band="G",
+        extinction_system="Gaia",
+        extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
+    )
+
+    estimate = absolute_magnitude_from_catalog(
+        source,
+        required_photometric_system="Gaia Vega",
+        required_photometric_band="G",
+    )
+
+    expected_error = math.sqrt(
+        0.04**2
+        + (5.0 / math.log(10.0) * 0.1 / 10.0) ** 2
+        + 0.03**2
+    )
+    assert estimate.status == "VALID"
+    assert estimate.error == pytest.approx(expected_error)
+    assert estimate.error_status == "AVAILABLE"
+    assert estimate.distance_interval_status == "DERIVED_FROM_PARALLAX_ERROR"
+    assert estimate.as_dict()["distance_error_lower_pc"] == pytest.approx(
+        100.0 - 1000.0 / 10.1
+    )
+    assert estimate.as_dict()["distance_error_upper_pc"] == pytest.approx(
+        1000.0 / 9.9 - 100.0
+    )
+
+
 def test_build_source_photometry_keeps_instrumental_calibrated_and_absolute_layers() -> None:
     detection = _source(0, 10.0, snr=20.0)
     instrumental = instrumental_magnitude(detection.flux)
@@ -817,5 +945,6 @@ def test_build_source_photometry_keeps_instrumental_calibrated_and_absolute_laye
     assert rows[0].status == "CALIBRATED"
     assert rows[0].instrumental_magnitude == pytest.approx(instrumental)
     assert rows[0].calibrated_magnitude == pytest.approx(instrumental + 20.15)
+    assert rows[0].catalog_magnitude_error == pytest.approx(0.02)
     assert rows[0].absolute_magnitude is not None
     assert rows[0].absolute_magnitude.status == "VALID"

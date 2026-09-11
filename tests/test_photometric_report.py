@@ -9,6 +9,7 @@ from rst19.photometric_report import (
     audit_photometry,
     build_photometric_report,
 )
+from rst19.photometry import absolute_magnitude_estimate_from_distance
 
 
 def _frame(frame_id: str, sources: list[dict[str, object]], *, wcs: object = None) -> dict[str, object]:
@@ -343,6 +344,12 @@ def test_model_distance_without_interval_is_retained_but_not_strict_absolute() -
     assert "MODEL_DISTANCE_INTERVAL_MISSING" in row.flags
     assert "distance_interval" in row.missing_inputs
     assert report.false_valid is False
+    assert row.strict_absolute_magnitude is None
+    assert row.absolute_magnitude_is_strict is False
+    assert row.absolute_magnitude_value_role == "DIAGNOSTIC_ONLY"
+    assert row.absolute_magnitude_band == "G"
+    assert row.absolute_magnitude_system == "Gaia"
+    assert row.absolute_magnitude_source == "Gaia DR3 GSP-Phot"
 
 
 @pytest.mark.parametrize(
@@ -404,6 +411,55 @@ def test_consistent_parallax_and_gspphot_paths_can_be_strict_absolute(
     assert report.rows[0].observability_level == "ABSOLUTE_ELIGIBLE"
     assert report.rows[0].absolute_status in {"VALID", "VALID_MODEL_DISTANCE"}
     assert report.false_valid is False
+    assert report.rows[0].strict_absolute_magnitude == pytest.approx(3.0)
+    assert report.rows[0].absolute_magnitude_is_strict is True
+    assert report.rows[0].absolute_magnitude_value_role == "STRICT"
+    assert report.rows[0].absolute_magnitude_band == "G"
+    assert report.rows[0].absolute_magnitude_system == "Gaia"
+
+
+def test_report_prefers_absolute_estimate_as_dict_over_dataclass_fields() -> None:
+    estimate = absolute_magnitude_estimate_from_distance(
+        13.0,
+        distance_pc=100.0,
+        distance_lower_pc=95.0,
+        distance_upper_pc=106.0,
+        distance_source="Gaia DR3 GSP-Phot",
+        extinction_mag=0.2,
+        extinction_band="G",
+        extinction_system="Gaia",
+        extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
+    )
+    assert estimate.is_strict is True
+
+    report = build_photometric_report(
+        source_rows=[
+            {
+                "source_id": "estimate-object",
+                "m_inst": 12.0,
+                "m_cal": 13.0,
+                "status": "CALIBRATED",
+                "calibration_status": "VALID",
+                "catalog_name": "Gaia DR3",
+                "photometric_system": "Gaia Vega",
+                "photometric_band": "G",
+                "absolute_magnitude": estimate,
+                "wcs_available": True,
+            }
+        ],
+        require_wcs=True,
+    )
+
+    row = report.rows[0]
+    assert row.absolute_magnitude == pytest.approx(estimate.value)
+    assert row.strict_absolute_magnitude == pytest.approx(estimate.value)
+    assert row.absolute_magnitude_is_strict is True
+    assert row.absolute_magnitude_distance_interval_status == "PROVIDED"
+    assert row.absolute_magnitude_distance_lower_pc == pytest.approx(95.0)
+    assert row.absolute_magnitude_distance_upper_pc == pytest.approx(106.0)
+    assert row.absolute_magnitude_extinction_band == "G"
+    assert row.absolute_magnitude_extinction_system == "Gaia"
+    assert row.absolute_magnitude_extinction_source == "Gaia DR3 GSP-Phot: ag_gspphot"
 
 
 def test_model_distance_absolute_status_is_reported_as_eligible_with_provenance() -> None:
@@ -444,6 +500,79 @@ def test_model_distance_absolute_status_is_reported_as_eligible_with_provenance(
     assert report.rows[0].observability_level == "ABSOLUTE_ELIGIBLE"
     assert report.rows[0].absolute_status == "VALID_MODEL_DISTANCE"
     assert report.false_valid is False
+
+
+def test_explicit_non_strict_absolute_value_is_retained_as_diagnostic_only() -> None:
+    report = build_photometric_report(
+        source_rows=[
+            {
+                "source_id": "old-cache",
+                "m_inst": 12.0,
+                "m_cal": 11.0,
+                "status": "CALIBRATED",
+                "calibration_status": "VALID",
+                "catalog_name": "Gaia DR3",
+                "photometric_system": "Gaia Vega",
+                "photometric_band": "G",
+                "absolute_magnitude": {
+                    "value": 3.0,
+                    "status": "VALID",
+                    "is_strict": False,
+                    "distance_source": "parallax",
+                    "parallax_mas": 10.0,
+                    "distance_pc": 100.0,
+                    "extinction_mag": 0.2,
+                    "extinction_band": "G",
+                    "extinction_system": "Gaia",
+                    "extinction_source": "test-catalog",
+                },
+                "wcs_available": True,
+            }
+        ],
+        require_wcs=True,
+    )
+
+    row = report.rows[0]
+    assert row.absolute_magnitude == pytest.approx(3.0)
+    assert row.strict_absolute_magnitude is None
+    assert row.absolute_magnitude_is_strict is False
+    assert row.absolute_magnitude_value_role == "DIAGNOSTIC_ONLY"
+    assert "ABSOLUTE_NOT_STRICT" in row.flags
+    assert "strict_absolute_result" in row.missing_inputs
+    assert row.observability_level == "APPARENT_CALIBRATED"
+
+
+def test_absolute_alias_keeps_v_band_identity_in_report() -> None:
+    report = build_photometric_report(
+        source_rows=[
+            {
+                "source_id": "v-source",
+                "m_inst": 12.0,
+                "m_cal": 11.0,
+                "status": "CALIBRATED",
+                "calibration_status": "VALID",
+                "catalog_name": "Johnson standards",
+                "photometric_system": "Johnson",
+                "photometric_band": "V",
+                "M_V": 4.2,
+                "absolute_status": "VALID",
+                "parallax_mas": 10.0,
+                "extinction_mag": 0.1,
+                "extinction_band": "V",
+                "extinction_system": "Johnson",
+                "extinction_source": "standard-field",
+                "wcs_available": True,
+            }
+        ],
+        require_wcs=True,
+    )
+
+    row = report.rows[0]
+    assert row.absolute_magnitude == pytest.approx(4.2)
+    assert row.absolute_magnitude_band == "V"
+    assert row.absolute_magnitude_system == "Johnson"
+    assert row.strict_absolute_magnitude == pytest.approx(4.2)
+    assert row.as_dict()["strict_M"] == pytest.approx(4.2)
 
 
 @pytest.mark.parametrize(

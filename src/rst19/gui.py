@@ -10,6 +10,7 @@ import queue
 import re
 import threading
 from collections import Counter
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -250,12 +251,14 @@ MANUAL_SNR_MAX = 10.0
 # 波段或物理量。尤其是 ``VALID_NO_EXTINCTION`` 仍带有一个计算值，但
 # 不是完整的消光修正绝对星等，默认界面必须把它挡在“严格 M”之外。
 _GUI_VALID_CALIBRATION_STATUSES = frozenset({"VALID", "VALID_NO_HOLDOUT"})
+_GUI_VALID_ROW_CALIBRATION_STATUSES = frozenset({"VALID", "VALID_NO_HOLDOUT", "CALIBRATED"})
 _GUI_VALID_ABSOLUTE_STATUS = "VALID"
 _GUI_VALID_ABSOLUTE_STATUSES = frozenset({
     "VALID",
     "VALID_MODEL_DISTANCE",
-    "VALID_MODEL_DISTANCE_NO_INTERVAL",
 })
+_GUI_STRICT_DISTANCE_INTERVAL_STATUSES = frozenset({"PROVIDED", "DERIVED_FROM_PARALLAX_ERROR"})
+_GUI_MISSING = object()
 _GUI_CALIBRATION_STATUS_LABELS = {
     "INSTRUMENTAL": "尚未接入标准星表",
     "INSTRUMENTAL_ONLY": "仅仪器星等（未匹配星表）",
@@ -279,6 +282,13 @@ _GUI_ABSOLUTE_STATUS_LABELS = {
     "VALID_MODEL_DISTANCE": "模型距离（带区间）",
     "VALID_MODEL_DISTANCE_NO_INTERVAL": "模型距离但缺少距离误差区间",
     "VALID_NO_EXTINCTION": "未提供消光修正",
+    "MODEL_DISTANCE_NO_EXTINCTION": "模型距离但未提供消光修正",
+    "MODEL_DISTANCE_INTERVAL_REQUIRED": "模型距离缺少完整距离区间",
+    "MODEL_DISTANCE_SOURCE_REQUIRED": "缺少模型距离来源",
+    "EXTINCTION_SEMANTICS_REQUIRED": "缺少消光系统/波段",
+    "INVALID_DISTANCE_INTERVAL": "距离区间无效",
+    "NO_PARALLAX_ERROR": "缺少视差误差",
+    "INVALID_EXTINCTION": "消光值无效",
     "NO_PARALLAX": "缺少视差/距离",
     "LOW_PARALLAX_SNR": "视差质量不足",
     "INVALID_PARALLAX": "修正后视差无效",
@@ -295,6 +305,256 @@ def _gui_text_value(value: object) -> str | None:
     if not text or text.lower() in {"none", "unknown", "?", "—", "-"}:
         return None
     return text
+
+
+def _gui_field(value: object, name: str, default: object = None) -> object:
+    """Read a field from either a result object or a serialized payload."""
+
+    if isinstance(value, Mapping):
+        return value.get(name, default)
+    return getattr(value, name, default) if value is not None else default
+
+
+def _gui_status_value(value: object) -> str | None:
+    """Normalize a status without treating ``unknown`` as an absent status."""
+
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _gui_numeric_value(value: object) -> float | None:
+    """Return a finite numeric payload value, otherwise ``None``."""
+
+    try:
+        numeric = float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+    return numeric if numeric is not None and math.isfinite(numeric) else None
+
+
+def _gui_effective_calibration_status(
+    row: object = None,
+    calibration: object = None,
+    *,
+    status: object = None,
+) -> str | None:
+    """Resolve status with row-level evidence taking precedence over global state."""
+
+    row_status = _gui_status_value(_gui_field(row, "status")) if row is not None else None
+    if row_status is None and row is not None:
+        row_status = _gui_status_value(_gui_field(row, "calibration_status"))
+    explicit_status = _gui_status_value(status)
+    calibration_status = _gui_status_value(_gui_field(calibration, "status"))
+    return row_status or explicit_status or calibration_status
+
+
+def _gui_row_status_reason(row: object, status: str) -> str:
+    """Keep the row's diagnostic reason alongside a rejected row status."""
+
+    detail = _gui_text_value(_gui_field(row, "photometric_outlier_reason"))
+    if detail is None:
+        flags = _gui_field(row, "flags", ())
+        if isinstance(flags, (list, tuple, set, frozenset)):
+            detail = ", ".join(str(flag) for flag in flags if _gui_text_value(flag) is not None) or None
+    return f"逐源状态 {status}" + (f"（{detail}）" if detail else "")
+
+
+def _gui_auto_result_reason(auto_result: object, fallback: str) -> str:
+    """Format an auto-workflow failure without dropping its source reason."""
+
+    status = _gui_status_value(_gui_field(auto_result, "status"))
+    reason = _gui_text_value(_gui_field(auto_result, "reason"))
+    if status and reason:
+        return f"自动测光 {status}：{reason}"
+    if status:
+        return f"自动测光状态 {status}"
+    if reason:
+        return f"自动测光：{reason}"
+    return fallback
+
+
+def _gui_auto_result_gate(auto_result: object = None) -> tuple[bool, str]:
+    """Gate formal photometry on an explicit, current auto-workflow result."""
+
+    if auto_result is None:
+        return True, ""
+    calibrated = _gui_field(auto_result, "calibrated", _GUI_MISSING)
+    if calibrated is not True:
+        return False, _gui_auto_result_reason(auto_result, "自动测光未通过 calibrated 门")
+    status = _gui_status_value(_gui_field(auto_result, "status"))
+    if status is None:
+        return False, "自动测光状态缺失，不能确认正式标定"
+    if status.upper() != "CALIBRATED":
+        return False, _gui_auto_result_reason(auto_result, f"自动测光状态 {status} 不是正式标定")
+    provenance = _gui_status_value(_gui_field(auto_result, "catalog_provenance_status"))
+    if provenance is None:
+        return False, "星表来源状态缺失，不能确认正式标定"
+    if provenance.upper() != "COMPLETE":
+        return False, f"星表来源未完整确认（{provenance}）"
+    return True, ""
+
+
+def _gui_calibration_gate(
+    *,
+    row: object = None,
+    calibration: object = None,
+    status: object = None,
+    system: object = None,
+    band: object = None,
+    wcs_available: bool = True,
+    wcs_verified: bool | None = None,
+    auto_result: object = None,
+    catalog_provenance_status: object = None,
+    strict_gate: bool = False,
+) -> tuple[bool, str]:
+    """Return whether an apparent magnitude may be presented as formal ``m_cal``."""
+
+    effective_status = _gui_effective_calibration_status(row, calibration, status=status)
+    if not strict_gate:
+        if effective_status is None or effective_status.upper() not in _GUI_VALID_ROW_CALIBRATION_STATUSES:
+            return False, _gui_calibration_status_text(effective_status)
+        return True, ""
+
+    reasons: list[str] = []
+    row_status = _gui_status_value(_gui_field(row, "status")) if row is not None else None
+    if row_status is None and row is not None:
+        row_status = _gui_status_value(_gui_field(row, "calibration_status"))
+    if row is None:
+        reasons.append("逐源测光证据缺失")
+    elif row_status is None:
+        reasons.append("逐源校准状态缺失")
+    elif row_status.upper() not in _GUI_VALID_ROW_CALIBRATION_STATUSES:
+        reasons.append(_gui_row_status_reason(row, row_status))
+
+    global_status = _gui_status_value(_gui_field(calibration, "status"))
+    if calibration is None:
+        global_status = _gui_status_value(status)
+        reasons.append("全局校准证据缺失")
+    if global_status is None:
+        reasons.append("校准状态缺失")
+    elif global_status.upper() not in _GUI_VALID_CALIBRATION_STATUSES:
+        reasons.append(f"全局校准状态 {global_status} 不允许正式 m_cal")
+
+    if effective_status is None:
+        reasons.append("逐源/全局校准状态缺失")
+    elif effective_status.upper() not in _GUI_VALID_ROW_CALIBRATION_STATUSES:
+        if not row_status:
+            reasons.append(f"校准状态 {effective_status} 不允许正式 m_cal")
+
+    if not wcs_available:
+        reasons.append("无 WCS")
+    elif wcs_verified is not True:
+        reasons.append("WCS 尚未通过当前帧验收")
+
+    auto_allowed, auto_reason = _gui_auto_result_gate(auto_result)
+    if not auto_allowed:
+        reasons.append(auto_reason)
+
+    provenance = _gui_status_value(catalog_provenance_status)
+    if provenance is not None and provenance.upper() != "COMPLETE":
+        reasons.append(f"星表来源未完整确认（{provenance}）")
+    if _gui_text_value(system) is None or _gui_text_value(band) is None:
+        reasons.append("未声明光度系统/波段")
+
+    return not reasons, "；".join(dict.fromkeys(reasons))
+
+
+def _gui_absolute_magnitude_gate(
+    absolute: object,
+    *,
+    system: object = None,
+    band: object = None,
+    row: object = None,
+    calibration: object = None,
+    status: object = None,
+    wcs_available: bool = True,
+    wcs_verified: bool | None = None,
+    auto_result: object = None,
+    catalog_provenance_status: object = None,
+    strict_gate: bool = False,
+) -> tuple[bool, str]:
+    """Return whether a numeric absolute magnitude is safe to show as formal ``M``."""
+
+    if absolute is None:
+        return False, "没有距离证据"
+    absolute_status = _gui_status_value(_gui_field(absolute, "status"))
+    status_key = absolute_status.upper() if absolute_status is not None else None
+    numeric = _gui_numeric_value(_gui_field(absolute, "value"))
+    if not strict_gate:
+        if status_key not in _GUI_VALID_ABSOLUTE_STATUSES:
+            return False, _GUI_ABSOLUTE_STATUS_LABELS.get(absolute_status or "", absolute_status or "未声明状态")
+        if numeric is None:
+            return False, "绝对星等数值缺失"
+        return True, ""
+
+    reasons: list[str] = []
+    calibration_allowed, calibration_reason = _gui_calibration_gate(
+        row=row,
+        calibration=calibration,
+        status=status,
+        system=system,
+        band=band,
+        wcs_available=wcs_available,
+        wcs_verified=wcs_verified,
+        auto_result=auto_result,
+        catalog_provenance_status=catalog_provenance_status,
+        strict_gate=True,
+    )
+    if not calibration_allowed and calibration_reason:
+        reasons.append(calibration_reason)
+
+    if status_key not in {"VALID", "VALID_MODEL_DISTANCE"}:
+        reasons.append(
+            _GUI_ABSOLUTE_STATUS_LABELS.get(
+                absolute_status or "",
+                absolute_status or "绝对星等状态缺失",
+            )
+        )
+    if numeric is None:
+        reasons.append("绝对星等数值缺失")
+
+    strict_marker = _gui_field(absolute, "is_strict", _GUI_MISSING)
+    if strict_marker is _GUI_MISSING:
+        reasons.append("旧结果缺少 is_strict，不能确认严格绝对星等")
+    elif strict_marker is not True:
+        reasons.append("绝对星等未通过 is_strict 严格质量门")
+
+    interval_status = _gui_field(absolute, "distance_interval_status", _GUI_MISSING)
+    if interval_status is _GUI_MISSING or _gui_status_value(interval_status) is None:
+        reasons.append("缺少完整距离区间状态")
+    elif str(interval_status).upper() not in _GUI_STRICT_DISTANCE_INTERVAL_STATUSES:
+        reasons.append("缺少完整距离误差区间")
+    distance_pc = _gui_numeric_value(_gui_field(absolute, "distance_pc"))
+    distance_lower_pc = _gui_numeric_value(_gui_field(absolute, "distance_lower_pc"))
+    distance_upper_pc = _gui_numeric_value(_gui_field(absolute, "distance_upper_pc"))
+    if distance_pc is None or distance_lower_pc is None or distance_upper_pc is None:
+        reasons.append("缺少完整距离区间数值")
+    elif (
+        distance_pc <= 0.0
+        or distance_lower_pc <= 0.0
+        or distance_upper_pc <= 0.0
+        or distance_lower_pc > distance_pc
+        or distance_pc > distance_upper_pc
+    ):
+        reasons.append("距离区间无效")
+
+    if _gui_text_value(_gui_field(absolute, "distance_source")) is None:
+        reasons.append("缺少距离来源")
+
+    absolute_system = _gui_text_value(_gui_field(absolute, "extinction_system"))
+    absolute_band = _gui_text_value(_gui_field(absolute, "extinction_band"))
+    declared_system = _gui_text_value(system)
+    declared_band = _gui_text_value(band)
+    if absolute_system is None or absolute_band is None:
+        reasons.append("绝对星等缺少消光系统/波段")
+    if absolute_system is not None and declared_system is not None and absolute_system != declared_system:
+        reasons.append("绝对星等消光系统与 m_cal 来源不一致")
+    if absolute_band is not None and declared_band is not None and absolute_band != declared_band:
+        reasons.append("绝对星等消光波段与 m_cal 波段不一致")
+
+    return not reasons, "；".join(dict.fromkeys(reasons))
 
 
 def _gui_photometric_provenance(system: object = None, band: object = None) -> str:
@@ -343,30 +603,52 @@ def _gui_selection_scope_text(scope: object) -> str:
 def _gui_format_calibrated_magnitude(
     value: object,
     *,
-    status: object,
+    status: object = None,
     system: object = None,
     band: object = None,
     error: object = None,
     wcs_available: bool = True,
     compact: bool = False,
+    row: object = None,
+    calibration: object = None,
+    wcs_verified: bool | None = None,
+    auto_result: object = None,
+    catalog_provenance_status: object = None,
+    strict_gate: bool = False,
+    include_provenance: bool = False,
 ) -> str:
     """Format a calibrated apparent magnitude only when its status permits it.
 
     A user-supplied zero point can make the pipeline carry a numeric value while
     the status remains ``INSTRUMENTAL``.  That value is deliberately labelled
     as a custom index instead of being presented as a standard-band magnitude.
+
+    ``strict_gate`` is used by the live GUI path.  It requires a verified WCS,
+    an explicit calibration/source state, and the row-level status; the default
+    keeps the small legacy helper contract used by older read-only callers.
     """
 
-    raw_status = _gui_text_value(status) or "INSTRUMENTAL"
-    numeric = None
-    try:
-        candidate = float(value) if value is not None else None
-        if candidate is not None and math.isfinite(candidate):
-            numeric = candidate
-    except (TypeError, ValueError):
-        numeric = None
-    if raw_status in _GUI_VALID_CALIBRATION_STATUSES and numeric is not None:
-        if not wcs_available:
+    raw_status = _gui_effective_calibration_status(row, calibration, status=status) or "INSTRUMENTAL"
+    status_key = raw_status.upper()
+    numeric = _gui_numeric_value(value)
+    if strict_gate:
+        calibration_allowed, gate_reason = _gui_calibration_gate(
+            row=row,
+            calibration=calibration,
+            status=status,
+            system=system,
+            band=band,
+            wcs_available=wcs_available,
+            wcs_verified=wcs_verified,
+            auto_result=auto_result,
+            catalog_provenance_status=catalog_provenance_status,
+            strict_gate=True,
+        )
+    else:
+        calibration_allowed = status_key in _GUI_VALID_ROW_CALIBRATION_STATUSES
+        gate_reason = ""
+    if calibration_allowed and numeric is not None:
+        if not strict_gate and not wcs_available:
             return "无 WCS" if compact else "m_cal = 不可用（无 WCS，未进行星表匹配）"
         if _gui_text_value(system) is None or _gui_text_value(band) is None:
             return "缺系统/波段" if compact else "m_cal = 不可用（未声明系统/波段）"
@@ -374,19 +656,31 @@ def _gui_format_calibrated_magnitude(
         system_band = _gui_photometric_provenance(system, band)
         label = _gui_magnitude_label("m", band_text)
         if compact:
-            return f"{numeric:.2f}"
+            return (
+                f"{label} = {numeric:.2f} · {system_band}"
+                if include_provenance or strict_gate
+                else f"{numeric:.2f}"
+            )
         error_text = ""
-        try:
-            error_value = float(error) if error is not None else None
-            if error_value is not None and math.isfinite(error_value) and error_value >= 0:
-                error_text = f" ± {error_value:.3f}"
-        except (TypeError, ValueError):
-            pass
-        return f"{label} [{system_band}] = {numeric:.3f}{error_text}"
-    if numeric is not None and raw_status == "INSTRUMENTAL":
+        error_value = _gui_numeric_value(error)
+        if error_value is not None and error_value >= 0:
+            error_text = f" ± {error_value:.3f}"
+        provenance = f" [{system_band}]"
+        return f"{label}{provenance} = {numeric:.3f}{error_text}"
+    if not strict_gate and numeric is not None and raw_status == "INSTRUMENTAL":
         if compact:
             return "自定义ZP"
         return f"m_user = {numeric:.3f}（自定义零点；系统/波段未声明）"
+    if strict_gate:
+        if not gate_reason:
+            gate_reason = "m_cal 数值缺失" if numeric is None else _gui_calibration_status_text(raw_status)
+        label = _gui_magnitude_label("m", band)
+        provenance = (
+            f" [{_gui_photometric_provenance(system, band)}]"
+            if compact and (include_provenance or strict_gate)
+            else ""
+        )
+        return f"{label}{provenance} = 不可用（{gate_reason}）"
     if compact:
         return _gui_calibration_status_text(raw_status, compact=True)
     label = _gui_magnitude_label("m", band)
@@ -398,6 +692,10 @@ def _gui_primary_faintest_display(
     calibration: object = None,
     *,
     wcs_verified: bool = False,
+    row: object = None,
+    auto_result: object = None,
+    catalog_provenance_status: object = None,
+    strict_gate: bool = False,
 ) -> tuple[str, str, bool]:
     """Choose the headline value without hiding its photometric provenance.
 
@@ -407,36 +705,35 @@ def _gui_primary_faintest_display(
     third return value lets the caller retain ``m_inst`` as a secondary line.
     """
 
-    instrumental = getattr(faintest, "instrumental_magnitude", None)
-    try:
-        instrumental_value = float(instrumental)
-        instrumental_text = (
-            f"{instrumental_value:.2f}" if math.isfinite(instrumental_value) else "—"
+    instrumental_value = _gui_numeric_value(_gui_field(faintest, "instrumental_magnitude"))
+    instrumental_text = f"{instrumental_value:.2f}" if instrumental_value is not None else "—"
+    status = _gui_effective_calibration_status(row, calibration, status=_gui_field(faintest, "calibration_status"))
+    system = _gui_field(faintest, "photometric_system") or _gui_field(calibration, "photometric_system")
+    band = _gui_field(faintest, "photometric_band") or _gui_field(calibration, "photometric_band")
+    calibrated_value = _gui_numeric_value(_gui_field(faintest, "calibrated_magnitude"))
+    if strict_gate:
+        calibrated_allowed, _ = _gui_calibration_gate(
+            row=row,
+            calibration=calibration,
+            status=status,
+            system=system,
+            band=band,
+            wcs_available=wcs_verified,
+            wcs_verified=wcs_verified,
+            auto_result=auto_result,
+            catalog_provenance_status=catalog_provenance_status,
+            strict_gate=True,
         )
-    except (TypeError, ValueError):
-        instrumental_text = "—"
-
-    status = _gui_text_value(getattr(calibration, "status", None)) or _gui_text_value(
-        getattr(faintest, "calibration_status", None)
-    )
-    system = getattr(faintest, "photometric_system", None) or getattr(calibration, "photometric_system", None)
-    band = getattr(faintest, "photometric_band", None) or getattr(calibration, "photometric_band", None)
-    calibrated = getattr(faintest, "calibrated_magnitude", None)
-    try:
-        calibrated_value = float(calibrated) if calibrated is not None else None
-        calibrated_value = (
-            calibrated_value if calibrated_value is not None and math.isfinite(calibrated_value) else None
+    else:
+        calibrated_allowed = (
+            wcs_verified
+            and status is not None
+            and status.upper() in _GUI_VALID_CALIBRATION_STATUSES
+            and calibrated_value is not None
+            and _gui_text_value(system) is not None
+            and _gui_text_value(band) is not None
         )
-    except (TypeError, ValueError):
-        calibrated_value = None
-
-    if (
-        wcs_verified
-        and status in _GUI_VALID_CALIBRATION_STATUSES
-        and calibrated_value is not None
-        and _gui_text_value(system) is not None
-        and _gui_text_value(band) is not None
-    ):
+    if calibrated_allowed and calibrated_value is not None:
         return f"{_gui_magnitude_label('m', band)},cal · 已标定", f"{calibrated_value:.2f}", True
     return "m_inst（未定标）", instrumental_text, False
 
@@ -448,46 +745,92 @@ def _gui_format_absolute_magnitude(
     band: object = None,
     wcs_available: bool = True,
     compact: bool = False,
+    row: object = None,
+    calibration: object = None,
+    status: object = None,
+    wcs_verified: bool | None = None,
+    auto_result: object = None,
+    catalog_provenance_status: object = None,
+    strict_gate: bool = False,
+    include_provenance: bool = False,
 ) -> str:
-    """Format strict absolute magnitude, hiding provisional no-extinction values."""
+    """Format an absolute magnitude without leaking diagnostic values into formal ``M``."""
 
     label = _gui_magnitude_label("M", band)
     if absolute is None:
+        if strict_gate:
+            provenance = (
+                f" [{_gui_photometric_provenance(system, band)}]"
+                if compact and include_provenance
+                else ""
+            )
+            return f"{label}{provenance} = 不可用（没有距离证据）"
         return "不可用" if compact else f"{label} = 不可用（没有距离证据）"
-    status = _gui_text_value(getattr(absolute, "status", None)) or "未声明状态"
-    value = getattr(absolute, "value", None)
-    try:
-        numeric = float(value) if value is not None else None
-        numeric = numeric if numeric is not None and math.isfinite(numeric) else None
-    except (TypeError, ValueError):
-        numeric = None
+    absolute_status = _gui_status_value(_gui_field(absolute, "status"))
+    status_key = absolute_status.upper() if absolute_status is not None else None
+    numeric = _gui_numeric_value(_gui_field(absolute, "value"))
+    if strict_gate:
+        absolute_allowed, gate_reason = _gui_absolute_magnitude_gate(
+            absolute,
+            system=system,
+            band=band,
+            row=row,
+            calibration=calibration,
+            status=status,
+            wcs_available=wcs_available,
+            wcs_verified=wcs_verified,
+            auto_result=auto_result,
+            catalog_provenance_status=catalog_provenance_status,
+            strict_gate=True,
+        )
+    else:
+        absolute_allowed = status_key in _GUI_VALID_ABSOLUTE_STATUSES and numeric is not None
+        gate_reason = ""
     # A model-distance value is displayable, but it must remain visibly
     # distinct from the direct/high-SNR parallax path.  It is still a
     # band-specific absolute-magnitude estimate when extinction is present;
     # the qualifier prevents the UI from implying a direct distance measure.
-    if status in _GUI_VALID_ABSOLUTE_STATUSES and numeric is not None:
-        if not wcs_available:
+    if absolute_allowed and numeric is not None:
+        if not strict_gate and not wcs_available:
             return "无 WCS" if compact else f"{label} = 不可用（无 WCS，未进行星表匹配）"
         if _gui_text_value(system) is None or _gui_text_value(band) is None:
             return "缺系统/波段" if compact else f"{label} = 不可用（未声明系统/波段）"
-        model_suffix = status.startswith("VALID_MODEL_DISTANCE")
-        distance_source = _gui_text_value(getattr(absolute, "distance_source", None))
+        model_suffix = status_key == "VALID_MODEL_DISTANCE"
+        distance_source = _gui_text_value(_gui_field(absolute, "distance_source"))
         if compact:
+            if include_provenance or strict_gate:
+                compact_parts = [f"{label} = {numeric:.2f}", _gui_photometric_provenance(system, band)]
+                if model_suffix:
+                    compact_parts.append(f"模型距离：{distance_source or '来源未声明'}")
+                return " · ".join(compact_parts)
             return f"{numeric:.2f}·模型" if model_suffix else f"{numeric:.2f}"
-        error = getattr(absolute, "error", None)
+        error = _gui_field(absolute, "error")
         error_text = ""
-        try:
-            error_value = float(error) if error is not None else None
-            if error_value is not None and math.isfinite(error_value) and error_value >= 0:
-                error_text = f" ± {error_value:.3f}"
-        except (TypeError, ValueError):
-            pass
+        error_value = _gui_numeric_value(error)
+        if error_value is not None and error_value >= 0:
+            error_text = f" ± {error_value:.3f}"
         qualifier = "（模型距离" if model_suffix else ""
         if model_suffix and distance_source:
             qualifier += f"：{distance_source}"
         if model_suffix:
             qualifier += "）"
-        return f"{label}{qualifier} = {numeric:.3f}{error_text}"
+        provenance = f" [{_gui_photometric_provenance(system, band)}]" if include_provenance else ""
+        return f"{label}{provenance}{qualifier} = {numeric:.3f}{error_text}"
+    if strict_gate:
+        if not gate_reason:
+            gate_reason = "绝对星等数值缺失" if numeric is None else _GUI_ABSOLUTE_STATUS_LABELS.get(
+                absolute_status or "",
+                absolute_status or "绝对星等不可用",
+            )
+        distance_source = _gui_text_value(_gui_field(absolute, "distance_source"))
+        if distance_source and "距离来源" not in gate_reason:
+            gate_reason += f"；距离来源 {distance_source}"
+        provenance = (
+            f" [{_gui_photometric_provenance(system, band)}]"
+            if compact and (include_provenance or strict_gate)
+            else ""
+        )
+        return f"{label}{provenance} = 不可用（{gate_reason}）"
     if compact:
         return {
             "VALID_MODEL_DISTANCE": "模型距离",
@@ -497,8 +840,8 @@ def _gui_format_absolute_magnitude(
             "LOW_PARALLAX_SNR": "视差质量不足",
             "INVALID_PARALLAX": "视差无效",
             "NO_APPARENT_MAGNITUDE": "无表观星等",
-        }.get(status, "不可用")
-    reason = _GUI_ABSOLUTE_STATUS_LABELS.get(status, status)
+        }.get(absolute_status, "不可用")
+    reason = _GUI_ABSOLUTE_STATUS_LABELS.get(absolute_status or "", absolute_status or "未声明状态")
     return f"{label} = 不可用（{reason}）"
 
 
@@ -508,6 +851,10 @@ def _gui_photometry_status_text(
     calibration: object = None,
     wcs_available: bool = True,
     compact: bool = False,
+    wcs_verified: bool | None = None,
+    auto_result: object = None,
+    catalog_provenance_status: object = None,
+    strict_gate: bool = False,
 ) -> str:
     """Explain a source row's photometric state and provenance."""
 
@@ -515,28 +862,42 @@ def _gui_photometry_status_text(
         return "无 WCS · 不进行星表匹配" if not compact else "无 WCS"
     if row is None:
         return "无逐源测光记录" if not compact else "无测光行"
-    row_status = getattr(row, "status", None)
+    row_status = _gui_field(row, "status")
     status_text = _gui_calibration_status_text(row_status, compact=compact)
-    system = getattr(row, "photometric_system", None) or getattr(calibration, "photometric_system", None)
-    band = getattr(row, "photometric_band", None) or getattr(calibration, "photometric_band", None)
+    system = _gui_field(row, "photometric_system") or _gui_field(calibration, "photometric_system")
+    band = _gui_field(row, "photometric_band") or _gui_field(calibration, "photometric_band")
     provenance = _gui_photometric_provenance(system, band)
-    if compact:
-        return f"{status_text} · {provenance}"
-    absolute = getattr(row, "absolute_magnitude", None)
-    absolute_status = _gui_text_value(getattr(absolute, "status", None)) if absolute is not None else None
+    absolute = _gui_field(row, "absolute_magnitude")
+    absolute_status = _gui_status_value(_gui_field(absolute, "status")) if absolute is not None else None
     absolute_note = ""
-    if absolute_status == "VALID":
+    if strict_gate:
+        absolute_allowed, absolute_reason = _gui_absolute_magnitude_gate(
+            absolute,
+            system=system,
+            band=band,
+            row=row,
+            calibration=calibration,
+            wcs_available=wcs_available,
+            wcs_verified=wcs_verified,
+            auto_result=auto_result,
+            catalog_provenance_status=catalog_provenance_status,
+            strict_gate=True,
+        )
+        absolute_note = " · M 可用" if absolute_allowed else f" · M 不可用（{absolute_reason}）"
+    elif absolute_status == "VALID":
         if _gui_text_value(system) is None or _gui_text_value(band) is None:
             absolute_note = " · M 缺系统/波段"
         else:
             absolute_note = " · M 可用"
     elif absolute_status in {"VALID_MODEL_DISTANCE", "VALID_MODEL_DISTANCE_NO_INTERVAL"}:
-        source = _gui_text_value(getattr(absolute, "distance_source", None))
+        source = _gui_text_value(_gui_field(absolute, "distance_source"))
         absolute_note = " · M 模型距离"
         if source:
             absolute_note += f"（{source}）"
     elif absolute_status == "VALID_NO_EXTINCTION":
         absolute_note = " · M 未消光"
+    if compact:
+        return f"{status_text} · {provenance}{absolute_note}"
     return f"{status_text} · 系统/波段 {provenance}{absolute_note}"
 
 
@@ -545,44 +906,65 @@ def _gui_photometry_context_summary(
     *,
     wcs_available: bool,
     wcs_verified: bool = False,
+    auto_result: object = None,
+    catalog_provenance_status: object = None,
+    strict_gate: bool = False,
 ) -> str:
     """Summarize what the current GUI result can and cannot claim."""
 
     if not wcs_available:
         return "几何：无 WCS · 星表：未接入 · 仅显示 m_inst；m_cal/M 不可用"
-    calibration = getattr(analysis, "photometric_calibration", None) if analysis is not None else None
+    calibration = _gui_field(analysis, "photometric_calibration") if analysis is not None else None
     geometry = "局部 WCS 已验证" if wcs_verified else "先验 WCS（尚未验证）"
     if calibration is None:
         return f"几何：{geometry} · 光度：未标定 · m_cal/M 严格数值不可用"
     system_band = _gui_photometric_provenance(
-        getattr(calibration, "photometric_system", None),
-        getattr(calibration, "photometric_band", None),
+        _gui_field(calibration, "photometric_system"),
+        _gui_field(calibration, "photometric_band"),
     )
-    calibration_system = getattr(calibration, "photometric_system", None)
-    calibration_band = getattr(calibration, "photometric_band", None)
-    rows = tuple(getattr(analysis, "source_photometry", ()) or ())
-    strict_absolute = sum(
-        1
-        for row in rows
-        if (
-            getattr(getattr(row, "absolute_magnitude", None), "status", None) in _GUI_VALID_ABSOLUTE_STATUSES
-            and _gui_text_value(getattr(row, "photometric_system", None) or calibration_system) is not None
-            and _gui_text_value(getattr(row, "photometric_band", None) or calibration_band) is not None
+    calibration_system = _gui_field(calibration, "photometric_system")
+    calibration_band = _gui_field(calibration, "photometric_band")
+    rows = tuple(_gui_field(analysis, "source_photometry", ()) or ())
+    if strict_gate:
+        strict_absolute = sum(
+            1
+            for row in rows
+            if _gui_absolute_magnitude_gate(
+                _gui_field(row, "absolute_magnitude"),
+                system=_gui_field(row, "photometric_system") or calibration_system,
+                band=_gui_field(row, "photometric_band") or calibration_band,
+                row=row,
+                calibration=calibration,
+                wcs_available=wcs_available,
+                wcs_verified=wcs_verified,
+                auto_result=auto_result,
+                catalog_provenance_status=catalog_provenance_status,
+                strict_gate=True,
+            )[0]
         )
-    )
+    else:
+        strict_absolute = sum(
+            1
+            for row in rows
+            if (
+                _gui_field(_gui_field(row, "absolute_magnitude"), "status") in _GUI_VALID_ABSOLUTE_STATUSES
+                and _gui_text_value(_gui_field(row, "photometric_system") or calibration_system) is not None
+                and _gui_text_value(_gui_field(row, "photometric_band") or calibration_band) is not None
+            )
+        )
     no_extinction = sum(
         1
         for row in rows
-        if getattr(getattr(row, "absolute_magnitude", None), "status", None) == "VALID_NO_EXTINCTION"
+        if _gui_field(_gui_field(row, "absolute_magnitude"), "status") == "VALID_NO_EXTINCTION"
     )
     model_distance = sum(
         1
         for row in rows
-        if getattr(getattr(row, "absolute_magnitude", None), "status", None)
+        if _gui_field(_gui_field(row, "absolute_magnitude"), "status")
         in {"VALID_MODEL_DISTANCE", "VALID_MODEL_DISTANCE_NO_INTERVAL"}
     )
     return (
-        f"几何：{geometry} · 光度：{system_band} / {getattr(calibration, 'status', '未声明')} · "
+        f"几何：{geometry} · 光度：{system_band} / {_gui_field(calibration, 'status', '未声明')} · "
         f"M 可用 {strict_absolute} 行（模型距离 {model_distance}） · 未消光 {no_extinction} 行"
     )
 
@@ -972,6 +1354,7 @@ class StarfieldApp(tk.Tk):
         self.catalog_match_result: MatchResult | None = None
         self.catalog_wcs: TangentPlaneWCS | AffineWCSCalibration | None = None
         self.catalog_calibration: AffineWCSCalibration | None = None
+        self.catalog_auto_result: Any | None = None
         self.catalog_path: Path | None = None
         self.catalog_frame_path: Path | None = None
         self.catalog_window: tk.Toplevel | None = None
@@ -3188,6 +3571,7 @@ class StarfieldApp(tk.Tk):
         self.catalog_match_result = None
         self.catalog_wcs = None
         self.catalog_calibration = None
+        self.catalog_auto_result = None
         self.catalog_frame_path = None
         self.long_trails = ()
         self.source_export_in_progress = False
@@ -3723,6 +4107,7 @@ class StarfieldApp(tk.Tk):
         self.catalog_match_result = None
         self.catalog_wcs = None
         self.catalog_calibration = None
+        self.catalog_auto_result = None
         self.catalog_frame_path = None
         self.hover_catalog_match = None
         self.sequence_brief = None
@@ -4081,6 +4466,7 @@ class StarfieldApp(tk.Tk):
         self.catalog_match_result = None
         self.catalog_wcs = None
         self.catalog_calibration = None
+        self.catalog_auto_result = None
         self.catalog_frame_path = None
         self.hover_catalog_match = None
         # 旧序列结果在新一轮计算期间不能继续伪装成当前结果；完成后再写回。
@@ -4644,6 +5030,7 @@ class StarfieldApp(tk.Tk):
                     run_button.config(state="normal", text="重试")
                     status.config(text="当前帧已切换 · 结果未写入")
                 else:
+                    self.catalog_auto_result = None
                     render(analysis, wcs, catalog_path, frame_path, catalog)
                     run_button.config(state="normal", text="重新核验")
                     status.config(text="已完成")
@@ -5041,6 +5428,16 @@ class StarfieldApp(tk.Tk):
             int(row.detection_id): row for row in getattr(self.analysis, "source_photometry", ())
         }
         wcs_verified = self.catalog_calibration is not None and self.catalog_analysis is self.analysis
+        auto_result = self.__dict__.get("catalog_auto_result")
+        if self.catalog_frame_path != self.selected_frame:
+            auto_result = None
+        calibration = getattr(self.analysis, "photometric_calibration", None)
+        display_band = _gui_field(calibration, "photometric_band")
+        self.source_tree.heading("cal", text=_gui_magnitude_label("m", display_band))
+        self.source_tree.heading(
+            "absolute",
+            text=f"{_gui_magnitude_label('M', display_band)} (strict)" if _gui_text_value(display_band) else "M",
+        )
         faintest = self.analysis.faintest
         if faintest is None:
             self.metric_values["faintest"].config(text="—")
@@ -5052,40 +5449,64 @@ class StarfieldApp(tk.Tk):
                 text="请检查阈值、掩膜和边缘筛选；没有通过质量门控的亮点不参与最暗源判定。当前没有可报告的星等。"
             )
         else:
-            calibration = getattr(self.analysis, "photometric_calibration", None)
-            primary_title, primary_value, primary_is_calibrated = _gui_primary_faintest_display(
+            faintest_row = self.source_photometry_by_id.get(int(faintest.detection_id))
+            primary_title, primary_value, _ = _gui_primary_faintest_display(
                 faintest,
                 calibration,
                 wcs_verified=wcs_verified,
+                row=faintest_row,
+                auto_result=auto_result,
+                strict_gate=True,
             )
             self.faintest_metric_title.config(text=primary_title)
             self.metric_values["faintest"].config(text=primary_value)
-            calibration_status = getattr(calibration, "status", None) or faintest.calibration_status
-            system = faintest.photometric_system or getattr(calibration, "photometric_system", None)
-            band = faintest.photometric_band or getattr(calibration, "photometric_band", None)
+            calibration_status = _gui_effective_calibration_status(
+                faintest_row,
+                calibration,
+                status=_gui_field(faintest, "calibration_status"),
+            )
+            system = _gui_field(faintest, "photometric_system") or _gui_field(calibration, "photometric_system")
+            band = _gui_field(faintest, "photometric_band") or _gui_field(calibration, "photometric_band")
             calibrated_line = _gui_format_calibrated_magnitude(
-                faintest.calibrated_magnitude,
+                _gui_field(faintest, "calibrated_magnitude"),
                 status=calibration_status,
                 system=system,
                 band=band,
-                error=faintest.calibrated_magnitude_error,
+                error=_gui_field(faintest, "calibrated_magnitude_error"),
                 wcs_available=wcs_verified,
+                row=faintest_row,
+                calibration=calibration,
+                wcs_verified=wcs_verified,
+                auto_result=auto_result,
+                strict_gate=True,
             )
-            absolute = faintest.absolute_magnitude
+            absolute = _gui_field(faintest, "absolute_magnitude")
             absolute_line = _gui_format_absolute_magnitude(
                 absolute,
                 system=system,
                 band=band,
                 wcs_available=wcs_verified,
+                row=faintest_row,
+                calibration=calibration,
+                status=calibration_status,
+                wcs_verified=wcs_verified,
+                auto_result=auto_result,
+                strict_gate=True,
             )
             calibrated_badge = _gui_format_calibrated_magnitude(
-                faintest.calibrated_magnitude,
+                _gui_field(faintest, "calibrated_magnitude"),
                 status=calibration_status,
                 system=system,
                 band=band,
-                error=faintest.calibrated_magnitude_error,
+                error=_gui_field(faintest, "calibrated_magnitude_error"),
                 wcs_available=wcs_verified,
                 compact=True,
+                row=faintest_row,
+                calibration=calibration,
+                wcs_verified=wcs_verified,
+                auto_result=auto_result,
+                strict_gate=True,
+                include_provenance=True,
             )
             absolute_badge = _gui_format_absolute_magnitude(
                 absolute,
@@ -5093,14 +5514,18 @@ class StarfieldApp(tk.Tk):
                 band=band,
                 wcs_available=wcs_verified,
                 compact=True,
+                row=faintest_row,
+                calibration=calibration,
+                status=calibration_status,
+                wcs_verified=wcs_verified,
+                auto_result=auto_result,
+                strict_gate=True,
+                include_provenance=True,
             )
             if self.__dict__.get("faintest_physical_label") is not None:
                 secondary = f"m_inst = {faintest.instrumental_magnitude:.2f}"
-                if primary_is_calibrated:
-                    secondary += f" · m_G = {calibrated_badge}"
-                else:
-                    secondary += f" · m_cal = {calibrated_badge}"
-                self.faintest_physical_label.config(text=f"{secondary} · M {absolute_badge}")
+                secondary += f" · {calibrated_badge}"
+                self.faintest_physical_label.config(text=f"{secondary} · {absolute_badge}")
             self.faintest_detail.config(
                 text=(
                     f"ID {faintest.detection_id:04d}\n"
@@ -5127,7 +5552,7 @@ class StarfieldApp(tk.Tk):
             self.faintest_note.config(
                 text=(
                     f"通量 {faintest.flux:.1f} ADU ({rate_text} ADU/s) · flux SNR {signal_snr:.1f}\n"
-                    f"{_gui_photometry_context_summary(self.analysis, wcs_available=wcs_verified, wcs_verified=wcs_verified)}。已在左侧用绿色环标出。\n"
+                    f"{_gui_photometry_context_summary(self.analysis, wcs_available=wcs_verified, wcs_verified=wcs_verified, auto_result=auto_result, strict_gate=True)}。已在左侧用绿色环标出。\n"
                     f"最暗源排序口径：{_gui_selection_scope_text(faintest.selection_scope)}；"
                     f"候选 {faintest.eligible_candidate_count:,}，可标定 {faintest.calibrated_candidate_count:,}。\n"
                     f"{comparison_text}"
@@ -5143,25 +5568,61 @@ class StarfieldApp(tk.Tk):
             magnitude_text = f"{magnitude:.2f}" if magnitude is not None else "—"
             source_photometry = self.source_photometry_by_id.get(int(source.detection_id))
             if source_photometry is None:
-                calibrated_text = "未接入"
-                absolute_text = "不可用"
+                calibrated_text = _gui_format_calibrated_magnitude(
+                    None,
+                    status=_gui_field(calibration, "status"),
+                    system=_gui_field(calibration, "photometric_system"),
+                    band=_gui_field(calibration, "photometric_band"),
+                    wcs_available=wcs_verified,
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    calibration=calibration,
+                    strict_gate=True,
+                    compact=True,
+                    include_provenance=True,
+                )
+                absolute_text = _gui_format_absolute_magnitude(
+                    None,
+                    system=_gui_field(calibration, "photometric_system"),
+                    band=_gui_field(calibration, "photometric_band"),
+                    wcs_available=wcs_verified,
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    calibration=calibration,
+                    status=_gui_field(calibration, "status"),
+                    strict_gate=True,
+                    compact=True,
+                    include_provenance=True,
+                )
             else:
-                calibration = getattr(self.analysis, "photometric_calibration", None)
                 calibrated_text = _gui_format_calibrated_magnitude(
                     source_photometry.calibrated_magnitude,
-                    status=getattr(calibration, "status", None) or source_photometry.status,
-                    system=source_photometry.photometric_system or getattr(calibration, "photometric_system", None),
-                    band=source_photometry.photometric_band or getattr(calibration, "photometric_band", None),
+                    status=_gui_effective_calibration_status(source_photometry, calibration),
+                    system=source_photometry.photometric_system or _gui_field(calibration, "photometric_system"),
+                    band=source_photometry.photometric_band or _gui_field(calibration, "photometric_band"),
                     error=source_photometry.calibrated_magnitude_error,
                     wcs_available=wcs_verified,
                     compact=True,
+                    row=source_photometry,
+                    calibration=calibration,
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    strict_gate=True,
+                    include_provenance=True,
                 )
                 absolute_text = _gui_format_absolute_magnitude(
                     source_photometry.absolute_magnitude,
-                    system=source_photometry.photometric_system or getattr(calibration, "photometric_system", None),
-                    band=source_photometry.photometric_band or getattr(calibration, "photometric_band", None),
+                    system=source_photometry.photometric_system or _gui_field(calibration, "photometric_system"),
+                    band=source_photometry.photometric_band or _gui_field(calibration, "photometric_band"),
                     wcs_available=wcs_verified,
                     compact=True,
+                    row=source_photometry,
+                    calibration=calibration,
+                    status=_gui_effective_calibration_status(source_photometry, calibration),
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    strict_gate=True,
+                    include_provenance=True,
                 )
             signal_snr = source.flux_snr if source.flux_snr is not None else source.snr
             self.source_tree.insert(
@@ -5524,6 +5985,8 @@ class StarfieldApp(tk.Tk):
                 analysis,
                 wcs_available=current_wcs is not None,
                 wcs_verified=wcs_verified,
+                auto_result=self.__dict__.get("catalog_auto_result"),
+                strict_gate=True,
             )
             if calibration is None:
                 return f"{context} · 需要匹配星表的表观星等和颜色项"
@@ -5577,6 +6040,20 @@ class StarfieldApp(tk.Tk):
             self.catalog_path = catalog_path
             self.catalog_frame_path = matched_frame
             self.hover_catalog_match = None
+            auto_result = self.__dict__.get("catalog_auto_result")
+            if self.selected_frame != matched_frame:
+                auto_result = None
+            wcs_verified = verified_wcs is not None
+            calibration = analysis.photometric_calibration
+            display_band = _gui_field(calibration, "photometric_band")
+            match_tree.heading(
+                "m_cal",
+                text=f"{_gui_magnitude_label('m', display_band)} (std)" if _gui_text_value(display_band) else "m_cal (std)",
+            )
+            match_tree.heading(
+                "absolute",
+                text=f"{_gui_magnitude_label('M', display_band)} (strict)" if _gui_text_value(display_band) else "M (strict)",
+            )
             calibrate_button.config(state="normal" if matching.matched_count >= 6 else "disabled", text="根据匹配拟合 WCS")
             export_calibration_button.config(
                 state="normal" if analysis.photometric_calibration is not None else "disabled"
@@ -5587,7 +6064,7 @@ class StarfieldApp(tk.Tk):
                 if matching.matched_count >= 6
                 else "匹配状态：匹配点不足 6 个 · 暂不输出像元角尺度或角速度"
             )
-            calibration_summary.config(text=f"{wcs_hint}\n{photometry_summary(analysis)}")
+            calibration_summary.config(text=f"{wcs_hint}\n{photometry_summary(analysis, wcs_verified=wcs_verified)}")
             for item in match_tree.get_children():
                 match_tree.delete(item)
             source_photometry_by_id = {
@@ -5601,28 +6078,46 @@ class StarfieldApp(tk.Tk):
                     if row is not None and row.instrumental_magnitude is not None
                     else "—"
                 )
-                calibration_status = getattr(analysis.photometric_calibration, "status", None)
+                calibration_status = _gui_effective_calibration_status(row, calibration)
+                system = _gui_field(row, "photometric_system") or _gui_field(calibration, "photometric_system")
+                band = _gui_field(row, "photometric_band") or _gui_field(calibration, "photometric_band")
                 calibrated_text = _gui_format_calibrated_magnitude(
-                    getattr(row, "calibrated_magnitude", None),
-                    status=calibration_status or getattr(row, "status", None) or "NO_PHOTOMETRY_ROW",
-                    system=getattr(row, "photometric_system", None) or getattr(analysis.photometric_calibration, "photometric_system", None),
-                    band=getattr(row, "photometric_band", None) or getattr(analysis.photometric_calibration, "photometric_band", None),
-                    error=getattr(row, "calibrated_magnitude_error", None),
-                    wcs_available=self.catalog_calibration is not None,
+                    _gui_field(row, "calibrated_magnitude"),
+                    status=calibration_status or "NO_PHOTOMETRY_ROW",
+                    system=system,
+                    band=band,
+                    error=_gui_field(row, "calibrated_magnitude_error"),
+                    wcs_available=wcs_verified,
                     compact=True,
-                ) if row is not None else "未接入"
+                    row=row,
+                    calibration=calibration,
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    strict_gate=True,
+                    include_provenance=True,
+                )
                 absolute_text = _gui_format_absolute_magnitude(
-                    getattr(row, "absolute_magnitude", None),
-                    system=getattr(row, "photometric_system", None) or getattr(analysis.photometric_calibration, "photometric_system", None),
-                    band=getattr(row, "photometric_band", None) or getattr(analysis.photometric_calibration, "photometric_band", None),
-                    wcs_available=self.catalog_calibration is not None,
+                    _gui_field(row, "absolute_magnitude"),
+                    system=system,
+                    band=band,
+                    wcs_available=wcs_verified,
                     compact=True,
-                ) if row is not None else "不可用"
+                    row=row,
+                    calibration=calibration,
+                    status=calibration_status,
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    strict_gate=True,
+                    include_provenance=True,
+                )
                 photometry_status = _gui_photometry_status_text(
                     row,
-                    calibration=analysis.photometric_calibration,
-                    wcs_available=self.catalog_calibration is not None,
+                    calibration=calibration,
+                    wcs_available=wcs_verified,
                     compact=True,
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    strict_gate=True,
                 )
                 match_tree.insert(
                     "",
@@ -5772,6 +6267,7 @@ class StarfieldApp(tk.Tk):
             nonlocal current_analysis, current_wcs, current_catalog, current_frame
             current_frame = frame_path
             current_catalog = tuple(result.catalog_sources)
+            self.catalog_auto_result = result
             self.catalog_path = catalog_path
             self.catalog_frame_path = frame_path
             if result.affine_wcs is not None and result.plate_solution.valid:
@@ -5783,7 +6279,7 @@ class StarfieldApp(tk.Tk):
                 return
 
             # 板解失败时仍展示检测结果和失败原因，但清除可能残留的
-            # 目录/WCS 状态，防止主卡片把 m_inst 误读成 m_G。
+            # 目录/WCS 状态，防止主卡片把 m_inst 误读成标准表观星等。
             current_analysis = result.analysis
             current_wcs = result.reference_wcs
             self.catalog_analysis = None
@@ -9435,43 +9931,52 @@ class StarfieldApp(tk.Tk):
                 }.get(int(match.detection_id)) if catalog_analysis is not None else None
                 calibration = getattr(catalog_analysis, "photometric_calibration", None)
                 system = (
-                    getattr(source_photometry, "photometric_system", None)
+                    _gui_field(source_photometry, "photometric_system")
                     or match.photometric_system
-                    or getattr(calibration, "photometric_system", None)
+                    or _gui_field(calibration, "photometric_system")
                 )
                 band = (
-                    getattr(source_photometry, "photometric_band", None)
+                    _gui_field(source_photometry, "photometric_band")
                     or match.photometric_band
-                    or getattr(calibration, "photometric_band", None)
+                    or _gui_field(calibration, "photometric_band")
                 )
-                calibrated_text = (
-                    _gui_format_calibrated_magnitude(
-                        getattr(source_photometry, "calibrated_magnitude", None),
-                        status=getattr(calibration, "status", None)
-                        or getattr(source_photometry, "status", None)
-                        or "NO_PHOTOMETRY_ROW",
-                        system=system,
-                        band=band,
-                        error=getattr(source_photometry, "calibrated_magnitude_error", None),
-                        wcs_available=self.__dict__.get("catalog_calibration") is not None,
-                    )
-                    if source_photometry is not None
-                    else "m_cal = 不可用（无逐源测光记录）"
+                auto_result = self.__dict__.get("catalog_auto_result")
+                wcs_verified = self.__dict__.get("catalog_calibration") is not None
+                calibration_status = _gui_effective_calibration_status(source_photometry, calibration)
+                calibrated_text = _gui_format_calibrated_magnitude(
+                    _gui_field(source_photometry, "calibrated_magnitude"),
+                    status=calibration_status or "NO_PHOTOMETRY_ROW",
+                    system=system,
+                    band=band,
+                    error=_gui_field(source_photometry, "calibrated_magnitude_error"),
+                    wcs_available=wcs_verified,
+                    row=source_photometry,
+                    calibration=calibration,
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    strict_gate=True,
+                    include_provenance=True,
                 )
-                absolute_text = (
-                    _gui_format_absolute_magnitude(
-                        getattr(source_photometry, "absolute_magnitude", None),
-                        system=system,
-                        band=band,
-                        wcs_available=self.__dict__.get("catalog_calibration") is not None,
-                    )
-                    if source_photometry is not None
-                    else "M = 不可用（无逐源测光记录）"
+                absolute_text = _gui_format_absolute_magnitude(
+                    _gui_field(source_photometry, "absolute_magnitude"),
+                    system=system,
+                    band=band,
+                    wcs_available=wcs_verified,
+                    row=source_photometry,
+                    calibration=calibration,
+                    status=calibration_status,
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    strict_gate=True,
+                    include_provenance=True,
                 )
                 status_text = _gui_photometry_status_text(
                     source_photometry,
                     calibration=calibration,
-                    wcs_available=self.__dict__.get("catalog_calibration") is not None,
+                    wcs_available=wcs_verified,
+                    wcs_verified=wcs_verified,
+                    auto_result=auto_result,
+                    strict_gate=True,
                 )
                 self.hover_info_var.set(
                     f"CAT {match.source_id}  ·  检测 X {match.detection_x:.1f} Y {match.detection_y:.1f}  ·  "
@@ -9592,35 +10097,46 @@ class StarfieldApp(tk.Tk):
             magnitude_text = f"{magnitude:.3f}" if magnitude is not None else "—"
             source_photometry = self.__dict__.get("source_photometry_by_id", {}).get(int(source.detection_id))
             calibration = getattr(self.analysis, "photometric_calibration", None)
-            system = getattr(source_photometry, "photometric_system", None) or getattr(calibration, "photometric_system", None)
-            band = getattr(source_photometry, "photometric_band", None) or getattr(calibration, "photometric_band", None)
-            calibrated_text = (
-                _gui_format_calibrated_magnitude(
-                    getattr(source_photometry, "calibrated_magnitude", None),
-                    status=getattr(calibration, "status", None) or getattr(source_photometry, "status", None) or "NO_PHOTOMETRY_ROW",
-                    system=system,
-                    band=band,
-                    error=getattr(source_photometry, "calibrated_magnitude_error", None),
-                        wcs_available=self.__dict__.get("catalog_calibration") is not None,
-                )
-                if source_photometry is not None
-                else "m_cal = 不可用（未接入星表）"
+            system = _gui_field(source_photometry, "photometric_system") or _gui_field(calibration, "photometric_system")
+            band = _gui_field(source_photometry, "photometric_band") or _gui_field(calibration, "photometric_band")
+            wcs_verified = self.__dict__.get("catalog_calibration") is not None
+            auto_result = self.__dict__.get("catalog_auto_result")
+            calibration_status = _gui_effective_calibration_status(source_photometry, calibration)
+            calibrated_text = _gui_format_calibrated_magnitude(
+                _gui_field(source_photometry, "calibrated_magnitude"),
+                status=calibration_status or "NO_PHOTOMETRY_ROW",
+                system=system,
+                band=band,
+                error=_gui_field(source_photometry, "calibrated_magnitude_error"),
+                wcs_available=wcs_verified,
+                row=source_photometry,
+                calibration=calibration,
+                wcs_verified=wcs_verified,
+                auto_result=auto_result,
+                strict_gate=True,
+                include_provenance=True,
             )
-            absolute_text = (
-                _gui_format_absolute_magnitude(
-                    getattr(source_photometry, "absolute_magnitude", None),
-                    system=system,
-                    band=band,
-                        wcs_available=self.__dict__.get("catalog_calibration") is not None,
-                )
-                if source_photometry is not None
-                else "M = 不可用（未接入星表）"
+            absolute_text = _gui_format_absolute_magnitude(
+                _gui_field(source_photometry, "absolute_magnitude"),
+                system=system,
+                band=band,
+                wcs_available=wcs_verified,
+                row=source_photometry,
+                calibration=calibration,
+                status=calibration_status,
+                wcs_verified=wcs_verified,
+                auto_result=auto_result,
+                strict_gate=True,
+                include_provenance=True,
             )
             photometry_status = _gui_photometry_status_text(
                 source_photometry,
                 calibration=calibration,
-                    wcs_available=self.__dict__.get("catalog_calibration") is not None,
-            ) if source_photometry is not None else "仅仪器星等（未接入星表/WCS）"
+                wcs_available=wcs_verified,
+                wcs_verified=wcs_verified,
+                auto_result=auto_result,
+                strict_gate=True,
+            )
             photometry_flags = ", ".join(source_photometry.flags) if source_photometry is not None and source_photometry.flags else "无"
             flags = ", ".join(source.flags) if source.flags else "无"
             signal_snr = source.flux_snr if source.flux_snr is not None else source.snr
@@ -9692,6 +10208,7 @@ class StarfieldApp(tk.Tk):
         self.catalog_match_result = None
         self.catalog_wcs = None
         self.catalog_calibration = None
+        self.catalog_auto_result = None
         self.catalog_frame_path = None
         self.sequence_result = None
         self.sequence_brief = None
