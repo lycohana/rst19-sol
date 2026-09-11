@@ -178,6 +178,9 @@ def test_auto_workflow_only_calls_calibrated_result_after_wcs_and_photometry_pas
         all_max_residual_px=0.1,
         condition_number=1.0,
         inlier_source_ids=("gaia-1",),
+        validation_count=1,
+        leave_one_out_rms_residual_px=0.1,
+        leave_one_out_max_residual_px=0.1,
     )
     photometric = PhotometricCalibration(
         photometric_system="Gaia Vega",

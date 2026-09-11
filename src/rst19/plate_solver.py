@@ -663,7 +663,16 @@ def solve_plate(
         )
     candidates.sort(key=lambda candidate: candidate.score, reverse=True)
     best = candidates[0]
-    loo_ok = best.leave_one_out_rms_residual_px is None or best.leave_one_out_rms_residual_px <= max_leave_one_out_rms_px
+    # A candidate without a usable leave-one-out sample is not validated.
+    # Treating ``None`` as success allowed a minimally constrained affine
+    # fit (for example, only three non-collinear points) to enter the WCS /
+    # photometric calibration path without an independent prediction check.
+    loo_rms = best.leave_one_out_rms_residual_px
+    loo_ok = (
+        loo_rms is not None
+        and math.isfinite(float(loo_rms))
+        and float(loo_rms) <= max_leave_one_out_rms_px
+    )
     accepted = (
         best.matched_count >= min_matches
         and best.rms_residual_px <= max_rms_residual_px
@@ -681,7 +690,11 @@ def solve_plate(
             failed.append(f"RMS {best.rms_residual_px:.3f}px > {max_rms_residual_px:.3f}px")
         if best.coverage_area < min_coverage_area:
             failed.append(f"覆盖度 {best.coverage_area:.4f} < {min_coverage_area:.4f}")
-        if not loo_ok:
+        if loo_rms is None:
+            failed.append("留一验证无有效样本")
+        elif not math.isfinite(float(loo_rms)):
+            failed.append("留一残差无效")
+        elif float(loo_rms) > max_leave_one_out_rms_px:
             failed.append("留一残差超过门槛")
         status = "REJECTED"
         reason = "；".join(failed) or "未通过严格验收"

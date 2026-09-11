@@ -189,3 +189,7 @@ def test_solve_plate_excludes_quality_rejected_and_structural_points() -> None:
         max_leave_one_out_rms_px=2.0,
     )
     assert result.image_points_considered == 3
+    assert not result.valid
+    assert result.status == "REJECTED"
+    assert result.best is not None
+    assert "留一验证无有效样本" in result.reason
