@@ -845,6 +845,22 @@ def _gui_format_absolute_magnitude(
     return f"{label} = 不可用（{reason}）"
 
 
+def _gui_format_catalog_model_magnitude(row: object, *, compact: bool = False) -> str:
+    """Format Gaia GSP-Phot's catalogue model ``M_G`` without calling it local ``M``."""
+
+    label = "Gaia模型 M_G"
+    value = _gui_numeric_value(_gui_field(row, "catalog_mg_gspphot"))
+    if value is None:
+        return f"{label} = 未获取" if not compact else "M_G模型 —"
+    lower = _gui_numeric_value(_gui_field(row, "catalog_mg_gspphot_lower"))
+    upper = _gui_numeric_value(_gui_field(row, "catalog_mg_gspphot_upper"))
+    interval = f" [{lower:.3f}, {upper:.3f}]" if lower is not None and upper is not None else ""
+    source = _gui_text_value(_gui_field(row, "catalog_mg_gspphot_source")) or "Gaia DR3 GSP-Phot"
+    if compact:
+        return f"M_G模型 = {value:.2f}{interval}"
+    return f"{label} = {value:.3f}{interval}（{source}，目录模型）"
+
+
 def _gui_photometry_status_text(
     row: object,
     *,
@@ -5156,7 +5172,7 @@ class StarfieldApp(tk.Tk):
                         text=(
                             f"Gaia DR3 已加载到 CSV 输入框。当前结果覆盖查询圆 {result.search_radius_deg:.4f}°，"
                             f"G={result.min_g_mag:g}–{result.max_g_mag:g}；旁车 JSON 记录分块是否截断。"
-                            "它只是身份/外部光度参考，仍需填写或验证 WCS；Gaia G 不能直接改名为开运相机 450–750 nm 星等。"
+                            "已同时保留 GSP-Phot M_G 模型区间；它只是身份/外部光度参考，仍需填写或验证 WCS；Gaia G 不能直接改名为开运相机 450–750 nm 星等。"
                         )
                     )
                     summary.config(
@@ -5522,6 +5538,7 @@ class StarfieldApp(tk.Tk):
                 strict_gate=True,
                 include_provenance=True,
             )
+            catalog_model_line = _gui_format_catalog_model_magnitude(faintest_row)
             if self.__dict__.get("faintest_physical_label") is not None:
                 secondary = f"m_inst = {faintest.instrumental_magnitude:.2f}"
                 secondary += f" · {calibrated_badge}"
@@ -5534,6 +5551,7 @@ class StarfieldApp(tk.Tk):
                     + "\n"
                     f"{calibrated_line}\n"
                     f"{absolute_line}\n"
+                    f"{catalog_model_line}\n"
                     f"测光状态 = {_gui_calibration_status_text(calibration_status)}\n"
                     f"最暗判定集合 = {_gui_selection_scope_text(faintest.selection_scope)} "
                     f"({faintest.calibrated_candidate_count:,}/{faintest.eligible_candidate_count:,} 可标定)\n"
@@ -5896,7 +5914,7 @@ class StarfieldApp(tk.Tk):
 
         note = self._label(
             form,
-            "当前 FITS 没有标准 WCS。RA/DEC、像元尺度、旋转和 parity 只是本次匹配的先验；先运行身份匹配，再点击“根据匹配拟合 WCS”。“在线获取 Gaia DR3”只在点击后联网，默认下载 G≤13.5 的标定参考子表，并把完整性写入旁车 JSON；它不会把 Gaia G 直接改名为开运相机 450–750 nm 星等。",
+            "当前 FITS 没有标准 WCS。RA/DEC、像元尺度、旋转和 parity 只是本次匹配的先验；先运行身份匹配，再点击“根据匹配拟合 WCS”。“在线获取 Gaia DR3”只在点击后联网，默认下载 G≤13.5 的标定参考子表并保留 GSP-Phot M_G 区间，完整性写入旁车 JSON；它不会把 Gaia G 直接改名为开运相机 450–750 nm 星等。",
             color=INK_SOFT,
             size=8,
             bg=PAPER_LIGHT,
@@ -6409,6 +6427,7 @@ class StarfieldApp(tk.Tk):
                             min_g_mag=min_g_value,
                             max_g_mag=max_g_value,
                             tile_radius_deg=DEFAULT_GAIA_TILE_RADIUS_DEG,
+                            include_gspphot_model=True,
                             progress=fetch_progress,
                         )
                         if not fetched.complete:
@@ -6498,6 +6517,7 @@ class StarfieldApp(tk.Tk):
                         min_g_mag=min_g_value,
                         max_g_mag=max_g_value,
                         tile_radius_deg=DEFAULT_GAIA_TILE_RADIUS_DEG,
+                        include_gspphot_model=True,
                         frame_path=requested_frame,
                         progress=progress,
                     )
@@ -10129,6 +10149,7 @@ class StarfieldApp(tk.Tk):
                 strict_gate=True,
                 include_provenance=True,
             )
+            catalog_model_text = _gui_format_catalog_model_magnitude(source_photometry)
             photometry_status = _gui_photometry_status_text(
                 source_photometry,
                 calibration=calibration,
@@ -10176,7 +10197,7 @@ class StarfieldApp(tk.Tk):
                 f"去混叠 ΔBIC {deblend_bic}  ·  次分量SNR {deblend_snr}\n"
                 f"数据审计：重复高位码 {repeated_code_count}  ·  异常负值像素 {range_anomaly_count}\n"
                 f"{shape_text}  ·  PSF支持 {psf_support_text}  ·  {shift_text}  ·  m_inst = {magnitude_text}\n"
-                f"{calibrated_text}\n{absolute_text}\n"
+                f"{calibrated_text}\n{absolute_text}\n{catalog_model_text}\n"
                 f"星等状态：{photometry_status}  ·  flags：{photometry_flags}\n"
                 f"判定：{quality_text}  ·  flags：{flags}"
             )

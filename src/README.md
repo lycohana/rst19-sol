@@ -49,6 +49,11 @@ rst19 doc/00-项目资料/原始数据/20260330163205413_9901.fits `
 
 需要公共参考目录时，显式运行 `python -m rst19.gaia_remote_cli --ra ... --dec ... --radius ... --out ...` 获取 Gaia DR3 子表；默认单帧/15 帧分析不联网，GUI 只有用户明确点击“在线获取 Gaia DR3”时才发起网络查询。Gaia 行中的 `phot_g_mean_flux_over_error`、`ruwe`、`duplicated_source`、`visibility_periods_used` 和 `phot_variable_flag` 会进入 `CatalogSource`，光度拟合默认排除明确重复/变量、低 G 通量 SNR、高 RUWE 和过少 visibility periods 的参考星，并把排除原因写入 `catalog_filter_counts`。15 帧相对光度可用 `python -m rst19.relative_photometry_cli` 或 `rst19-sequence --relative-photometry`，输出的帧零点和源亮度是相对量。`rst19-photometric-report` 用于审计 JSON 中的仪器/相对/表观/绝对星等证据层级。
 
+GUI 的“在线获取 Gaia DR3”和“自动板解 + 测光”会默认额外保留 GSP-Phot 的
+`M_G` 中位数及 16/84 百分位区间。界面将其显示为“Gaia模型 M_G”，并与
+本地图像重算的 `M` 分开；这组目录模型值只作外部绝对星等证据，不会改变最暗源的
+表观星等排序。
+
 分析 15 帧：
 
 ```powershell

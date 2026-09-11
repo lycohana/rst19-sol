@@ -404,6 +404,15 @@ def test_source_hover_exposes_snr_provenance_and_rejection_reason() -> None:
             }
         )
     )
+    app.source_photometry_by_id = {
+        18836: SimpleNamespace(
+            catalog_mg_gspphot=4.2,
+            catalog_mg_gspphot_lower=3.9,
+            catalog_mg_gspphot_upper=4.5,
+            catalog_mg_gspphot_source="Gaia DR3 GSP-Phot: mg_gspphot",
+            flags=(),
+        )
+    }
     app.exposure_s = 1.5
     app._find_source_at = lambda _event: source
     app._draw_preview = lambda: None
@@ -416,6 +425,7 @@ def test_source_hover_exposes_snr_provenance_and_rejection_reason() -> None:
     assert "提案 gaussian+dog_narrow" in app.hover_info_var.value
     assert "去混叠 ΔBIC 2.0" in app.hover_info_var.value
     assert "通量 SNR 6.70 < 门槛 7.00" in app.hover_info_var.value
+    assert "Gaia模型 M_G = 4.200 [3.900, 4.500]" in app.hover_info_var.value
 
 
 def test_single_frame_trail_preview_is_rendered_before_full_analysis() -> None:
