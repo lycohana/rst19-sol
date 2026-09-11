@@ -32,6 +32,7 @@ _CRITICAL_FIELDS = frozenset(
         "ra_deg",
         "dec_deg",
         "magnitude",
+        "magnitude_source",
         "phot_g_mean_mag",
         "parallax",
         "parallax_mas",
