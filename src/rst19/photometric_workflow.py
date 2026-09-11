@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -198,6 +199,46 @@ def _catalog_provenance_status(path: Path | None) -> str:
     return "COMPLETE"
 
 
+def _affine_wcs_rejection_reason(
+    affine_wcs: AffineWCSCalibration,
+    *,
+    min_matches: int,
+    max_rms_residual_px: float,
+    max_leave_one_out_rms_px: float,
+) -> str | None:
+    """Return why a refined WCS cannot be used for photometric calibration.
+
+    ``solve_plate`` validates its own affine candidate before the refinement,
+    but the second fit can change the inlier set and residuals.  Requiring a
+    finite leave-one-out result here prevents a locally good-looking fit from
+    silently becoming the coordinate basis for ``m_cal``.
+    """
+
+    failures: list[str] = []
+    if affine_wcs.inlier_count < min_matches:
+        failures.append(f"仿射内点数 {affine_wcs.inlier_count} < {min_matches}")
+    if not math.isfinite(float(affine_wcs.rms_residual_px)):
+        failures.append("仿射 RMS 无效")
+    elif affine_wcs.rms_residual_px > max_rms_residual_px:
+        failures.append(
+            f"仿射 RMS {affine_wcs.rms_residual_px:.3f}px > {max_rms_residual_px:.3f}px"
+        )
+    if not math.isfinite(float(affine_wcs.condition_number)) or affine_wcs.condition_number > 1.0e10:
+        failures.append("仿射条件数无效或过大")
+    if not math.isfinite(float(affine_wcs.anisotropy_ratio)) or affine_wcs.anisotropy_ratio <= 0.0:
+        failures.append("仿射各向异性指标无效")
+    loo_rms = affine_wcs.leave_one_out_rms_residual_px
+    if affine_wcs.validation_count < 1 or loo_rms is None:
+        failures.append("仿射留一验证无有效样本")
+    elif not math.isfinite(float(loo_rms)):
+        failures.append("仿射留一残差无效")
+    elif loo_rms > max_leave_one_out_rms_px:
+        failures.append(
+            f"仿射留一 RMS {loo_rms:.3f}px > {max_leave_one_out_rms_px:.3f}px"
+        )
+    return "；".join(failures) if failures else None
+
+
 def run_auto_photometric_workflow(
     frame: str | Path | FitsFrame,
     catalog: str | Path | Sequence[CatalogSource],
@@ -310,6 +351,26 @@ def run_auto_photometric_workflow(
             affine_wcs=None,
             status="WCS_REFINEMENT_FAILED",
             reason=f"星对板解通过但仿射细化失败：{exc}；仅保留 m_inst。",
+            catalog_provenance_status=catalog_provenance_status,
+        )
+
+    affine_gate_reason = _affine_wcs_rejection_reason(
+        affine_wcs,
+        min_matches=min(6, min_matches),
+        max_rms_residual_px=max_rms_residual_px,
+        max_leave_one_out_rms_px=max_leave_one_out_rms_px,
+    )
+    if affine_gate_reason is not None:
+        _report(progress, 100.0, f"仿射 WCS 验收失败 · {affine_gate_reason}")
+        return AutoPhotometricResult(
+            analysis=analysis,
+            catalog_sources=sources,
+            catalog_path=catalog_path,
+            reference_wcs=reference_wcs,
+            plate_solution=plate_solution,
+            affine_wcs=None,
+            status="WCS_REFINEMENT_REJECTED",
+            reason=f"仿射 WCS 验收失败：{affine_gate_reason}；仅保留 m_inst。",
             catalog_provenance_status=catalog_provenance_status,
         )
 

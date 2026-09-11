@@ -170,8 +170,8 @@ def test_auto_workflow_only_calls_calibrated_result_after_wcs_and_photometry_pas
         rotation_deg=0.0,
         parity=1,
         anisotropy_ratio=1.0,
-        matched_count=1,
-        inlier_count=1,
+        matched_count=6,
+        inlier_count=6,
         rms_residual_px=0.1,
         max_residual_px=0.1,
         all_rms_residual_px=0.1,
@@ -223,3 +223,88 @@ def test_auto_workflow_only_calls_calibrated_result_after_wcs_and_photometry_pas
     assert compact["analysis"]["evidence_scope"] == "compact_auto_photometry"
     assert len(full["analysis"]["detection"]["sources"]) == 1
     assert full["analysis"]["evidence_scope"] == "full_source_evidence"
+
+
+def test_auto_workflow_rejects_refined_wcs_without_leave_one_out_validation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    frame = _frame(tmp_path)
+    analysis = _analysis(frame)
+    catalog = _catalog()
+    match = CatalogMatch(
+        detection_id=1,
+        source_id="gaia-1",
+        detection_x=64.0,
+        detection_y=64.0,
+        predicted_x=64.0,
+        predicted_y=64.0,
+        residual_px=0.1,
+        catalog_magnitude=10.0,
+    )
+    candidate = PlateSolveCandidate(
+        transform=PlateTransform(
+            matrix_px_per_arcsec=((0.1, 0.0), (0.0, 0.1)),
+            offset_px=(64.0, 64.0),
+            plate_scale_arcsec_per_pixel=10.0,
+            rotation_deg=0.0,
+            parity=1,
+            anisotropy_ratio=1.0,
+        ),
+        matches=(match,),
+        rms_residual_px=0.1,
+        max_residual_px=0.1,
+        coverage_x=0.5,
+        coverage_y=0.5,
+        coverage_area=0.25,
+        leave_one_out_rms_residual_px=0.1,
+        leave_one_out_max_residual_px=0.1,
+        seed_image_pair=(1, 1),
+        seed_catalog_pair=("gaia-1", "gaia-1"),
+    )
+    plate_solution = PlateSolveResult(
+        status="VALID",
+        reason="synthetic positive geometry",
+        best=candidate,
+        alternatives=(),
+        image_points_considered=1,
+        catalog_points_considered=1,
+        pair_hypotheses=1,
+        unique_hypotheses=1,
+        acceptance={},
+    )
+    affine = AffineWCSCalibration(
+        center_ra_deg=10.0,
+        center_dec_deg=20.0,
+        matrix_px_per_arcsec=((0.1, 0.0), (0.0, 0.1)),
+        offset_px=(64.0, 64.0),
+        plate_scale_arcsec_per_pixel=10.0,
+        rotation_deg=0.0,
+        parity=1,
+        anisotropy_ratio=1.0,
+        matched_count=6,
+        inlier_count=6,
+        rms_residual_px=0.1,
+        max_residual_px=0.1,
+        all_rms_residual_px=0.1,
+        all_max_residual_px=0.1,
+        condition_number=1.0,
+        inlier_source_ids=("gaia-1",),
+        validation_count=0,
+        leave_one_out_rms_residual_px=None,
+        leave_one_out_max_residual_px=None,
+    )
+    monkeypatch.setattr(workflow, "solve_plate", lambda *_args, **_kwargs: plate_solution)
+    monkeypatch.setattr(workflow, "fit_affine_wcs_from_matches", lambda *_args, **_kwargs: affine)
+
+    result = workflow.run_auto_photometric_workflow(
+        frame,
+        catalog,
+        initial_analysis=analysis,
+    )
+
+    assert result.status == "WCS_REFINEMENT_REJECTED"
+    assert not result.calibrated
+    assert result.affine_wcs is None
+    assert result.analysis is analysis
+    assert "仿射留一验证无有效样本" in result.reason
