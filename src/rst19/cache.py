@@ -801,6 +801,7 @@ def load_analysis(cache_dir: Path, key: str, frame: FitsFrame) -> Any | None:
                 color_name=row.get("color_name"),
                 photometric_system=row.get("photometric_system"),
                 photometric_band=row.get("photometric_band"),
+                magnitude_source=row.get("magnitude_source"),
                 absolute_magnitude=(
                     AbsoluteMagnitudeEstimate(
                         value=(float(row["absolute_magnitude"]["value"]) if row["absolute_magnitude"].get("value") is not None else None),

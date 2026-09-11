@@ -908,6 +908,7 @@ def test_build_source_photometry_keeps_instrumental_calibrated_and_absolute_laye
             catalog_name="Gaia DR3",
             photometric_system="Gaia Vega",
             photometric_band="G",
+            magnitude_source="Gaia DR3 phot_g_mean_mag",
             parallax_mas=10.0,
             parallax_error_mas=0.1,
             extinction_mag=0.2,
@@ -946,5 +947,6 @@ def test_build_source_photometry_keeps_instrumental_calibrated_and_absolute_laye
     assert rows[0].instrumental_magnitude == pytest.approx(instrumental)
     assert rows[0].calibrated_magnitude == pytest.approx(instrumental + 20.15)
     assert rows[0].catalog_magnitude_error == pytest.approx(0.02)
+    assert rows[0].magnitude_source == "Gaia DR3 phot_g_mean_mag"
     assert rows[0].absolute_magnitude is not None
     assert rows[0].absolute_magnitude.status == "VALID"

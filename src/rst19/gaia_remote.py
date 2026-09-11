@@ -91,6 +91,7 @@ CATALOG_COMPAT_COLUMNS = (
     "catalog_name",
     "photometric_system",
     "photometric_band",
+    "magnitude_source",
     "ra",
     "dec",
     "pmra",
@@ -807,6 +808,7 @@ def _normalise_rows(
         output["ra_deg"] = row.get("ra", "")
         output["dec_deg"] = row.get("dec", "")
         output["magnitude"] = row.get("phot_g_mean_mag", "")
+        output["magnitude_source"] = "Gaia DR3 phot_g_mean_mag" if row.get("phot_g_mean_mag", "") else ""
         g_mag_error = row.get("phot_g_mean_mag_error", "")
         if not g_mag_error:
             g_flux = parsed_numbers["phot_g_mean_flux"]

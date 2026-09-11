@@ -79,6 +79,7 @@ def test_parse_gaia_csv_returns_catalog_compatible_aliases() -> None:
     assert row["ra_deg"] == "129.5"
     assert row["dec_deg"] == "-1.25"
     assert row["magnitude"] == "15.4"
+    assert row["magnitude_source"] == "Gaia DR3 phot_g_mean_mag"
     assert float(row["magnitude_error"]) == pytest.approx(
         (2.5 / math.log(10.0)) * 10.0 / 1000.0
     )
@@ -254,6 +255,7 @@ def test_write_catalog_csv_round_trips_gspphot_distance_and_extinction(tmp_path)
     assert source.distance_lower_pc == pytest.approx(90.0)
     assert source.distance_upper_pc == pytest.approx(110.0)
     assert source.distance_source == "Gaia DR3 GSP-Phot"
+    assert source.magnitude_source == "Gaia DR3 phot_g_mean_mag"
     assert source.extinction_mag == pytest.approx(0.12)
     assert source.extinction_error_mag == pytest.approx(0.025)
     assert source.extinction_band == "G"

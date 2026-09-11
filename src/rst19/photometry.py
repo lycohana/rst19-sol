@@ -448,6 +448,7 @@ class SourcePhotometry:
     photometric_band: str | None
     absolute_magnitude: AbsoluteMagnitudeEstimate | None
     status: str
+    magnitude_source: str | None = None
     flags: tuple[str, ...] = ()
     photometric_residual_mag: float | None = None
     photometric_residual_limit_mag: float | None = None
@@ -469,6 +470,7 @@ class SourcePhotometry:
             "color_name": self.color_name,
             "photometric_system": self.photometric_system,
             "photometric_band": self.photometric_band,
+            "magnitude_source": self.magnitude_source,
             "absolute_magnitude": self.absolute_magnitude.as_dict() if self.absolute_magnitude else None,
             "status": self.status,
             "flags": list(self.flags),
@@ -1887,6 +1889,7 @@ def build_source_photometry(
         color_name = None
         photometric_system = None
         photometric_band = None
+        magnitude_source = None
         photometric_residual = None
         photometric_residual_limit = None
         photometric_consistent = None
@@ -1899,6 +1902,7 @@ def build_source_photometry(
             color_name = catalog_source.color_name
             photometric_system = catalog_source.photometric_system
             photometric_band = catalog_source.photometric_band
+            magnitude_source = catalog_source.magnitude_source
         if match is not None:
             if catalog_magnitude is None:
                 catalog_magnitude = match.catalog_magnitude
@@ -2019,6 +2023,7 @@ def build_source_photometry(
                 photometric_band=photometric_band,
                 absolute_magnitude=absolute,
                 status=status,
+                magnitude_source=magnitude_source,
                 flags=tuple(dict.fromkeys(flags)),
                 photometric_residual_mag=photometric_residual,
                 photometric_residual_limit_mag=photometric_residual_limit,

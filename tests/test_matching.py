@@ -177,6 +177,7 @@ def test_load_catalog_csv_supports_gaia_column_aliases(tmp_path) -> None:
     assert catalog[0].catalog_name == "Gaia DR3"
     assert catalog[0].photometric_system == "Gaia Vega"
     assert catalog[0].photometric_band == "G"
+    assert catalog[0].magnitude_source == "Gaia DR3 phot_g_mean_mag"
     assert catalog[0].phot_g_mean_flux_over_error == 80.0
     assert catalog[0].phot_bp_rp_excess_factor == 1.18
     assert catalog[0].ruwe == 1.05
@@ -212,6 +213,34 @@ def test_load_catalog_csv_rejects_non_finite_optional_values(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="non-finite magnitude"):
         load_catalog_csv(path)
+
+
+def test_load_catalog_csv_rejects_conflicting_generic_and_gaia_magnitudes(tmp_path) -> None:
+    path = tmp_path / "conflicting-magnitude.csv"
+    path.write_text(
+        "source_id,ra,dec,magnitude,phot_g_mean_mag\n"
+        "s1,10.0,20.0,12.5,13.1\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="magnitude and phot_g_mean_mag conflict"):
+        load_catalog_csv(path)
+
+
+def test_load_catalog_csv_records_generic_magnitude_provenance(tmp_path) -> None:
+    path = tmp_path / "generic-magnitude.csv"
+    path.write_text(
+        "source_id,ra,dec,magnitude\n"
+        "s1,10.0,20.0,12.5\n",
+        encoding="utf-8",
+    )
+
+    source = load_catalog_csv(path)[0]
+
+    assert source.magnitude == 12.5
+    assert source.magnitude_source == "CSV magnitude column"
+    assert source.catalog_name == "unknown"
+    assert source.photometric_band == "unknown"
 
 
 def test_fit_affine_wcs_recovers_local_scale_rotation_and_rejects_outlier() -> None:

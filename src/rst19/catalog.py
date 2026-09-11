@@ -247,6 +247,7 @@ class CatalogSource:
     catalog_name: str = "unknown"
     photometric_system: str = "unknown"
     photometric_band: str = "unknown"
+    magnitude_source: str = "unknown"
     magnitude_error: float | None = None
     color_name: str | None = None
     parallax_mas: float | None = None
@@ -323,6 +324,8 @@ class CatalogSource:
             raise ValueError("duplicated_source must be a boolean or None")
         if self.phot_variable_flag is not None and not str(self.phot_variable_flag).strip():
             raise ValueError("phot_variable_flag cannot be empty when provided")
+        magnitude_source = "unknown" if self.magnitude_source is None else str(self.magnitude_source).strip()
+        object.__setattr__(self, "magnitude_source", magnitude_source or "unknown")
         object.__setattr__(self, "extinction_band", _canonical_extinction_band(self.extinction_band))
         object.__setattr__(self, "extinction_system", _canonical_extinction_system(self.extinction_system))
         extinction_source = "unknown" if self.extinction_source is None else str(self.extinction_source).strip()
@@ -393,6 +396,7 @@ class CatalogSource:
             catalog_name=self.catalog_name,
             photometric_system=self.photometric_system,
             photometric_band=self.photometric_band,
+            magnitude_source=self.magnitude_source,
             magnitude_error=self.magnitude_error,
             color_name=self.color_name,
             parallax_mas=self.parallax_mas,
@@ -427,6 +431,7 @@ class CatalogSource:
             "catalog_name": self.catalog_name,
             "photometric_system": self.photometric_system,
             "photometric_band": self.photometric_band,
+            "magnitude_source": self.magnitude_source,
             "magnitude_error": self.magnitude_error,
             "color_name": self.color_name,
             "parallax_mas": self.parallax_mas,
@@ -464,7 +469,6 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
         sources: list[CatalogSource] = []
         source_ids: set[str] = set()
         fieldnames = {str(field).strip().lower() for field in reader.fieldnames}
-        has_gaia_g = "phot_g_mean_mag" in fieldnames
         for row_number, row in enumerate(reader, start=2):
             source_id = _first_value(row, ("source_id", "sourceid", "id"))
             if source_id is None:
@@ -475,8 +479,34 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
             source_ids.add(source_id)
             ra = _required_float(_first_value(row, ("ra_deg", "ra", "RA")), field="ra_deg", row_number=row_number)
             dec = _required_float(_first_value(row, ("dec_deg", "dec", "DEC")), field="dec_deg", row_number=row_number)
+            explicit_magnitude_source = _first_value(
+                row,
+                ("magnitude_source", "mag_source", "magnitude_provenance", "mag_provenance"),
+            )
+            gaia_magnitude_raw = _first_value(row, ("phot_g_mean_mag",))
+            generic_magnitude_raw = _first_value(row, ("magnitude", "apparent_magnitude", "mag"))
+            if gaia_magnitude_raw is not None and generic_magnitude_raw is not None:
+                if not _numeric_values_equal(gaia_magnitude_raw, generic_magnitude_raw):
+                    raise ValueError(
+                        f"catalog row {row_number}: magnitude and phot_g_mean_mag conflict; "
+                        "declare one magnitude source in a separate catalogue"
+                    )
+            source_text = explicit_magnitude_source.casefold() if explicit_magnitude_source else ""
+            magnitude_is_gaia = gaia_magnitude_raw is not None and (
+                explicit_magnitude_source is None
+                or "gaia" in source_text
+                or "phot_g" in source_text
+            )
+            if magnitude_is_gaia:
+                magnitude_raw = gaia_magnitude_raw
+                magnitude_source = explicit_magnitude_source or "Gaia DR3 phot_g_mean_mag"
+            else:
+                magnitude_raw = generic_magnitude_raw or gaia_magnitude_raw
+                magnitude_source = explicit_magnitude_source or (
+                    "CSV magnitude column" if generic_magnitude_raw is not None else "unknown"
+                )
             magnitude = _optional_float(
-                _first_value(row, ("magnitude", "apparent_magnitude", "mag", "phot_g_mean_mag")),
+                magnitude_raw,
                 field="magnitude",
                 row_number=row_number,
             )
@@ -603,7 +633,7 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
             catalog_name = _first_value(row, ("catalog_name", "catalog", "catalogue"))
             photometric_system = _first_value(row, ("photometric_system", "mag_system", "system"))
             photometric_band = _first_value(row, ("photometric_band", "band", "passband"))
-            if has_gaia_g:
+            if magnitude_is_gaia:
                 catalog_name = catalog_name or "Gaia DR3"
                 photometric_system = photometric_system or "Gaia Vega"
                 photometric_band = photometric_band or "G"
@@ -620,6 +650,7 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
                     catalog_name=catalog_name or "unknown",
                     photometric_system=photometric_system or "unknown",
                     photometric_band=photometric_band or "unknown",
+                    magnitude_source=magnitude_source,
                     magnitude_error=magnitude_error,
                     color_name=color_name,
                     parallax_mas=parallax_mas,
