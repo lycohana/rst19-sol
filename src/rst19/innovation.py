@@ -640,6 +640,140 @@ def _motion_rows(payload: Mapping[str, Any], frame_rows: Sequence[Mapping[str, A
     return result
 
 
+def _point_motion_rows(payload: Mapping[str, Any], frame_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """把质量点轨迹中的 ``moving`` 证据整理成独立的创新表。
+
+    ``motion_features`` 描述的是差分图中的线状目标，而 ``tracks`` 描述的
+    是逐帧点源关联。两者不能合并计数：前者依赖残差连通域/PCA，后者可能
+    来自普通近邻关联或高速点源补充关联。这里仅消费已经进入 ``tracks`` 的
+    moving 轨迹，并重新用真实 ``DATE-OBS`` 计算 ``px/s``，让创新报告不会
+    把 GUI 中的点轨迹悄悄遗漏，也不会把两种证据层伪装成同一种目标。
+    """
+
+    raw_tracks = payload.get("tracks", [])
+    if not isinstance(raw_tracks, list):
+        return []
+    timestamps = [_parse_timestamp(row.get("timestamp")) for row in frame_rows]
+    interval_values = [
+        float(row["interval_s"])
+        for row in frame_rows
+        if row.get("interval_s") is not None and float(row["interval_s"]) > 0
+    ]
+    prediction_horizon_s = float(np.median(interval_values) * 5.0) if interval_values else None
+    result: list[dict[str, Any]] = []
+    for track in raw_tracks:
+        if not isinstance(track, Mapping) or str(track.get("classification", "")) != "moving":
+            continue
+        points = track.get("points", [])
+        if not isinstance(points, list):
+            continue
+        valid_points = [point for point in points if isinstance(point, Mapping)]
+        if not valid_points:
+            continue
+        valid_points.sort(key=lambda point: int(point.get("frame_index", 0)))
+        first = valid_points[0]
+        last = valid_points[-1]
+        first_index = int(first.get("frame_index", 0))
+        last_index = int(last.get("frame_index", first_index))
+        first_time = timestamps[first_index] if 0 <= first_index < len(timestamps) else None
+        last_time = timestamps[last_index] if 0 <= last_index < len(timestamps) else None
+        duration_s = (
+            (last_time - first_time).total_seconds()
+            if first_time is not None and last_time is not None
+            else None
+        )
+        x = np.asarray([float(point.get("aligned_x", point.get("x", 0.0))) for point in valid_points], dtype=np.float64)
+        y = np.asarray([float(point.get("aligned_y", point.get("y", 0.0))) for point in valid_points], dtype=np.float64)
+        kinematics: dict[str, Any] = {}
+        point_fit_residuals = np.full(len(valid_points), np.nan, dtype=np.float64)
+        all_point_times_available = all(
+            0 <= int(point.get("frame_index", 0)) < len(timestamps)
+            and timestamps[int(point.get("frame_index", 0))] is not None
+            for point in valid_points
+        )
+        if (
+            len(valid_points) >= 2
+            and duration_s is not None
+            and duration_s > 0
+            and all_point_times_available
+        ):
+            elapsed = np.asarray(
+                [
+                    (timestamps[int(point.get("frame_index", 0))] - first_time).total_seconds()
+                    for point in valid_points
+                ],
+                dtype=np.float64,
+            )
+            kinematics = _fit_constant_velocity(elapsed, x, y, prediction_horizon_s)
+            point_fit_residuals = np.asarray(kinematics["fit_residual_px"], dtype=np.float64)
+            speed_px_per_s = _as_float(kinematics.get("speed_px_per_s"))
+            displacement_px = (
+                float(speed_px_per_s * duration_s)
+                if speed_px_per_s is not None
+                else _as_float(track.get("displacement_px"))
+            )
+            fit_rms_px = _as_float(kinematics.get("fit_rms_px"))
+        else:
+            speed_px_per_s = None
+            displacement_px = _as_float(track.get("displacement_px"))
+            fit_rms_px = _as_float(track.get("fit_rms_px"))
+        point_records: list[dict[str, Any]] = []
+        for point, residual in zip(valid_points, point_fit_residuals, strict=True):
+            record = dict(point)
+            record["fit_residual_px"] = float(residual) if np.isfinite(residual) else None
+            point_records.append(record)
+        flux_snrs = [_as_float(point.get("flux_snr")) for point in valid_points]
+        candidate_snrs = [_as_float(point.get("candidate_snr")) for point in valid_points]
+        flux_snrs = [value for value in flux_snrs if value is not None]
+        candidate_snrs = [value for value in candidate_snrs if value is not None]
+        result.append(
+            {
+                "track_id": int(track.get("track_id", len(result))),
+                "classification": "moving",
+                "evidence_level": str(track.get("evidence_level", "quality_track")),
+                "presence": len(valid_points),
+                "first_frame": first_index,
+                "last_frame": last_index,
+                "duration_s": duration_s,
+                "displacement_px": displacement_px,
+                "speed_px_per_frame": _as_float(track.get("speed_px_per_frame")),
+                "speed_px_per_s": speed_px_per_s,
+                "velocity_x_px_per_s": _as_float(kinematics.get("velocity_x_px_per_s")),
+                "velocity_y_px_per_s": _as_float(kinematics.get("velocity_y_px_per_s")),
+                "speed_ci95_low_px_per_s": _as_float(kinematics.get("speed_ci95_low_px_per_s")),
+                "speed_ci95_high_px_per_s": _as_float(kinematics.get("speed_ci95_high_px_per_s")),
+                "direction_deg_image": _as_float(kinematics.get("direction_deg_image")),
+                "direction_ci95_half_width_deg": _as_float(kinematics.get("direction_ci95_half_width_deg")),
+                "fit_rms_px": fit_rms_px,
+                "kinematic_model": "constant_velocity_ols_date_obs" if kinematics else None,
+                "uncertainty_method": (
+                    "student_t_95_delta_method_independent_xy"
+                    if kinematics and kinematics.get("t95_critical") is not None
+                    else None
+                ),
+                "fit_degrees_of_freedom": int(kinematics["degrees_of_freedom"]) if kinematics else None,
+                "median_flux_snr": float(np.median(flux_snrs)) if flux_snrs else None,
+                "median_candidate_snr": float(np.median(candidate_snrs)) if candidate_snrs else None,
+                "start_x_px": float(x[0]),
+                "start_y_px": float(y[0]),
+                "end_x_px": float(x[-1]),
+                "end_y_px": float(y[-1]),
+                "fitted_start_x_px": float(kinematics["fitted_x_px"][0]) if kinematics else None,
+                "fitted_start_y_px": float(kinematics["fitted_y_px"][0]) if kinematics else None,
+                "fitted_end_x_px": float(kinematics["fitted_x_px"][-1]) if kinematics else None,
+                "fitted_end_y_px": float(kinematics["fitted_y_px"][-1]) if kinematics else None,
+                "prediction_horizon_s": prediction_horizon_s if kinematics else None,
+                "predicted_x_px": _as_float(kinematics.get("predicted_x_px")),
+                "predicted_y_px": _as_float(kinematics.get("predicted_y_px")),
+                "predicted_x_ci95_half_width_px": _as_float(kinematics.get("predicted_x_ci95_half_width_px")),
+                "predicted_y_ci95_half_width_px": _as_float(kinematics.get("predicted_y_ci95_half_width_px")),
+                "frame_indices": ",".join(str(int(point.get("frame_index", 0)) + 1) for point in valid_points),
+                "points": point_records,
+            }
+        )
+    return result
+
+
 def _motion_audit_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     """规范化逐帧线状筛选计数，并补充面向用户的 1-based 帧号。"""
 
@@ -1240,6 +1374,7 @@ def _build_innovation_report_payload(payload: Mapping[str, Any], json_path: Path
         payload = converted
     frame_rows = _frame_rows(payload, json_path)
     motion_rows = _motion_rows(payload, frame_rows)
+    point_motion_rows = _point_motion_rows(payload, frame_rows)
     motion_audit_rows = _motion_audit_rows(payload)
     intervals = [float(row["interval_s"]) for row in frame_rows if row.get("interval_s") is not None and float(row["interval_s"]) > 0]
     timestamps = [_parse_timestamp(row.get("timestamp")) for row in frame_rows]
@@ -1364,6 +1499,19 @@ def _build_innovation_report_payload(payload: Mapping[str, Any], json_path: Path
             "tracks": motion_rows,
             "frame_audits": motion_audit_rows,
             "note": f"{reference_note} speed_px_per_s 是图像平面速度；三点及以上轨迹附带小样本 OLS 速度、方向和轨迹均值外推的 95% 区间。区间不包含配准系统误差、模型失配或未来单次观测噪声；没有像元尺度/WCS 时不解释为真实天体速度。",
+        },
+        "point_motion": {
+            "track_count": len(point_motion_rows),
+            "moving_count": len(point_motion_rows),
+            "fast_point_motion_count": sum(
+                row.get("evidence_level") == "fast_point_motion" for row in point_motion_rows
+            ),
+            "tracks": point_motion_rows,
+            "note": (
+                "这是逐帧点源关联层的运动证据，与差分图线状 motion 分开统计。"
+                "fast_point_motion 由宽筛候选回到原始 FITS 做通量 SNR、PSF 支持、形状、"
+                "持续性和常速度拟合复核；它是算法候选，不等于人工真值或星表身份。"
+            ),
         },
         "frames": frame_rows,
     }
@@ -1681,11 +1829,16 @@ def _motion_audit_chart(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
     )
 
 
-def _trajectory_chart(path: Path, tracks: Sequence[Mapping[str, Any]]) -> None:
+def _trajectory_chart(
+    path: Path,
+    tracks: Sequence[Mapping[str, Any]],
+    *,
+    title: str = "CROSS-FRAME MOTION · CONSTANT-VELOCITY OLS",
+) -> None:
     image, draw = _chart_canvas()
     font = ImageFont.load_default()
     left, top, right, bottom = 95, 72, image.width - 165, image.height - 78
-    draw.text((left, 22), "CROSS-FRAME MOTION · CONSTANT-VELOCITY OLS", fill="#20293d", font=font)
+    draw.text((left, 22), title, fill="#20293d", font=font)
     moving = [track for track in tracks if track.get("classification") == "moving"]
     candidates = moving or [track for track in tracks if track.get("classification") == "candidate"]
     coords = [
@@ -2031,6 +2184,9 @@ def write_innovation_artifacts(report: Mapping[str, Any], out_dir: str | Path) -
     motion_tracks = report.get("motion", {}).get("tracks", [])
     _write_csv(output / "motion_evidence.csv", motion_tracks, exclude_keys=("points",))
     _write_csv(output / "motion_points_evidence.csv", _motion_point_rows(motion_tracks))
+    point_motion_tracks = report.get("point_motion", {}).get("tracks", [])
+    _write_csv(output / "point_motion_evidence.csv", point_motion_tracks, exclude_keys=("points",))
+    _write_csv(output / "point_motion_points_evidence.csv", _motion_point_rows(point_motion_tracks))
     motion_audits = report.get("motion", {}).get("frame_audits", [])
     _write_csv(output / "motion_frame_audit.csv", motion_audits)
     _motion_audit_chart(output / "motion_frame_audit.png", motion_audits)
@@ -2092,5 +2248,10 @@ def write_innovation_artifacts(report: Mapping[str, Any], out_dir: str | Path) -
     )
     _telemetry_position_chart(output / "telemetry_position.png", telemetry_rows, predictions)
     _trajectory_chart(output / "motion_trajectory.png", report.get("motion", {}).get("tracks", []))
+    _trajectory_chart(
+        output / "point_motion_trajectory.png",
+        point_motion_tracks,
+        title="POINT MOTION EVIDENCE · CONSTANT-VELOCITY OLS",
+    )
     _registered_mosaic(output / "registered_mosaic.png", telemetry_rows)
     return output

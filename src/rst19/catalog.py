@@ -41,12 +41,187 @@ def _optional_bool(value: str | None, *, field: str, row_number: int) -> bool | 
     raise ValueError(f"catalog row {row_number}: invalid {field}={value!r}")
 
 
-def _first_value(row: dict[str, str], names: Iterable[str]) -> str | None:
+def _first_named_value(row: dict[str, str], names: Iterable[str]) -> tuple[str | None, str | None]:
+    """返回第一个非空值及其规范化列名。
+
+    CSV 表头在历史文件中并不总是小写。读取时进行大小写不敏感匹配，
+    但只返回规范化后的列名，避免把表头的写法误当成字段的物理语义。
+    """
+
+    folded: dict[str, str | None] = {}
+    for raw_name, value in row.items():
+        if raw_name is None:
+            continue
+        folded.setdefault(str(raw_name).strip().lower(), value)
     for name in names:
+        canonical_name = str(name).strip().lower()
         value = row.get(name)
-        if value is not None and value.strip():
-            return value
-    return None
+        if value is None or not str(value).strip():
+            value = folded.get(canonical_name)
+        if value is not None and str(value).strip():
+            return canonical_name, str(value).strip()
+    return None, None
+
+
+def _first_value(row: dict[str, str], names: Iterable[str]) -> str | None:
+    """返回第一个非空值，并兼容大小写不同的历史 CSV 表头。"""
+
+    return _first_named_value(row, names)[1]
+
+
+def _canonical_extinction_band(value: str | None) -> str:
+    if value is None or not str(value).strip():
+        return "unknown"
+    text = str(value).strip()
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in {"g", "gaiag", "gaiadr3g"}:
+        return "G"
+    if key in {"v", "johnsonv", "johnsoncousinsv"}:
+        return "V"
+    if key in {"a0", "azero", "a05414nm", "5414nm"}:
+        return "A0(541.4 nm)"
+    if key in {"unknown", "unk", "na", "n/a", "none"}:
+        return "unknown"
+    return text
+
+
+def _canonical_extinction_system(value: str | None) -> str:
+    if value is None or not str(value).strip():
+        return "unknown"
+    text = str(value).strip()
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in {"gaia", "gaiavega", "gaiadr3", "gaiadr3vega"}:
+        return "Gaia"
+    if key in {"johnson", "johnsonv", "johnsoncousins", "johnsoncousinsv"}:
+        return "Johnson"
+    if key in {"monochromatic", "monochromatic5414nm", "a0"}:
+        return "monochromatic"
+    if key in {"unknown", "unk", "na", "none"}:
+        return "unknown"
+    return text
+
+
+_EXTINCTION_VALUE_FIELDS = (
+    "ag_gspphot",
+    "azero_gspphot",
+    "a0_gspphot",
+    "a0",
+    "azero",
+    "a_v",
+    "av",
+    "a_band",
+    "a_g",
+    "ag",
+    "extinction_mag",
+)
+
+
+def _extinction_field_kind(field: str | None) -> str:
+    if field == "ag_gspphot":
+        return "gaia_g"
+    if field in {"azero_gspphot", "a0_gspphot", "a0", "azero"}:
+        return "a0"
+    if field in {"a_v", "av"}:
+        return "johnson_v"
+    return "unknown"
+
+
+def _inferred_extinction_semantics(field: str | None) -> tuple[str, str, str]:
+    if field == "ag_gspphot":
+        return "G", "Gaia", "Gaia DR3 GSP-Phot: ag_gspphot"
+    if field in {"azero_gspphot", "a0_gspphot"}:
+        return "A0(541.4 nm)", "monochromatic", f"Gaia DR3 GSP-Phot: {field}"
+    if field in {"a0", "azero"}:
+        return "A0(541.4 nm)", "monochromatic", f"CSV column: {field}"
+    if field in {"a_v", "av"}:
+        return "V", "Johnson", f"CSV column: {field}"
+    if field is not None:
+        return "unknown", "unknown", f"CSV column: {field}"
+    return "unknown", "unknown", "unknown"
+
+
+def _numeric_values_equal(left: str, right: str) -> bool:
+    try:
+        left_value = float(left)
+        right_value = float(right)
+    except (TypeError, ValueError):
+        return left.strip() == right.strip()
+    return math.isfinite(left_value) and math.isfinite(right_value) and math.isclose(
+        left_value, right_value, rel_tol=1e-9, abs_tol=1e-12
+    )
+
+
+def _resolve_extinction_semantics(
+    row: dict[str, str],
+    *,
+    row_number: int,
+) -> tuple[str | None, str | None, str, str, str]:
+    """解析消光值及其 provenance，拒绝互相冲突的已知列。
+
+    ``extinction_mag``、``a_band``、``a_g`` 和 ``ag`` 都是兼容性别名，
+    本身不能证明波段。只有字段名明确指向 Gaia GSP-Phot、A_V 或 A0
+    时才推断语义；显式的 ``extinction_*`` 元数据可以为通用值补充语义。
+    """
+
+    present: list[tuple[str, str]] = []
+    for field in _EXTINCTION_VALUE_FIELDS:
+        value = _first_value(row, (field,))
+        if value is not None:
+            present.append((field, value))
+    selected_field, selected_value = (present[0] if present else (None, None))
+    explicit_band = _first_value(row, ("extinction_band", "ext_band", "extinction_passband"))
+    explicit_system = _first_value(
+        row,
+        ("extinction_system", "extinction_photometric_system", "ext_system"),
+    )
+    explicit_source = _first_value(
+        row,
+        ("extinction_source", "extinction_provenance", "ext_source"),
+    )
+
+    known_kinds = {_extinction_field_kind(field) for field, _ in present}
+    known_kinds.discard("unknown")
+    if len(known_kinds) > 1:
+        fields = ", ".join(field for field, _ in present)
+        raise ValueError(
+            f"catalog row {row_number}: conflicting extinction columns ({fields}); "
+            "provide one extinction value with explicit semantics"
+        )
+
+    # A Gaia export contains both the source-specific ag_gspphot column and
+    # the historical extinction_mag alias.  Permit that compatibility pair
+    # only when their values agree; never silently choose between differing
+    # values.
+    if selected_field is not None and _extinction_field_kind(selected_field) != "unknown":
+        selected_kind = _extinction_field_kind(selected_field)
+        for field, value in present[1:]:
+            kind = _extinction_field_kind(field)
+            if kind == "unknown" and not _numeric_values_equal(selected_value or "", value):
+                raise ValueError(
+                    f"catalog row {row_number}: extinction column {field} conflicts with "
+                    f"{selected_field}"
+                )
+            if kind not in {"unknown", selected_kind}:
+                raise ValueError(
+                    f"catalog row {row_number}: extinction column {field} conflicts with "
+                    f"{selected_field}"
+                )
+
+    inferred_band, inferred_system, inferred_source = _inferred_extinction_semantics(selected_field)
+    band = _canonical_extinction_band(explicit_band) if explicit_band is not None else inferred_band
+    system = _canonical_extinction_system(explicit_system) if explicit_system is not None else inferred_system
+    if explicit_band is not None and inferred_band != "unknown":
+        if _canonical_extinction_band(explicit_band) != _canonical_extinction_band(inferred_band):
+            raise ValueError(
+                f"catalog row {row_number}: extinction_band={explicit_band!r} conflicts with {selected_field}"
+            )
+    if explicit_system is not None and inferred_system != "unknown":
+        if _canonical_extinction_system(explicit_system) != _canonical_extinction_system(inferred_system):
+            raise ValueError(
+                f"catalog row {row_number}: extinction_system={explicit_system!r} conflicts with {selected_field}"
+            )
+    source = str(explicit_source).strip() if explicit_source is not None else inferred_source
+    return selected_field, selected_value, band, system, source or "unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +269,12 @@ class CatalogSource:
     duplicated_source: bool | None = None
     visibility_periods_used: int | None = None
     phot_variable_flag: str | None = None
+    # Extinction provenance is separate from the historical numeric alias
+    # ``extinction_mag``.  ``unknown`` is intentional: an old generic CSV
+    # column must not be silently interpreted as Gaia G or Johnson V.
+    extinction_band: str = "unknown"
+    extinction_system: str = "unknown"
+    extinction_source: str = "unknown"
 
     def __post_init__(self) -> None:
         if not self.source_id:
@@ -142,6 +323,10 @@ class CatalogSource:
             raise ValueError("duplicated_source must be a boolean or None")
         if self.phot_variable_flag is not None and not str(self.phot_variable_flag).strip():
             raise ValueError("phot_variable_flag cannot be empty when provided")
+        object.__setattr__(self, "extinction_band", _canonical_extinction_band(self.extinction_band))
+        object.__setattr__(self, "extinction_system", _canonical_extinction_system(self.extinction_system))
+        extinction_source = "unknown" if self.extinction_source is None else str(self.extinction_source).strip()
+        object.__setattr__(self, "extinction_source", extinction_source or "unknown")
         for name, value in (
             ("distance_pc", self.distance_pc),
             ("distance_lower_pc", self.distance_lower_pc),
@@ -158,6 +343,34 @@ class CatalogSource:
             raise ValueError(f"catalog declination out of range: {self.dec_deg}")
         if not -360.0 <= self.ra_deg <= 360.0:
             raise ValueError(f"catalog right ascension out of range: {self.ra_deg}")
+        if self.extinction_compatibility() == "mismatch":
+            raise ValueError(
+                f"catalog source {self.source_id!r} has extinction semantics "
+                f"({self.extinction_system}/{self.extinction_band}) incompatible with "
+                f"photometry ({self.photometric_system}/{self.photometric_band})"
+            )
+
+    def extinction_compatibility(self) -> str:
+        """返回消光与源光度元数据的兼容性。
+
+        返回值为 ``compatible``、``mismatch``、``unknown`` 或
+        ``not_applicable``。未知语义不会被升级为兼容；这让旧 CSV 可以
+        继续读取，同时为需要严格绝对星等的调用方提供安全门控。
+        """
+
+        if self.extinction_mag is None:
+            return "not_applicable"
+        extinction_band = _canonical_extinction_band(self.extinction_band)
+        photometric_band = _canonical_extinction_band(self.photometric_band)
+        if extinction_band == "unknown" or photometric_band == "unknown":
+            return "unknown"
+        if extinction_band != photometric_band:
+            return "mismatch"
+        extinction_system = _canonical_extinction_system(self.extinction_system)
+        photometric_system = _canonical_extinction_system(self.photometric_system)
+        if extinction_system == "unknown" or photometric_system == "unknown":
+            return "unknown"
+        return "compatible" if extinction_system == photometric_system else "mismatch"
 
     def at_epoch(self, epoch: float | None) -> "CatalogSource":
         """将自行线性传播到指定 Julian 年，返回新对象。"""
@@ -196,6 +409,9 @@ class CatalogSource:
             duplicated_source=self.duplicated_source,
             visibility_periods_used=self.visibility_periods_used,
             phot_variable_flag=self.phot_variable_flag,
+            extinction_band=self.extinction_band,
+            extinction_system=self.extinction_system,
+            extinction_source=self.extinction_source,
         )
 
     def as_dict(self) -> dict[str, object]:
@@ -227,6 +443,9 @@ class CatalogSource:
             "duplicated_source": self.duplicated_source,
             "visibility_periods_used": self.visibility_periods_used,
             "phot_variable_flag": self.phot_variable_flag,
+            "extinction_band": self.extinction_band,
+            "extinction_system": self.extinction_system,
+            "extinction_source": self.extinction_source,
         }
 
 
@@ -307,12 +526,16 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
                 field="parallax_error_mas",
                 row_number=row_number,
             )
+            (
+                extinction_field,
+                extinction_value,
+                extinction_band,
+                extinction_system,
+                extinction_source,
+            ) = _resolve_extinction_semantics(row, row_number=row_number)
             extinction_mag = _optional_float(
-                _first_value(
-                    row,
-                    ("extinction_mag", "ag_gspphot", "a_band", "a_g", "ag", "a_v", "av"),
-                ),
-                field="extinction_mag",
+                extinction_value,
+                field=extinction_field or "extinction_mag",
                 row_number=row_number,
             )
             extinction_error_mag = _optional_float(
@@ -321,8 +544,14 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
                     (
                         "extinction_error_mag",
                         "ag_gspphot_error",
+                        "azero_gspphot_error",
+                        "a0_gspphot_error",
+                        "a0_error",
+                        "azero_error",
                         "extinction_error",
                         "a_band_error",
+                        "a_v_error",
+                        "av_error",
                     ),
                 ),
                 field="extinction_error_mag",
@@ -378,8 +607,8 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
                 catalog_name = catalog_name or "Gaia DR3"
                 photometric_system = photometric_system or "Gaia Vega"
                 photometric_band = photometric_band or "G"
-            sources.append(
-                CatalogSource(
+            try:
+                source = CatalogSource(
                     source_id=source_id,
                     ra_deg=ra,
                     dec_deg=dec,
@@ -407,6 +636,11 @@ def load_catalog_csv(path: str | Path) -> tuple[CatalogSource, ...]:
                     duplicated_source=duplicated_source,
                     visibility_periods_used=visibility_periods_used,
                     phot_variable_flag=phot_variable_flag,
+                    extinction_band=extinction_band,
+                    extinction_system=extinction_system,
+                    extinction_source=extinction_source,
                 )
-            )
+            except ValueError as exc:
+                raise ValueError(f"catalog row {row_number}: {exc}") from exc
+            sources.append(source)
     return tuple(sources)

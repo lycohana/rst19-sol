@@ -105,6 +105,9 @@ def _matched_catalog(
         parallax_error_mas=parallax_error_mas,
         extinction_mag=extinction_mag,
         extinction_error_mag=0.03 if extinction_mag is not None else None,
+        extinction_band="G" if extinction_mag is not None else "unknown",
+        extinction_system="Gaia" if extinction_mag is not None else "unknown",
+        extinction_source=("Gaia DR3 GSP-Phot: ag_gspphot" if extinction_mag is not None else "unknown"),
     )
     match = CatalogMatch(
         detection_id=detection.detection_id,

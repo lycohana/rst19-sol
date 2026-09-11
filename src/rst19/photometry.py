@@ -89,6 +89,9 @@ def _absolute_unavailable(
     distance_source: str | None = None,
     distance_lower_pc: float | None = None,
     distance_upper_pc: float | None = None,
+    extinction_band: str | None = None,
+    extinction_system: str | None = None,
+    extinction_source: str | None = None,
 ) -> "AbsoluteMagnitudeEstimate":
     """Build a non-numeric absolute-magnitude result for a failed quality gate."""
 
@@ -103,6 +106,9 @@ def _absolute_unavailable(
         distance_source=distance_source,
         distance_lower_pc=distance_lower_pc,
         distance_upper_pc=distance_upper_pc,
+        extinction_band=extinction_band,
+        extinction_system=extinction_system,
+        extinction_source=extinction_source,
     )
 
 
@@ -281,6 +287,14 @@ class AbsoluteMagnitudeEstimate:
     distance_source: str | None = None
     distance_lower_pc: float | None = None
     distance_upper_pc: float | None = None
+    # Extinction provenance is optional for the generic APIs.  ``None`` means
+    # that the caller did not declare a band/system; it must never be guessed
+    # from the numeric value alone.  Catalog-backed results copy the explicit
+    # fields from CatalogSource so the calculation remains auditable after
+    # serialization.
+    extinction_band: str | None = None
+    extinction_system: str | None = None
+    extinction_source: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -294,6 +308,9 @@ class AbsoluteMagnitudeEstimate:
             "distance_source": self.distance_source,
             "distance_lower_pc": self.distance_lower_pc,
             "distance_upper_pc": self.distance_upper_pc,
+            "extinction_band": self.extinction_band,
+            "extinction_system": self.extinction_system,
+            "extinction_source": self.extinction_source,
         }
 
 
@@ -1008,6 +1025,9 @@ def absolute_magnitude_estimate_from_parallax(
     extinction_error_mag: float | None = None,
     parallax_zero_point_mas: float = 0.0,
     max_fractional_parallax_error: float = 0.2,
+    extinction_band: str | None = None,
+    extinction_system: str | None = None,
+    extinction_source: str | None = None,
 ) -> AbsoluteMagnitudeEstimate:
     """在质量门控下由表观星等和视差估计绝对星等。
 
@@ -1040,6 +1060,9 @@ def absolute_magnitude_estimate_from_parallax(
                 extinction_mag=extinction_mag,
                 status="INVALID_EXTINCTION",
                 flags=("NEGATIVE_EXTINCTION",),
+                extinction_band=extinction_band,
+                extinction_system=extinction_system,
+                extinction_source=extinction_source,
             )
     corrected_parallax = float(parallax_mas) - float(parallax_zero_point_mas)
     if corrected_parallax <= 0:
@@ -1049,6 +1072,9 @@ def absolute_magnitude_estimate_from_parallax(
             extinction_mag=extinction_mag,
             status="INVALID_PARALLAX",
             flags=("NON_POSITIVE_CORRECTED_PARALLAX",),
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
 
     distance_pc = 1000.0 / corrected_parallax
@@ -1062,6 +1088,9 @@ def absolute_magnitude_estimate_from_parallax(
             extinction_mag=extinction_mag,
             status="NO_PARALLAX_ERROR",
             flags=tuple(flags),
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
     if not math.isfinite(float(parallax_error_mas)) or parallax_error_mas < 0:
         raise ValueError("parallax_error_mas must be finite and non-negative")
@@ -1076,6 +1105,9 @@ def absolute_magnitude_estimate_from_parallax(
             extinction_mag=extinction_mag,
             status="LOW_PARALLAX_SNR",
             flags=tuple(flags),
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
 
     # A distance estimate without an extinction estimate is not a strict
@@ -1088,6 +1120,9 @@ def absolute_magnitude_estimate_from_parallax(
             extinction_mag=None,
             status="VALID_NO_EXTINCTION",
             flags=("EXTINCTION_NOT_PROVIDED",),
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
 
     value = float(apparent_magnitude) - 5.0 * math.log10(distance_pc / 10.0) - float(extinction_mag)
@@ -1109,6 +1144,9 @@ def absolute_magnitude_estimate_from_parallax(
         status="VALID" if extinction_mag is not None else "VALID_NO_EXTINCTION",
         flags=tuple(flags),
         distance_source="parallax",
+        extinction_band=extinction_band,
+        extinction_system=extinction_system,
+        extinction_source=extinction_source,
     )
 
 
@@ -1122,6 +1160,9 @@ def absolute_magnitude_estimate_from_distance(
     apparent_magnitude_error: float | None = None,
     extinction_error_mag: float | None = None,
     distance_source: str | None = None,
+    extinction_band: str | None = None,
+    extinction_system: str | None = None,
+    extinction_source: str | None = None,
 ) -> AbsoluteMagnitudeEstimate:
     """Use an external/model distance posterior to estimate absolute magnitude.
 
@@ -1157,6 +1198,9 @@ def absolute_magnitude_estimate_from_distance(
                 distance_source=distance_source,
                 distance_lower_pc=lower,
                 distance_upper_pc=upper,
+                extinction_band=extinction_band,
+                extinction_system=extinction_system,
+                extinction_source=extinction_source,
             )
     for name, value in (
         ("apparent_magnitude_error", apparent_magnitude_error),
@@ -1174,6 +1218,9 @@ def absolute_magnitude_estimate_from_distance(
             distance_source=distance_source,
             distance_lower_pc=distance_lower_pc,
             distance_upper_pc=distance_upper_pc,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
     if not math.isfinite(float(extinction_mag)):
         raise ValueError("extinction_mag must be finite when provided")
@@ -1187,6 +1234,9 @@ def absolute_magnitude_estimate_from_distance(
             distance_source=distance_source,
             distance_lower_pc=distance_lower_pc,
             distance_upper_pc=distance_upper_pc,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
 
     value = float(apparent_magnitude) - 5.0 * math.log10(float(distance_pc) / 10.0) - float(extinction_mag)
@@ -1222,7 +1272,33 @@ def absolute_magnitude_estimate_from_distance(
         distance_source=distance_source,
         distance_lower_pc=(float(distance_lower_pc) if distance_lower_pc is not None else None),
         distance_upper_pc=(float(distance_upper_pc) if distance_upper_pc is not None else None),
+        extinction_band=extinction_band,
+        extinction_system=extinction_system,
+        extinction_source=extinction_source,
     )
+
+
+def _catalog_extinction_gate(source: CatalogSource) -> tuple[str, tuple[str, ...]] | None:
+    """Return an explicit failure for catalog extinction with unsafe semantics.
+
+    The generic distance/parallax helpers intentionally accept a bare numeric
+    extinction for backward compatibility.  A ``CatalogSource`` is different:
+    its numeric extinction is provenance-bearing input, so it must agree with
+    the source's declared photometric system and band before it can enter the
+    strict catalog-backed path.  ``CatalogSource.extinction_compatibility`` is
+    the single source of truth for aliases such as Gaia Vega/Gaia G.
+    """
+
+    if source.extinction_mag is None:
+        return None
+    compatibility = source.extinction_compatibility()
+    if compatibility == "compatible":
+        return None
+    if compatibility == "mismatch":
+        return "EXTINCTION_BAND_MISMATCH", ("EXTINCTION_BAND_MISMATCH",)
+    # ``unknown`` and an unexpected value are both unsafe: accepting either
+    # would turn an unlabelled A0/A_V/custom-band value into a guessed A_G.
+    return "EXTINCTION_SEMANTICS_REQUIRED", ("EXTINCTION_SEMANTICS_REQUIRED",)
 
 
 def absolute_magnitude_from_catalog(
@@ -1246,6 +1322,10 @@ def absolute_magnitude_from_catalog(
     防止把 Gaia G 的距离信息挂到 V 波段的表观星等上。
     """
 
+    extinction_band = getattr(source, "extinction_band", None)
+    extinction_system = getattr(source, "extinction_system", None)
+    extinction_source = getattr(source, "extinction_source", None)
+
     if (required_photometric_system is None) != (required_photometric_band is None):
         return _absolute_unavailable(
             corrected_parallax_mas=None,
@@ -1253,6 +1333,9 @@ def absolute_magnitude_from_catalog(
             extinction_mag=source.extinction_mag,
             status="PHOTOMETRIC_METADATA_REQUIRED",
             flags=("PHOTOMETRIC_SYSTEM_AND_BAND_REQUIRED",),
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
     if required_photometric_system is not None and not _photometric_metadata_matches(
         required_photometric_system,
@@ -1266,7 +1349,32 @@ def absolute_magnitude_from_catalog(
             extinction_mag=source.extinction_mag,
             status="PHOTOMETRIC_METADATA_MISMATCH",
             flags=("CATALOG_BAND_DOES_NOT_MATCH_CALIBRATION",),
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
+
+    # A bare ``absolute_magnitude_from_catalog(source)`` call is a legacy
+    # diagnostic API and does not establish which photometric system/band the
+    # caller intends to use.  Apply the extinction compatibility gate only on
+    # the strict, explicitly declared photometric path; otherwise an old
+    # caller with a numeric but unlabelled extinction would unexpectedly stop
+    # working.  The partial-metadata case has already returned above and can
+    # never produce a strict value.
+    if required_photometric_system is not None and required_photometric_band is not None:
+        extinction_failure = _catalog_extinction_gate(source)
+        if extinction_failure is not None:
+            status, flags = extinction_failure
+            return _absolute_unavailable(
+                corrected_parallax_mas=None,
+                distance_pc=None,
+                extinction_mag=source.extinction_mag,
+                status=status,
+                flags=flags,
+                extinction_band=extinction_band,
+                extinction_system=extinction_system,
+                extinction_source=extinction_source,
+            )
 
     magnitude_from_catalog = apparent_magnitude is None
     magnitude = source.magnitude if magnitude_from_catalog else apparent_magnitude
@@ -1279,6 +1387,9 @@ def absolute_magnitude_from_catalog(
             extinction_mag=source.extinction_mag,
             status="NO_APPARENT_MAGNITUDE",
             flags=("NO_CATALOG_MAGNITUDE",),
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
     magnitude_error = (
         source.magnitude_error
@@ -1296,6 +1407,9 @@ def absolute_magnitude_from_catalog(
                 extinction_mag=source.extinction_mag,
                 status="NO_PARALLAX",
                 flags=("NO_DISTANCE",),
+                extinction_band=extinction_band,
+                extinction_system=extinction_system,
+                extinction_source=extinction_source,
             )
         if source.distance_source is None:
             return _absolute_unavailable(
@@ -1306,6 +1420,9 @@ def absolute_magnitude_from_catalog(
                 flags=("DISTANCE_SOURCE_REQUIRED",),
                 distance_lower_pc=source.distance_lower_pc,
                 distance_upper_pc=source.distance_upper_pc,
+                extinction_band=extinction_band,
+                extinction_system=extinction_system,
+                extinction_source=extinction_source,
             )
         estimate = absolute_magnitude_estimate_from_distance(
             float(magnitude),
@@ -1316,6 +1433,9 @@ def absolute_magnitude_from_catalog(
             apparent_magnitude_error=magnitude_error,
             extinction_error_mag=source.extinction_error_mag,
             distance_source=source.distance_source,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
         if fallback_from_parallax:
             estimate = replace(
@@ -1336,6 +1456,9 @@ def absolute_magnitude_from_catalog(
             extinction_error_mag=source.extinction_error_mag,
             parallax_zero_point_mas=parallax_zero_point_mas,
             max_fractional_parallax_error=max_fractional_parallax_error,
+            extinction_band=extinction_band,
+            extinction_system=extinction_system,
+            extinction_source=extinction_source,
         )
         if parallax_estimate.value is not None or source.distance_pc is None:
             return replace(

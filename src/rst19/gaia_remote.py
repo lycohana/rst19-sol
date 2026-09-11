@@ -85,6 +85,9 @@ CATALOG_COMPAT_COLUMNS = (
     "distance_source",
     "extinction_mag",
     "extinction_error_mag",
+    "extinction_band",
+    "extinction_system",
+    "extinction_source",
     "catalog_name",
     "photometric_system",
     "photometric_band",
@@ -138,6 +141,21 @@ _NUMERIC_RESPONSE_COLUMNS = (
     "ag_gspphot_lower",
     "ag_gspphot_upper",
     "ebpminrp_gspphot",
+    # Optional semantic extinction columns are accepted when a local CSV or
+    # JSON proxy supplies them.  They are not required in the Gaia cone query
+    # because the standard query uses ag_gspphot as the G-band value.
+    "azero_gspphot",
+    "azero_gspphot_lower",
+    "azero_gspphot_upper",
+    "a0_gspphot",
+    "a0",
+    "azero",
+    "a_v",
+    "av",
+    "a_band",
+    "a_g",
+    "ag",
+    "extinction_mag",
 )
 
 
@@ -544,6 +562,191 @@ def _finite_cell_number(value: str, *, field: str, row_number: int, response_for
     return parsed
 
 
+_EXTINCTION_VALUE_FIELDS = (
+    "ag_gspphot",
+    "azero_gspphot",
+    "a0_gspphot",
+    "a0",
+    "azero",
+    "a_v",
+    "av",
+    "a_band",
+    "a_g",
+    "ag",
+    "extinction_mag",
+)
+
+
+def _first_response_value(row: Mapping[str, str], names: Iterable[str]) -> tuple[str | None, str | None]:
+    for name in names:
+        value = row.get(name, "")
+        if value is not None and str(value).strip():
+            return name, str(value).strip()
+    return None, None
+
+
+def _canonical_extinction_band(value: str | None) -> str:
+    if value is None or not str(value).strip():
+        return "unknown"
+    text = str(value).strip()
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in {"g", "gaiag", "gaiadr3g"}:
+        return "G"
+    if key in {"v", "johnsonv", "johnsoncousinsv"}:
+        return "V"
+    if key in {"a0", "azero", "a05414nm", "5414nm"}:
+        return "A0(541.4 nm)"
+    if key in {"unknown", "unk", "na", "none"}:
+        return "unknown"
+    return text
+
+
+def _canonical_extinction_system(value: str | None) -> str:
+    if value is None or not str(value).strip():
+        return "unknown"
+    text = str(value).strip()
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in {"gaia", "gaiavega", "gaiadr3", "gaiadr3vega"}:
+        return "Gaia"
+    if key in {"johnson", "johnsonv", "johnsoncousins", "johnsoncousinsv"}:
+        return "Johnson"
+    if key in {"monochromatic", "monochromatic5414nm", "a0"}:
+        return "monochromatic"
+    if key in {"unknown", "unk", "na", "none"}:
+        return "unknown"
+    return text
+
+
+def _extinction_field_kind(field: str | None) -> str:
+    if field == "ag_gspphot":
+        return "gaia_g"
+    if field in {"azero_gspphot", "a0_gspphot", "a0", "azero"}:
+        return "a0"
+    if field in {"a_v", "av"}:
+        return "johnson_v"
+    return "unknown"
+
+
+def _inferred_extinction_semantics(field: str | None) -> tuple[str, str, str]:
+    if field == "ag_gspphot":
+        return "G", "Gaia", "Gaia DR3 GSP-Phot: ag_gspphot"
+    if field in {"azero_gspphot", "a0_gspphot"}:
+        return "A0(541.4 nm)", "monochromatic", f"Gaia DR3 GSP-Phot: {field}"
+    if field in {"a0", "azero"}:
+        return "A0(541.4 nm)", "monochromatic", f"response column: {field}"
+    if field in {"a_v", "av"}:
+        return "V", "Johnson", f"response column: {field}"
+    if field is not None:
+        return "unknown", "unknown", f"response column: {field}"
+    return "unknown", "unknown", "unknown"
+
+
+def _numeric_values_equal(left: str, right: str) -> bool:
+    try:
+        left_value = float(left)
+        right_value = float(right)
+    except (TypeError, ValueError):
+        return left.strip() == right.strip()
+    return math.isfinite(left_value) and math.isfinite(right_value) and math.isclose(
+        left_value, right_value, rel_tol=1e-9, abs_tol=1e-12
+    )
+
+
+def _resolve_extinction_semantics(
+    row: Mapping[str, str],
+    *,
+    row_number: int,
+    response_format: str,
+) -> tuple[str | None, str | None, str, str, str]:
+    """保留 Gaia/代理响应中的消光波段、系统和来源。
+
+    具体字段优先于历史 ``extinction_mag`` 别名；通用别名本身不会被
+    推断为 Gaia G。若响应同时携带了互相冲突的已知消光字段，则拒绝
+    该行，避免在 JSON/CSV 归一化时悄悄覆盖物理语义。
+    """
+
+    present = [
+        (field, value)
+        for field in _EXTINCTION_VALUE_FIELDS
+        for actual_field, value in [_first_response_value(row, (field,))]
+        if actual_field is not None and value is not None
+    ]
+    selected_field, selected_value = present[0] if present else (None, None)
+    explicit_band = _first_response_value(
+        row, ("extinction_band", "ext_band", "extinction_passband")
+    )[1]
+    explicit_system = _first_response_value(
+        row, ("extinction_system", "extinction_photometric_system", "ext_system")
+    )[1]
+    explicit_source = _first_response_value(
+        row, ("extinction_source", "extinction_provenance", "ext_source")
+    )[1]
+
+    known_kinds = {_extinction_field_kind(field) for field, _ in present}
+    known_kinds.discard("unknown")
+    if len(known_kinds) > 1:
+        fields = ", ".join(field for field, _ in present)
+        raise GaiaResponseError(
+            f"Gaia {response_format} row {row_number}: conflicting extinction columns ({fields})"
+        )
+    if selected_field is not None and _extinction_field_kind(selected_field) != "unknown":
+        selected_kind = _extinction_field_kind(selected_field)
+        for field, value in present[1:]:
+            kind = _extinction_field_kind(field)
+            if kind == "unknown" and not _numeric_values_equal(selected_value or "", value):
+                raise GaiaResponseError(
+                    f"Gaia {response_format} row {row_number}: extinction column {field} conflicts with "
+                    f"{selected_field}"
+                )
+            if kind not in {"unknown", selected_kind}:
+                raise GaiaResponseError(
+                    f"Gaia {response_format} row {row_number}: extinction column {field} conflicts with "
+                    f"{selected_field}"
+                )
+
+    inferred_band, inferred_system, inferred_source = _inferred_extinction_semantics(selected_field)
+    band = _canonical_extinction_band(explicit_band) if explicit_band is not None else inferred_band
+    system = _canonical_extinction_system(explicit_system) if explicit_system is not None else inferred_system
+    if explicit_band is not None and inferred_band != "unknown":
+        if _canonical_extinction_band(explicit_band) != _canonical_extinction_band(inferred_band):
+            raise GaiaResponseError(
+                f"Gaia {response_format} row {row_number}: extinction_band={explicit_band!r} conflicts with "
+                f"{selected_field}"
+            )
+    if explicit_system is not None and inferred_system != "unknown":
+        if _canonical_extinction_system(explicit_system) != _canonical_extinction_system(inferred_system):
+            raise GaiaResponseError(
+                f"Gaia {response_format} row {row_number}: extinction_system={explicit_system!r} conflicts with "
+                f"{selected_field}"
+            )
+    source = str(explicit_source).strip() if explicit_source is not None else inferred_source
+    return selected_field, selected_value, band, system, source or "unknown"
+
+
+def _extinction_error_fields(field: str | None) -> tuple[str, ...]:
+    if field == "ag_gspphot":
+        return ("ag_gspphot_error", "ag_error")
+    if field in {"azero_gspphot", "a0_gspphot"}:
+        return (f"{field}_error", "azero_error", "a0_error")
+    if field in {"a0", "azero"}:
+        return (f"{field}_error", "a0_error", "azero_error")
+    if field in {"a_v", "av"}:
+        return (f"{field}_error", "a_v_error", "av_error")
+    if field is not None:
+        return (f"{field}_error",)
+    return ()
+
+
+def _extinction_bound_fields(field: str | None) -> tuple[str | None, str | None]:
+    if field == "ag_gspphot":
+        return "ag_gspphot_lower", "ag_gspphot_upper"
+    if field in {"azero_gspphot", "a0_gspphot"}:
+        return f"{field}_lower", f"{field}_upper"
+    if field in {"a0", "azero", "a_v", "av", "a_band", "a_g", "ag", "extinction_mag"}:
+        return f"{field}_lower", f"{field}_upper"
+    return None, None
+
+
 def _normalise_rows(
     headers: Iterable[str],
     records: Iterable[Mapping[str, object]],
@@ -625,15 +828,44 @@ def _normalise_rows(
         output["distance_source"] = (
             "Gaia DR3 GSP-Phot" if row.get("distance_gspphot", "") else ""
         )
-        output["extinction_mag"] = row.get("ag_gspphot", "")
-        ag_lower = parsed_numbers["ag_gspphot_lower"]
-        ag_upper = parsed_numbers["ag_gspphot_upper"]
-        if ag_lower is not None and ag_upper is not None and ag_upper >= ag_lower:
-            # Gaia publishes 16th/84th percentiles. This compact half-width
-            # is a local uncertainty summary, not an official Gaia column.
-            output["extinction_error_mag"] = _format_adql_float(0.5 * (ag_upper - ag_lower))
+        (
+            extinction_field,
+            extinction_value,
+            extinction_band,
+            extinction_system,
+            extinction_source,
+        ) = _resolve_extinction_semantics(
+            row,
+            row_number=row_number,
+            response_format=response_format,
+        )
+        output["extinction_mag"] = extinction_value or ""
+        error_field, error_value = _first_response_value(
+            row,
+            ("extinction_error_mag", *_extinction_error_fields(extinction_field)),
+        )
+        if error_value is not None:
+            _finite_cell_number(
+                error_value,
+                field=error_field or "extinction_error_mag",
+                row_number=row_number,
+                response_format=response_format,
+            )
+            output["extinction_error_mag"] = error_value
         else:
-            output["extinction_error_mag"] = ""
+            lower_field, upper_field = _extinction_bound_fields(extinction_field)
+            lower = parsed_numbers.get(lower_field) if lower_field is not None else None
+            upper = parsed_numbers.get(upper_field) if upper_field is not None else None
+            if lower is not None and upper is not None and upper >= lower:
+                # Gaia publishes 16th/84th percentiles. This compact
+                # half-width is a local uncertainty summary, not an official
+                # Gaia column.
+                output["extinction_error_mag"] = _format_adql_float(0.5 * (upper - lower))
+            else:
+                output["extinction_error_mag"] = ""
+        output["extinction_band"] = extinction_band
+        output["extinction_system"] = extinction_system
+        output["extinction_source"] = extinction_source
         output["phot_g_mean_flux_over_error"] = row.get("phot_g_mean_flux_over_error", "")
         output["phot_bp_rp_excess_factor"] = row.get("phot_bp_rp_excess_factor", "")
         output["ruwe"] = row.get("ruwe", "")

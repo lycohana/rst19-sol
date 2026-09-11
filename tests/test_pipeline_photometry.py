@@ -72,6 +72,9 @@ def test_analyze_frame_wires_catalog_matching_calibration_and_absolute_magnitude
                 parallax_error_mas=0.1,
                 extinction_mag=0.2,
                 extinction_error_mag=0.03,
+                extinction_band="G",
+                extinction_system="Gaia",
+                extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
             )
         )
 

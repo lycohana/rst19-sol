@@ -152,6 +152,9 @@ def test_analysis_cache_round_trips_photometry_layers(tmp_path: Path) -> None:
         distance_source="parallax",
         distance_lower_pc=98.0,
         distance_upper_pc=102.0,
+        extinction_band="G",
+        extinction_system="Gaia",
+        extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
     )
     row = SourcePhotometry(
         detection_id=0,
@@ -196,8 +199,11 @@ def test_analysis_cache_round_trips_photometry_layers(tmp_path: Path) -> None:
         radius_px=3.0,
         assignment_mode="global",
     )
+    base_analysis = _analysis(frame)
+    assert base_analysis.faintest is not None
     analysis = replace(
-        _analysis(frame),
+        base_analysis,
+        faintest=replace(base_analysis.faintest, absolute_magnitude=absolute),
         matching=matching,
         photometric_calibration=calibration,
         source_photometry=(row,),
@@ -217,6 +223,47 @@ def test_analysis_cache_round_trips_photometry_layers(tmp_path: Path) -> None:
     assert restored.source_photometry[0].absolute_magnitude.distance_source == "parallax"
     assert restored.source_photometry[0].absolute_magnitude.distance_lower_pc == 98.0
     assert restored.source_photometry[0].absolute_magnitude.distance_upper_pc == 102.0
+    assert restored.source_photometry[0].absolute_magnitude.extinction_band == "G"
+    assert restored.source_photometry[0].absolute_magnitude.extinction_system == "Gaia"
+    assert (
+        restored.source_photometry[0].absolute_magnitude.extinction_source
+        == "Gaia DR3 GSP-Phot: ag_gspphot"
+    )
+    assert restored.faintest is not None
+    assert restored.faintest.absolute_magnitude is not None
+    assert restored.faintest.absolute_magnitude.extinction_band == "G"
+    assert restored.faintest.absolute_magnitude.extinction_system == "Gaia"
+    assert restored.faintest.absolute_magnitude.extinction_source == "Gaia DR3 GSP-Phot: ag_gspphot"
+
+    # A cache produced before the provenance fields existed remains readable;
+    # missing fields are unknown rather than inferred from extinction_mag.
+    cache_path = next(cache_dir.glob("*.json.gz"))
+    with gzip.open(cache_path, "rt", encoding="utf-8") as stream:
+        legacy_payload = json.load(stream)
+    legacy_absolute = legacy_payload["source_photometry"][0]["absolute_magnitude"]
+    legacy_absolute.pop("extinction_band", None)
+    legacy_absolute.pop("extinction_system", None)
+    legacy_absolute.pop("extinction_source", None)
+    legacy_faintest_absolute = legacy_payload["faintest_detected"]["absolute_magnitude"]
+    legacy_faintest_absolute.pop("extinction_band", None)
+    legacy_faintest_absolute.pop("extinction_system", None)
+    legacy_faintest_absolute.pop("extinction_source", None)
+    with gzip.open(cache_path, "wt", encoding="utf-8") as stream:
+        json.dump(legacy_payload, stream)
+
+    legacy_restored = load_analysis(cache_dir, key, frame)
+    assert legacy_restored is not None
+    legacy_estimate = legacy_restored.source_photometry[0].absolute_magnitude
+    assert legacy_estimate is not None
+    assert legacy_estimate.extinction_band is None
+    assert legacy_estimate.extinction_system is None
+    assert legacy_estimate.extinction_source is None
+    assert legacy_restored.faintest is not None
+    legacy_faintest_estimate = legacy_restored.faintest.absolute_magnitude
+    assert legacy_faintest_estimate is not None
+    assert legacy_faintest_estimate.extinction_band is None
+    assert legacy_faintest_estimate.extinction_system is None
+    assert legacy_faintest_estimate.extinction_source is None
 
 
 def test_analysis_cache_rejects_previous_detection_version(tmp_path: Path) -> None:

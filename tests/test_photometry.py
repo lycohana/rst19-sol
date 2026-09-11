@@ -42,6 +42,38 @@ def _source(
     )
 
 
+def _catalog_source_with_forced_extinction_semantics(
+    *,
+    extinction_band: str,
+    extinction_system: str,
+    extinction_source: str,
+) -> CatalogSource:
+    """Build a legacy-shaped source, then exercise the photometry gate.
+
+    The current CatalogSource constructor rejects an explicitly contradictory
+    row early.  Bypassing that constructor check here lets this test cover the
+    defensive contract of absolute_magnitude_from_catalog as well (for a
+    deserialized/legacy object that can still reach the calculation layer).
+    """
+
+    source = CatalogSource(
+        "extinction-gate",
+        10.0,
+        20.0,
+        magnitude=13.56,
+        photometric_system="Gaia Vega",
+        photometric_band="G",
+        parallax_mas=10.0,
+        parallax_error_mas=0.1,
+        extinction_mag=None,
+    )
+    object.__setattr__(source, "extinction_mag", 0.2)
+    object.__setattr__(source, "extinction_band", extinction_band)
+    object.__setattr__(source, "extinction_system", extinction_system)
+    object.__setattr__(source, "extinction_source", extinction_source)
+    return source
+
+
 def test_instrumental_magnitude_uses_positive_flux() -> None:
     assert instrumental_magnitude(10.0) == pytest.approx(-2.5)
     assert instrumental_magnitude(10.0, exposure_s=2.0) == pytest.approx(-1.747425)
@@ -501,6 +533,54 @@ def test_absolute_magnitude_estimate_has_quality_gate_and_error() -> None:
     assert "USE_DISTANCE_POSTERIOR" in rejected.flags
 
 
+def test_generic_absolute_magnitude_helpers_carry_optional_extinction_provenance() -> None:
+    parallax_estimate = absolute_magnitude_estimate_from_parallax(
+        13.56,
+        parallax_mas=10.0,
+        parallax_error_mas=0.1,
+        extinction_mag=0.2,
+        extinction_band="G",
+        extinction_system="Gaia",
+        extinction_source="test-catalog",
+    )
+    assert parallax_estimate.status == "VALID"
+    assert parallax_estimate.extinction_band == "G"
+    assert parallax_estimate.extinction_system == "Gaia"
+    assert parallax_estimate.extinction_source == "test-catalog"
+    assert parallax_estimate.as_dict()["extinction_band"] == "G"
+    assert parallax_estimate.as_dict()["extinction_system"] == "Gaia"
+    assert parallax_estimate.as_dict()["extinction_source"] == "test-catalog"
+
+    distance_estimate = absolute_magnitude_estimate_from_distance(
+        13.56,
+        distance_pc=100.0,
+        distance_lower_pc=95.0,
+        distance_upper_pc=106.0,
+        distance_source="test-distance",
+        extinction_mag=0.2,
+        extinction_band="G",
+        extinction_system="Gaia",
+        extinction_source="test-catalog",
+    )
+    assert distance_estimate.status == "VALID_MODEL_DISTANCE"
+    assert distance_estimate.extinction_band == "G"
+    assert distance_estimate.extinction_system == "Gaia"
+    assert distance_estimate.extinction_source == "test-catalog"
+
+    # A bare numeric extinction remains a supported generic API input, but no
+    # photometric semantics are invented for it.
+    legacy_estimate = absolute_magnitude_estimate_from_parallax(
+        13.56,
+        parallax_mas=10.0,
+        parallax_error_mas=0.1,
+        extinction_mag=0.2,
+    )
+    assert legacy_estimate.status == "VALID"
+    assert legacy_estimate.extinction_band is None
+    assert legacy_estimate.extinction_system is None
+    assert legacy_estimate.extinction_source is None
+
+
 def test_catalog_absolute_magnitude_requires_distance_metadata() -> None:
     source = CatalogSource(
         "g1",
@@ -508,20 +588,84 @@ def test_catalog_absolute_magnitude_requires_distance_metadata() -> None:
         20.0,
         magnitude=13.56,
         magnitude_error=0.04,
+        photometric_system="Gaia Vega",
+        photometric_band="G",
         parallax_mas=10.0,
         parallax_error_mas=0.1,
         extinction_mag=0.2,
         extinction_error_mag=0.03,
+        extinction_band="G",
+        extinction_system="Gaia",
+        extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
     )
-    estimate = absolute_magnitude_from_catalog(source)
+    estimate = absolute_magnitude_from_catalog(
+        source,
+        required_photometric_system="Gaia Vega",
+        required_photometric_band="G",
+    )
     assert estimate.status == "VALID"
     assert estimate.value == pytest.approx(8.36)
+    assert estimate.extinction_band == "G"
+    assert estimate.extinction_system == "Gaia"
+    assert estimate.extinction_source == "Gaia DR3 GSP-Phot: ag_gspphot"
 
     missing_distance = absolute_magnitude_from_catalog(
         CatalogSource("g2", 10.0, 20.0, magnitude=13.56)
     )
     assert missing_distance.value is None
     assert missing_distance.status == "NO_PARALLAX"
+
+
+@pytest.mark.parametrize(
+    ("extinction_band", "extinction_system", "expected_status"),
+    (
+        ("V", "Johnson", "EXTINCTION_BAND_MISMATCH"),
+        ("A0(541.4 nm)", "monochromatic", "EXTINCTION_BAND_MISMATCH"),
+        ("unknown", "unknown", "EXTINCTION_SEMANTICS_REQUIRED"),
+    ),
+)
+def test_catalog_absolute_magnitude_rejects_mismatched_or_unknown_extinction_semantics(
+    extinction_band: str,
+    extinction_system: str,
+    expected_status: str,
+) -> None:
+    source = _catalog_source_with_forced_extinction_semantics(
+        extinction_band=extinction_band,
+        extinction_system=extinction_system,
+        extinction_source="test-extinction",
+    )
+
+    estimate = absolute_magnitude_from_catalog(
+        source,
+        required_photometric_system="Gaia Vega",
+        required_photometric_band="G",
+    )
+
+    assert estimate.value is None
+    assert estimate.status == expected_status
+    assert expected_status in estimate.flags
+    assert estimate.extinction_band == extinction_band
+    assert estimate.extinction_system == extinction_system
+    assert estimate.extinction_source == "test-extinction"
+
+
+def test_catalog_extinction_gate_is_limited_to_explicit_photometric_path() -> None:
+    source = _catalog_source_with_forced_extinction_semantics(
+        extinction_band="unknown",
+        extinction_system="unknown",
+        extinction_source="legacy-unlabelled-column",
+    )
+
+    # The no-argument form is a legacy diagnostic path.  It has no declared
+    # band contract, so preserve its historical numeric result while carrying
+    # the unknown provenance; only the explicitly declared path is strict.
+    legacy = absolute_magnitude_from_catalog(source)
+
+    assert legacy.status == "VALID"
+    assert legacy.value == pytest.approx(8.36)
+    assert legacy.extinction_band == "unknown"
+    assert legacy.extinction_system == "unknown"
+    assert legacy.extinction_source == "legacy-unlabelled-column"
 
 
 def test_catalog_absolute_magnitude_uses_declared_model_distance_when_parallax_is_missing() -> None:
@@ -539,6 +683,9 @@ def test_catalog_absolute_magnitude_uses_declared_model_distance_when_parallax_i
         distance_source="Gaia DR3 GSP-Phot",
         extinction_mag=0.2,
         extinction_error_mag=0.03,
+        extinction_band="G",
+        extinction_system="Gaia",
+        extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
     )
 
     estimate = absolute_magnitude_from_catalog(source)
@@ -568,6 +715,9 @@ def test_low_snr_parallax_falls_back_to_declared_model_distance() -> None:
         distance_upper_pc=115.0,
         distance_source="Gaia DR3 GSP-Phot",
         extinction_mag=0.2,
+        extinction_band="G",
+        extinction_system="Gaia",
+        extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
     )
 
     estimate = absolute_magnitude_from_catalog(source)
@@ -586,6 +736,9 @@ def test_model_distance_requires_explicit_provenance() -> None:
         photometric_system="Gaia Vega",
         photometric_band="G",
         distance_pc=100.0,
+        extinction_band="G",
+        extinction_system="Gaia",
+        extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
         extinction_mag=0.2,
     )
 
@@ -630,6 +783,9 @@ def test_build_source_photometry_keeps_instrumental_calibrated_and_absolute_laye
             parallax_mas=10.0,
             parallax_error_mas=0.1,
             extinction_mag=0.2,
+            extinction_band="G",
+            extinction_system="Gaia",
+            extinction_source="Gaia DR3 GSP-Phot: ag_gspphot",
         ),
     )
     match = CatalogMatch(0, "g0", detection.x, detection.y, detection.x, detection.y, 0.1, catalog[0].magnitude)

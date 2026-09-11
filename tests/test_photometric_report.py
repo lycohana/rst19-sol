@@ -53,6 +53,9 @@ def test_observability_levels_and_counts_are_deterministic() -> None:
                         "photometric_band": "G",
                         "parallax_mas": 10.0,
                         "extinction_mag": 0.2,
+                        "extinction_band": "G",
+                        "extinction_system": "Gaia",
+                        "extinction_source": "Gaia DR3 GSP-Phot: ag_gspphot",
                     },
                 ],
                 wcs={"status": "VALID"},
@@ -257,8 +260,11 @@ def test_dict_inputs_and_indexed_absolute_results_are_supported() -> None:
             "s1": {
                 "value": 3.0,
                 "status": "VALID",
-                "parallax_mas": 10.0,
-                "extinction_mag": 0.0,
+                    "parallax_mas": 10.0,
+                    "extinction_mag": 0.0,
+                    "extinction_band": "G",
+                    "extinction_system": "Gaia",
+                    "extinction_source": "test-catalog",
             }
         },
         require_wcs=False,
@@ -268,6 +274,136 @@ def test_dict_inputs_and_indexed_absolute_results_are_supported() -> None:
     assert report.source_count == 1
     assert report.rows[0].observability_level == "ABSOLUTE_ELIGIBLE"
     assert report.rows[0].absolute_status == "VALID"
+
+
+def test_positive_distance_without_source_is_not_strict_absolute() -> None:
+    report = build_photometric_report(
+        source_rows=[
+            {
+                "source_id": "unprovenanced-distance",
+                "m_inst": 12.0,
+                "m_cal": 11.0,
+                "M": 3.0,
+                "status": "ABSOLUTE_ELIGIBLE",
+                "calibration_status": "VALID",
+                "catalog_name": "Gaia DR3",
+                "photometric_system": "Gaia Vega",
+                "photometric_band": "G",
+                "distance_pc": 100.0,
+                "extinction_mag": 0.2,
+                "extinction_band": "G",
+                "extinction_system": "Gaia",
+                "extinction_source": "Gaia DR3 GSP-Phot: ag_gspphot",
+                "wcs_available": True,
+            }
+        ],
+        require_wcs=True,
+    )
+
+    row = report.rows[0]
+    assert row.observability_level == "APPARENT_CALIBRATED"
+    assert "DISTANCE_SOURCE_REQUIRED" in row.flags
+    assert "distance_source" in row.missing_inputs
+    assert report.false_valid is True
+    assert "DISTANCE_SOURCE_REQUIRED" in report.false_valid_gate.flags
+
+
+def test_model_distance_without_interval_is_retained_but_not_strict_absolute() -> None:
+    report = build_photometric_report(
+        source_rows=[
+            {
+                "source_id": "gsp-no-interval",
+                "m_inst": 12.0,
+                "m_cal": 11.0,
+                "status": "CALIBRATED",
+                "calibration_status": "VALID",
+                "catalog_name": "Gaia DR3",
+                "photometric_system": "Gaia Vega",
+                "photometric_band": "G",
+                "absolute_magnitude": {
+                    "value": 3.0,
+                    "status": "VALID_MODEL_DISTANCE_NO_INTERVAL",
+                    "distance_source": "Gaia DR3 GSP-Phot",
+                    "distance_pc": 100.0,
+                    "extinction_mag": 0.2,
+                    "extinction_band": "G",
+                    "extinction_system": "Gaia",
+                    "extinction_source": "Gaia DR3 GSP-Phot: ag_gspphot",
+                },
+                "wcs_available": True,
+            }
+        ],
+        require_wcs=True,
+    )
+
+    row = report.rows[0]
+    assert row.observability_level == "APPARENT_CALIBRATED"
+    assert row.absolute_status == "VALID_MODEL_DISTANCE_NO_INTERVAL"
+    assert row.absolute_magnitude == pytest.approx(3.0)
+    assert "MODEL_DISTANCE_INTERVAL_MISSING" in row.flags
+    assert "distance_interval" in row.missing_inputs
+    assert report.false_valid is False
+
+
+@pytest.mark.parametrize(
+    ("source_id", "absolute_magnitude"),
+    [
+        (
+            "parallax-path",
+            {
+                "value": 3.0,
+                "status": "VALID",
+                "distance_source": "parallax",
+                "distance_pc": 100.0,
+                "parallax_mas": 10.0,
+                "extinction_mag": 0.2,
+                "extinction_band": "G",
+                "extinction_system": "Gaia",
+                "extinction_source": "test-catalog",
+            },
+        ),
+        (
+            "gsp-phot-path",
+            {
+                "value": 3.0,
+                "status": "VALID_MODEL_DISTANCE",
+                "distance_source": "Gaia DR3 GSP-Phot",
+                "distance_pc": 100.0,
+                "distance_lower_pc": 95.0,
+                "distance_upper_pc": 106.0,
+                "extinction_mag": 0.2,
+                "extinction_band": "G",
+                "extinction_system": "Gaia",
+                "extinction_source": "Gaia DR3 GSP-Phot: ag_gspphot",
+            },
+        ),
+    ],
+)
+def test_consistent_parallax_and_gspphot_paths_can_be_strict_absolute(
+    source_id: str,
+    absolute_magnitude: dict[str, object],
+) -> None:
+    report = build_photometric_report(
+        source_rows=[
+            {
+                "source_id": source_id,
+                "m_inst": 12.0,
+                "m_cal": 11.0,
+                "status": "CALIBRATED",
+                "calibration_status": "VALID",
+                "catalog_name": "Gaia DR3",
+                "photometric_system": "Gaia Vega",
+                "photometric_band": "G",
+                "absolute_magnitude": absolute_magnitude,
+                "wcs_available": True,
+            }
+        ],
+        require_wcs=True,
+    )
+
+    assert report.rows[0].observability_level == "ABSOLUTE_ELIGIBLE"
+    assert report.rows[0].absolute_status in {"VALID", "VALID_MODEL_DISTANCE"}
+    assert report.false_valid is False
 
 
 def test_model_distance_absolute_status_is_reported_as_eligible_with_provenance() -> None:
@@ -286,12 +422,18 @@ def test_model_distance_absolute_status_is_reported_as_eligible_with_provenance(
                 "distance_source": "Gaia DR3 GSP-Phot",
                 "distance_pc": 100.0,
                 "extinction_mag": 0.2,
+                "extinction_band": "G",
+                "extinction_system": "Gaia",
+                "extinction_source": "Gaia DR3 GSP-Phot: ag_gspphot",
                 "absolute_magnitude": {
                     "value": 3.0,
                     "status": "VALID_MODEL_DISTANCE",
                     "distance_source": "Gaia DR3 GSP-Phot",
                     "distance_lower_pc": 95.0,
                     "distance_upper_pc": 106.0,
+                    "extinction_band": "G",
+                    "extinction_system": "Gaia",
+                    "extinction_source": "Gaia DR3 GSP-Phot: ag_gspphot",
                 },
                 "wcs_available": True,
             }
@@ -302,3 +444,45 @@ def test_model_distance_absolute_status_is_reported_as_eligible_with_provenance(
     assert report.rows[0].observability_level == "ABSOLUTE_ELIGIBLE"
     assert report.rows[0].absolute_status == "VALID_MODEL_DISTANCE"
     assert report.false_valid is False
+
+
+@pytest.mark.parametrize(
+    ("fields", "expected_flag"),
+    [
+        ({}, "EXTINCTION_SEMANTICS_REQUIRED"),
+        (
+            {"extinction_band": "V", "extinction_system": "Johnson", "extinction_source": "test"},
+            "EXTINCTION_BAND_MISMATCH",
+        ),
+        (
+            {"extinction_band": "G", "extinction_system": "Gaia"},
+            "EXTINCTION_SOURCE_REQUIRED",
+        ),
+    ],
+)
+def test_strict_absolute_report_requires_compatible_extinction_provenance(
+    fields: dict[str, object],
+    expected_flag: str,
+) -> None:
+    row = {
+        "source_id": "unsafe-extinction",
+        "m_inst": 12.0,
+        "m_cal": 11.0,
+        "M": 3.0,
+        "status": "CALIBRATED",
+        "calibration_status": "VALID",
+        "catalog_name": "Gaia DR3",
+        "photometric_system": "Gaia Vega",
+        "photometric_band": "G",
+        "parallax_mas": 10.0,
+        "extinction_mag": 0.2,
+        "absolute_status": "VALID",
+        "wcs_available": True,
+    }
+    row.update(fields)
+
+    report = build_photometric_report(source_rows=[row], require_wcs=True)
+
+    assert report.rows[0].observability_level == "APPARENT_CALIBRATED"
+    assert expected_flag in report.rows[0].flags
+    assert report.false_valid is True

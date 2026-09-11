@@ -696,6 +696,12 @@ def load_analysis(cache_dir: Path, key: str, frame: FitsFrame) -> Any | None:
                             if faintest_payload["absolute_magnitude"].get("distance_upper_pc") is not None
                             else None
                         ),
+                        # These fields were added after older cache payloads;
+                        # ``get`` keeps those payloads readable without
+                        # inventing a band/system for their numeric extinction.
+                        extinction_band=faintest_payload["absolute_magnitude"].get("extinction_band"),
+                        extinction_system=faintest_payload["absolute_magnitude"].get("extinction_system"),
+                        extinction_source=faintest_payload["absolute_magnitude"].get("extinction_source"),
                     )
                     if faintest_payload.get("absolute_magnitude") is not None
                     else None
@@ -815,6 +821,12 @@ def load_analysis(cache_dir: Path, key: str, frame: FitsFrame) -> Any | None:
                             if row["absolute_magnitude"].get("distance_upper_pc") is not None
                             else None
                         ),
+                        # Older frame caches do not contain extinction
+                        # provenance.  Missing fields deliberately fall back
+                        # to None rather than being inferred from extinction_mag.
+                        extinction_band=row["absolute_magnitude"].get("extinction_band"),
+                        extinction_system=row["absolute_magnitude"].get("extinction_system"),
+                        extinction_source=row["absolute_magnitude"].get("extinction_source"),
                     )
                     if row.get("absolute_magnitude") is not None
                     else None

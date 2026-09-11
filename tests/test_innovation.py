@@ -12,6 +12,7 @@ from rst19.innovation import (
     _motion_audit_rows,
     _motion_point_rows,
     _motion_rows,
+    _point_motion_rows,
     _photometric_evidence_section,
     _telemetry_consistency,
     _telemetry_position_chart,
@@ -86,6 +87,69 @@ def test_motion_rows_keeps_single_frame_candidate_without_fake_speed() -> None:
     assert rows[0]["duration_s"] == pytest.approx(0.0)
     assert rows[0]["speed_px_per_s"] is None
     assert rows[0]["direction_deg_image"] == pytest.approx(90.0)
+
+
+def test_point_motion_rows_uses_date_obs_and_keeps_evidence_level() -> None:
+    rows = _point_motion_rows(
+        {
+            "tracks": [
+                {
+                    "track_id": 12,
+                    "classification": "moving",
+                    "evidence_level": "fast_point_motion",
+                    "speed_px_per_frame": 15.0,
+                    "points": [
+                        {"frame_index": 0, "aligned_x": 10.0, "aligned_y": 20.0, "flux_snr": 18.0, "candidate_snr": 22.0},
+                        {"frame_index": 1, "aligned_x": 25.0, "aligned_y": 20.0, "flux_snr": 20.0, "candidate_snr": 24.0},
+                    ],
+                },
+                {
+                    "track_id": 13,
+                    "classification": "static",
+                    "points": [{"frame_index": 0, "aligned_x": 4.0, "aligned_y": 5.0}],
+                },
+            ]
+        },
+        [
+            {"timestamp": "2026-03-30T16:32:05.000", "frame_index": 0},
+            {"timestamp": "2026-03-30T16:32:06.500", "frame_index": 1},
+        ],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["track_id"] == 12
+    assert rows[0]["evidence_level"] == "fast_point_motion"
+    assert rows[0]["speed_px_per_s"] == pytest.approx(10.0)
+    assert rows[0]["displacement_px"] == pytest.approx(15.0)
+    assert rows[0]["median_flux_snr"] == pytest.approx(19.0)
+    assert rows[0]["points"][1]["fit_residual_px"] == pytest.approx(0.0)
+
+
+def test_point_motion_rows_skips_velocity_fit_when_one_timestamp_is_missing() -> None:
+    rows = _point_motion_rows(
+        {
+            "tracks": [
+                {
+                    "track_id": 21,
+                    "classification": "moving",
+                    "evidence_level": "fast_point_motion",
+                    "points": [
+                        {"frame_index": 0, "aligned_x": 10.0, "aligned_y": 20.0},
+                        {"frame_index": 1, "aligned_x": 14.0, "aligned_y": 18.0},
+                    ],
+                }
+            ]
+        },
+        [
+            {"timestamp": "2026-03-30T16:32:05.000", "frame_index": 0},
+            {"timestamp": None, "frame_index": 1},
+        ],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["kinematic_model"] is None
+    assert rows[0]["speed_px_per_s"] is None
+    assert rows[0]["points"][0]["fit_residual_px"] is None
 
 
 def test_motion_point_rows_exposes_one_based_frame_number() -> None:

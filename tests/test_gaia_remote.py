@@ -95,6 +95,9 @@ def test_parse_gaia_csv_returns_catalog_compatible_aliases() -> None:
     assert row["distance_source"] == "Gaia DR3 GSP-Phot"
     assert row["extinction_mag"] == "0.12"
     assert float(row["extinction_error_mag"]) == pytest.approx(0.025)
+    assert row["extinction_band"] == "G"
+    assert row["extinction_system"] == "Gaia"
+    assert row["extinction_source"] == "Gaia DR3 GSP-Phot: ag_gspphot"
     assert row["color"] == "0.9"
     assert row["color_name"] == "BP-RP"
     assert row["catalog_name"] == "Gaia DR3"
@@ -111,6 +114,25 @@ def test_parse_gaia_json_supports_metadata_and_array_rows() -> None:
     assert rows[0]["source_id"] == "123"
     assert rows[0]["magnitude"] == "15.4"
     assert rows[0]["ruwe"] == "1.05"
+
+
+def test_parse_gaia_json_preserves_a0_semantics_without_treating_it_as_gaia_g() -> None:
+    values = GAIA_ROW.split(",")
+    # Remove the standard Gaia GSP-Phot A_G triplet so this fixture represents
+    # an A0-only response carrying an optional monochromatic extinction value.
+    values[22:25] = ["", "", ""]
+    columns = [*gaia_remote.GAIA_REQUIRED_COLUMNS, "a0"]
+    payload = {
+        "metadata": [{"name": column} for column in columns],
+        "data": [values + ["0.3"]],
+    }
+
+    rows = parse_gaia_json(payload)
+
+    assert rows[0]["extinction_mag"] == "0.3"
+    assert rows[0]["extinction_band"] == "A0(541.4 nm)"
+    assert rows[0]["extinction_system"] == "monochromatic"
+    assert rows[0]["extinction_source"] == "response column: a0"
 
 
 def test_parse_gaia_response_reports_missing_columns_clearly() -> None:
@@ -234,3 +256,58 @@ def test_write_catalog_csv_round_trips_gspphot_distance_and_extinction(tmp_path)
     assert source.distance_source == "Gaia DR3 GSP-Phot"
     assert source.extinction_mag == pytest.approx(0.12)
     assert source.extinction_error_mag == pytest.approx(0.025)
+    assert source.extinction_band == "G"
+    assert source.extinction_system == "Gaia"
+    assert source.extinction_source == "Gaia DR3 GSP-Phot: ag_gspphot"
+
+
+def test_load_catalog_csv_keeps_legacy_generic_extinction_unknown(tmp_path) -> None:
+    path = tmp_path / "legacy-extinction.csv"
+    path.write_text(
+        "source_id,ra,dec,phot_g_mean_mag,extinction_mag\n"
+        "legacy,10.0,20.0,12.5,0.2\n",
+        encoding="utf-8",
+    )
+
+    source = load_catalog_csv(path)[0]
+
+    assert source.extinction_mag == pytest.approx(0.2)
+    assert source.extinction_band == "unknown"
+    assert source.extinction_system == "unknown"
+    assert source.extinction_source == "CSV column: extinction_mag"
+    assert source.extinction_compatibility() == "unknown"
+
+
+def test_load_catalog_csv_accepts_gaia_g_extinction_only_when_semantics_match(tmp_path) -> None:
+    path = tmp_path / "gaia-g-extinction.csv"
+    path.write_text(
+        "source_id,ra,dec,phot_g_mean_mag,extinction_mag,extinction_band,"
+        "extinction_system,extinction_source\n"
+        "g,10.0,20.0,12.5,0.2,G,Gaia,calibration\n",
+        encoding="utf-8",
+    )
+
+    source = load_catalog_csv(path)[0]
+
+    assert source.extinction_band == "G"
+    assert source.extinction_system == "Gaia"
+    assert source.extinction_source == "calibration"
+    assert source.extinction_compatibility() == "compatible"
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [("a_v", "0.2"), ("azero_gspphot", "0.3")],
+)
+def test_load_catalog_csv_rejects_known_extinction_band_mismatch_with_gaia_g(
+    tmp_path, column: str, value: str
+) -> None:
+    path = tmp_path / f"mismatch-{column}.csv"
+    path.write_text(
+        f"source_id,ra,dec,phot_g_mean_mag,{column}\n"
+        f"bad,10.0,20.0,12.5,{value}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="incompatible"):
+        load_catalog_csv(path)

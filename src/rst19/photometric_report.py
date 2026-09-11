@@ -660,6 +660,8 @@ def _contains_invalid_status(status: str) -> bool:
         return False
     if status in _INVALID_STATUS_WORDS:
         return True
+    if status in _CALIBRATION_VALID_STATUSES or status in _ABSOLUTE_VALID_STATUSES:
+        return False
     tokens = set(status.split("_"))
     return bool(tokens.intersection({"INVALID", "REJECTED", "MISSING", "UNAVAILABLE", "NO"}))
 
@@ -701,8 +703,6 @@ def _absolute_status_valid(
     explicit_level: str | None,
     absolute: Mapping[str, object],
 ) -> bool:
-    if explicit_level == "ABSOLUTE_ELIGIBLE" and not statuses:
-        return True
     nonempty = [status for status in statuses if status]
     if not nonempty:
         return False
@@ -714,11 +714,17 @@ def _absolute_status_valid(
         "CALIBRATED",
     }
     for status in nonempty:
+        # Check the allow-list before the generic token check.  Valid states
+        # such as VALID_NO_HOLDOUT and
+        # VALID_MODEL_DISTANCE_NO_INTERVAL contain the token ``NO`` but are
+        # still explicit, meaningful states rather than rejection states.
+        if status in _ABSOLUTE_VALID_STATUSES:
+            has_valid_status = True
+            continue
+        if status in allowed_lower_layer:
+            continue
         if _contains_invalid_status(status):
             return False
-        if status in _ABSOLUTE_VALID_STATUSES or status in allowed_lower_layer:
-            has_valid_status = has_valid_status or status in _ABSOLUTE_VALID_STATUSES
-            continue
         if status == "VALID":
             has_valid_status = True
             continue
@@ -728,8 +734,229 @@ def _absolute_status_valid(
         return False
     if has_valid_status:
         return True
-    found, value = _lookup(absolute, ("valid", "is_valid"))
-    return found and _bool_value(value) is True
+    # A bare ``valid: true`` flag is not enough for an absolute result.  The
+    # report boundary needs a named status so it can check that the distance
+    # path and the status describe the same provenance.
+    return False
+
+
+_MODEL_DISTANCE_STATUSES = {
+    "VALID_MODEL_DISTANCE",
+    "VALID_MODEL_DISTANCE_NO_INTERVAL",
+}
+
+
+def _distance_source_kind(value: object) -> str | None:
+    """Classify the small set of distance provenance labels we can audit.
+
+    The report layer intentionally does not infer a provenance label from a
+    positive ``distance_pc``.  Only recognizable parallax/model labels are
+    accepted, and unknown labels remain unsafe for strict eligibility.
+    """
+
+    normalized = _norm_status(value)
+    if not normalized:
+        return None
+    # Check model first because a fallback label such as
+    # PARALLAX_QUALITY_FALLBACK_TO_MODEL_DISTANCE contains both words.
+    if ("GSP" in normalized and "PHOT" in normalized) or (
+        "MODEL" in normalized and "DISTANCE" in normalized
+    ):
+        return "model"
+    if "PARALLAX" in normalized:
+        return "parallax"
+    return "unknown"
+
+
+def _distance_evidence(
+    row: Mapping[str, object],
+    absolute: Mapping[str, object],
+    statuses: Sequence[str],
+    *,
+    parallax: float | None,
+    distance_pc: float | None,
+) -> tuple[str | None, bool, str | None]:
+    """Return ``(path, strict, issue)`` for the absolute-distance gate.
+
+    A positive parallax field is itself an explicit direct-parallax path, so
+    legacy rows that contain parallax but no redundant source label remain
+    auditable.  A positive ``distance_pc`` on its own is deliberately not
+    evidence of provenance.  Model distances require a model status and a
+    complete two-sided interval before they can promote a row to the strict
+    absolute level; the point estimate can still be retained by callers.
+    """
+
+    positive_parallax = parallax is not None and parallax > 0
+    positive_distance = distance_pc is not None and distance_pc > 0
+
+    source_values: list[object] = []
+    for mapping in (row, absolute):
+        found, value = _lookup(mapping, ("distance_source", "distance_method", "distance_origin"))
+        if found and _nonempty(value):
+            source_values.append(value)
+
+    source_kinds = [_distance_source_kind(value) for value in source_values]
+    if source_kinds:
+        if any(kind in {None, "unknown"} for kind in source_kinds):
+            return None, False, "DISTANCE_SOURCE_UNRECOGNIZED"
+        if len(set(source_kinds)) != 1:
+            return None, False, "DISTANCE_SOURCE_CONFLICT"
+        path = source_kinds[0]
+    elif positive_parallax:
+        # The presence of a usable parallax field identifies the direct path.
+        path = "parallax"
+    elif positive_distance:
+        return None, False, "DISTANCE_SOURCE_REQUIRED"
+    else:
+        return None, False, "DISTANCE_MISSING"
+
+    has_model_status = any(status in _MODEL_DISTANCE_STATUSES for status in statuses)
+    if path == "parallax":
+        if has_model_status:
+            return path, False, "DISTANCE_SOURCE_STATUS_MISMATCH"
+        if not positive_parallax and not positive_distance:
+            return path, False, "PARALLAX_VALUE_MISSING"
+        return path, True, None
+
+    # The only other recognized path is an explicitly sourced model distance.
+    if not positive_distance:
+        return path, False, "MODEL_DISTANCE_MISSING"
+    if not has_model_status:
+        return path, False, "DISTANCE_SOURCE_STATUS_MISMATCH"
+    # This status is a legitimate model point estimate, but it explicitly
+    # says that the distance interval is absent.  It must not be promoted to
+    # the complete strict level.
+    if "VALID_MODEL_DISTANCE_NO_INTERVAL" in statuses:
+        return path, False, "MODEL_DISTANCE_INTERVAL_MISSING"
+
+    lower_present, lower = _present_number(row, ("distance_lower_pc", "distance_gspphot_lower", "distance_lower"))
+    if not lower_present:
+        lower_present, lower = _present_number(
+            absolute,
+            ("distance_lower_pc", "distance_gspphot_lower", "distance_lower"),
+        )
+    upper_present, upper = _present_number(row, ("distance_upper_pc", "distance_gspphot_upper", "distance_upper"))
+    if not upper_present:
+        upper_present, upper = _present_number(
+            absolute,
+            ("distance_upper_pc", "distance_gspphot_upper", "distance_upper"),
+        )
+    interval_valid = (
+        lower is not None
+        and upper is not None
+        and lower > 0
+        and upper > 0
+        and lower <= upper
+        and distance_pc is not None
+        and lower <= distance_pc <= upper
+    )
+    if not interval_valid:
+        return path, False, "MODEL_DISTANCE_INTERVAL_MISSING"
+    return path, True, None
+
+
+def _canonical_photometric_band(value: object) -> str:
+    """Normalize the small set of bands used by the strict report gate."""
+
+    if value is None:
+        return "unknown"
+    text = str(value).strip()
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in {"g", "gaiag", "gaiadr3g"}:
+        return "G"
+    if key in {"v", "johnsonv", "johnsoncousinsv"}:
+        return "V"
+    if key in {"a0", "azero", "a05414nm", "5414nm"}:
+        return "A0(541.4 nm)"
+    if key in {"", "unknown", "unk", "na", "none"}:
+        return "unknown"
+    return text
+
+
+def _canonical_photometric_system(value: object) -> str:
+    """Normalize catalogue/system aliases without guessing arbitrary systems."""
+
+    if value is None:
+        return "unknown"
+    text = str(value).strip()
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in {"gaia", "gaiavega", "gaiadr3", "gaiadr3vega"}:
+        return "Gaia"
+    if key in {"johnson", "johnsonv", "johnsoncousins", "johnsoncousinsv"}:
+        return "Johnson"
+    if key in {"monochromatic", "monochromatic5414nm", "a0"}:
+        return "monochromatic"
+    if key in {"", "unknown", "unk", "na", "none"}:
+        return "unknown"
+    return text
+
+
+def _first_nonempty_value(
+    mappings: Sequence[Mapping[str, object]], aliases: Iterable[str]
+) -> object | None:
+    for mapping in mappings:
+        found, value = _lookup(mapping, aliases)
+        if found and _nonempty(value):
+            return value
+    return None
+
+
+def _extinction_evidence(
+    row: Mapping[str, object],
+    absolute: Mapping[str, object],
+) -> tuple[bool, str | None, float | None]:
+    """Validate extinction value, band, system and provenance as one unit.
+
+    A numeric ``extinction_mag`` is not self-describing.  The strict report
+    therefore requires a declared band, a compatible photometric system and a
+    non-placeholder source.  The function intentionally does not infer
+    ``A_G`` from ``A_V`` or ``A_0``.
+    """
+
+    mappings = (row, absolute)
+    found, raw_value = _lookup(row, ("extinction_mag", "extinction", "A_V", "av"))
+    if not found:
+        found, raw_value = _lookup(absolute, ("extinction_mag", "extinction", "A_V", "av"))
+    if not found:
+        return False, "EXTINCTION_MISSING", None
+    extinction = _number(raw_value)
+    if extinction is None or extinction < 0:
+        return False, "EXTINCTION_INVALID", extinction
+
+    band = _first_nonempty_value(
+        mappings,
+        ("extinction_band", "ext_band", "extinction_passband"),
+    )
+    system = _first_nonempty_value(
+        mappings,
+        ("extinction_system", "extinction_photometric_system", "ext_system"),
+    )
+    source = _first_nonempty_value(
+        mappings,
+        ("extinction_source", "extinction_provenance", "ext_source"),
+    )
+    canonical_band = _canonical_photometric_band(band)
+    canonical_system = _canonical_photometric_system(system)
+    if canonical_band == "unknown" or canonical_system == "unknown":
+        return False, "EXTINCTION_SEMANTICS_REQUIRED", extinction
+    if not _nonempty(source) or _norm_key(source) in {"unknown", "unk", "na", "none"}:
+        return False, "EXTINCTION_SOURCE_REQUIRED", extinction
+
+    photometric_band = _first_nonempty_value(
+        mappings,
+        ("photometric_band", "band", "passband"),
+    )
+    photometric_system = _first_nonempty_value(
+        mappings,
+        ("photometric_system", "system"),
+    )
+    expected_band = _canonical_photometric_band(photometric_band)
+    expected_system = _canonical_photometric_system(photometric_system)
+    if expected_band != "unknown" and expected_band != canonical_band:
+        return False, "EXTINCTION_BAND_MISMATCH", extinction
+    if expected_system != "unknown" and expected_system != canonical_system:
+        return False, "EXTINCTION_BAND_MISMATCH", extinction
+    return True, None, extinction
 
 
 def _error_values(mapping: Mapping[str, object] | None) -> dict[str, float]:
@@ -1134,14 +1361,17 @@ def _audit_row(
     distance_present, distance_pc = _present_number(row, ("distance_pc", "distance"))
     if not distance_present:
         distance_present, distance_pc = _present_number(absolute_value_mapping, ("distance_pc", "distance"))
-    parallax_ok = (parallax is not None and parallax > 0) or (distance_pc is not None and distance_pc > 0)
-    extinction_present, extinction = _present_number(row, ("extinction_mag", "extinction", "A_V", "av"))
-    if not extinction_present:
-        extinction_present, extinction = _present_number(
-            absolute_value_mapping,
-            ("extinction_mag", "extinction", "A_V", "av"),
-        )
-    extinction_ok = extinction is not None and extinction >= 0
+    distance_path, distance_qualified, distance_issue = _distance_evidence(
+        row,
+        absolute_value_mapping,
+        absolute_statuses,
+        parallax=parallax,
+        distance_pc=distance_pc,
+    )
+    extinction_ok, extinction_issue, extinction = _extinction_evidence(
+        row,
+        absolute_value_mapping,
+    )
 
     violations: list[FalseValidViolation] = []
     if m_cal_present and m_cal is None:
@@ -1176,7 +1406,18 @@ def _audit_row(
             missing_absolute.append("calibration")
         if not catalog_available:
             missing_absolute.append("catalog")
-        if not parallax_ok:
+        # A model point estimate without an interval is intentionally kept as
+        # an incomplete-but-meaningful result rather than called false-valid.
+        # Other distance provenance failures are reported as a dedicated
+        # violation below, so they are not hidden behind a generic parallax
+        # message.
+        incomplete_model_estimate = (
+            distance_path == "model"
+            and distance_issue == "MODEL_DISTANCE_INTERVAL_MISSING"
+            and "VALID_MODEL_DISTANCE_NO_INTERVAL" in absolute_statuses
+        )
+        distance_provenance_issue = distance_issue not in {None, "DISTANCE_MISSING"}
+        if not distance_qualified and not incomplete_model_estimate and not distance_provenance_issue:
             missing_absolute.append("parallax")
         if not extinction_ok:
             missing_absolute.append("extinction")
@@ -1187,6 +1428,16 @@ def _audit_row(
                     "M",
                     "M_WITH_MISSING_INPUTS",
                     "M is present/marked valid but required inputs are missing: " + ",".join(missing_absolute),
+                )
+            )
+        if not distance_qualified and distance_provenance_issue and not incomplete_model_estimate:
+            violations.append(
+                FalseValidViolation(
+                    row_key,
+                    "distance_source",
+                    distance_issue or "DISTANCE_EVIDENCE_INVALID",
+                    "M is present/marked valid but distance provenance is not strict: "
+                    + (distance_issue or "unknown"),
                 )
             )
     if m_cal is None and explicit_level in {"RELATIVE_CALIBRATED", "APPARENT_CALIBRATED", "ABSOLUTE_ELIGIBLE"}:
@@ -1218,8 +1469,17 @@ def _audit_row(
         missing.append("catalog")
     if not calibration_valid:
         missing.append("calibration")
-    if not parallax_ok:
-        missing.append("parallax")
+    if not distance_qualified:
+        if distance_issue == "DISTANCE_SOURCE_REQUIRED":
+            missing.append("distance_source")
+        elif distance_issue == "MODEL_DISTANCE_INTERVAL_MISSING":
+            missing.append("distance_interval")
+        elif distance_issue == "DISTANCE_MISSING":
+            # Preserve the established report vocabulary for a row with no
+            # distance evidence at all.
+            missing.append("parallax")
+        else:
+            missing.append("distance")
     if not extinction_ok:
         missing.append("extinction")
     if absolute_magnitude is None:
@@ -1249,6 +1509,12 @@ def _audit_row(
         reasons.append(_norm_status(raw_reasons))
     for item in missing:
         reasons.append("MISSING_" + item.upper())
+    if distance_issue and distance_issue != "DISTANCE_MISSING":
+        source_flags.append(distance_issue)
+        reasons.append(distance_issue)
+    if extinction_issue and extinction_issue != "EXTINCTION_MISSING":
+        source_flags.append(extinction_issue)
+        reasons.append(extinction_issue)
     if row_status and _contains_invalid_status(row_status):
         source_flags.append(row_status)
         reasons.append(row_status)
@@ -1268,7 +1534,7 @@ def _audit_row(
         absolute_status_valid
         and absolute_magnitude is not None
         and apparent_valid
-        and parallax_ok
+        and distance_qualified
         and extinction_ok
         and geometry_sufficient_for_absolute
     )
