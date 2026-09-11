@@ -11,14 +11,14 @@
 - 局部背景/RMS、Gaussian PSF 匹配滤波、3×3 PSF 支持反尖峰审计、全量候选审计、孔径通量误差、三种 SNR 和点源质量分层；
 - 基于切平面先验 WCS 的全局/贪心可对照星表一对一匹配；
 - CSV 离线任务星表读取、自行传播和 JSON CLI 输出。
-- Python Tkinter 桌面工作台：选择 FITS、调整参数，在“可信星点 / 全部候选 / 运动候选”图层间切换，并查看最暗源标注。
+- Python Tkinter 桌面工作台：选择 FITS、调整参数，在“可信星点 / 全部候选 / 运动候选”图层间切换，并查看最暗源的 `m_inst`、标定表观星等和绝对星等质量状态。
 - 15 帧质量源的全局平移配准、唯一轨迹关联和 `static`/`moving`/`transient` 点轨迹基线；另有独立的线状候选检测与跨帧关联。
 - 单帧长线候选检测和 `rst19-innovation` 证据导出：按真实 `DATE-OBS` 生成逐帧/逐轨迹 JSON、CSV 和 PNG，区分单帧候选与跨帧 `moving`。
 
 模块当前不声称已经完成：
 
 - 完全盲的 plate solving 或 Astrometry.net 索引生成；
-- 经过真实标定的绝对星等、`Mv` 转换和检测完备率；当前只输出仪器星等 `m_inst`；
+- 本设备实验室响应曲线、官方逐星真值和检测完备率；代码已实现星表驱动的 `m_inst → m_cal → M` 结果链，但实际绝对星等仍取决于用户提供的目录、波段转换、视差质量和消光资料；
 - 官方逐星/运动目标真值、基于逐星标签的 precision/误检率验证；当前 `quality_count` 是明确规则下的可信点源数，不自动等于物理恒星真值。真实首帧已完成 Gaussian 和修正后全局经验 PSF 的首轮背景注入，以及边缘/拥挤/特殊值域的分层机制审计，但尚未完成空间变 PSF 和大样本分层完备率。
 
 ## 安装
@@ -44,7 +44,9 @@ rst19 doc/00-项目资料/原始数据/20260330163205413_9901.fits `
 
 核心/CLI 检测默认在 Gaussian PSF 匹配响应上采用 4σ 候选阈值并优先保留候选；不传 `--max-sources` 就不截断候选源。GUI 入口另采用已经过真实 FITS 对照的 `hybrid`（Gaussian + 双尺度 DoG）平衡宽筛和 `FWHM=2 px`，不改变 CLI 的可复现实验默认。`--max-sources` 仍可作为显式的性能/导出限制，但带有限制时最暗源只会在返回的检测源中选择。结果同时保留 `candidate_count`、`returned_count`、`quality_count` 和拒绝标志，不把外部示例数量写入算法。
 
-分析结果中的 `faintest_detected` 是通过局部通量 SNR、正通量、点源形状以及边缘/掩膜/饱和质量筛选后的最暗可信候选源。其 `instrumental_magnitude` 按 `m_inst = -2.5 log10(flux_rate)` 计算；只有提供经过验证的 `--zero-point` 时才会附带 `calibrated_magnitude`，不能在未标定时直接称为 Gaia V 或 `Mv`。`snr` 是峰值 SNR，`flux_snr` 是孔径通量 SNR，`filter_snr` 是匹配滤波 SNR，三者语义不同。
+分析结果中的 `faintest_detected` 是通过局部通量 SNR、正通量、点源形状以及边缘/掩膜/饱和质量筛选后的最暗可信候选源。其 `instrumental_magnitude` 按 `m_inst = -2.5 log10(flux_rate)` 计算；提供星表并启用 `--fit-photometry` 后，`source_photometry` 会逐源输出 `calibrated_magnitude`、误差、光度系统/波段和 `absolute_magnitude` 质量状态。没有匹配、颜色或可靠视差时数值保持 `null`，不把它直接称为 Gaia V 或 `Mv`。`snr` 是峰值 SNR，`flux_snr` 是孔径通量 SNR，`filter_snr` 是匹配滤波 SNR，三者语义不同。
+
+需要公共参考目录时，显式运行 `python -m rst19.gaia_remote_cli --ra ... --dec ... --radius ... --out ...` 获取 Gaia DR3 子表；该命令之外的包导入、GUI 和默认分析不联网。Gaia 行中的 `phot_g_mean_flux_over_error`、`ruwe`、`duplicated_source`、`visibility_periods_used` 和 `phot_variable_flag` 会进入 `CatalogSource`，光度拟合默认排除明确重复/变量、低 G 通量 SNR、高 RUWE 和过少 visibility periods 的参考星，并把排除原因写入 `catalog_filter_counts`。15 帧相对光度可用 `python -m rst19.relative_photometry_cli` 或 `rst19-sequence --relative-photometry`，输出的帧零点和源亮度是相对量。`rst19-photometric-report` 用于审计 JSON 中的仪器/相对/表观/绝对星等证据层级。
 
 分析 15 帧：
 
@@ -714,7 +716,7 @@ rst19-temporal-codes doc/00-项目资料/原始数据 `
 
 ## 测试
 
-当前全量回归为 `290` 项，覆盖分层抽样、峰/质心锚点切换、指定源追加、汇总统计、局部匹配响应选择、pair 相对几何、经验 PSF 留一法、类别证据矩阵及其确定性复核路由、pair 独立像素支持留出、原始像素拓扑审计、空间分区留出注入、经验 PSF 孔径敏感性、类别参数敏感性转移矩阵、序列参数比较器、类别内经验分位审计、类别内高显著性落选审计、hard-negative 空间条件化审计、固定码焦点时序导出、污染局部背景双源注入、跨类别污染双源复核、端点级质量原因记录、旗标交互审计、质量门余量审计、质量门逐候选路径审计、质量门路径—跨帧响应交叉审计、局部 ROI 坐标恢复和计数范围回归、两种序列 shift JSON 兼容口径记录以及注册合成大图的 footprint、覆盖数、掩膜、透明预览、缓存和导出回归。
+当前全量回归为 `394` 项，覆盖分层抽样、峰/质心锚点切换、指定源追加、汇总统计、局部匹配响应选择、pair 相对几何、经验 PSF 留一法、类别证据矩阵及其确定性复核路由、pair 独立像素支持留出、原始像素拓扑审计、空间分区留出注入、经验 PSF 孔径敏感性、类别参数敏感性转移矩阵、序列参数比较器、类别内经验分位审计、类别内高显著性落选审计、hard-negative 空间条件化审计、固定码焦点时序导出、污染局部背景双源注入、跨类别污染双源复核、端点级质量原因记录、旗标交互审计、质量门余量审计、质量门逐候选路径审计、质量门路径—跨帧响应交叉审计、局部 ROI 坐标恢复和计数范围回归、两种序列 shift JSON 兼容口径记录以及注册合成大图的 footprint、覆盖数、掩膜、透明预览、缓存和导出回归，并覆盖公共 Gaia 查询解析、Gaia 大视场分块完整性审计、星等质量门、GUI 最终入口审计、星对几何 WCS 候选和创新报告证据摘要。
 
 ```powershell
 python -m pytest

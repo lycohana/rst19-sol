@@ -11,7 +11,7 @@ from scipy.spatial import cKDTree
 
 from .catalog import CatalogSource
 from .detection import Detection
-from .wcs import TangentPlaneWCS
+from .wcs import AffineWCSCalibration, TangentPlaneWCS
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +24,11 @@ class CatalogMatch:
     predicted_y: float
     residual_px: float
     catalog_magnitude: float | None
+    catalog_magnitude_error: float | None = None
+    catalog_color: float | None = None
+    catalog_color_name: str | None = None
+    photometric_system: str | None = None
+    photometric_band: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -35,6 +40,11 @@ class CatalogMatch:
             "predicted_y": self.predicted_y,
             "residual_px": self.residual_px,
             "catalog_magnitude": self.catalog_magnitude,
+            "catalog_magnitude_error": self.catalog_magnitude_error,
+            "catalog_color": self.catalog_color,
+            "catalog_color_name": self.catalog_color_name,
+            "photometric_system": self.photometric_system,
+            "photometric_band": self.photometric_band,
         }
 
 
@@ -168,7 +178,7 @@ def _global_assignment(
 def match_detections(
     detections: Sequence[Detection],
     catalog: Sequence[CatalogSource],
-    wcs: TangentPlaneWCS,
+    wcs: TangentPlaneWCS | AffineWCSCalibration,
     *,
     radius_px: float = 3.0,
     epoch: float | None = None,
@@ -177,6 +187,8 @@ def match_detections(
     """把图像检测源与 WCS 预测位置进行唯一、半径约束匹配。
 
     当前版本假设 WCS 初值已经存在；它不会把“最近邻最多”当作盲解算。
+    ``AffineWCSCalibration`` 可用于板解后的二次匹配，此时会保留拟合
+    的完整仿射矩阵，而不是退回到只含平均尺度的等效 TAN 近似。
     ``global`` 在每个候选连通分量内先最大化一对一匹配数、再最小化总
     残差；``greedy`` 保留旧的按残差抢占基线，用于敏感性对照。
     传入 `epoch` 时，先按星表自行传播，再投影到图像坐标。
@@ -251,6 +263,11 @@ def match_detections(
                 predicted_y=float(predicted[catalog_index, 1]),
                 residual_px=residual,
                 catalog_magnitude=source.magnitude,
+                catalog_magnitude_error=source.magnitude_error,
+                catalog_color=source.color,
+                catalog_color_name=source.color_name,
+                photometric_system=source.photometric_system,
+                photometric_band=source.photometric_band,
             )
         )
 

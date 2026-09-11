@@ -11,7 +11,7 @@ import math
 import re
 import struct
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Mapping
 
 import numpy as np
 
@@ -106,6 +106,86 @@ def auxiliary_mask(shape: tuple[int, int]) -> np.ndarray:
     mask = np.zeros(shape, dtype=bool)
     mask[0, : min(shape[1], AUXILIARY_BYTES // 2)] = True
     return mask
+
+
+_EXPOSURE_NUMBER_RE = re.compile(
+    r"^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?)\s*([A-Za-zµμ]*)\s*$"
+)
+
+
+def _exposure_value_and_unit(value: object) -> tuple[float | None, str | None]:
+    """Parse a numeric header value and an optional inline time unit."""
+
+    if isinstance(value, bool) or value is None:
+        return None, None
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        number = float(value)
+        return (number, None) if math.isfinite(number) else (None, None)
+    match = _EXPOSURE_NUMBER_RE.match(str(value))
+    if match is None:
+        return None, None
+    try:
+        number = float(match.group(1).replace("D", "E").replace("d", "e"))
+    except ValueError:
+        return None, None
+    return (number, match.group(2) or None) if math.isfinite(number) else (None, None)
+
+
+def _normalise_time_unit(value: object) -> str | None:
+    """Return ``s`` or ``ms`` for common FITS/application unit spellings."""
+
+    if value is None:
+        return None
+    text = str(value).strip().casefold().replace("μ", "µ")
+    text = text.replace(" ", "")
+    if text in {"s", "sec", "secs", "second", "seconds"}:
+        return "s"
+    if text in {"ms", "msec", "msecs", "millisecond", "milliseconds"}:
+        return "ms"
+    return None
+
+
+def exposure_seconds(header: Mapping[str, object], *, default: float = 1.0) -> float:
+    """Resolve a FITS/application exposure value into seconds.
+
+    The standard ``EXPTIME`` keyword is interpreted as seconds unless an
+    explicit unit is supplied.  The RST19 files use the project-specific
+    ``EXPOSURE`` keyword in milliseconds, matching the format document; an
+    inline ``EXPOSURE_UNIT``/``TIMEUNIT`` can override that convention.  This
+    precedence keeps the photometry, GUI and sequence code from silently
+    disagreeing when a dataset uses ``EXPTIME`` or string-valued headers.
+    """
+
+    if not math.isfinite(float(default)) or float(default) <= 0:
+        raise ValueError("default exposure must be positive")
+
+    for key, default_unit, unit_keys in (
+        ("EXPTIME", "s", ("EXPTIME_UNIT", "TIMEUNIT")),
+        ("EXPOSURE", "ms", ("EXPOSURE_UNIT", "TIMEUNIT")),
+    ):
+        number, inline_unit = _exposure_value_and_unit(header.get(key))
+        if number is None or not math.isfinite(number) or number <= 0:
+            continue
+        unit = _normalise_time_unit(inline_unit)
+        if unit is None:
+            for unit_key in unit_keys:
+                unit = _normalise_time_unit(header.get(unit_key))
+                if unit is not None:
+                    break
+        unit = unit or default_unit
+        seconds = number / 1000.0 if unit == "ms" else number
+        if math.isfinite(seconds) and seconds > 0:
+            return float(seconds)
+
+    return float(default)
+
+
+def exposure_milliseconds(header: Mapping[str, object]) -> float | None:
+    """Return the declared exposure in milliseconds, or ``None`` if absent."""
+
+    if "EXPTIME" not in header and "EXPOSURE" not in header:
+        return None
+    return float(exposure_seconds(header) * 1000.0)
 
 
 _BITPIX_DTYPES: dict[int, np.dtype] = {

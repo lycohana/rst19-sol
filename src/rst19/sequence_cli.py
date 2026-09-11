@@ -129,6 +129,30 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="禁用整数 FITS 序列的 float32 中间阵列，使用 float64 做对照",
     )
+    parser.add_argument(
+        "--relative-photometry",
+        action="store_true",
+        help="在稳定质量轨迹上拟合 15 帧相对星等标尺；只输出相对量，不生成绝对星等",
+    )
+    parser.add_argument(
+        "--relative-max-sources",
+        type=int,
+        default=400,
+        help="相对标尺最多使用的高 SNR 静态轨迹数；默认 400",
+    )
+    parser.add_argument(
+        "--relative-spatial-order",
+        type=int,
+        choices=(0, 1, 2),
+        default=0,
+        help="相对标尺空间响应项阶数；默认 0",
+    )
+    parser.add_argument(
+        "--relative-validation-fraction",
+        type=float,
+        default=0.2,
+        help="相对标尺按源分块留出比例；默认 0.2",
+    )
     parser.add_argument("--keep-linear-artifacts", action="store_true", help="保留线状结构候选；默认将长线标记为 LINE_ARTIFACT")
     parser.add_argument("--json-out", type=Path, help="可选 JSON 输出路径")
     parser.add_argument(
@@ -150,6 +174,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("--source-limit must be zero or a positive integer")
         if args.workers < 1:
             raise ValueError("--workers must be a positive integer")
+        if args.relative_max_sources < 1:
+            raise ValueError("--relative-max-sources must be positive")
         result = analyze_sequence(
             paths,
             threshold_sigma=args.threshold_sigma,
@@ -179,6 +205,10 @@ def main(argv: list[str] | None = None) -> int:
             stack_min_flux_snr=args.stack_min_flux_snr,
             stack_frame_min_flux_snr=args.stack_frame_min_flux_snr,
             stack_min_presence=args.stack_min_presence,
+            relative_photometry=args.relative_photometry,
+            relative_photometry_max_sources=args.relative_max_sources,
+            relative_photometry_spatial_order=args.relative_spatial_order,
+            relative_photometry_validation_fraction=args.relative_validation_fraction,
             use_float32=not args.float64,
             reject_linear_artifacts=not args.keep_linear_artifacts,
         )

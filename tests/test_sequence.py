@@ -1095,6 +1095,13 @@ def test_analyze_sequence_reports_frame_and_stage_progress(monkeypatch: pytest.M
     assert all(call.get("max_sources") is None for call in detector_calls)
     assert full_result.source_working_limit is None
 
+    relative_result = sequence_module.analyze_sequence(
+        ("frame-1.fits", "frame-2.fits"),
+        relative_photometry=True,
+    )
+    assert relative_result.relative_photometry is not None
+    assert relative_result.relative_photometry.status == "NO_VALID_REFERENCES"
+
 
 def _faint_frame_analysis(
     frame_index: int,

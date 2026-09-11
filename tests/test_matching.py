@@ -34,6 +34,59 @@ def test_tangent_plane_round_trip() -> None:
     np.testing.assert_allclose(round_trip_y, y, atol=1e-8)
 
 
+def test_affine_wcs_world_to_pixel_preserves_full_matrix_for_rematching() -> None:
+    reference_wcs = TangentPlaneWCS(
+        center_ra_deg=129.5,
+        center_dec_deg=-1.8,
+        pixel_scale_arcsec=8.5,
+        crpix_x=1000.0,
+        crpix_y=900.0,
+    )
+    tangent_points = np.asarray(
+        ((-1200.0, -700.0), (-800.0, 1100.0), (-150.0, -250.0), (500.0, 900.0), (1200.0, -600.0), (1500.0, 800.0)),
+        dtype=np.float64,
+    )
+    ra, dec = reference_wcs.pixel_to_world(
+        reference_wcs.crpix_x + tangent_points[:, 0] / reference_wcs.pixel_scale_arcsec,
+        reference_wcs.crpix_y + tangent_points[:, 1] / reference_wcs.pixel_scale_arcsec,
+    )
+    catalog = tuple(
+        CatalogSource(
+            source_id=f"affine-{index}",
+            ra_deg=float(ra[index]),
+            dec_deg=float(dec[index]),
+            magnitude=10.0 + index,
+        )
+        for index in range(len(tangent_points))
+    )
+    matrix = np.asarray(((0.105, 0.004), (-0.003, 0.116)), dtype=np.float64)
+    offset = np.asarray((1050.0, 875.0), dtype=np.float64)
+    pixels = tangent_points @ matrix.T + offset
+    detections = tuple(_detection(index, *pixels[index]) for index in range(len(pixels)))
+    initial_matches = tuple(
+        CatalogMatch(
+            detection_id=index,
+            source_id=f"affine-{index}",
+            detection_x=float(pixels[index, 0]),
+            detection_y=float(pixels[index, 1]),
+            predicted_x=float(pixels[index, 0]),
+            predicted_y=float(pixels[index, 1]),
+            residual_px=0.0,
+            catalog_magnitude=catalog[index].magnitude,
+        )
+        for index in range(len(pixels))
+    )
+    affine = fit_affine_wcs_from_matches(initial_matches, catalog, reference_wcs, min_matches=6)
+
+    predicted_x, predicted_y = affine.world_to_pixel(ra, dec)
+    np.testing.assert_allclose(predicted_x, pixels[:, 0], atol=1e-8)
+    np.testing.assert_allclose(predicted_y, pixels[:, 1], atol=1e-8)
+    rematched = match_detections(detections, catalog, affine, radius_px=1e-6)
+
+    assert rematched.matched_count == len(detections)
+    assert rematched.rms_residual_px is not None and rematched.rms_residual_px < 1e-8
+
+
 def test_match_detections_is_one_to_one() -> None:
     wcs = TangentPlaneWCS(
         center_ra_deg=10.0,
@@ -109,8 +162,10 @@ def test_match_detections_rejects_unknown_assignment_mode() -> None:
 def test_load_catalog_csv_supports_gaia_column_aliases(tmp_path) -> None:
     path = tmp_path / "catalog.csv"
     path.write_text(
-        "source_id,ra,dec,phot_g_mean_mag,pmra,pmdec,ref_epoch\n"
-        "123,10.0,20.0,12.5,100.0,-50.0,2016.0\n",
+        "source_id,ra,dec,phot_g_mean_mag,pmra,pmdec,ref_epoch,"
+        "phot_g_mean_flux_over_error,phot_bp_rp_excess_factor,ruwe,"
+        "duplicated_source,visibility_periods_used,phot_variable_flag\n"
+        "123,10.0,20.0,12.5,100.0,-50.0,2016.0,80,1.18,1.05,false,12,NOT_AVAILABLE\n",
         encoding="utf-8",
     )
 
@@ -119,9 +174,19 @@ def test_load_catalog_csv_supports_gaia_column_aliases(tmp_path) -> None:
     assert len(catalog) == 1
     assert catalog[0].source_id == "123"
     assert catalog[0].magnitude == 12.5
+    assert catalog[0].catalog_name == "Gaia DR3"
+    assert catalog[0].photometric_system == "Gaia Vega"
+    assert catalog[0].photometric_band == "G"
+    assert catalog[0].phot_g_mean_flux_over_error == 80.0
+    assert catalog[0].phot_bp_rp_excess_factor == 1.18
+    assert catalog[0].ruwe == 1.05
+    assert catalog[0].duplicated_source is False
+    assert catalog[0].visibility_periods_used == 12
+    assert catalog[0].phot_variable_flag == "NOT_AVAILABLE"
     propagated = catalog[0].at_epoch(2017.0)
     assert propagated.ra_deg != catalog[0].ra_deg
     assert propagated.dec_deg != catalog[0].dec_deg
+    assert propagated.ruwe == catalog[0].ruwe
 
 
 def test_load_catalog_csv_rejects_duplicate_source_ids(tmp_path) -> None:

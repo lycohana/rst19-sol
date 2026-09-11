@@ -50,11 +50,24 @@ from .experiments import (
     write_single_frame_trail_artifacts,
 )
 from .feedback import ManualThresholdFeedback, append_manual_feedback, load_manual_feedback
-from .fits import auxiliary_mask, read_fits
+from .fits import auxiliary_mask, exposure_seconds, read_fits
 from .innovation import _fit_constant_velocity, _telemetry_consistency, _telemetry_prediction, build_innovation_report_from_payload, write_innovation_artifacts
 from .photometry import inferred_zero_point_for_comparison, instrumental_magnitude
 from .pipeline import FrameAnalysis, analyze_frame
+from .pipeline import recalibrate_frame_analysis
 from .matching import MatchResult
+from .photometric_workflow import (
+    DEFAULT_CAMERA_PIXEL_SCALE_ARCSEC,
+    run_auto_photometric_workflow,
+)
+from .public_catalog import (
+    DEFAULT_GAIA_MAX_G_MAG,
+    DEFAULT_GAIA_MIN_G_MAG,
+    DEFAULT_GAIA_TILE_RADIUS_DEG,
+    camera_footprint_radius_deg,
+    download_public_gaia_catalog,
+    download_public_gaia_catalog_for_frame,
+)
 from .mosaic import (
     MOSAIC_DEFAULT_CLIP_SIGMA,
     MosaicResult,
@@ -138,6 +151,64 @@ GUI_DEFAULT_TEMPORAL_MULTISCALE = False
 GUI_DEFAULT_TEMPORAL_MIN_PSF_CORRELATION = 0.8
 GUI_DEFAULT_LOCAL_DEBLEND = False
 GUI_DEFAULT_SEQUENCE_FULL = False
+# 自动板解 + 测光可以复用当前帧的检测结果，但只能在真正参与检测的
+# 参数完全一致时复用。这里不把零点等测光展示参数混入指纹：它们不会
+# 改变候选峰、源级测量或背景模型；相反，下面每一项都会改变检测结果。
+GUI_AUTO_REUSE_PARAMETER_KEYS = (
+    "threshold_sigma",
+    "min_distance",
+    "max_sources",
+    "psf_fwhm",
+    "min_flux_snr",
+    "proposal_mode",
+    "reject_linear_artifacts",
+    "enable_local_deblend",
+)
+
+
+def _normalise_gui_detector_parameter(key: str, value: Any) -> object:
+    """把界面值和 DetectionResult.parameters 里的值归一到可比较形式。"""
+
+    if key == "max_sources":
+        # detect_sources 用 -1 表示“未设置上限”，GUI 用 None/空串表示。
+        return -1 if value is None or str(value).strip() == "" else int(value)
+    if key in {"reject_linear_artifacts", "enable_local_deblend"}:
+        return int(bool(value))
+    if key == "proposal_mode":
+        return str(value).strip().lower()
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return value
+
+
+def _analysis_matches_detector_parameters(
+    analysis: Any,
+    detector_kwargs: dict[str, Any],
+) -> bool:
+    """判断已有分析是否可以安全地作为自动测光的初始检测结果。
+
+    旧缓存或手工构造的分析可能没有参数记录；这种情况下宁可重新检测，
+    不把“看起来是同一帧”误当成“使用了同一套检测口径”。
+    """
+
+    detection = getattr(analysis, "detection", None)
+    parameters = getattr(detection, "parameters", None)
+    if not isinstance(parameters, dict):
+        return False
+    for key in GUI_AUTO_REUSE_PARAMETER_KEYS:
+        if key not in detector_kwargs or key not in parameters:
+            return False
+        try:
+            expected = _normalise_gui_detector_parameter(key, detector_kwargs[key])
+            actual = _normalise_gui_detector_parameter(key, parameters[key])
+        except (TypeError, ValueError):
+            return False
+        if isinstance(expected, float) and isinstance(actual, float):
+            if not math.isclose(expected, actual, rel_tol=0.0, abs_tol=1e-9):
+                return False
+        elif expected != actual:
+            return False
+    return True
 # 这些参数只作用于观察预览，不参与候选检测、孔径测光或星等计算。
 # 真实 FITS 的背景中位数约为 21 ADU，噪声约为 8--9 ADU；若直接对
 # 1--99.5 分位做平方根拉伸，背景会被抬到约 78/255，整幅图看起来像
@@ -174,6 +245,346 @@ MANUAL_THRESHOLD_MIN = 1.0
 MANUAL_THRESHOLD_MAX = 20.0
 MANUAL_SNR_MIN = 1.0
 MANUAL_SNR_MAX = 10.0
+
+# GUI 只负责呈现测光结果的证据边界；它不把数值本身重新解释成另一个
+# 波段或物理量。尤其是 ``VALID_NO_EXTINCTION`` 仍带有一个计算值，但
+# 不是完整的消光修正绝对星等，默认界面必须把它挡在“严格 M”之外。
+_GUI_VALID_CALIBRATION_STATUSES = frozenset({"VALID", "VALID_NO_HOLDOUT"})
+_GUI_VALID_ABSOLUTE_STATUS = "VALID"
+_GUI_VALID_ABSOLUTE_STATUSES = frozenset({
+    "VALID",
+    "VALID_MODEL_DISTANCE",
+    "VALID_MODEL_DISTANCE_NO_INTERVAL",
+})
+_GUI_CALIBRATION_STATUS_LABELS = {
+    "INSTRUMENTAL": "尚未接入标准星表",
+    "INSTRUMENTAL_ONLY": "仅仪器星等（未匹配星表）",
+    "CATALOG_MATCH_NO_CALIBRATION": "已匹配，但未完成光度标定",
+    "CALIBRATION_MISSING_COLOR": "缺少颜色项，未应用标定",
+    "CALIBRATION_INVALID": "光度标定无效",
+    "CALIBRATED": "表观星等已标定",
+    "CATALOG_INCONSISTENT": "星表残差异常（仅诊断）",
+    "REJECTED_QUALITY": "质量门控拒绝",
+    "NO_POSITIVE_FLUX": "没有正通量",
+    "NO_PHOTOMETRY_ROW": "没有逐源测光记录",
+}
+_GUI_SELECTION_SCOPE_LABELS = {
+    "QUALITY_DETECTIONS": "全部质量候选",
+    "ZERO_POINT_ADJUSTED": "全部质量候选 · 自定义零点",
+    "CALIBRATED_MATCHES": "全部候选均已标定",
+    "CALIBRATED_MATCHES_PARTIAL": "仅已标定候选（部分覆盖）",
+    "QUALITY_DETECTIONS_NO_USABLE_CALIBRATION": "全部质量候选 · 无可用标定值",
+}
+_GUI_ABSOLUTE_STATUS_LABELS = {
+    "VALID_MODEL_DISTANCE": "模型距离（带区间）",
+    "VALID_MODEL_DISTANCE_NO_INTERVAL": "模型距离但缺少距离误差区间",
+    "VALID_NO_EXTINCTION": "未提供消光修正",
+    "NO_PARALLAX": "缺少视差/距离",
+    "LOW_PARALLAX_SNR": "视差质量不足",
+    "INVALID_PARALLAX": "修正后视差无效",
+    "NO_APPARENT_MAGNITUDE": "缺少表观星等",
+}
+
+
+def _gui_text_value(value: object) -> str | None:
+    """Return a non-empty, non-placeholder display value."""
+
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in {"none", "unknown", "?", "—", "-"}:
+        return None
+    return text
+
+
+def _gui_photometric_provenance(system: object = None, band: object = None) -> str:
+    """Format the declared photometric system and passband without guessing."""
+
+    system_text = _gui_text_value(system)
+    band_text = _gui_text_value(band)
+    if system_text and band_text:
+        return f"{system_text}/{band_text}"
+    if band_text:
+        return band_text
+    if system_text:
+        return system_text
+    return "未声明系统/波段"
+
+
+def _gui_magnitude_label(prefix: str, band: object = None) -> str:
+    band_text = _gui_text_value(band)
+    return f"{prefix}_{band_text}" if band_text else ("m_cal" if prefix == "m" else prefix)
+
+
+def _gui_calibration_status_text(status: object, *, compact: bool = False) -> str:
+    raw = _gui_text_value(status) or "未标定"
+    if compact:
+        return {
+            "INSTRUMENTAL": "未接入",
+            "INSTRUMENTAL_ONLY": "未匹配",
+            "CATALOG_MATCH_NO_CALIBRATION": "未标定",
+            "CALIBRATION_MISSING_COLOR": "缺颜色",
+            "CALIBRATION_INVALID": "标定无效",
+            "CALIBRATED": "已标定",
+            "REJECTED_QUALITY": "质量拒绝",
+            "NO_POSITIVE_FLUX": "无正通量",
+            "NO_PHOTOMETRY_ROW": "无测光行",
+        }.get(raw, raw)
+    return _GUI_CALIBRATION_STATUS_LABELS.get(raw, raw)
+
+
+def _gui_selection_scope_text(scope: object) -> str:
+    """Explain the population used for the faintest-source ranking."""
+
+    raw = _gui_text_value(scope) or "QUALITY_DETECTIONS"
+    return _GUI_SELECTION_SCOPE_LABELS.get(raw, raw)
+
+
+def _gui_format_calibrated_magnitude(
+    value: object,
+    *,
+    status: object,
+    system: object = None,
+    band: object = None,
+    error: object = None,
+    wcs_available: bool = True,
+    compact: bool = False,
+) -> str:
+    """Format a calibrated apparent magnitude only when its status permits it.
+
+    A user-supplied zero point can make the pipeline carry a numeric value while
+    the status remains ``INSTRUMENTAL``.  That value is deliberately labelled
+    as a custom index instead of being presented as a standard-band magnitude.
+    """
+
+    raw_status = _gui_text_value(status) or "INSTRUMENTAL"
+    numeric = None
+    try:
+        candidate = float(value) if value is not None else None
+        if candidate is not None and math.isfinite(candidate):
+            numeric = candidate
+    except (TypeError, ValueError):
+        numeric = None
+    if raw_status in _GUI_VALID_CALIBRATION_STATUSES and numeric is not None:
+        if not wcs_available:
+            return "无 WCS" if compact else "m_cal = 不可用（无 WCS，未进行星表匹配）"
+        if _gui_text_value(system) is None or _gui_text_value(band) is None:
+            return "缺系统/波段" if compact else "m_cal = 不可用（未声明系统/波段）"
+        band_text = _gui_text_value(band)
+        system_band = _gui_photometric_provenance(system, band)
+        label = _gui_magnitude_label("m", band_text)
+        if compact:
+            return f"{numeric:.2f}"
+        error_text = ""
+        try:
+            error_value = float(error) if error is not None else None
+            if error_value is not None and math.isfinite(error_value) and error_value >= 0:
+                error_text = f" ± {error_value:.3f}"
+        except (TypeError, ValueError):
+            pass
+        return f"{label} [{system_band}] = {numeric:.3f}{error_text}"
+    if numeric is not None and raw_status == "INSTRUMENTAL":
+        if compact:
+            return "自定义ZP"
+        return f"m_user = {numeric:.3f}（自定义零点；系统/波段未声明）"
+    if compact:
+        return _gui_calibration_status_text(raw_status, compact=True)
+    label = _gui_magnitude_label("m", band)
+    return f"{label} = 不可用（{_gui_calibration_status_text(raw_status)}）"
+
+
+def _gui_primary_faintest_display(
+    faintest: object,
+    calibration: object = None,
+    *,
+    wcs_verified: bool = False,
+) -> tuple[str, str, bool]:
+    """Choose the headline value without hiding its photometric provenance.
+
+    The large metric card is the first value users read.  It may show a
+    calibrated apparent magnitude only after the local WCS has passed its
+    gates and the value belongs to a declared photometric system/band.  The
+    third return value lets the caller retain ``m_inst`` as a secondary line.
+    """
+
+    instrumental = getattr(faintest, "instrumental_magnitude", None)
+    try:
+        instrumental_value = float(instrumental)
+        instrumental_text = (
+            f"{instrumental_value:.2f}" if math.isfinite(instrumental_value) else "—"
+        )
+    except (TypeError, ValueError):
+        instrumental_text = "—"
+
+    status = _gui_text_value(getattr(calibration, "status", None)) or _gui_text_value(
+        getattr(faintest, "calibration_status", None)
+    )
+    system = getattr(faintest, "photometric_system", None) or getattr(calibration, "photometric_system", None)
+    band = getattr(faintest, "photometric_band", None) or getattr(calibration, "photometric_band", None)
+    calibrated = getattr(faintest, "calibrated_magnitude", None)
+    try:
+        calibrated_value = float(calibrated) if calibrated is not None else None
+        calibrated_value = (
+            calibrated_value if calibrated_value is not None and math.isfinite(calibrated_value) else None
+        )
+    except (TypeError, ValueError):
+        calibrated_value = None
+
+    if (
+        wcs_verified
+        and status in _GUI_VALID_CALIBRATION_STATUSES
+        and calibrated_value is not None
+        and _gui_text_value(system) is not None
+        and _gui_text_value(band) is not None
+    ):
+        return f"{_gui_magnitude_label('m', band)},cal · 已标定", f"{calibrated_value:.2f}", True
+    return "m_inst（未定标）", instrumental_text, False
+
+
+def _gui_format_absolute_magnitude(
+    absolute: object,
+    *,
+    system: object = None,
+    band: object = None,
+    wcs_available: bool = True,
+    compact: bool = False,
+) -> str:
+    """Format strict absolute magnitude, hiding provisional no-extinction values."""
+
+    label = _gui_magnitude_label("M", band)
+    if absolute is None:
+        return "不可用" if compact else f"{label} = 不可用（没有距离证据）"
+    status = _gui_text_value(getattr(absolute, "status", None)) or "未声明状态"
+    value = getattr(absolute, "value", None)
+    try:
+        numeric = float(value) if value is not None else None
+        numeric = numeric if numeric is not None and math.isfinite(numeric) else None
+    except (TypeError, ValueError):
+        numeric = None
+    # A model-distance value is displayable, but it must remain visibly
+    # distinct from the direct/high-SNR parallax path.  It is still a
+    # band-specific absolute-magnitude estimate when extinction is present;
+    # the qualifier prevents the UI from implying a direct distance measure.
+    if status in _GUI_VALID_ABSOLUTE_STATUSES and numeric is not None:
+        if not wcs_available:
+            return "无 WCS" if compact else f"{label} = 不可用（无 WCS，未进行星表匹配）"
+        if _gui_text_value(system) is None or _gui_text_value(band) is None:
+            return "缺系统/波段" if compact else f"{label} = 不可用（未声明系统/波段）"
+        model_suffix = status.startswith("VALID_MODEL_DISTANCE")
+        distance_source = _gui_text_value(getattr(absolute, "distance_source", None))
+        if compact:
+            return f"{numeric:.2f}·模型" if model_suffix else f"{numeric:.2f}"
+        error = getattr(absolute, "error", None)
+        error_text = ""
+        try:
+            error_value = float(error) if error is not None else None
+            if error_value is not None and math.isfinite(error_value) and error_value >= 0:
+                error_text = f" ± {error_value:.3f}"
+        except (TypeError, ValueError):
+            pass
+        qualifier = "（模型距离" if model_suffix else ""
+        if model_suffix and distance_source:
+            qualifier += f"：{distance_source}"
+        if model_suffix:
+            qualifier += "）"
+        return f"{label}{qualifier} = {numeric:.3f}{error_text}"
+    if compact:
+        return {
+            "VALID_MODEL_DISTANCE": "模型距离",
+            "VALID_MODEL_DISTANCE_NO_INTERVAL": "模型距离无区间",
+            "VALID_NO_EXTINCTION": "未消光",
+            "NO_PARALLAX": "无视差",
+            "LOW_PARALLAX_SNR": "视差质量不足",
+            "INVALID_PARALLAX": "视差无效",
+            "NO_APPARENT_MAGNITUDE": "无表观星等",
+        }.get(status, "不可用")
+    reason = _GUI_ABSOLUTE_STATUS_LABELS.get(status, status)
+    return f"{label} = 不可用（{reason}）"
+
+
+def _gui_photometry_status_text(
+    row: object,
+    *,
+    calibration: object = None,
+    wcs_available: bool = True,
+    compact: bool = False,
+) -> str:
+    """Explain a source row's photometric state and provenance."""
+
+    if not wcs_available:
+        return "无 WCS · 不进行星表匹配" if not compact else "无 WCS"
+    if row is None:
+        return "无逐源测光记录" if not compact else "无测光行"
+    row_status = getattr(row, "status", None)
+    status_text = _gui_calibration_status_text(row_status, compact=compact)
+    system = getattr(row, "photometric_system", None) or getattr(calibration, "photometric_system", None)
+    band = getattr(row, "photometric_band", None) or getattr(calibration, "photometric_band", None)
+    provenance = _gui_photometric_provenance(system, band)
+    if compact:
+        return f"{status_text} · {provenance}"
+    absolute = getattr(row, "absolute_magnitude", None)
+    absolute_status = _gui_text_value(getattr(absolute, "status", None)) if absolute is not None else None
+    absolute_note = ""
+    if absolute_status == "VALID":
+        if _gui_text_value(system) is None or _gui_text_value(band) is None:
+            absolute_note = " · M 缺系统/波段"
+        else:
+            absolute_note = " · M 可用"
+    elif absolute_status in {"VALID_MODEL_DISTANCE", "VALID_MODEL_DISTANCE_NO_INTERVAL"}:
+        source = _gui_text_value(getattr(absolute, "distance_source", None))
+        absolute_note = " · M 模型距离"
+        if source:
+            absolute_note += f"（{source}）"
+    elif absolute_status == "VALID_NO_EXTINCTION":
+        absolute_note = " · M 未消光"
+    return f"{status_text} · 系统/波段 {provenance}{absolute_note}"
+
+
+def _gui_photometry_context_summary(
+    analysis: object,
+    *,
+    wcs_available: bool,
+    wcs_verified: bool = False,
+) -> str:
+    """Summarize what the current GUI result can and cannot claim."""
+
+    if not wcs_available:
+        return "几何：无 WCS · 星表：未接入 · 仅显示 m_inst；m_cal/M 不可用"
+    calibration = getattr(analysis, "photometric_calibration", None) if analysis is not None else None
+    geometry = "局部 WCS 已验证" if wcs_verified else "先验 WCS（尚未验证）"
+    if calibration is None:
+        return f"几何：{geometry} · 光度：未标定 · m_cal/M 严格数值不可用"
+    system_band = _gui_photometric_provenance(
+        getattr(calibration, "photometric_system", None),
+        getattr(calibration, "photometric_band", None),
+    )
+    calibration_system = getattr(calibration, "photometric_system", None)
+    calibration_band = getattr(calibration, "photometric_band", None)
+    rows = tuple(getattr(analysis, "source_photometry", ()) or ())
+    strict_absolute = sum(
+        1
+        for row in rows
+        if (
+            getattr(getattr(row, "absolute_magnitude", None), "status", None) in _GUI_VALID_ABSOLUTE_STATUSES
+            and _gui_text_value(getattr(row, "photometric_system", None) or calibration_system) is not None
+            and _gui_text_value(getattr(row, "photometric_band", None) or calibration_band) is not None
+        )
+    )
+    no_extinction = sum(
+        1
+        for row in rows
+        if getattr(getattr(row, "absolute_magnitude", None), "status", None) == "VALID_NO_EXTINCTION"
+    )
+    model_distance = sum(
+        1
+        for row in rows
+        if getattr(getattr(row, "absolute_magnitude", None), "status", None)
+        in {"VALID_MODEL_DISTANCE", "VALID_MODEL_DISTANCE_NO_INTERVAL"}
+    )
+    return (
+        f"几何：{geometry} · 光度：{system_band} / {getattr(calibration, 'status', '未声明')} · "
+        f"M 可用 {strict_absolute} 行（模型距离 {model_distance}） · 未消光 {no_extinction} 行"
+    )
 
 
 def _preview_values_and_stats(data: np.ndarray) -> tuple[np.ndarray, tuple[float, float, float, float, float, float]]:
@@ -559,7 +970,7 @@ class StarfieldApp(tk.Tk):
         self.analysis: FrameAnalysis | None = None
         self.catalog_analysis: FrameAnalysis | None = None
         self.catalog_match_result: MatchResult | None = None
-        self.catalog_wcs: TangentPlaneWCS | None = None
+        self.catalog_wcs: TangentPlaneWCS | AffineWCSCalibration | None = None
         self.catalog_calibration: AffineWCSCalibration | None = None
         self.catalog_path: Path | None = None
         self.catalog_frame_path: Path | None = None
@@ -609,11 +1020,14 @@ class StarfieldApp(tk.Tk):
         self.source_grid: dict[tuple[int, int], list[Any]] = {}
         self.exposure_s = 1.0
         self.frame_token = 0
-        self.result_queue: queue.Queue[tuple[str, int, Any]] = queue.Queue()
+        # 结果事件兼容旧的 (kind, frame_token, payload) 三元组，也支持
+        # 新的 (kind, frame_token, cache_generation, payload) 四元组。
+        self.result_queue: queue.Queue[tuple[Any, ...]] = queue.Queue()
         self.sequence_frame_states: list[str] = []
         self.task_mode = "single"
         self.busy = False
         self.active_job_token: int | None = None
+        self.active_job_generation: int | None = None
         self.active_job_kind: str | None = None
         self._closing = False
         self.cache_generation = 0
@@ -1100,10 +1514,10 @@ class StarfieldApp(tk.Tk):
 
         action_row = tk.Frame(controls, bg=PAPER_LIGHT)
         action_row.pack(fill="x", padx=15, pady=(10, 12))
-        self._mono_label(action_row, "标定零点", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(side="left")
+        self._mono_label(action_row, "自定义零点", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(side="left")
         self.zero_point_var = tk.StringVar(value="")
         tk.Entry(action_row, textvariable=self.zero_point_var, width=6, bg=PAPER, fg=INK, insertbackground=INK, relief="flat", highlightbackground=PAPER_LINE, highlightthickness=1, font=(MONO, 10)).pack(side="left", padx=(6, 5))
-        self._mono_label(action_row, "可选，仅用于 m_cal", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(side="left")
+        self._mono_label(action_row, "可选，仅生成 m_user（非标准波段）", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(side="left")
         self.cache_button = tk.Button(action_row, text="清缓存", command=self.clear_detection_cache, bg=PAPER, fg=INK, activebackground="#e9d8b7", activeforeground=NAVY_DARK, relief="flat", bd=0, padx=10, pady=7, font=(SANS, 9, "bold"))
         self.cache_button.pack(side="left", padx=(15, 0))
         self.evidence_button = tk.Button(action_row, text="15 帧证据", command=self._show_sequence_evidence, bg=PAPER, fg=INK, activebackground="#dcecf0", activeforeground=NAVY_DARK, relief="flat", bd=0, padx=13, pady=9, font=(SANS, 9, "bold"), state="disabled")
@@ -1290,9 +1704,17 @@ class StarfieldApp(tk.Tk):
         self._mono_label(top, "SOURCE REGISTER · TOP FLUX SNR", color=INK_SOFT, size=8, bg=PAPER_LIGHT).pack(side="left")
         self.table_count_label = self._mono_label(top, "0 rows", color=AMBER, size=8, bg=PAPER_LIGHT)
         self.table_count_label.pack(side="right")
-        columns = ("id", "xy", "peak", "snr", "mag")
+        columns = ("id", "xy", "peak", "snr", "mag", "cal", "absolute")
         self.source_tree = ttk.Treeview(register, columns=columns, show="headings", height=2)
-        for column, title, width in (("id", "ID", 36), ("xy", "X / Y", 82), ("peak", "PEAK", 48), ("snr", "SNR", 44), ("mag", "m_inst", 48)):
+        for column, title, width in (
+            ("id", "ID", 36),
+            ("xy", "X / Y", 82),
+            ("peak", "PEAK", 48),
+            ("snr", "SNR", 44),
+            ("mag", "m_inst", 48),
+            ("cal", "m_cal", 48),
+            ("absolute", "M", 48),
+        ):
             self.source_tree.heading(column, text=title)
             self.source_tree.column(column, width=width, minwidth=34, anchor="w", stretch=True)
         self.source_tree_scrollbar = ttk.Scrollbar(register, orient="vertical", command=self.source_tree.yview)
@@ -2010,7 +2432,7 @@ class StarfieldApp(tk.Tk):
         entry_field(2, "PSF FWHM", self.psf_fwhm_var, "px")
         entry_field(3, "通量门", self.min_flux_snr_var, "σ", focus_sync=True)
         entry_field(4, "单图源上限", self.max_sources_var, "留空=全量", width=7)
-        entry_field(5, "测光零点", self.zero_point_var, "可选", width=7)
+        entry_field(5, "自定义零点", self.zero_point_var, "m_user", width=7)
 
         proposal_row = tk.Frame(advanced, bg=PAPER_LIGHT)
         proposal_row.pack(fill="x", padx=16, pady=(10, 0))
@@ -2313,7 +2735,10 @@ class StarfieldApp(tk.Tk):
             top = tk.Frame(panel, bg=background)
             top.pack(fill="x", padx=14, pady=(10, 0))
             self._mono_label(top, eyebrow, color=accent, size=7, bg=background).pack(side="left")
-            self._mono_label(top, title, color=INK_SOFT, size=7, bg=background).pack(side="right")
+            title_label = self._mono_label(top, title, color=INK_SOFT, size=7, bg=background)
+            title_label.pack(side="right")
+            if column == 2:
+                self.faintest_metric_title = title_label
             return panel
 
         source_box = card(0, "DETECTION ACCOUNT", "not star truth", AMBER_LIGHT, NAVY_SOFT)
@@ -2341,13 +2766,13 @@ class StarfieldApp(tk.Tk):
             value.pack(anchor="w", pady=(2, 0))
             self.metric_values[key] = value
 
-        faintest_box = card(2, "FAINTEST ACCEPTED", "m_inst / M_V", MINT)
+        faintest_box = card(2, "FAINTEST ACCEPTED", "m_inst（未定标）", MINT)
         faintest_value = self._label(faintest_box, "—", color=MINT, size=21, bg=PAPER_LIGHT)
         faintest_value.pack(anchor="w", padx=14, pady=(5, 1))
         self.metric_values["faintest"] = faintest_value
         self.faintest_physical_label = self._mono_label(
             faintest_box,
-            "M_V = 待标定",
+            "m_cal = 未标定 · M = 不可用",
             color=AMBER_LIGHT,
             size=7,
             bg=PAPER_LIGHT,
@@ -2531,7 +2956,7 @@ class StarfieldApp(tk.Tk):
         self.faintest_detail.pack(fill="x", padx=16, pady=(8, 3))
         self.faintest_note = self._label(
             detail,
-            "按通量 SNR、点源形状、边缘、掩膜和饱和状态筛选；m_inst 是仪器星等，有零点后才显示 m_cal。",
+            "按通量 SNR、点源形状、边缘、掩膜和饱和状态筛选；默认只有 m_inst（ADU/s）。m_cal 需要标准星表标定，M 还需要视差与消光。",
             color=INK_SOFT,
             size=8,
             bg=PAPER_LIGHT,
@@ -2596,7 +3021,7 @@ class StarfieldApp(tk.Tk):
         )
         self.table_count_label = self._mono_label(table_header, "0 rows", color=AMBER_LIGHT, size=7, bg=PAPER_LIGHT)
         self.table_count_label.pack(side="right")
-        columns = ("id", "xy", "peak", "snr", "mag")
+        columns = ("id", "xy", "peak", "snr", "mag", "cal", "absolute")
         self.source_tree = ttk.Treeview(register, columns=columns, show="headings", height=2)
         for column, title, width in (
             ("id", "ID", 40),
@@ -2604,6 +3029,8 @@ class StarfieldApp(tk.Tk):
             ("peak", "PEAK", 52),
             ("snr", "SNR", 48),
             ("mag", "m_inst", 54),
+            ("cal", "m_cal (std)", 68),
+            ("absolute", "M (strict)", 70),
         ):
             self.source_tree.heading(column, text=title)
             self.source_tree.column(column, width=width, minwidth=34, anchor="w", stretch=True)
@@ -2968,6 +3395,104 @@ class StarfieldApp(tk.Tk):
             )
             self._update_research_menu_state()
 
+    @staticmethod
+    def _decode_result_event(event: tuple[Any, ...]) -> tuple[str, int, int | None, Any]:
+        """解包 GUI 后台事件，并兼容旧的三元组事件格式。"""
+
+        if len(event) == 4:
+            kind, token, cache_generation, payload = event
+            normalized_generation = None if cache_generation is None else int(cache_generation)
+            return str(kind), int(token), normalized_generation, payload
+        if len(event) == 3:
+            kind, token, payload = event
+            return str(kind), int(token), None, payload
+        raise ValueError(f"invalid GUI result event length: {len(event)}")
+
+    def _queue_task_result(
+        self,
+        kind: str,
+        token: int,
+        cache_generation: int,
+        payload: Any,
+    ) -> None:
+        """把带任务代际的后台结果放入队列。
+
+        ``frame_token`` 防止切帧后的旧结果回填；``cache_generation`` 防止
+        用户清空缓存后、同一帧仍在运行的旧任务回填。保留三元组解包兼容性，
+        使已有研究窗口和测试事件可以渐进迁移。
+        """
+
+        self.result_queue.put((kind, int(token), int(cache_generation), payload))
+
+    def _event_is_current(self, token: int, cache_generation: int | None) -> bool:
+        """判断事件是否仍属于当前帧和当前缓存代际。"""
+
+        if token != self.frame_token:
+            return False
+        return cache_generation is None or cache_generation == getattr(self, "cache_generation", 0)
+
+    def _discard_stale_result(
+        self,
+        kind: str,
+        token: int,
+        cache_generation: int | None,
+        payload: Any,
+    ) -> None:
+        """丢弃过期事件，同时释放仍被旧任务占用的主任务状态。"""
+
+        terminal_job_kinds = {
+            "analysis",
+            "analysis-error",
+            "sequence",
+            "sequence-error",
+            "mosaic",
+            "mosaic-error",
+        }
+        if kind in terminal_job_kinds and getattr(self, "active_job_token", None) == token:
+            active_generation = getattr(self, "active_job_generation", None)
+            if cache_generation is None or active_generation is None or active_generation == cache_generation:
+                self.active_job_token = None
+                self.active_job_generation = None
+                self.busy = False
+                self.active_job_kind = None
+                self._set_job_controls()
+                if kind.startswith("sequence"):
+                    self._set_sequence_progress(0.0, "任务已失效 · 可重试")
+                    self._reset_sequence_ledger(len(getattr(self, "frames", ())), state="pending")
+
+        # 旧任务被清缓存或切帧后，研究窗口里的按钮不能永久停留在
+        # “处理中”。只恢复控件，不写入任何分析/WCS/测光状态。
+        if not isinstance(payload, (tuple, list)):
+            return
+        widget_spec = {
+            "catalog": (2, 3, "重试"),
+            "catalog-error": (1, 2, "重试"),
+            "catalog-calibration": (2, 3, "根据匹配拟合 WCS"),
+            "catalog-calibration-error": (1, 2, "重试 WCS 拟合"),
+            "catalog-validation": (1, 2, "重新验证 15 帧 WCS"),
+            "catalog-validation-error": (1, 2, "重试 15 帧 WCS"),
+            "catalog-auto": (1, 2, "再次自动 Gaia 测光"),
+            "catalog-auto-error": (1, 2, "重试自动 Gaia 测光"),
+            "catalog-fetch": (1, 2, "再次获取 Gaia DR3"),
+            "catalog-fetch-error": (1, 2, "重试获取 Gaia DR3"),
+        }
+        spec = widget_spec.get(kind)
+        if spec is None:
+            return
+        button_index, status_index, button_text = spec
+        if len(payload) <= max(button_index, status_index):
+            return
+        window = payload[0]
+        button = payload[button_index]
+        status = payload[status_index]
+        try:
+            if not bool(window.winfo_exists()):
+                return
+            button.config(state="normal", text=button_text)
+            status.config(text="任务已失效 · 当前帧或缓存已变化 · 请重新运行")
+        except (AttributeError, tk.TclError):
+            return
+
     def _selected_frame_index(self) -> int | None:
         if self.selected_frame is None:
             return None
@@ -3086,7 +3611,7 @@ class StarfieldApp(tk.Tk):
                 self.status_var.set("运动候选层 · 金橙=高速点源轨迹 · 洋红=线状目标 · 橙=待复核线")
         elif mode == "catalog":
             if self.catalog_match_result is None:
-                self.status_var.set("尚未完成星表核验 · 请打开“星表核验”输入目录和已标定 WCS")
+                self.status_var.set("尚未完成星表核验 · 请打开“星表核验”输入目录和光轴先验")
             else:
                 self.status_var.set("星表匹配层 · 绿色标出目录预测位置，连线显示检测位置与预测位置残差")
         elif mode == "candidates":
@@ -3206,6 +3731,7 @@ class StarfieldApp(tk.Tk):
         self.busy = True
         self.active_job_kind = "single"
         self.active_job_token = self.frame_token
+        self.active_job_generation = self.cache_generation
         self._set_job_controls()
         self._set_progress(2.0, "准备")
         self._set_sequence_progress(2.0, "单图 · 准备")
@@ -3218,19 +3744,20 @@ class StarfieldApp(tk.Tk):
 
         def worker() -> None:
             try:
-                self.result_queue.put(("analysis-progress", token, (4.0, "读取 1/1")))
+                self._queue_task_result("analysis-progress", token, cache_generation, (4.0, "读取 1/1"))
                 frame = read_fits(frame_path)
-                self.result_queue.put(("analysis-progress", token, (8.0, "读取完成 · 先找单帧长线")))
+                self._queue_task_result("analysis-progress", token, cache_generation, (8.0, "读取完成 · 先找单帧长线"))
 
                 # 长线检测不依赖全量星点孔径测光。先用同一套背景、掩膜和
                 # 连通域几何规则做轻量候选筛选，让明显长轨迹先进入预览；
                 # 后台随后继续完成数万候选的星点属性和星等精测。
                 def trail_preview_progress(value: float, label: str) -> None:
-                    self.result_queue.put((
+                    self._queue_task_result(
                         "analysis-progress",
                         token,
+                        cache_generation,
                         (8.0 + 6.0 * float(value) / 100.0, f"单帧长线 · {label}"),
-                    ))
+                    )
 
                 try:
                     long_trails = detect_single_frame_long_trails(
@@ -3240,17 +3767,25 @@ class StarfieldApp(tk.Tk):
                     )
                 except Exception as exc:  # noqa: BLE001 - supplementary preview must not block star measurement
                     long_trails = ()
-                    self.result_queue.put(
-                        ("analysis-progress", token, (14.0, f"单帧长线预检跳过 · {type(exc).__name__}"))
+                    self._queue_task_result(
+                        "analysis-progress",
+                        token,
+                        cache_generation,
+                        (14.0, f"单帧长线预检跳过 · {type(exc).__name__}"),
                     )
                 # 这是单帧形状候选，不是已经确认的 moving 目标；UI 用橙色
                 # 显示，并在最终分析结果到达时用同一结果替换。
-                self.result_queue.put(("trail-preview", token, long_trails))
+                self._queue_task_result("trail-preview", token, cache_generation, long_trails)
 
                 def progress(value: float, label: str) -> None:
-                    self.result_queue.put(("analysis-progress", token, (14.0 + 0.80 * float(value), label)))
+                    self._queue_task_result(
+                        "analysis-progress",
+                        token,
+                        cache_generation,
+                        (14.0 + 0.80 * float(value), label),
+                    )
 
-                self.result_queue.put(("analysis-progress", token, (14.5, "读取单图缓存")))
+                self._queue_task_result("analysis-progress", token, cache_generation, (14.5, "读取单图缓存"))
                 key = cache_key(
                     frame,
                     threshold_sigma=threshold,
@@ -3292,15 +3827,20 @@ class StarfieldApp(tk.Tk):
                         cache_state = f"缓存写入失败：{exc}"
                 else:
                     cache_state = "缓存命中"
-                    self.result_queue.put(("analysis-progress", token, (94.0, "缓存命中")))
+                    self._queue_task_result("analysis-progress", token, cache_generation, (94.0, "缓存命中"))
                 if not cache_hit:
-                    self.result_queue.put(("analysis-progress", token, (94.0, "完成星点检测")))
-                self.result_queue.put(("analysis-progress", token, (94.0, "生成预览")))
+                    self._queue_task_result("analysis-progress", token, cache_generation, (94.0, "完成星点检测"))
+                self._queue_task_result("analysis-progress", token, cache_generation, (94.0, "生成预览"))
                 previews = _make_preview_variants(frame.data)
-                self.result_queue.put(("analysis-progress", token, (100.0, "完成")))
-                self.result_queue.put(("analysis", token, (analysis, frame.data.shape, previews, cache_state, cache_hit, long_trails)))
+                self._queue_task_result("analysis-progress", token, cache_generation, (100.0, "完成"))
+                self._queue_task_result(
+                    "analysis",
+                    token,
+                    cache_generation,
+                    (analysis, frame.data.shape, previews, cache_state, cache_hit, long_trails),
+                )
             except Exception as exc:  # noqa: BLE001 - worker must return a user-facing error
-                self.result_queue.put(("analysis-error", token, exc))
+                self._queue_task_result("analysis-error", token, cache_generation, exc)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -3609,6 +4149,7 @@ class StarfieldApp(tk.Tk):
         self.busy = True
         self.active_job_kind = "sequence"
         self.active_job_token = token
+        self.active_job_generation = cache_generation
         self._set_job_controls()
         self._set_progress(2.0, f"0/{len(frame_paths)}")
         self._set_sequence_progress(2.0, f"准备 · 0/{len(frame_paths)}")
@@ -3623,7 +4164,12 @@ class StarfieldApp(tk.Tk):
 
         def worker() -> None:
             try:
-                self.result_queue.put(("analysis-progress", token, (2.5, f"准备序列缓存 · 0/{len(frame_paths)}")))
+                self._queue_task_result(
+                    "analysis-progress",
+                    token,
+                    cache_generation,
+                    (2.5, f"准备序列缓存 · 0/{len(frame_paths)}"),
+                )
                 key = sequence_cache_key(frame_paths, parameters=sequence_parameters)
                 with self.cache_lock:
                     result = load_sequence_result(self.cache_dir, key)
@@ -3661,7 +4207,7 @@ class StarfieldApp(tk.Tk):
                             value, label = 94.0, "线状筛选"
                         else:
                             value, label = 100.0, "完成"
-                        self.result_queue.put(("analysis-progress", token, (value, label)))
+                        self._queue_task_result("analysis-progress", token, cache_generation, (value, label))
 
                     def detail_progress(frame_index: int, total: int, value: float, label: str) -> None:
                         bounded = max(0.0, min(100.0, float(value)))
@@ -3672,7 +4218,12 @@ class StarfieldApp(tk.Tk):
                             finished = sum(item >= 100.0 for item in frame_progress_values)
                         overall = 8.0 + 72.0 * completed_equivalent / max(1, total)
                         progress_label = f"完成 {finished}/{total} · F{frame_index:02d} {label}"
-                        self.result_queue.put(("analysis-progress", token, (overall, progress_label)))
+                        self._queue_task_result(
+                            "analysis-progress",
+                            token,
+                            cache_generation,
+                            (overall, progress_label),
+                        )
 
                     result = analyze_sequence(
                         frame_paths,
@@ -3718,11 +4269,11 @@ class StarfieldApp(tk.Tk):
                         cache_state = f"序列缓存写入失败：{exc}"
                 else:
                     cache_state = "序列缓存命中"
-                    self.result_queue.put(("analysis-progress", token, (100.0, "缓存命中")))
-                self.result_queue.put(("analysis-progress", token, (100.0, "完成")))
-                self.result_queue.put(("sequence", token, (result, cache_state, cache_hit)))
+                    self._queue_task_result("analysis-progress", token, cache_generation, (100.0, "缓存命中"))
+                self._queue_task_result("analysis-progress", token, cache_generation, (100.0, "完成"))
+                self._queue_task_result("sequence", token, cache_generation, (result, cache_state, cache_hit))
             except Exception as exc:  # noqa: BLE001 - worker must return a user-facing error
-                self.result_queue.put(("sequence-error", token, exc))
+                self._queue_task_result("sequence-error", token, cache_generation, exc)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -3760,6 +4311,7 @@ class StarfieldApp(tk.Tk):
         self.busy = True
         self.active_job_kind = "mosaic"
         self.active_job_token = token
+        self.active_job_generation = cache_generation
         self._set_job_controls()
         self._set_progress(2.0, "准备合成大图")
         self._set_sequence_progress(2.0, f"合成准备 · 0/{len(frame_paths)}")
@@ -3773,7 +4325,12 @@ class StarfieldApp(tk.Tk):
                 cache_hit = result is not None
                 if result is None:
                     def progress(value: float, label: str) -> None:
-                        self.result_queue.put(("mosaic-progress", token, (float(value), str(label))))
+                        self._queue_task_result(
+                            "mosaic-progress",
+                            token,
+                            cache_generation,
+                            (float(value), str(label)),
+                        )
 
                     result = build_registered_mosaic(
                         frame_paths,
@@ -3794,11 +4351,11 @@ class StarfieldApp(tk.Tk):
                         cache_state = f"大图缓存写入失败：{exc}"
                 else:
                     cache_state = "大图缓存命中"
-                    self.result_queue.put(("mosaic-progress", token, (100.0, "大图缓存命中")))
-                self.result_queue.put(("mosaic-progress", token, (100.0, "合成大图完成")))
-                self.result_queue.put(("mosaic", token, (result, cache_state, cache_hit)))
+                    self._queue_task_result("mosaic-progress", token, cache_generation, (100.0, "大图缓存命中"))
+                self._queue_task_result("mosaic-progress", token, cache_generation, (100.0, "合成大图完成"))
+                self._queue_task_result("mosaic", token, cache_generation, (result, cache_state, cache_hit))
             except Exception as exc:  # noqa: BLE001 - worker must return a user-facing error
-                self.result_queue.put(("mosaic-error", token, exc))
+                self._queue_task_result("mosaic-error", token, cache_generation, exc)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -3806,26 +4363,46 @@ class StarfieldApp(tk.Tk):
         if self.__dict__.get("_closing", False):
             return
         try:
-            kind, token, payload = self.result_queue.get_nowait()
+            raw_event = self.result_queue.get_nowait()
         except queue.Empty:
+            self.after(100, self._poll_result)
+            return
+        try:
+            kind, token, event_generation, payload = self._decode_result_event(raw_event)
+        except (TypeError, ValueError):
+            # 队列只由本模块写入；遇到损坏事件时跳过这一条，不能让
+            # 一个后台异常把主界面的事件轮询永久打断。
+            self.after(100, self._poll_result)
+            return
+        if not self._event_is_current(token, event_generation):
+            self._discard_stale_result(kind, token, event_generation, payload)
             self.after(100, self._poll_result)
             return
         if kind == "analysis-progress":
             # 检测器会在每帧源级测量时产生很多细粒度事件。逐条以 100 ms
             # 消费会让 UI 落后几十秒，甚至在后台已完成后还看不到完成状态；
             # 这里只合并连续的同一任务进度，保留队列中的最终结果事件。
-            latest_progress = (kind, token, payload)
+            latest_progress = (kind, token, event_generation, payload)
             while True:
                 try:
                     queued = self.result_queue.get_nowait()
                 except queue.Empty:
                     break
-                if queued[0] == "analysis-progress" and queued[1] == token:
-                    latest_progress = queued
+                try:
+                    queued_kind, queued_token, queued_generation, queued_payload = self._decode_result_event(queued)
+                except (TypeError, ValueError):
+                    self.result_queue.put(queued)
+                    break
+                if (
+                    queued_kind == "analysis-progress"
+                    and queued_token == token
+                    and queued_generation == event_generation
+                ):
+                    latest_progress = (queued_kind, queued_token, queued_generation, queued_payload)
                     continue
                 self.result_queue.put(queued)
                 break
-            _, token, payload = latest_progress
+            _, token, event_generation, payload = self._decode_result_event(latest_progress)
             if token == self.frame_token:
                 value, progress_text = payload
                 self._set_progress(float(value), str(progress_text))
@@ -4073,13 +4650,13 @@ class StarfieldApp(tk.Tk):
             self.after(100, self._poll_result)
             return
         if kind == "catalog-calibration":
-            window, render, button, status, calibration = payload
+            window, render, button, status, calibration, refined_analysis = payload
             try:
                 exists = bool(window.winfo_exists())
             except tk.TclError:
                 exists = False
             if exists and token == self.frame_token:
-                render(calibration)
+                render(calibration, refined_analysis)
                 button.config(state="normal", text="根据匹配拟合 WCS")
             self.after(100, self._poll_result)
             return
@@ -4116,6 +4693,110 @@ class StarfieldApp(tk.Tk):
                 status.config(text=f"15 帧 WCS 验证失败：{error_text}")
             self.after(100, self._poll_result)
             return
+        if kind == "catalog-auto-progress":
+            window, button, status, requested_frame, value, progress_text = payload
+            try:
+                exists = bool(window.winfo_exists())
+            except tk.TclError:
+                exists = False
+            if exists and token == self.frame_token and self.selected_frame == requested_frame:
+                button.config(text=f"自动处理中… {float(value):.0f}%")
+                status.config(text=f"{float(value):.0f}% · {progress_text}")
+            self.after(100, self._poll_result)
+            return
+        if kind == "catalog-auto":
+            window, button, status, requested_frame, catalog_path_var, catalog_path, result, render_result = payload
+            try:
+                exists = bool(window.winfo_exists())
+            except tk.TclError:
+                exists = False
+            if exists:
+                current = token == self.frame_token and self.selected_frame == requested_frame
+                button.config(state="normal", text="再次自动 Gaia 测光")
+                if current:
+                    catalog_path_var.set(str(catalog_path))
+                    self.catalog_path = Path(catalog_path)
+                    render_result(result, Path(catalog_path))
+                    status.config(text=f"自动流程结束 · {result.status} · {result.reason}")
+                else:
+                    status.config(text=f"请求帧已切换 · 自动结果已保存但未写入当前窗口")
+            self.after(100, self._poll_result)
+            return
+        if kind == "catalog-auto-error":
+            window, button, status, requested_frame, error_text = payload
+            try:
+                exists = bool(window.winfo_exists())
+            except tk.TclError:
+                exists = False
+            if exists:
+                button.config(state="normal", text="重试自动 Gaia 测光")
+                if token == self.frame_token and self.selected_frame == requested_frame:
+                    status.config(text=f"自动 Gaia 测光失败：{error_text}")
+                else:
+                    status.config(text=f"请求帧已切换 · 自动 Gaia 测光失败：{error_text}")
+            self.after(100, self._poll_result)
+            return
+        if kind == "catalog-fetch-progress":
+            window, button, status, requested_frame, progress_text = payload
+            try:
+                exists = bool(window.winfo_exists())
+            except tk.TclError:
+                exists = False
+            if exists and token == self.frame_token and self.selected_frame == requested_frame:
+                status.config(text=progress_text)
+            self.after(100, self._poll_result)
+            return
+        if kind == "catalog-fetch":
+            window, button, status, requested_frame, catalog_path_var, result = payload
+            try:
+                exists = bool(window.winfo_exists())
+            except tk.TclError:
+                exists = False
+            if exists:
+                current = token == self.frame_token and self.selected_frame == requested_frame
+                button.config(state="normal", text="再次获取 Gaia DR3")
+                if current:
+                    catalog_path_var.set(str(result.output_path))
+                    self.catalog_path = result.output_path
+                    completeness = "完整性通过" if result.complete else "结果不完整，不能当作完整星表"
+                    status.config(
+                        text=(
+                            f"Gaia DR3 已保存 · {result.row_count:,} 行 · {result.queried_tile_count} 块 · "
+                            f"{completeness} · 审计：{result.audit_path}"
+                        )
+                    )
+                    note.config(
+                        text=(
+                            f"Gaia DR3 已加载到 CSV 输入框。当前结果覆盖查询圆 {result.search_radius_deg:.4f}°，"
+                            f"G={result.min_g_mag:g}–{result.max_g_mag:g}；旁车 JSON 记录分块是否截断。"
+                            "它只是身份/外部光度参考，仍需填写或验证 WCS；Gaia G 不能直接改名为开运相机 450–750 nm 星等。"
+                        )
+                    )
+                    summary.config(
+                        text=(
+                            f"公共星表：Gaia DR3 · {result.row_count:,} 行 · "
+                            f"查询完整性：{'通过' if result.complete else '未通过'} · "
+                            f"审计文件：{result.audit_path}"
+                        )
+                    )
+                else:
+                    status.config(text=f"请求帧已切换 · 结果已保存：{result.output_path} · 未自动写入当前窗口")
+            self.after(100, self._poll_result)
+            return
+        if kind == "catalog-fetch-error":
+            window, button, status, requested_frame, error_text = payload
+            try:
+                exists = bool(window.winfo_exists())
+            except tk.TclError:
+                exists = False
+            if exists:
+                button.config(state="normal", text="重试获取 Gaia DR3")
+                if token == self.frame_token and self.selected_frame == requested_frame:
+                    status.config(text=f"Gaia DR3 获取失败：{error_text}")
+                else:
+                    status.config(text=f"请求帧已切换 · Gaia 获取失败：{error_text}")
+            self.after(100, self._poll_result)
+            return
         if kind == "catalog-calibration-error":
             window, button, status, error_text = payload
             try:
@@ -4148,6 +4829,7 @@ class StarfieldApp(tk.Tk):
                 "mosaic-error",
             }:
                 self.active_job_token = None
+                self.active_job_generation = None
                 self.busy = False
                 self.active_job_kind = None
                 self._set_job_controls()
@@ -4164,6 +4846,7 @@ class StarfieldApp(tk.Tk):
             messagebox.showerror("预览载入失败", str(payload))
         elif kind == "analysis-error":
             self.active_job_token = None
+            self.active_job_generation = None
             self.busy = False
             self.active_job_kind = None
             self._set_job_controls()
@@ -4174,6 +4857,7 @@ class StarfieldApp(tk.Tk):
             messagebox.showerror("分析失败", str(payload))
         elif kind == "analysis":
             self.active_job_token = None
+            self.active_job_generation = None
             self.busy = False
             self.active_job_kind = None
             self._set_job_controls()
@@ -4224,6 +4908,7 @@ class StarfieldApp(tk.Tk):
             self._render_analysis()
         elif kind == "sequence-error":
             self.active_job_token = None
+            self.active_job_generation = None
             self.busy = False
             self.active_job_kind = None
             self._set_job_controls()
@@ -4240,6 +4925,7 @@ class StarfieldApp(tk.Tk):
             messagebox.showerror("动目标分析失败", str(payload))
         elif kind == "mosaic-error":
             self.active_job_token = None
+            self.active_job_generation = None
             self.busy = False
             self.active_job_kind = None
             self._set_job_controls()
@@ -4251,6 +4937,7 @@ class StarfieldApp(tk.Tk):
             messagebox.showerror("15 帧合成大图失败", str(payload))
         elif kind == "sequence":
             self.active_job_token = None
+            self.active_job_generation = None
             self.busy = False
             self.active_job_kind = None
             self._set_job_controls()
@@ -4283,6 +4970,7 @@ class StarfieldApp(tk.Tk):
             self._draw_preview()
         elif kind == "mosaic":
             self.active_job_token = None
+            self.active_job_generation = None
             self.busy = False
             self.active_job_kind = None
             self._set_job_controls()
@@ -4302,11 +4990,13 @@ class StarfieldApp(tk.Tk):
     def _reset_result_widgets(self) -> None:
         for value in self.metric_values.values():
             value.config(text="—")
+        if self.__dict__.get("faintest_metric_title") is not None:
+            self.faintest_metric_title.config(text="m_inst（未定标）")
         if self.__dict__.get("faintest_physical_label") is not None:
-            self.faintest_physical_label.config(text="m_std = 待标定 · M_V = 不可计算")
+            self.faintest_physical_label.config(text="m_cal = 未标定 · M = 不可用")
         self.faintest_detail.config(text="尚未运行分析")
         self.faintest_note.config(
-            text="m_inst = -2.5 log10(ADU/s) 只是仪器星等；没有零点、波段、距离和消光时，不输出 m_V 或 M_V。"
+            text="测光状态：仅 m_inst（ADU/s）· 无 WCS/星表；m_cal 需要标准系统与波段，M 还需要可靠视差和消光。"
         )
         if self.sequence_result is None:
             self.sequence_brief = None
@@ -4316,7 +5006,8 @@ class StarfieldApp(tk.Tk):
         else:
             self._render_sequence_evidence(self.sequence_result)
         self.table_count_label.config(text="0 rows")
-        self.hover_info_var.set("将鼠标移到候选点查看坐标、通量、误差、SNR、形状和仪器星等")
+        self.hover_info_var.set("将鼠标移到候选点查看坐标、通量、误差、SNR、三层星等和落选原因")
+        self.source_photometry_by_id = {}
         for item in self.source_tree.get_children():
             self.source_tree.delete(item)
 
@@ -4341,37 +5032,87 @@ class StarfieldApp(tk.Tk):
             f"已应用 · { {'gaussian': 'Gaussian基线', 'hybrid': 'hybrid平衡', 'ensemble': 'Starlet实验'}.get(applied_proposal_mode, applied_proposal_mode) } · 候选 {applied_threshold:.1f}σ · 可信 SNR {applied_min_flux_snr:.1f}σ · 可记录反馈",
             color=MINT,
         )
-        exposure_ms = self.analysis.frame.header.get("EXPOSURE")
-        self.exposure_s = float(exposure_ms) / 1000.0 if isinstance(exposure_ms, (int, float)) and float(exposure_ms) > 0 else 1.0
+        self.exposure_s = exposure_seconds(self.analysis.frame.header)
         self.metric_values["candidate"].config(text=f"{detection.candidate_count:,}")
         self.metric_values["returned"].config(text=f"{detection.star_count:,}")
         self.metric_values["background"].config(text=f"{detection.background:.2f}")
         self.metric_values["noise"].config(text=f"{detection.noise:.2f}")
+        self.source_photometry_by_id = {
+            int(row.detection_id): row for row in getattr(self.analysis, "source_photometry", ())
+        }
+        wcs_verified = self.catalog_calibration is not None and self.catalog_analysis is self.analysis
         faintest = self.analysis.faintest
         if faintest is None:
             self.metric_values["faintest"].config(text="—")
+            self.faintest_metric_title.config(text="m_inst（未定标）")
             if self.__dict__.get("faintest_physical_label") is not None:
-                self.faintest_physical_label.config(text="m_std = 待标定 · M_V = 不可计算")
+                self.faintest_physical_label.config(text="m_cal = 未标定 · M = 不可用")
             self.faintest_detail.config(text="没有满足质量条件的源")
             self.faintest_note.config(
-                text="请检查阈值、掩膜和边缘筛选；m_inst 只在质量源上定义，仍不能代替标准表观星等。"
+                text="请检查阈值、掩膜和边缘筛选；没有通过质量门控的亮点不参与最暗源判定。当前没有可报告的星等。"
             )
         else:
-            self.metric_values["faintest"].config(text=f"{faintest.instrumental_magnitude:.2f}")
-            if faintest.calibrated_magnitude is not None:
-                calibrated_line = f"m_cal = {faintest.calibrated_magnitude:.3f}（未指定波段）"
-                physical_line = f"m_cal = {faintest.calibrated_magnitude:.2f} · M_V = 不可计算"
-            else:
-                calibrated_line = "m_std = 待标定"
-                physical_line = "m_std = 待标定 · M_V = 不可计算"
+            calibration = getattr(self.analysis, "photometric_calibration", None)
+            primary_title, primary_value, primary_is_calibrated = _gui_primary_faintest_display(
+                faintest,
+                calibration,
+                wcs_verified=wcs_verified,
+            )
+            self.faintest_metric_title.config(text=primary_title)
+            self.metric_values["faintest"].config(text=primary_value)
+            calibration_status = getattr(calibration, "status", None) or faintest.calibration_status
+            system = faintest.photometric_system or getattr(calibration, "photometric_system", None)
+            band = faintest.photometric_band or getattr(calibration, "photometric_band", None)
+            calibrated_line = _gui_format_calibrated_magnitude(
+                faintest.calibrated_magnitude,
+                status=calibration_status,
+                system=system,
+                band=band,
+                error=faintest.calibrated_magnitude_error,
+                wcs_available=wcs_verified,
+            )
+            absolute = faintest.absolute_magnitude
+            absolute_line = _gui_format_absolute_magnitude(
+                absolute,
+                system=system,
+                band=band,
+                wcs_available=wcs_verified,
+            )
+            calibrated_badge = _gui_format_calibrated_magnitude(
+                faintest.calibrated_magnitude,
+                status=calibration_status,
+                system=system,
+                band=band,
+                error=faintest.calibrated_magnitude_error,
+                wcs_available=wcs_verified,
+                compact=True,
+            )
+            absolute_badge = _gui_format_absolute_magnitude(
+                absolute,
+                system=system,
+                band=band,
+                wcs_available=wcs_verified,
+                compact=True,
+            )
             if self.__dict__.get("faintest_physical_label") is not None:
-                self.faintest_physical_label.config(text=physical_line)
+                secondary = f"m_inst = {faintest.instrumental_magnitude:.2f}"
+                if primary_is_calibrated:
+                    secondary += f" · m_G = {calibrated_badge}"
+                else:
+                    secondary += f" · m_cal = {calibrated_badge}"
+                self.faintest_physical_label.config(text=f"{secondary} · M {absolute_badge}")
             self.faintest_detail.config(
                 text=(
                     f"ID {faintest.detection_id:04d}\n"
-                    f"m_inst = {faintest.instrumental_magnitude:.3f}\n"
+                    f"m_inst = {faintest.instrumental_magnitude:.3f}"
+                    + (f" ± {faintest.instrumental_magnitude_error:.3f}" if faintest.instrumental_magnitude_error is not None else "")
+                    + "\n"
                     f"{calibrated_line}\n"
-                    "M_V = 不可计算（缺距离/视差与消光）\n"
+                    f"{absolute_line}\n"
+                    f"测光状态 = {_gui_calibration_status_text(calibration_status)}\n"
+                    f"最暗判定集合 = {_gui_selection_scope_text(faintest.selection_scope)} "
+                    f"({faintest.calibrated_candidate_count:,}/{faintest.eligible_candidate_count:,} 可标定)\n"
+                    f"系统/波段 = {_gui_photometric_provenance(system, band)}\n"
                     f"X {faintest.x:.1f}  /  Y {faintest.y:.1f}"
                 )
             )
@@ -4386,7 +5127,9 @@ class StarfieldApp(tk.Tk):
             self.faintest_note.config(
                 text=(
                     f"通量 {faintest.flux:.1f} ADU ({rate_text} ADU/s) · flux SNR {signal_snr:.1f}\n"
-                    "m_inst 是仪器星等，不是 m_V，更不是 M_V；已在左侧用绿色环标出。\n"
+                    f"{_gui_photometry_context_summary(self.analysis, wcs_available=wcs_verified, wcs_verified=wcs_verified)}。已在左侧用绿色环标出。\n"
+                    f"最暗源排序口径：{_gui_selection_scope_text(faintest.selection_scope)}；"
+                    f"候选 {faintest.eligible_candidate_count:,}，可标定 {faintest.calibrated_candidate_count:,}。\n"
                     f"{comparison_text}"
                 )
             )
@@ -4398,8 +5141,42 @@ class StarfieldApp(tk.Tk):
         for source in sorted(quality_sources, key=lambda item: (item.flux_snr if item.flux_snr is not None else item.snr), reverse=True)[:40]:
             magnitude = instrumental_magnitude(source.flux, exposure_s=self.exposure_s)
             magnitude_text = f"{magnitude:.2f}" if magnitude is not None else "—"
+            source_photometry = self.source_photometry_by_id.get(int(source.detection_id))
+            if source_photometry is None:
+                calibrated_text = "未接入"
+                absolute_text = "不可用"
+            else:
+                calibration = getattr(self.analysis, "photometric_calibration", None)
+                calibrated_text = _gui_format_calibrated_magnitude(
+                    source_photometry.calibrated_magnitude,
+                    status=getattr(calibration, "status", None) or source_photometry.status,
+                    system=source_photometry.photometric_system or getattr(calibration, "photometric_system", None),
+                    band=source_photometry.photometric_band or getattr(calibration, "photometric_band", None),
+                    error=source_photometry.calibrated_magnitude_error,
+                    wcs_available=wcs_verified,
+                    compact=True,
+                )
+                absolute_text = _gui_format_absolute_magnitude(
+                    source_photometry.absolute_magnitude,
+                    system=source_photometry.photometric_system or getattr(calibration, "photometric_system", None),
+                    band=source_photometry.photometric_band or getattr(calibration, "photometric_band", None),
+                    wcs_available=wcs_verified,
+                    compact=True,
+                )
             signal_snr = source.flux_snr if source.flux_snr is not None else source.snr
-            self.source_tree.insert("", tk.END, values=(f"{source.detection_id:04d}", f"{source.x:.1f} / {source.y:.1f}", f"{source.peak:.0f}", f"{signal_snr:.1f}", magnitude_text))
+            self.source_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    f"{source.detection_id:04d}",
+                    f"{source.x:.1f} / {source.y:.1f}",
+                    f"{source.peak:.0f}",
+                    f"{signal_snr:.1f}",
+                    magnitude_text,
+                    calibrated_text,
+                    absolute_text,
+                ),
+            )
         self._draw_preview()
 
     def _render_sequence_evidence(self, result: SequenceResult) -> None:
@@ -4590,7 +5367,7 @@ class StarfieldApp(tk.Tk):
         self._label(header, "星表核验", color=NAVY_DARK, size=20, bold=True, bg=PAPER).pack(anchor="w", pady=(5, 0))
         self._label(
             header,
-            "星表先用于身份核验；匹配点足够且几何稳定时，可进一步拟合视场内局部 WCS。它不替代图像检测，也不能把匹配数直接当作全部恒星数。",
+            "星表先用于身份核验；匹配点足够且几何稳定时，可进一步拟合视场内局部 WCS。只有通过多参考星光度标定后才显示标准表观星等；严格 M 还必须有视差和消光。",
             color=INK_SOFT,
             size=9,
             bg=PAPER,
@@ -4622,6 +5399,9 @@ class StarfieldApp(tk.Tk):
         rotation_var = tk.StringVar(value="0")
         parity_var = tk.StringVar(value="1")
         radius_var = tk.StringVar(value="3")
+        query_radius_var = tk.StringVar(value=f"{camera_footprint_radius_deg():.4f}")
+        min_g_var = tk.StringVar(value=f"{DEFAULT_GAIA_MIN_G_MAG:.1f}")
+        max_g_var = tk.StringVar(value=f"{DEFAULT_GAIA_MAX_G_MAG:.1f}")
 
         self._mono_label(form, "CATALOG CSV", color=AMBER, size=8, bg=PAPER_LIGHT).grid(row=0, column=0, padx=(14, 7), pady=(13, 7), sticky="e")
         path_entry = tk.Entry(form, textvariable=catalog_path_var, bg=PAPER, fg=INK, insertbackground=INK, relief="flat", highlightbackground=PAPER_LINE, highlightthickness=1, font=(MONO, 9))
@@ -4645,6 +5425,9 @@ class StarfieldApp(tk.Tk):
             ("ROTATION / deg", rotation_var, 2, 0),
             ("PARITY ±1", parity_var, 2, 2),
             ("MATCH RADIUS / px", radius_var, 2, 4),
+            ("GAIA MIN G / mag", min_g_var, 3, 0),
+            ("GAIA MAX G / mag", max_g_var, 3, 2),
+            ("QUERY RADIUS / deg", query_radius_var, 3, 4),
         )
         for label_text, variable, row, label_column in field_specs:
             self._mono_label(form, label_text, color=INK_SOFT, size=8, bg=PAPER_LIGHT).grid(row=row, column=label_column, padx=(14 if label_column == 0 else 12, 7), pady=(4, 13), sticky="e")
@@ -4652,23 +5435,51 @@ class StarfieldApp(tk.Tk):
 
         note = self._label(
             form,
-            "当前 FITS 没有标准 WCS。RA/DEC 可用首行辅助字段作为光轴先验；先运行身份匹配，再点击“根据匹配拟合 WCS”。拟合失败或内点不足时继续保持待标定，不能凭截图猜尺度。",
+            "当前 FITS 没有标准 WCS。RA/DEC、像元尺度、旋转和 parity 只是本次匹配的先验；先运行身份匹配，再点击“根据匹配拟合 WCS”。“在线获取 Gaia DR3”只在点击后联网，默认下载 G≤13.5 的标定参考子表，并把完整性写入旁车 JSON；它不会把 Gaia G 直接改名为开运相机 450–750 nm 星等。",
             color=INK_SOFT,
             size=8,
             bg=PAPER_LIGHT,
             justify="left",
             wraplength=950,
         )
-        note.grid(row=3, column=0, columnspan=7, padx=14, pady=(0, 12), sticky="w")
+        note.grid(row=4, column=0, columnspan=7, padx=14, pady=(0, 12), sticky="w")
 
         body = tk.Frame(window, bg=PAPER_LIGHT, highlightbackground=PAPER_LINE, highlightthickness=1)
         body.pack(fill="both", expand=True, padx=24, pady=(0, 24))
         toolbar = tk.Frame(body, bg=PAPER_LIGHT)
         toolbar.pack(fill="x", padx=14, pady=(12, 8))
-        status = self._mono_label(toolbar, "尚未运行 · 需要 CSV 与已标定 WCS", color=INK_SOFT, size=8, bg=PAPER_LIGHT)
+        status = self._mono_label(toolbar, "尚未运行 · 需要 CSV + 光轴先验（不是已标定 WCS）", color=INK_SOFT, size=8, bg=PAPER_LIGHT)
         status.pack(side="left")
         run_button = tk.Button(toolbar, text="运行星表核验", bg=NAVY, fg=WHITE, activebackground=NAVY_SOFT, activeforeground=WHITE, relief="flat", bd=0, padx=13, pady=7, font=(SANS, 9, "bold"))
         run_button.pack(side="right")
+        fetch_button = tk.Button(
+            toolbar,
+            text="在线获取 Gaia DR3",
+            bg=SKY,
+            fg=NAVY_DARK,
+            activebackground=SKY_LIGHT,
+            activeforeground=NAVY_DARK,
+            relief="flat",
+            bd=0,
+            padx=13,
+            pady=7,
+            font=(SANS, 9, "bold"),
+        )
+        fetch_button.pack(side="right", padx=(0, 8))
+        auto_button = tk.Button(
+            toolbar,
+            text="自动板解 + 测光",
+            bg=AMBER,
+            fg=NAVY_DARK,
+            activebackground=AMBER_LIGHT,
+            activeforeground=NAVY_DARK,
+            relief="flat",
+            bd=0,
+            padx=13,
+            pady=7,
+            font=(SANS, 9, "bold"),
+        )
+        auto_button.pack(side="right", padx=(0, 8))
         calibrate_button = tk.Button(toolbar, text="根据匹配拟合 WCS", state="disabled", bg=MINT, fg=WHITE, activebackground="#43856f", activeforeground=WHITE, relief="flat", bd=0, padx=13, pady=7, font=(SANS, 9, "bold"))
         calibrate_button.pack(side="right", padx=(0, 8))
         export_calibration_button = tk.Button(toolbar, text="导出校准 JSON", state="disabled", bg=PAPER, fg=INK, activebackground="#dcecf0", relief="flat", bd=0, padx=11, pady=7, font=(SANS, 9, "bold"))
@@ -4679,46 +5490,140 @@ class StarfieldApp(tk.Tk):
         summary.pack(fill="x", padx=14, pady=(0, 8))
         calibration_summary = self._mono_label(body, "校准状态：尚未根据匹配点拟合 · 至少需要 6 个有效且非共线匹配", color=INK_SOFT, size=8, bg=PAPER_LIGHT, anchor="w", justify="left", wraplength=950)
         calibration_summary.pack(fill="x", padx=14, pady=(0, 8))
-        columns = ("det", "source", "det_xy", "pred_xy", "residual", "mag")
+        columns = ("det", "source", "det_xy", "pred_xy", "residual", "mag", "m_inst", "m_cal", "absolute", "status")
         match_tree = ttk.Treeview(body, columns=columns, show="headings")
-        for column, title, width in (("det", "DETECTION ID", 110), ("source", "CATALOG ID", 180), ("det_xy", "DETECTED X / Y", 150), ("pred_xy", "PREDICTED X / Y", 150), ("residual", "RESIDUAL / px", 120), ("mag", "CATALOG MAG", 120)):
+        for column, title, width in (
+            ("det", "DETECTION ID", 90),
+            ("source", "CATALOG ID", 150),
+            ("det_xy", "DETECTED X / Y", 125),
+            ("pred_xy", "PREDICTED X / Y", 125),
+            ("residual", "RESIDUAL / px", 90),
+            ("mag", "CATALOG MAG", 90),
+            ("m_inst", "m_inst", 80),
+            ("m_cal", "m_cal (std)", 88),
+            ("absolute", "M (strict)", 88),
+            ("status", "PHOTO STATUS", 170),
+        ):
             match_tree.heading(column, text=title)
-            match_tree.column(column, width=width, anchor="w", stretch=column in {"source", "pred_xy"})
+            match_tree.column(column, width=width, anchor="w", stretch=column in {"source", "pred_xy", "status"})
         scroll = ttk.Scrollbar(body, orient="vertical", command=match_tree.yview)
         match_tree.configure(yscrollcommand=scroll.set)
         match_tree.pack(side="left", fill="both", expand=True, padx=(14, 0), pady=(0, 14))
         scroll.pack(side="right", fill="y", padx=(0, 14), pady=(0, 14))
 
         current_analysis: FrameAnalysis | None = None
-        current_wcs: TangentPlaneWCS | None = None
+        current_wcs: TangentPlaneWCS | AffineWCSCalibration | None = None
         current_catalog: tuple[CatalogSource, ...] = ()
+        current_catalog_path: Path | None = None
         current_frame: Path | None = None
         validation_window: tk.Toplevel | None = None
 
-        def render(analysis: FrameAnalysis, wcs: TangentPlaneWCS, catalog_path: Path, matched_frame: Path, catalog: tuple[CatalogSource, ...]) -> None:
-            nonlocal current_analysis, current_wcs, current_catalog, current_frame
+        def photometry_summary(analysis: FrameAnalysis, *, wcs_verified: bool = False) -> str:
+            calibration = analysis.photometric_calibration
+            context = _gui_photometry_context_summary(
+                analysis,
+                wcs_available=current_wcs is not None,
+                wcs_verified=wcs_verified,
+            )
+            if calibration is None:
+                return f"{context} · 需要匹配星表的表观星等和颜色项"
+            system = calibration.photometric_system or "unknown"
+            band = calibration.photometric_band or "unknown"
+            evidence = (
+                f"参考星 {calibration.calibrator_count} · 内点 {calibration.inlier_count} · "
+                f"验证 {calibration.validation_count}"
+            )
+            fit_text = f"拟合 RMS {calibration.fit_rms_mag:.3f} mag" if calibration.fit_rms_mag is not None else "拟合 RMS —"
+            validation_text = (
+                f" · 留出 RMS {calibration.validation_rms_mag:.3f} mag"
+                if calibration.validation_rms_mag is not None
+                else ""
+            )
+            flags = f" · {','.join(calibration.flags)}" if calibration.flags else ""
+            filter_counts = getattr(calibration, "catalog_filter_counts", ()) or ()
+            filter_text = (
+                " · 目录质量排除 "
+                + ", ".join(f"{reason}={count}" for reason, count in filter_counts)
+                if filter_counts
+                else ""
+            )
+            return f"{context} · 系统/波段 {system} / {band} · {evidence} · {fit_text}{validation_text}{filter_text}{flags}"
+
+        def render(
+            analysis: FrameAnalysis,
+            wcs: TangentPlaneWCS | AffineWCSCalibration,
+            catalog_path: Path,
+            matched_frame: Path,
+            catalog: tuple[CatalogSource, ...],
+            *,
+            verified_wcs: AffineWCSCalibration | None = None,
+        ) -> None:
+            nonlocal current_analysis, current_wcs, current_catalog, current_catalog_path, current_frame
             matching = analysis.matching
             if matching is None:
                 return
             current_analysis = analysis
             current_wcs = wcs
             current_catalog = catalog
+            current_catalog_path = catalog_path
             current_frame = matched_frame
             self.catalog_analysis = analysis
             self.catalog_match_result = matching
             self.catalog_wcs = wcs
-            self.catalog_calibration = None
+            # 初次身份匹配没有经过局部 WCS 验证；自动完成或手动拟合
+            # 重新渲染时由调用方传入 verified_wcs，保证右表的 m_cal/M
+            # 与主卡片使用同一份 refined_analysis 和有效 WCS。
+            self.catalog_calibration = verified_wcs
             self.catalog_path = catalog_path
             self.catalog_frame_path = matched_frame
             self.hover_catalog_match = None
             calibrate_button.config(state="normal" if matching.matched_count >= 6 else "disabled", text="根据匹配拟合 WCS")
-            export_calibration_button.config(state="disabled")
+            export_calibration_button.config(
+                state="normal" if analysis.photometric_calibration is not None else "disabled"
+            )
             validation_button.config(state="normal", text="验证 15 帧 WCS")
-            calibration_summary.config(text="校准状态：可以开始局部仿射拟合 · 仅使用唯一匹配点，不是盲解算" if matching.matched_count >= 6 else "校准状态：匹配点不足 6 个，暂不输出像元角尺度或角速度")
+            wcs_hint = (
+                "匹配状态：可以开始局部仿射拟合 · 当前仍是先验 WCS，不是盲解算"
+                if matching.matched_count >= 6
+                else "匹配状态：匹配点不足 6 个 · 暂不输出像元角尺度或角速度"
+            )
+            calibration_summary.config(text=f"{wcs_hint}\n{photometry_summary(analysis)}")
             for item in match_tree.get_children():
                 match_tree.delete(item)
+            source_photometry_by_id = {
+                int(row.detection_id): row for row in getattr(analysis, "source_photometry", ())
+            }
             for match in matching.matches:
                 magnitude = f"{match.catalog_magnitude:.3f}" if match.catalog_magnitude is not None else "—"
+                row = source_photometry_by_id.get(int(match.detection_id))
+                instrumental_text = (
+                    f"{row.instrumental_magnitude:.3f}"
+                    if row is not None and row.instrumental_magnitude is not None
+                    else "—"
+                )
+                calibration_status = getattr(analysis.photometric_calibration, "status", None)
+                calibrated_text = _gui_format_calibrated_magnitude(
+                    getattr(row, "calibrated_magnitude", None),
+                    status=calibration_status or getattr(row, "status", None) or "NO_PHOTOMETRY_ROW",
+                    system=getattr(row, "photometric_system", None) or getattr(analysis.photometric_calibration, "photometric_system", None),
+                    band=getattr(row, "photometric_band", None) or getattr(analysis.photometric_calibration, "photometric_band", None),
+                    error=getattr(row, "calibrated_magnitude_error", None),
+                    wcs_available=self.catalog_calibration is not None,
+                    compact=True,
+                ) if row is not None else "未接入"
+                absolute_text = _gui_format_absolute_magnitude(
+                    getattr(row, "absolute_magnitude", None),
+                    system=getattr(row, "photometric_system", None) or getattr(analysis.photometric_calibration, "photometric_system", None),
+                    band=getattr(row, "photometric_band", None) or getattr(analysis.photometric_calibration, "photometric_band", None),
+                    wcs_available=self.catalog_calibration is not None,
+                    compact=True,
+                ) if row is not None else "不可用"
+                photometry_status = _gui_photometry_status_text(
+                    row,
+                    calibration=analysis.photometric_calibration,
+                    wcs_available=self.catalog_calibration is not None,
+                    compact=True,
+                )
                 match_tree.insert(
                     "",
                     tk.END,
@@ -4729,6 +5634,10 @@ class StarfieldApp(tk.Tk):
                         f"{match.predicted_x:.1f} / {match.predicted_y:.1f}",
                         f"{match.residual_px:.3f}",
                         magnitude,
+                        instrumental_text,
+                        calibrated_text,
+                        absolute_text,
+                        photometry_status,
                     ),
                 )
             rms = f"{matching.rms_residual_px:.3f}px" if matching.rms_residual_px is not None else "—"
@@ -4737,8 +5646,34 @@ class StarfieldApp(tk.Tk):
             self._update_overlay_hint()
             self._draw_preview()
 
-        def render_calibration(calibration: AffineWCSCalibration) -> None:
+        def render_calibration(
+            calibration: AffineWCSCalibration,
+            refined_analysis: FrameAnalysis,
+        ) -> None:
+            nonlocal current_analysis
+            # The geometric fit is not just a display artifact: rematch the
+            # already detected sources with the full affine transform, then
+            # rebuild the photometry layer from those identities.  This keeps
+            # the reported m_cal tied to the same WCS that passed the residual
+            # gates instead of the looser prior-WCS nearest neighbours.
+            current_analysis = refined_analysis
+            self.catalog_analysis = refined_analysis
+            self.catalog_match_result = refined_analysis.matching
+            self.catalog_wcs = calibration
             self.catalog_calibration = calibration
+            # `render()` 在初次身份匹配时会按“尚未验证 WCS”显示右表。
+            # 拟合完成后必须用 refined_analysis 再走一遍同一渲染路径，
+            # 并显式传入已验证的仿射 WCS；否则主卡片已经是 m_cal，右表
+            # 仍会保留旧的 m_inst/不可用口径。
+            if current_catalog_path is not None and current_frame is not None:
+                render(
+                    refined_analysis,
+                    calibration,
+                    current_catalog_path,
+                    current_frame,
+                    current_catalog,
+                    verified_wcs=calibration,
+                )
             leave_one_out_text = f"{calibration.leave_one_out_rms_residual_px:.3f}px" if calibration.leave_one_out_rms_residual_px is not None else "—"
             calibration_summary.config(
                 text=(
@@ -4746,11 +5681,25 @@ class StarfieldApp(tk.Tk):
                     f"({calibration.inlier_ratio:.1%}) · 像元角尺度 {calibration.plate_scale_arcsec_per_pixel:.4f} arcsec/px "
                     f"· 旋转 {calibration.rotation_deg:.3f}° · parity {calibration.parity:+d} "
                     f"· 内点 RMS {calibration.rms_residual_px:.3f}px · 留一 RMS "
-                    f"{leave_one_out_text} · 各向异性 {calibration.anisotropy_ratio:.5f}"
+                    f"{leave_one_out_text} · 各向异性 {calibration.anisotropy_ratio:.5f}\n"
+                    f"{photometry_summary(current_analysis, wcs_verified=True) if current_analysis is not None else '光度标定：—'}"
                 )
             )
             export_calibration_button.config(state="normal")
-            status.config(text="已完成星表核验与局部 WCS 拟合 · 重新打开 15 帧证据可查看角速度换算")
+            status.config(
+                text=(
+                    f"已完成 WCS 细化与测光重算 · 匹配 {refined_analysis.matching.matched_count if refined_analysis.matching is not None else 0:,} · "
+                    "m_cal 已按完整仿射坐标重算 · M 仍需消光质量通过 · 可重新验证 15 帧"
+                )
+            )
+            # If the research window is for the currently displayed frame,
+            # make its verified result the main result as well.  A later frame
+            # selection clears the token and prevents stale catalog state from
+            # leaking into the new image.
+            if self.selected_frame is not None and self.selected_frame == current_frame:
+                self.analysis = refined_analysis
+                self._prepare_source_grid()
+                self._render_analysis()
 
         def calibrate() -> None:
             if current_analysis is None or current_wcs is None or current_frame is None:
@@ -4761,13 +5710,25 @@ class StarfieldApp(tk.Tk):
             calibrate_button.config(state="disabled", text="拟合中…")
             status.config(text="正在根据唯一匹配点拟合局部仿射 WCS…")
             token = self.frame_token
-            wcs = current_wcs
+            wcs = current_wcs.refined_wcs() if isinstance(current_wcs, AffineWCSCalibration) else current_wcs
             catalog = current_catalog
 
             def worker() -> None:
                 try:
                     calibration = fit_affine_wcs_from_matches(matching.matches, catalog, wcs)
-                    self.result_queue.put(("catalog-calibration", token, (window, render_calibration, calibrate_button, status, calibration)))
+                    refined_analysis = recalibrate_frame_analysis(
+                        current_analysis,
+                        catalog,
+                        calibration,
+                        match_radius_px=matching.radius_px,
+                    )
+                    self.result_queue.put(
+                        (
+                            "catalog-calibration",
+                            token,
+                            (window, render_calibration, calibrate_button, status, calibration, refined_analysis),
+                        )
+                    )
                 except Exception as exc:  # noqa: BLE001 - worker returns a visible calibration error
                     self.result_queue.put(("catalog-calibration-error", token, (window, calibrate_button, status, str(exc))))
 
@@ -4775,7 +5736,8 @@ class StarfieldApp(tk.Tk):
 
         def export_calibration() -> None:
             calibration = self.catalog_calibration
-            if calibration is None or current_wcs is None or current_frame is None:
+            photometric_calibration = current_analysis.photometric_calibration if current_analysis is not None else None
+            if (calibration is None and photometric_calibration is None) or current_wcs is None or current_frame is None:
                 return
             chosen = filedialog.asksaveasfilename(
                 parent=window,
@@ -4791,8 +5753,11 @@ class StarfieldApp(tk.Tk):
                 "frame_path": str(current_frame),
                 "catalog_path": str(self.catalog_path) if self.catalog_path is not None else None,
                 "reference_wcs": current_wcs.as_dict(),
-                "calibration": calibration.as_dict(),
-                "note": "局部仿射反校准；依赖先验 WCS 引导的唯一匹配，不是全天空盲解算或轨道速度。",
+                "calibration": calibration.as_dict() if calibration is not None else None,
+                "photometric_calibration": (
+                    photometric_calibration.as_dict() if photometric_calibration is not None else None
+                ),
+                "note": "WCS 校准依赖先验 WCS 引导的唯一匹配，不是全天空盲解算或轨道速度；光度标定来自多颗匹配参考星，不等于本设备绝对响应已完成实验室定标。",
             }
             try:
                 Path(chosen).write_text(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
@@ -4800,6 +5765,264 @@ class StarfieldApp(tk.Tk):
                 messagebox.showerror("导出失败", str(exc), parent=window)
                 return
             status.config(text=f"校准证据已导出 · {Path(chosen)}")
+
+        def render_auto_result(result: Any, catalog_path: Path) -> None:
+            """把自动板解结果接回当前核验窗口和主界面。"""
+
+            nonlocal current_analysis, current_wcs, current_catalog, current_frame
+            current_frame = frame_path
+            current_catalog = tuple(result.catalog_sources)
+            self.catalog_path = catalog_path
+            self.catalog_frame_path = frame_path
+            if result.affine_wcs is not None and result.plate_solution.valid:
+                # 自动流程的 analysis 已经用完整仿射模型重做匹配，直接
+                # 进入已有的结果渲染器，再设置已验证的几何状态。
+                render(result.analysis, result.affine_wcs, catalog_path, frame_path, current_catalog)
+                render_calibration(result.affine_wcs, result.analysis)
+                status.config(text=f"自动 Gaia 测光完成 · {result.status} · {result.reason}")
+                return
+
+            # 板解失败时仍展示检测结果和失败原因，但清除可能残留的
+            # 目录/WCS 状态，防止主卡片把 m_inst 误读成 m_G。
+            current_analysis = result.analysis
+            current_wcs = result.reference_wcs
+            self.catalog_analysis = None
+            self.catalog_match_result = None
+            self.catalog_wcs = None
+            self.catalog_calibration = None
+            self.catalog_frame_path = frame_path
+            for item in match_tree.get_children():
+                match_tree.delete(item)
+            summary.config(
+                text=(
+                    f"自动测光未通过 · {result.status}\n{result.reason}\n"
+                    f"单帧检测源 {len(result.analysis.detection.quality_sources):,} · "
+                    f"参考目录 {len(result.catalog_sources):,}"
+                )
+            )
+            calibration_summary.config(
+                text=(
+                    "当前只能报告 m_inst（未标定）。自动流程不会把未通过板解的近邻匹配"
+                    f"当作星等：{result.plate_solution.reason}"
+                )
+            )
+            calibrate_button.config(state="disabled", text="根据匹配拟合 WCS")
+            export_calibration_button.config(state="disabled")
+            validation_button.config(state="disabled", text="验证 15 帧 WCS")
+            if self.selected_frame == frame_path:
+                self.analysis = result.analysis
+                self._prepare_source_grid()
+                self._render_analysis()
+
+        def run_auto_photometry() -> None:
+            """一键执行：可选获取 Gaia → 自动板解 → Gaia 经验测光。"""
+
+            try:
+                catalog_text = catalog_path_var.get().strip()
+                if catalog_text:
+                    catalog_path_for_run = Path(catalog_text).expanduser().resolve()
+                    if not catalog_path_for_run.is_file():
+                        raise ValueError("当前 CSV 星表不存在，请重新选择或先在线获取 Gaia DR3")
+                else:
+                    catalog_path_for_run = PROJECT_ROOT / "tmp" / "public-catalog" / f"{frame_path.stem}.gaia-dr3.csv"
+                scale_text = scale_var.get().strip()
+                pixel_scale_value = float(scale_text) if scale_text else DEFAULT_CAMERA_PIXEL_SCALE_ARCSEC
+                radius_value = float(radius_var.get())
+                query_radius_value = float(query_radius_var.get())
+                min_g_value = float(min_g_var.get())
+                max_g_value = float(max_g_var.get())
+                if pixel_scale_value <= 0.0 or radius_value <= 0.0:
+                    raise ValueError("像元角尺度和匹配半径必须为正数")
+                if query_radius_value <= 0.0 or query_radius_value > 180.0:
+                    raise ValueError("查询半径必须在 (0, 180] 度")
+                if min_g_value > max_g_value:
+                    raise ValueError("Gaia G 下限不能大于上限")
+                threshold, min_distance, max_sources, zero_point, psf_fwhm, min_flux_snr = self._read_parameters()
+            except (OSError, TypeError, ValueError) as exc:
+                messagebox.showerror("自动测光参数错误", str(exc), parent=window)
+                return
+
+            # 若存在查询审计，明确拒绝把已知不完整的公共目录送进板解。
+            audit_path = catalog_path_for_run.with_suffix(catalog_path_for_run.suffix + ".meta.json")
+            if audit_path.is_file():
+                try:
+                    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+                except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                    messagebox.showerror("自动测光", f"无法读取 Gaia 查询审计：{exc}", parent=window)
+                    return
+                if isinstance(audit, dict) and audit.get("complete") is False:
+                    messagebox.showwarning(
+                        "自动测光",
+                        "当前 Gaia CSV 被审计为不完整，不能直接拟合零点。请缩小查询范围、重新分块获取，或选择完整星表。",
+                        parent=window,
+                    )
+                    return
+
+            auto_button.config(state="disabled", text="自动处理中…")
+            status.config(text="自动流程启动 · 准备 Gaia 参考星和图像检测…")
+            token = self.frame_token
+            cache_generation = self.cache_generation
+            requested_frame = frame_path
+            detector_kwargs = {
+                "threshold_sigma": threshold,
+                "min_distance": min_distance,
+                "max_sources": max_sources,
+                "zero_point": zero_point,
+                "psf_fwhm": psf_fwhm,
+                "min_flux_snr": min_flux_snr,
+                "proposal_mode": self.proposal_mode_var.get(),
+                "reject_linear_artifacts": True,
+                "enable_local_deblend": bool(self.local_deblend_var.get()),
+            }
+            # 同一帧并不等于同一检测结果。手动输入框、宽筛模式或局部
+            # 去混叠任一项变化后，必须重新跑检测；旧分析没有完整参数记录
+            # 时也强制重跑。这样自动测光使用的候选、测光和当前界面口径
+            # 保持一致，而不是只复用“上一张同名帧”的对象。
+            initial_analysis = (
+                self.analysis
+                if (
+                    not self.manual_tuning_dirty
+                    and self.analysis is not None
+                    and self.selected_frame == requested_frame
+                    and _analysis_matches_detector_parameters(self.analysis, detector_kwargs)
+                )
+                else None
+            )
+
+            def progress(value: float, progress_text: str) -> None:
+                self._queue_task_result(
+                    "catalog-auto-progress",
+                    token,
+                    cache_generation,
+                    (window, auto_button, status, requested_frame, float(value), str(progress_text)),
+                )
+
+            def worker() -> None:
+                try:
+                    needs_fetch = not catalog_text
+                    if needs_fetch:
+                        progress(4.0, "未指定 CSV · 正在显式获取 Gaia DR3")
+
+                        def fetch_progress(message: str) -> None:
+                            progress(4.0, message)
+
+                        fetched = download_public_gaia_catalog_for_frame(
+                            requested_frame,
+                            catalog_path_for_run,
+                            search_radius_deg=query_radius_value,
+                            min_g_mag=min_g_value,
+                            max_g_mag=max_g_value,
+                            tile_radius_deg=DEFAULT_GAIA_TILE_RADIUS_DEG,
+                            progress=fetch_progress,
+                        )
+                        if not fetched.complete:
+                            raise ValueError(
+                                f"Gaia 查询不完整，已保存 {fetched.output_path}；请先修复分块完整性再测光"
+                            )
+                    else:
+                        progress(8.0, "复用已准备的 Gaia CSV")
+                    result = run_auto_photometric_workflow(
+                        requested_frame,
+                        catalog_path_for_run,
+                        pixel_scale_arcsec=pixel_scale_value,
+                        match_radius_px=radius_value,
+                        detector_kwargs=detector_kwargs,
+                        initial_analysis=initial_analysis,
+                        progress=lambda value, label: progress(10.0 + 0.9 * float(value), label),
+                    )
+                except Exception as exc:  # noqa: BLE001 - worker returns a visible workflow error
+                    self._queue_task_result(
+                        "catalog-auto-error",
+                        token,
+                        cache_generation,
+                        (window, auto_button, status, requested_frame, str(exc)),
+                    )
+                    return
+                self._queue_task_result(
+                    "catalog-auto",
+                    token,
+                    cache_generation,
+                    (
+                        window,
+                        auto_button,
+                        status,
+                        requested_frame,
+                        catalog_path_var,
+                        catalog_path_for_run,
+                        result,
+                        render_auto_result,
+                    ),
+                )
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        def fetch_gaia() -> None:
+            """显式联网获取 Gaia 参考子表；下载过程永远在后台线程执行。"""
+
+            try:
+                center_ra_value = float(ra_var.get())
+                center_dec_value = float(dec_var.get())
+                search_radius_value = float(query_radius_var.get())
+                min_g_value = float(min_g_var.get())
+                max_g_value = float(max_g_var.get())
+                if not 0.0 <= center_ra_value < 360.0:
+                    raise ValueError("中心 RA 必须在 [0, 360) 度")
+                if not -90.0 <= center_dec_value <= 90.0:
+                    raise ValueError("中心 DEC 必须在 [-90, 90] 度")
+                if search_radius_value <= 0.0 or search_radius_value > 180.0:
+                    raise ValueError("查询半径必须在 (0, 180] 度")
+                if min_g_value > max_g_value:
+                    raise ValueError("Gaia G 下限不能大于上限")
+            except (TypeError, ValueError) as exc:
+                messagebox.showerror("Gaia 查询参数错误", str(exc), parent=window)
+                return
+
+            output_path = PROJECT_ROOT / "tmp" / "public-catalog" / f"{frame_path.stem}.gaia-dr3.csv"
+            fetch_button.config(state="disabled", text="获取中…")
+            status.config(text="正在后台查询 Gaia DR3 · 不阻塞界面 · 等待分块完整性结果…")
+            token = self.frame_token
+            requested_frame = frame_path
+
+            def progress(message: str) -> None:
+                self.result_queue.put(
+                    (
+                        "catalog-fetch-progress",
+                        token,
+                        (window, fetch_button, status, requested_frame, str(message)),
+                    )
+                )
+
+            def worker() -> None:
+                try:
+                    result = download_public_gaia_catalog(
+                        center_ra_value,
+                        center_dec_value,
+                        output_path,
+                        search_radius_deg=search_radius_value,
+                        min_g_mag=min_g_value,
+                        max_g_mag=max_g_value,
+                        tile_radius_deg=DEFAULT_GAIA_TILE_RADIUS_DEG,
+                        frame_path=requested_frame,
+                        progress=progress,
+                    )
+                except Exception as exc:  # noqa: BLE001 - worker returns a visible network/query error
+                    self.result_queue.put(
+                        (
+                            "catalog-fetch-error",
+                            token,
+                            (window, fetch_button, status, requested_frame, str(exc)),
+                        )
+                    )
+                    return
+                self.result_queue.put(
+                    (
+                        "catalog-fetch",
+                        token,
+                        (window, fetch_button, status, requested_frame, catalog_path_var, result),
+                    )
+                )
+
+            threading.Thread(target=worker, daemon=True).start()
 
         def render_validation(report: WCSValidationReport, output: Path) -> None:
             nonlocal validation_window
@@ -5025,6 +6248,7 @@ class StarfieldApp(tk.Tk):
                         proposal_mode=self.proposal_mode_var.get(),
                         match_radius_px=radius_value,
                         reject_linear_artifacts=True,
+                        fit_photometry=True,
                     )
                     self.result_queue.put(("catalog", token, (window, render, run_button, status, analysis, wcs, catalog_path, frame_path, catalog)))
                 except Exception as exc:  # noqa: BLE001 - worker must return a user-facing error
@@ -5032,6 +6256,8 @@ class StarfieldApp(tk.Tk):
 
             threading.Thread(target=worker, daemon=True).start()
 
+        fetch_button.config(command=fetch_gaia)
+        auto_button.config(command=run_auto_photometry)
         run_button.config(command=run)
         calibrate_button.config(command=calibrate)
         export_calibration_button.config(command=export_calibration)
@@ -8202,10 +9428,56 @@ class StarfieldApp(tk.Tk):
                 self.hover_info_var.set("星表核验层只显示匹配成功的源；将鼠标移到绿色预测环或黄色检测点查看残差")
             else:
                 magnitude_text = f"{match.catalog_magnitude:.3f}" if match.catalog_magnitude is not None else "—"
+                catalog_analysis = self.__dict__.get("catalog_analysis")
+                source_photometry = {
+                    int(row.detection_id): row
+                    for row in getattr(catalog_analysis, "source_photometry", ())
+                }.get(int(match.detection_id)) if catalog_analysis is not None else None
+                calibration = getattr(catalog_analysis, "photometric_calibration", None)
+                system = (
+                    getattr(source_photometry, "photometric_system", None)
+                    or match.photometric_system
+                    or getattr(calibration, "photometric_system", None)
+                )
+                band = (
+                    getattr(source_photometry, "photometric_band", None)
+                    or match.photometric_band
+                    or getattr(calibration, "photometric_band", None)
+                )
+                calibrated_text = (
+                    _gui_format_calibrated_magnitude(
+                        getattr(source_photometry, "calibrated_magnitude", None),
+                        status=getattr(calibration, "status", None)
+                        or getattr(source_photometry, "status", None)
+                        or "NO_PHOTOMETRY_ROW",
+                        system=system,
+                        band=band,
+                        error=getattr(source_photometry, "calibrated_magnitude_error", None),
+                        wcs_available=self.__dict__.get("catalog_calibration") is not None,
+                    )
+                    if source_photometry is not None
+                    else "m_cal = 不可用（无逐源测光记录）"
+                )
+                absolute_text = (
+                    _gui_format_absolute_magnitude(
+                        getattr(source_photometry, "absolute_magnitude", None),
+                        system=system,
+                        band=band,
+                        wcs_available=self.__dict__.get("catalog_calibration") is not None,
+                    )
+                    if source_photometry is not None
+                    else "M = 不可用（无逐源测光记录）"
+                )
+                status_text = _gui_photometry_status_text(
+                    source_photometry,
+                    calibration=calibration,
+                    wcs_available=self.__dict__.get("catalog_calibration") is not None,
+                )
                 self.hover_info_var.set(
                     f"CAT {match.source_id}  ·  检测 X {match.detection_x:.1f} Y {match.detection_y:.1f}  ·  "
                     f"预测 X {match.predicted_x:.1f} Y {match.predicted_y:.1f}  ·  残差 {match.residual_px:.3f}px  ·  "
-                    f"目录星等 {magnitude_text}"
+                    f"目录 {magnitude_text} [{_gui_photometric_provenance(system, band)}]\n"
+                    f"{calibrated_text}\n{absolute_text}\n测光状态：{status_text}"
                 )
             self._draw_preview()
             return
@@ -8314,10 +9586,42 @@ class StarfieldApp(tk.Tk):
         self.hover_source = source
         self.hover_trusted_track = None
         if source is None:
-            self.hover_info_var.set("将鼠标移到候选点查看坐标、通量、误差、SNR、形状和仪器星等")
+            self.hover_info_var.set("将鼠标移到候选点查看坐标、通量、误差、SNR、三层星等和落选原因")
         else:
             magnitude = instrumental_magnitude(source.flux, exposure_s=self.exposure_s)
             magnitude_text = f"{magnitude:.3f}" if magnitude is not None else "—"
+            source_photometry = self.__dict__.get("source_photometry_by_id", {}).get(int(source.detection_id))
+            calibration = getattr(self.analysis, "photometric_calibration", None)
+            system = getattr(source_photometry, "photometric_system", None) or getattr(calibration, "photometric_system", None)
+            band = getattr(source_photometry, "photometric_band", None) or getattr(calibration, "photometric_band", None)
+            calibrated_text = (
+                _gui_format_calibrated_magnitude(
+                    getattr(source_photometry, "calibrated_magnitude", None),
+                    status=getattr(calibration, "status", None) or getattr(source_photometry, "status", None) or "NO_PHOTOMETRY_ROW",
+                    system=system,
+                    band=band,
+                    error=getattr(source_photometry, "calibrated_magnitude_error", None),
+                        wcs_available=self.__dict__.get("catalog_calibration") is not None,
+                )
+                if source_photometry is not None
+                else "m_cal = 不可用（未接入星表）"
+            )
+            absolute_text = (
+                _gui_format_absolute_magnitude(
+                    getattr(source_photometry, "absolute_magnitude", None),
+                    system=system,
+                    band=band,
+                        wcs_available=self.__dict__.get("catalog_calibration") is not None,
+                )
+                if source_photometry is not None
+                else "M = 不可用（未接入星表）"
+            )
+            photometry_status = _gui_photometry_status_text(
+                source_photometry,
+                calibration=calibration,
+                    wcs_available=self.__dict__.get("catalog_calibration") is not None,
+            ) if source_photometry is not None else "仅仪器星等（未接入星表/WCS）"
+            photometry_flags = ", ".join(source_photometry.flags) if source_photometry is not None and source_photometry.flags else "无"
             flags = ", ".join(source.flags) if source.flags else "无"
             signal_snr = source.flux_snr if source.flux_snr is not None else source.snr
             filter_snr_text = f"{source.filter_snr:.2f}" if source.filter_snr is not None else "—"
@@ -8355,7 +9659,9 @@ class StarfieldApp(tk.Tk):
                 f"提案 {proposal_methods}  ·  proposal SNR {proposal_snr}  ·  尺度 {proposal_scales}px  ·  最近Gaussian {nearest_gaussian}\n"
                 f"去混叠 ΔBIC {deblend_bic}  ·  次分量SNR {deblend_snr}\n"
                 f"数据审计：重复高位码 {repeated_code_count}  ·  异常负值像素 {range_anomaly_count}\n"
-                f"{shape_text}  ·  PSF支持 {psf_support_text}  ·  {shift_text}  ·  m_inst {magnitude_text}\n"
+                f"{shape_text}  ·  PSF支持 {psf_support_text}  ·  {shift_text}  ·  m_inst = {magnitude_text}\n"
+                f"{calibrated_text}\n{absolute_text}\n"
+                f"星等状态：{photometry_status}  ·  flags：{photometry_flags}\n"
                 f"判定：{quality_text}  ·  flags：{flags}"
             )
         self._draw_preview()
@@ -8368,7 +9674,7 @@ class StarfieldApp(tk.Tk):
         self.hover_motion_track = None
         self.hover_trusted_track = None
         self.hover_catalog_match = None
-        self.hover_info_var.set("将鼠标移到候选点查看坐标、通量、误差、SNR、形状和仪器星等")
+        self.hover_info_var.set("将鼠标移到候选点查看坐标、通量、误差、SNR、三层星等和落选原因")
         self._draw_preview()
 
     def clear_detection_cache(self) -> None:
@@ -8376,6 +9682,10 @@ class StarfieldApp(tk.Tk):
             return
         with self.cache_lock:
             self.cache_generation += 1
+            # 清缓存会使“同一帧”的旧后台结果也失效。递增 frame_token
+            # 兼容尚未迁移到四元组事件的研究任务；已迁移任务还会由
+            # cache_generation 做第二道校验。
+            self.frame_token += 1
             removed = clear_cache(self.cache_dir)
         self.analysis = None
         self.catalog_analysis = None

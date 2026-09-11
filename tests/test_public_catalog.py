@@ -1,0 +1,52 @@
+from __future__ import annotations
+
+import csv
+import json
+import math
+from pathlib import Path
+
+from rst19.public_catalog import camera_footprint_radius_deg, download_public_gaia_catalog
+
+
+def _query_rows(*_args: object, **_kwargs: object) -> tuple[dict[str, object], ...]:
+    return (
+        {
+            "source_id": "42",
+            "ra": 129.5,
+            "dec": -1.8,
+            "phot_g_mean_mag": 11.2,
+            "phot_bp_mean_mag": 11.7,
+            "phot_rp_mean_mag": 10.9,
+        },
+    )
+
+
+def test_camera_query_radius_covers_square_field_diagonal() -> None:
+    assert math.isclose(camera_footprint_radius_deg(9.78, 9.78), 6.915504, rel_tol=0.0, abs_tol=1.0e-6)
+
+
+def test_public_catalog_download_is_explicit_and_writes_audit(tmp_path: Path) -> None:
+    output = tmp_path / "gaia.csv"
+    result = download_public_gaia_catalog(
+        129.5,
+        -1.8,
+        output,
+        search_radius_deg=0.1,
+        tile_radius_deg=1.0,
+        min_g_mag=5.0,
+        max_g_mag=13.5,
+        query_fn=_query_rows,
+    )
+
+    assert result.complete is True
+    assert result.row_count == 1
+    assert result.output_path == output.resolve()
+    assert result.audit_path.is_file()
+    with output.open("r", encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert rows[0]["source_id"] == "42"
+    metadata = json.loads(result.audit_path.read_text(encoding="utf-8"))
+    assert metadata["catalog"] == "Gaia DR3"
+    assert metadata["complete"] is True
+    assert metadata["provenance"]["photometric_band"] == "G"
+    assert "rows" not in metadata["tiled"]

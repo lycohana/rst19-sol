@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from rst19.fits import _parse_card_value, decode_auxiliary, read_fits
+from rst19.fits import _parse_card_value, decode_auxiliary, exposure_milliseconds, exposure_seconds, read_fits
 
 
 def _card(key: str, value: str) -> bytes:
@@ -60,3 +60,21 @@ def test_decode_auxiliary_rejects_wrong_length() -> None:
 def test_parse_card_value_handles_current_numeric_card_variant() -> None:
     assert _parse_card_value("0000          01500") == 1500
     assert _parse_card_value("          0270.00000 0000.00000") == 270.0
+
+
+def test_exposure_seconds_prefers_standard_exptime_in_seconds() -> None:
+    assert exposure_seconds({"EXPTIME": 1.5, "EXPOSURE": 1500}) == 1.5
+
+
+def test_exposure_seconds_preserves_rst19_exposure_milliseconds() -> None:
+    assert exposure_seconds({"EXPOSURE": 1500}) == 1.5
+    assert exposure_seconds({"EXPOSURE": "1.5 s"}) == 1.5
+    assert exposure_seconds({"EXPOSURE": 1500, "EXPOSURE_UNIT": "ms"}) == 1.5
+
+
+def test_exposure_seconds_honours_explicit_unit_and_default() -> None:
+    assert exposure_seconds({"EXPTIME": 1500, "EXPTIME_UNIT": "ms"}) == 1.5
+    assert exposure_seconds({"EXPOSURE": 1.5, "TIMEUNIT": "s"}) == 1.5
+    assert exposure_seconds({}) == 1.0
+    assert exposure_milliseconds({}) is None
+    assert exposure_milliseconds({"EXPTIME": 1.5}) == 1500.0

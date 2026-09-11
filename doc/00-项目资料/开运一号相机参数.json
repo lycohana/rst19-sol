@@ -1,0 +1,42 @@
+{
+  "name": "开运01相机",
+  "source": {
+    "kind": "user_supplied_image",
+    "description": "用户补充的《开运01星相机参数》截图；不是 FITS 头字段，也不是本仓库自行测量结果。",
+    "status": "external_device_prior"
+  },
+  "nominal": {
+    "pixel_pitch_um": 9.0,
+    "detector_width_px": 4096,
+    "detector_height_px": 4096,
+    "bit_depth_bits": 16,
+    "entrance_pupil_diameter_mm": 120.0,
+    "focal_length_mm": 220.0,
+    "spectral_range_nm": [450, 750],
+    "field_of_view_deg": [9.78, 9.78]
+  },
+  "derived_nominal": {
+    "active_sensor_width_mm": 36.864,
+    "active_sensor_height_mm": 36.864,
+    "pixel_scale_from_pitch_and_focal_arcsec_per_px": 8.438106,
+    "geometric_fov_from_pitch_and_focal_deg": 9.578320,
+    "pixel_scale_from_stated_fov_arcsec_per_px": 8.595703,
+    "effective_focal_length_from_stated_fov_mm": 215.441799,
+    "f_number": 1.833333,
+    "ideal_550nm_first_zero_angle_arcsec": 1.153364
+  },
+  "calibration_boundary": {
+    "pixel_scale_status": "prior_only",
+    "recommended_prior_arcsec_per_px": [8.438106, 8.595703],
+    "do_not_use_as_default_wcs": true,
+    "spectral_range_is_not_a_v_band": true,
+    "absolute_magnitude_is_not_calibrated": true,
+    "requires": [
+      "星表唯一匹配与留一残差",
+      "图像轴旋转和 parity",
+      "镜头畸变或 SIP 参数",
+      "相机响应曲线、增益、读出噪声和饱和/非线性参数",
+      "同设备标准星或可靠光度零点"
+    ]
+  }
+}

@@ -50,6 +50,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--keep-zero-pixels", action="store_true", help="不把整数图像中的精确 0 自动标记为无效像素")
     parser.add_argument("--keep-linear-artifacts", action="store_true", help="保留线状结构候选；默认将长线标记为 LINE_ARTIFACT")
     parser.add_argument("--zero-point", type=float, help="可选仪器星等零点；不提供时只输出仪器星等")
+    parser.add_argument(
+        "--fit-photometry",
+        action="store_true",
+        help="使用匹配星表中的多颗参考星拟合零点/颜色项，并在 JSON 中输出标定证据",
+    )
+    parser.add_argument("--photometric-system", default=None, help="标定目标光度系统，例如 Gaia Vega")
+    parser.add_argument("--photometric-band", default=None, help="标定目标波段，例如 G、V 或 RST19-natural")
+    parser.add_argument("--photometric-color-name", default=None, help="颜色项名称，例如 BP-RP")
+    parser.add_argument("--photometric-color-order", type=int, choices=(0, 1, 2), default=1, help="颜色项阶数")
+    parser.add_argument("--photometric-min-calibrators", type=int, default=6, help="最少参考星数量；默认 6 以保留颜色项和留出验证余量")
+    parser.add_argument("--parallax-zero-point-mas", type=float, default=0.0, help="视差零点修正（mas）；默认不修正")
+    parser.add_argument("--max-fractional-parallax-error", type=float, default=0.2, help="允许计算 M 的最大视差相对误差")
     parser.add_argument("--json-out", type=Path, help="可选 JSON 输出文件；不提供时输出到 stdout")
     return parser
 
@@ -112,6 +124,14 @@ def main(argv: list[str] | None = None) -> int:
             match_radius_px=args.match_radius_px,
             epoch=args.epoch,
             zero_point=args.zero_point,
+            fit_photometry=args.fit_photometry,
+            photometric_system=args.photometric_system,
+            photometric_band=args.photometric_band,
+            photometric_color_name=args.photometric_color_name,
+            photometric_color_order=args.photometric_color_order,
+            photometric_min_calibrators=args.photometric_min_calibrators,
+            parallax_zero_point_mas=args.parallax_zero_point_mas,
+            max_fractional_parallax_error=args.max_fractional_parallax_error,
         )
         payload = result.as_dict()
         if wcs is not None:

@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
-from .fits import auxiliary_mask, read_fits
+from .fits import auxiliary_mask, exposure_milliseconds, read_fits
 
 
 def _as_float(value: object) -> float | None:
@@ -360,11 +360,14 @@ def _frame_rows(payload: Mapping[str, Any], sequence_json: Path) -> list[dict[st
         shift_x = _as_float(shift[0]) if len(shift) > 0 else 0.0
         shift_y = _as_float(shift[1]) if len(shift) > 1 else 0.0
         stats = _robust_image_stats(frame.data)
+        exposure_ms = _as_float(summary.get("exposure_ms"))
+        if exposure_ms is None:
+            exposure_ms = exposure_milliseconds(frame.header)
         row: dict[str, Any] = {
             "frame_index": int(summary.get("frame_index", index)),
             "path": str(frame_path),
             "timestamp": _timestamp_text(timestamp_raw),
-            "exposure_ms": _as_float(summary.get("exposure_ms")) or _as_float(frame.header.get("EXPOSURE")),
+            "exposure_ms": exposure_ms,
             "width_px": int(frame.data.shape[1]),
             "height_px": int(frame.data.shape[0]),
             "candidate_count": int(summary.get("candidate_count", 0)),
@@ -658,11 +661,583 @@ def _motion_audit_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+_PHOTOMETRIC_LEVELS = (
+    "INSTRUMENTAL_ONLY",
+    "RELATIVE_CALIBRATED",
+    "APPARENT_CALIBRATED",
+    "ABSOLUTE_ELIGIBLE",
+    "GEOMETRY_UNAVAILABLE",
+)
+_RELATIVE_VALID_STATUSES = {"VALID", "VALID_NO_HOLDOUT"}
+_PHOTOMETRIC_REPORT_ALIASES = (
+    "photometric_quality_report",
+    "photometric_quality",
+    "photometric_report",
+    "photometry_report",
+)
+
+
+def _evidence_mapping(value: object) -> dict[str, Any] | None:
+    """把映射、结果对象或 ``as_dict`` 对象转为只读报告视图。
+
+    ``innovation`` 的输入既可能来自 JSON，也可能来自 GUI 传入的结果对象。
+    这里不修改输入对象，也不要求调用方先导入任意一个具体的光度结果类，
+    因而可以兼容旧序列结果和新的 dataclass payload。
+    """
+
+    if isinstance(value, Mapping):
+        return dict(value)
+    as_dict = getattr(value, "as_dict", None)
+    if callable(as_dict):
+        converted = as_dict()
+        if isinstance(converted, Mapping):
+            return dict(converted)
+    attributes = getattr(value, "__dict__", None)
+    if isinstance(attributes, Mapping):
+        return dict(attributes)
+    return None
+
+
+def _evidence_key(value: object) -> str:
+    return "".join(char if char.isalnum() else "_" for char in str(value).strip().lower()).strip("_")
+
+
+def _evidence_lookup(mapping: Mapping[str, Any] | None, aliases: Iterable[str]) -> tuple[bool, Any]:
+    if mapping is None:
+        return False, None
+    values = {_evidence_key(key): value for key, value in mapping.items()}
+    for alias in aliases:
+        key = _evidence_key(alias)
+        if key in values:
+            return True, values[key]
+    return False, None
+
+
+def _evidence_value(mapping: Mapping[str, Any] | None, aliases: Iterable[str], default: Any = None) -> Any:
+    found, value = _evidence_lookup(mapping, aliases)
+    return value if found else default
+
+
+def _evidence_bool(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if float(value) == 1.0:
+            return True
+        if float(value) == 0.0:
+            return False
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token in {"true", "yes", "y", "1", "pass", "passed", "ok"}:
+            return True
+        if token in {"false", "no", "n", "0", "fail", "failed", "invalid"}:
+            return False
+    return None
+
+
+def _evidence_status(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text.upper().replace("-", "_").replace(" ", "_") if text else None
+
+
+def _evidence_count(value: object) -> int | None:
+    number = _as_float(value)
+    if number is None or number < 0:
+        return None
+    return int(number)
+
+
+def _evidence_strings(value: object, *, limit: int = 64) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if not isinstance(value, Sequence) or isinstance(value, (bytes, bytearray)):
+        return []
+    return [str(item) for item in list(value)[:limit] if item is not None]
+
+
+def _finite_evidence_mapping(value: object) -> dict[str, float]:
+    mapping = _evidence_mapping(value)
+    if mapping is None:
+        return {}
+    result: dict[str, float] = {}
+    for key, raw in mapping.items():
+        number = _as_float(raw)
+        if number is not None:
+            result[str(key)] = number
+    return result
+
+
+def _count_evidence_mapping(value: object) -> dict[str, int]:
+    mapping = _evidence_mapping(value)
+    if mapping is None:
+        return {}
+    result: dict[str, int] = {}
+    for key, raw in mapping.items():
+        count = _evidence_count(raw)
+        if count is not None:
+            result[str(key)] = count
+    return {key: result[key] for key in sorted(result)}
+
+
+def _evidence_rows(value: object) -> list[dict[str, Any]]:
+    """提取光度报告行，但不把原始检测源表误当成测光表。"""
+
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [mapping for item in value if (mapping := _evidence_mapping(item)) is not None]
+    mapping = _evidence_mapping(value)
+    if mapping is None:
+        return []
+    for alias in (
+        "rows",
+        "source_rows",
+        "source_photometry",
+        "photometry_rows",
+        "photometry_results",
+        "results",
+        "items",
+    ):
+        found, nested = _evidence_lookup(mapping, (alias,))
+        if not found:
+            continue
+        if isinstance(nested, Sequence) and not isinstance(nested, (str, bytes, bytearray)):
+            return [item for raw in nested if (item := _evidence_mapping(raw)) is not None]
+    return []
+
+
+def _normalise_evidence_level(value: object) -> str | None:
+    status = _evidence_status(value)
+    if status in _PHOTOMETRIC_LEVELS:
+        return status
+    return None
+
+
+def _absolute_value_from_row(row: Mapping[str, Any]) -> float | None:
+    found, raw = _evidence_lookup(row, ("M", "absolute_magnitude", "absolute_magnitude_value", "absolute_mag", "M_V", "m_abs"))
+    if found:
+        nested = _evidence_mapping(raw)
+        if nested is not None:
+            return _as_float(_evidence_value(nested, ("value", "M", "absolute_magnitude", "absolute_magnitude_value")))
+        return _as_float(raw)
+    return None
+
+
+def _row_evidence_level(row: Mapping[str, Any]) -> str | None:
+    explicit = _normalise_evidence_level(_evidence_value(row, ("observability_level", "observability", "level")))
+    if explicit is not None:
+        return explicit
+    status = _evidence_status(_evidence_value(row, ("status", "state", "calibration_status")))
+    if status in {"CATALOG_INCONSISTENT", "PHOTOMETRIC_OUTLIER", "PHOTOMETRICALLY_INCONSISTENT"}:
+        # A retained numerical m_cal is diagnostic evidence only when its
+        # catalog residual failed the source-level gate; do not count it as a
+        # usable apparent magnitude in the innovation summary.
+        return "INSTRUMENTAL_ONLY"
+    absolute_raw_found, absolute_raw = _evidence_lookup(
+        row, ("absolute_magnitude", "absolute", "absolute_result")
+    )
+    absolute_mapping = _evidence_mapping(absolute_raw) if absolute_raw_found else None
+    absolute_status = _evidence_status(
+        _evidence_value(row, ("absolute_status", "M_status", "absolute_magnitude_status"))
+    )
+    if absolute_status is None and absolute_mapping is not None:
+        absolute_status = _evidence_status(_evidence_value(absolute_mapping, ("status", "state", "absolute_status")))
+    # SourcePhotometry keeps the row status as CALIBRATED while the stricter
+    # absolute status lives in the nested estimate.  Inspect the nested status
+    # before falling through to APPARENT_CALIBRATED, otherwise valid GSP-Phot
+    # model-distance estimates would disappear from the innovation counts.
+    if _absolute_value_from_row(row) is not None and absolute_status in {
+        "VALID",
+        "VALID_MODEL_DISTANCE",
+        "VALID_MODEL_DISTANCE_NO_INTERVAL",
+        "ABSOLUTE_VALID",
+        "ABSOLUTE_ELIGIBLE",
+        "CALIBRATED_ABSOLUTE",
+    }:
+        return "ABSOLUTE_ELIGIBLE"
+    if status in {"RELATIVE_CALIBRATED", "RELATIVE", "RELATIVE_CALIBRATION"}:
+        return "RELATIVE_CALIBRATED"
+    if status in {"CALIBRATED", "APPARENT_CALIBRATED", "APPARENT", "VALID_NO_HOLDOUT"}:
+        return "APPARENT_CALIBRATED"
+    if _absolute_value_from_row(row) is not None and status in {
+        "VALID",
+        "VALID_MODEL_DISTANCE",
+        "VALID_MODEL_DISTANCE_NO_INTERVAL",
+        "ABSOLUTE_VALID",
+        "ABSOLUTE_ELIGIBLE",
+        "CALIBRATED_ABSOLUTE",
+    }:
+        return "ABSOLUTE_ELIGIBLE"
+    if _as_float(_evidence_value(row, ("m_inst", "instrumental_magnitude", "instrumental_mag"))) is not None:
+        return "INSTRUMENTAL_ONLY"
+    return None
+
+
+def _compact_photometric_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    """保留一小段逐源证据，避免把大型原始检测表复制进创新报告。"""
+
+    absolute = _absolute_value_from_row(row)
+    result: dict[str, Any] = {
+        "row_key": _evidence_value(row, ("row_key", "key")),
+        "frame_id": _evidence_value(row, ("frame_id", "frame")),
+        "source_id": _evidence_value(row, ("source_id", "detection_id", "id")),
+        "observability_level": _row_evidence_level(row),
+        "status": _evidence_value(row, ("status", "state")),
+        "m_inst": _as_float(_evidence_value(row, ("m_inst", "instrumental_magnitude", "instrumental_mag"))),
+        "m_cal": _as_float(_evidence_value(row, ("m_cal", "calibrated_magnitude", "apparent_magnitude", "m_std"))),
+        "absolute_magnitude": absolute,
+        "photometric_residual_mag": _as_float(
+            _evidence_value(row, ("photometric_residual_mag", "photometric_residual", "catalog_residual_mag"))
+        ),
+        "photometric_consistent": _evidence_bool(_evidence_value(row, ("photometric_consistent",))),
+        "photometric_outlier_reason": _evidence_value(
+            row, ("photometric_outlier_reason", "outlier_reason")
+        ),
+        "calibration_sample_role": _evidence_value(row, ("calibration_sample_role", "sample_role")),
+        "flags": _evidence_strings(_evidence_value(row, ("flags",))),
+        "rejection_reasons": _evidence_strings(_evidence_value(row, ("rejection_reasons", "reasons"))),
+        "missing_inputs": _evidence_strings(_evidence_value(row, ("missing_inputs",))),
+    }
+    return result
+
+
+def _photometric_quality_summary(value: object, *, source_name: str) -> dict[str, Any]:
+    mapping = _evidence_mapping(value)
+    rows = _evidence_rows(value)
+    if mapping is None and not rows:
+        return {
+            "present": False,
+            "source": source_name,
+            "row_count": 0,
+            "sample_rows": [],
+            "sample_truncated": False,
+        }
+
+    declared_counts: dict[str, int] = {}
+    for alias in ("observability_counts", "level_counts", "observability_levels"):
+        candidate = _evidence_value(mapping, (alias,))
+        declared_counts = {
+            _evidence_status(key) or str(key): count
+            for key, count in _count_evidence_mapping(candidate).items()
+            if (_evidence_status(key) or str(key)) in _PHOTOMETRIC_LEVELS
+        }
+        if declared_counts:
+            break
+    if not declared_counts:
+        counts_mapping = _evidence_mapping(_evidence_value(mapping, ("counts",)))
+        if counts_mapping is not None:
+            declared_counts = {
+                _evidence_status(key) or str(key): count
+                for key, count in _count_evidence_mapping(_evidence_value(counts_mapping, ("observability",))).items()
+                if (_evidence_status(key) or str(key)) in _PHOTOMETRIC_LEVELS
+            }
+
+    row_counts = {level: 0 for level in _PHOTOMETRIC_LEVELS}
+    instrumental_count = 0
+    apparent_count = 0
+    absolute_value_count = 0
+    absolute_eligible_count = 0
+    derived_reasons: dict[str, int] = {}
+    derived_missing: dict[str, int] = {}
+    status_counts: dict[str, int] = {}
+    photometric_consistent_count = 0
+    photometric_inconsistent_count = 0
+    photometric_unknown_count = 0
+    for row in rows:
+        level = _row_evidence_level(row)
+        if level is not None:
+            row_counts[level] += 1
+        if _as_float(_evidence_value(row, ("m_inst", "instrumental_magnitude", "instrumental_mag"))) is not None:
+            instrumental_count += 1
+        if _as_float(_evidence_value(row, ("m_cal", "calibrated_magnitude", "apparent_magnitude", "m_std"))) is not None:
+            apparent_count += 1
+        absolute = _absolute_value_from_row(row)
+        if absolute is not None:
+            absolute_value_count += 1
+        if level == "ABSOLUTE_ELIGIBLE":
+            absolute_eligible_count += 1
+        status = _evidence_status(_evidence_value(row, ("status", "state")))
+        if status:
+            status_counts[status] = status_counts.get(status, 0) + 1
+        consistent = _evidence_bool(_evidence_value(row, ("photometric_consistent",)))
+        if consistent is True:
+            photometric_consistent_count += 1
+        elif consistent is False:
+            photometric_inconsistent_count += 1
+        elif _as_float(
+            _evidence_value(row, ("photometric_residual_mag", "photometric_residual", "catalog_residual_mag"))
+        ) is not None:
+            photometric_unknown_count += 1
+        for reason in _evidence_strings(_evidence_value(row, ("rejection_reasons", "reasons"))):
+            derived_reasons[reason] = derived_reasons.get(reason, 0) + 1
+        for missing in _evidence_strings(_evidence_value(row, ("missing_inputs",))):
+            derived_missing[missing] = derived_missing.get(missing, 0) + 1
+
+    level_counts = declared_counts or {key: value for key, value in row_counts.items() if value}
+    false_valid = _evidence_bool(_evidence_value(mapping, ("false_valid",)))
+    gate = _evidence_mapping(_evidence_value(mapping, ("false_valid_gate",)))
+    gate_passed = _evidence_bool(_evidence_value(gate, ("passed",)))
+    if false_valid is None and gate_passed is not None:
+        false_valid = not gate_passed
+    if gate_passed is None and false_valid is not None:
+        gate_passed = not false_valid
+
+    source_count = _evidence_count(_evidence_value(mapping, ("source_count",)))
+    if source_count is None:
+        source_count = len(rows)
+    frame_count = _evidence_count(_evidence_value(mapping, ("frame_count", "frames")))
+    missing_inputs = _count_evidence_mapping(_evidence_value(mapping, ("missing_inputs", "missing_input_counts"))) or {
+        key: derived_missing[key] for key in sorted(derived_missing)
+    }
+    rejection_reasons = _count_evidence_mapping(_evidence_value(mapping, ("rejection_reasons", "reason_counts"))) or {
+        key: derived_reasons[key] for key in sorted(derived_reasons)
+    }
+    sample_rows = [_compact_photometric_row(row) for row in rows[:20]]
+    provenance = _evidence_mapping(_evidence_value(mapping, ("provenance",)))
+    compact_provenance: dict[str, Any] = {}
+    if provenance is not None:
+        for key, raw in sorted(provenance.items(), key=lambda item: str(item[0])):
+            if isinstance(raw, (str, int, bool)):
+                compact_provenance[str(key)] = raw
+            else:
+                number = _as_float(raw)
+                if number is not None:
+                    compact_provenance[str(key)] = number
+                elif isinstance(raw, Sequence) and not isinstance(raw, (str, bytes, bytearray)):
+                    compact_provenance[str(key)] = _evidence_strings(raw, limit=16)
+
+    return {
+        "present": True,
+        "source": source_name,
+        "status": _evidence_status(_evidence_value(mapping, ("status", "state"))),
+        "frame_count": frame_count,
+        "source_count": source_count,
+        "row_count": len(rows),
+        "level_counts": {key: level_counts[key] for key in sorted(level_counts)},
+        "status_counts": {key: status_counts[key] for key in sorted(status_counts)},
+        "photometric_consistent_count": photometric_consistent_count,
+        "photometric_inconsistent_count": photometric_inconsistent_count,
+        "photometric_consistency_unknown_count": photometric_unknown_count,
+        "instrumental_magnitude_count": instrumental_count,
+        "apparent_magnitude_count": apparent_count,
+        "absolute_magnitude_value_count": absolute_value_count,
+        "absolute_eligible_count": absolute_eligible_count or level_counts.get("ABSOLUTE_ELIGIBLE", 0),
+        "false_valid": false_valid,
+        "false_valid_gate_passed": gate_passed,
+        "flags": _evidence_strings(_evidence_value(mapping, ("flags",))),
+        "errors": _evidence_strings(_evidence_value(mapping, ("errors",))),
+        "rejection_reasons": rejection_reasons,
+        "missing_inputs": missing_inputs,
+        "provenance": compact_provenance,
+        "sample_rows": sample_rows,
+        "sample_truncated": len(rows) > len(sample_rows),
+    }
+
+
+def _relative_photometry_summary(value: object) -> dict[str, Any]:
+    mapping = _evidence_mapping(value)
+    if mapping is None:
+        return {
+            "present": False,
+            "status": None,
+            "usable": False,
+            "flags": [],
+            "relative_magnitudes": {},
+            "frame_zero_points": {},
+        }
+    relative_values = _finite_evidence_mapping(_evidence_value(mapping, ("relative_magnitudes", "source_relative_magnitudes")))
+    frame_offsets = _finite_evidence_mapping(_evidence_value(mapping, ("frame_zero_points", "zero_points")))
+    status = _evidence_status(_evidence_value(mapping, ("status", "state")))
+    reference_count = _evidence_count(_evidence_value(mapping, ("reference_sample_count", "reference_count")))
+    frame_count = len(frame_offsets)
+    source_count = len(relative_values)
+    usable = status in _RELATIVE_VALID_STATUSES and reference_count is not None and reference_count > 0 and frame_count > 0 and source_count > 0
+    values = list(relative_values.values())
+    return {
+        "present": True,
+        "status": status,
+        "usable": usable,
+        "flags": _evidence_strings(_evidence_value(mapping, ("flags",))),
+        "reference_sample_count": reference_count,
+        "reference_sample_count_by_frame": _count_evidence_mapping(_evidence_value(mapping, ("reference_sample_count_by_frame",))),
+        "reference_sample_count_by_source": _count_evidence_mapping(_evidence_value(mapping, ("reference_sample_count_by_source",))),
+        "frame_count": frame_count,
+        "source_count": source_count,
+        "frame_zero_point_count": len(frame_offsets),
+        "relative_magnitude_count": len(relative_values),
+        "frame_zero_points": frame_offsets,
+        "relative_magnitudes": relative_values,
+        "relative_magnitude_range": {
+            "min": min(values) if values else None,
+            "max": max(values) if values else None,
+        },
+        "training_residual_rms_mag": _as_float(_evidence_value(mapping, ("training_residual_rms", "train_rms"))),
+        "training_residual_mad_mag": _as_float(_evidence_value(mapping, ("training_residual_mad", "train_mad"))),
+        "validation_residual_rms_mag": _as_float(_evidence_value(mapping, ("validation_residual_rms", "validation_rms"))),
+        "validation_residual_mad_mag": _as_float(_evidence_value(mapping, ("validation_residual_mad", "validation_mad"))),
+        "validation_sample_count": _evidence_count(_evidence_value(mapping, ("validation_sample_count",))),
+        "validation_source_count": len(_evidence_strings(_evidence_value(mapping, ("validation_source_ids",)))),
+        "excluded_observation_count": _evidence_count(_evidence_value(mapping, ("excluded_observation_count",))),
+        "spatial_order": _evidence_count(_evidence_value(mapping, ("spatial_order",))),
+        "absolute_magnitude_claim": "NOT_DERIVED_FROM_RELATIVE_SCALE",
+        "note": "这些数值是相对光度尺度和帧零点；创新报告不把它们改名为表观或绝对星等。",
+    }
+
+
+def _photometric_calibration_summary(value: object) -> dict[str, Any]:
+    mapping = _evidence_mapping(value)
+    if mapping is None:
+        return {"present": False}
+    coefficients = [number for number in (_as_float(item) for item in _evidence_strings(_evidence_value(mapping, ("coefficients",)))) if number is not None]
+    # ``coefficients`` 通常是数值列表；上面的字符串路径只为兼容极旧的
+    # JSON 包装，下面再直接读取序列以避免丢失正常输入。
+    raw_coefficients = _evidence_value(mapping, ("coefficients",))
+    if isinstance(raw_coefficients, Sequence) and not isinstance(raw_coefficients, (str, bytes, bytearray)):
+        coefficients = [number for number in (_as_float(item) for item in raw_coefficients) if number is not None]
+    return {
+        "present": True,
+        "status": _evidence_status(_evidence_value(mapping, ("status", "state"))),
+        "photometric_system": _evidence_value(mapping, ("photometric_system", "system")),
+        "photometric_band": _evidence_value(mapping, ("photometric_band", "band")),
+        "color_name": _evidence_value(mapping, ("color_name", "color")),
+        "color_order": _evidence_count(_evidence_value(mapping, ("color_order",))),
+        "coefficients": coefficients,
+        "calibrator_count": _evidence_count(_evidence_value(mapping, ("calibrator_count",))),
+        "inlier_count": _evidence_count(_evidence_value(mapping, ("inlier_count",))),
+        "validation_count": _evidence_count(_evidence_value(mapping, ("validation_count",))),
+        "fit_rms_mag": _as_float(_evidence_value(mapping, ("fit_rms_mag",))),
+        "validation_rms_mag": _as_float(_evidence_value(mapping, ("validation_rms_mag",))),
+        "flags": _evidence_strings(_evidence_value(mapping, ("flags",))),
+        "note": "这是输入中已有的同设备/同条件标定声明；创新报告不重新拟合零点。",
+    }
+
+
+def _photometric_evidence_section(payload: Mapping[str, Any] | object) -> dict[str, Any]:
+    """把星等相关输入接入创新报告，同时显式保留物理证据边界。
+
+    该函数只做报告消费和审计，不执行新的星表匹配、不从相对尺度推导
+    绝对星等，也不把 ``m_inst`` 或输入中未经质量门确认的数字升级为
+    ``m_cal``/``M``。旧的序列 JSON 没有这些字段时仍返回稳定的
+    ``NOT_PRESENT`` section。
+    """
+
+    mapping = _evidence_mapping(payload) or {}
+    relative_raw = _evidence_value(mapping, ("relative_photometry",))
+    relative = _relative_photometry_summary(relative_raw)
+
+    quality_raw: object = None
+    quality_source: str | None = None
+    for alias in _PHOTOMETRIC_REPORT_ALIASES:
+        found, value = _evidence_lookup(mapping, (alias,))
+        if found and value is not None:
+            quality_raw = value
+            quality_source = alias
+            break
+    photometry_container = _evidence_mapping(_evidence_value(mapping, ("photometry",)))
+    if quality_source is None and photometry_container is not None:
+        for alias in ("quality_report", "quality", "report"):
+            found, value = _evidence_lookup(photometry_container, (alias,))
+            if found and value is not None:
+                quality_raw = value
+                quality_source = f"photometry.{alias}"
+                break
+    if quality_source is None:
+        photometry_found, photometry_value = _evidence_lookup(mapping, ("photometry",))
+        if photometry_found and photometry_value is not None:
+            quality_raw = photometry_value
+            quality_source = "photometry"
+    if quality_source is None:
+        source_rows_found, source_rows = _evidence_lookup(mapping, ("source_photometry",))
+        if source_rows_found and source_rows is not None:
+            quality_raw = {"rows": source_rows}
+            quality_source = "source_photometry"
+    quality = _photometric_quality_summary(quality_raw, source_name=quality_source or "photometric_quality_report")
+
+    calibration_raw = _evidence_value(mapping, ("photometric_calibration", "calibration"))
+    calibration = _photometric_calibration_summary(calibration_raw)
+    sources: list[str] = []
+    if relative["present"]:
+        sources.append("relative_photometry")
+    if quality["present"]:
+        sources.append(str(quality["source"]))
+    if calibration["present"]:
+        sources.append("photometric_calibration")
+
+    quality_rejected = quality.get("false_valid") is True
+    quality_level_count = sum(int(value) for value in quality.get("level_counts", {}).values()) if quality.get("present") else 0
+    apparent_evidence_count = int(quality.get("apparent_magnitude_count", 0)) + int(quality.get("absolute_magnitude_value_count", 0))
+    apparent_evidence_count += int(quality.get("level_counts", {}).get("APPARENT_CALIBRATED", 0))
+    apparent_evidence_count += int(quality.get("level_counts", {}).get("ABSOLUTE_ELIGIBLE", 0))
+    available = bool(relative.get("usable") or apparent_evidence_count > 0 or calibration.get("status") in {"VALID", "VALID_NO_HOLDOUT"})
+    if not sources:
+        status = "NOT_PRESENT"
+    elif quality_rejected:
+        status = "PRESENT_BUT_REJECTED"
+    elif available:
+        status = "AVAILABLE"
+    elif quality.get("present") and (quality.get("row_count", 0) > 0 or quality_level_count > 0) and quality.get("instrumental_magnitude_count", 0) > 0:
+        status = "INSTRUMENTAL_ONLY"
+    else:
+        status = "PRESENT_BUT_INCOMPLETE"
+
+    apparent_count = int(quality.get("apparent_magnitude_count", 0))
+    if apparent_count == 0:
+        apparent_count = int(quality.get("level_counts", {}).get("APPARENT_CALIBRATED", 0)) + int(quality.get("level_counts", {}).get("ABSOLUTE_ELIGIBLE", 0))
+    absolute_value_count = int(quality.get("absolute_magnitude_value_count", 0))
+    absolute_eligible_count = int(quality.get("absolute_eligible_count", 0))
+    return {
+        "status": status,
+        "evidence_sources": sources,
+        "relative_photometry": relative,
+        "photometric_quality": quality,
+        "photometric_calibration": calibration,
+        "summary": {
+            "relative_scale_usable": bool(relative.get("usable")),
+            "relative_source_count": int(relative.get("relative_magnitude_count", 0)),
+            "relative_frame_count": int(relative.get("frame_zero_point_count", 0)),
+            "reported_apparent_magnitude_count": apparent_count,
+            "reported_absolute_magnitude_value_count": absolute_value_count,
+            "reported_absolute_eligible_count": absolute_eligible_count,
+            "absolute_magnitude_status": "INPUT_EVIDENCE_ONLY" if absolute_value_count or absolute_eligible_count else "NOT_AVAILABLE",
+        },
+        "boundary": {
+            "instrumental_magnitude": {
+                "status": "INPUT_MEASUREMENT_ONLY",
+                "note": "m_inst/仪器星等可作为观测量消费，但不含同设备绝对零点。",
+            },
+            "relative_magnitude": {
+                "status": "CONSUMED_WITH_RELATIVE_LABEL" if relative.get("present") else "NOT_PRESENT",
+                "note": "relative_photometry 只提供跨帧相对尺度、帧零点和残差证据。",
+            },
+            "apparent_magnitude": {
+                "status": "REPORTED_BY_INPUT_ONLY" if apparent_count else "NOT_INFERRED",
+                "count": apparent_count,
+                "note": "只有输入质量报告明确提供并通过其自身状态门时才保留为表观星等证据；本模块不重新标定。",
+            },
+            "absolute_magnitude": {
+                "status": "INPUT_EVIDENCE_ONLY" if absolute_value_count or absolute_eligible_count else "NOT_INFERRED",
+                "value_count": absolute_value_count,
+                "eligible_count": absolute_eligible_count,
+                "note": "创新模块不会从 m_inst、相对光度或亮度排序推导绝对星等；需要目录身份、距离/视差、消光和质量门。",
+            },
+        },
+        "notes": [
+            "星等 section 是创新报告对已有光度证据的审计摘要，不是新的星表匹配或重新测光结果。",
+            "运动目标没有被自动当作 Gaia 恒星；相对光度证据也不会改变运动/静态分类。",
+        ],
+    }
+
+
 def _build_innovation_report_payload(payload: Mapping[str, Any], json_path: Path) -> dict[str, Any]:
     """从已经载入的 ``SequenceResult.as_dict`` 对象构建完整序列证据报告。"""
 
     if not isinstance(payload, Mapping):
-        raise ValueError("sequence JSON 根节点必须是对象")
+        converted = _evidence_mapping(payload)
+        if converted is None:
+            raise ValueError("sequence JSON 根节点必须是对象")
+        payload = converted
     frame_rows = _frame_rows(payload, json_path)
     motion_rows = _motion_rows(payload, frame_rows)
     motion_audit_rows = _motion_audit_rows(payload)
@@ -780,6 +1355,7 @@ def _build_innovation_report_payload(payload: Mapping[str, Any], json_path: Path
                 else "当前序列使用全量源级工作集。统计排除了首行 208 字节辅助区；未设置饱和阈值，不报告饱和率。"
             ),
         },
+        "photometric_evidence": _photometric_evidence_section(payload),
         "motion": {
             "feature_count": len(motion_rows),
             "moving_count": sum(row["classification"] == "moving" for row in motion_rows),

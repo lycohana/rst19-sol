@@ -62,7 +62,7 @@ Astropy 的 `memmap` 适合逐帧或分块访问大型本地图像；不要一�
 2. `SIMPLE`、`NAXIS`、`BITPIX`、`NAXIS1`、`NAXIS2` 是否存在且类型正确。
 3. 文件长度是否符合 `header_blocks × 2880 + image_bytes`。
 4. `DATE-OBS` 是否能解析为 UTC，且按时间升序排列。
-5. `EXPOSURE` 是否为正，并统一单位为秒或毫秒，避免混用。
+5. `EXPTIME`/`EXPOSURE` 是否为正，并统一单位为秒或毫秒，避免混用。
 6. `BSCALE`、`BZERO`、NaN/Inf、负值和接近极值的像素是否需要单独标记。
 7. 首行 208 字节辅助数据是否能解包成 26 个有限 `double`。
 8. `p_az/p_el` 是否与 `AZIMUTH/ELEVATIO` 一致，四元数范数是否接近 1，姿态推导的相机 `-Y` 光轴是否与辅助 `ra/dec` 一致，位置/速度在相邻帧之间是否连续。
@@ -86,6 +86,15 @@ def decode_auxiliary(raw_image_bytes: bytes) -> tuple[float, ...]:
 这段逻辑必须用 15 个文件逐一验证，并与 C++ 版本和头部字段交叉比对。不要在没有数值范围检查的情况下把任意 208 字节解释成姿态或轨道数据。
 
 本项目已用 `rst19-aux-audit` 完成上述逐帧光轴交叉检查。结果表明四元数推导光轴与辅助 `ra/dec` 在 15 帧内的最大角残差约为 `1.1×10^-10 arcsec`，但这只是辅助字段之间的一致性，不代表已经获得完整 WCS。
+
+### 3.4 曝光时间的统一口径
+
+测光必须使用曝光归一化通量。代码统一通过 `rst19.fits.exposure_seconds()`
+解析曝光时间，优先读取标准 FITS 关键字 `EXPTIME`（默认单位为秒），没有
+该关键字时读取本比赛格式的 `EXPOSURE`（默认单位为毫秒）。如果头部提供
+`EXPTIME_UNIT`、`EXPOSURE_UNIT` 或 `TIMEUNIT`，显式单位优先；数值字符串
+如 `"1.5 s"` 也会被解析。单帧、15 帧相对测光和 GUI 使用同一入口，避免
+把 `1500 ms` 当成 `1500 s` 或把不同帧的 `m_inst` 放在不同曝光口径下比较。
 
 对格式说明与实际文件的完整只读复核可运行：
 

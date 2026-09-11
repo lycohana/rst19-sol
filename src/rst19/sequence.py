@@ -18,9 +18,11 @@ from scipy import ndimage
 from scipy.spatial import cKDTree
 
 from .detection import Detection, DetectionResult, _working_mask, build_background_model, detect_sources, sigma_clipped_stats
-from .fits import auxiliary_mask, read_fits
+from .fits import auxiliary_mask, exposure_milliseconds, exposure_seconds, read_fits
 from .models import FitsFrame
 from .pipeline import FrameAnalysis, analyze_frame
+from .photometry import instrumental_magnitude
+from .relative_photometry import Observation, RelativePhotometryResult, fit_relative_photometry
 
 
 # 15 帧关联的默认工作集上限。候选总数仍然完整统计，只有进入跨帧
@@ -605,6 +607,7 @@ class SequenceResult:
     stack_min_presence: int = 0
     fixed_sentinel_audit: FixedSentinelAudit | None = None
     fixed_sentinel_impact_audit: FixedSentinelImpactAudit | None = None
+    relative_photometry: RelativePhotometryResult | None = None
 
     @property
     def stable_source_count(self) -> int:
@@ -718,6 +721,11 @@ class SequenceResult:
             "fixed_sentinel_impact_audit": (
                 self.fixed_sentinel_impact_audit.as_dict()
                 if self.fixed_sentinel_impact_audit is not None
+                else None
+            ),
+            "relative_photometry": (
+                self.relative_photometry.as_dict()
+                if self.relative_photometry is not None
                 else None
             ),
             "frames": [frame.as_dict() for frame in self.frames],
@@ -3773,6 +3781,79 @@ def _stack_faint_tracks(
     return tuple(rendered)
 
 
+def _fit_sequence_relative_photometry(
+    analyses: Sequence[FrameAnalysis],
+    tracks: Sequence[SourceTrack],
+    *,
+    min_presence: int,
+    max_sources: int,
+    spatial_order: int,
+    validation_fraction: float,
+) -> RelativePhotometryResult:
+    """Fit a compact relative scale from stable quality tracks.
+
+    The dense design used by :func:`fit_relative_photometry` is intentionally
+    capped here.  A 4096×4096 frame can contain thousands of detections; using
+    every source would make the source/frame design matrix unnecessarily large.
+    We therefore choose the highest-SNR static tracks that span the sequence,
+    while keeping the selection deterministic.  This is a relative scale only:
+    it does not manufacture a Gaia zero point or an absolute magnitude.
+    """
+
+    if max_sources < 1:
+        raise ValueError("relative_photometry_max_sources must be positive")
+    track_by_observation: dict[tuple[int, int], SourceTrack] = {}
+    eligible: list[tuple[float, int, SourceTrack]] = []
+    for track in tracks:
+        if track.classification != "static" or track.presence < min_presence:
+            continue
+        snr_values = [
+            float(point.flux_snr)
+            for point in track.points
+            if point.flux_snr is not None and np.isfinite(float(point.flux_snr)) and float(point.flux_snr) > 0
+        ]
+        if not snr_values:
+            continue
+        eligible.append((float(np.median(np.asarray(snr_values))), int(track.track_id), track))
+        for point in track.points:
+            track_by_observation[(int(point.frame_index), int(point.detection_id))] = track
+    eligible.sort(key=lambda item: (-item[0], item[1]))
+    selected = {track_id for _snr, track_id, _track in eligible[:max_sources]}
+
+    observations: list[Observation] = []
+    for frame_index, analysis in enumerate(analyses):
+        exposure_s = exposure_seconds(analysis.frame.header)
+        for source in analysis.detection.quality_sources:
+            track = track_by_observation.get((frame_index, int(source.detection_id)))
+            if track is None or int(track.track_id) not in selected:
+                continue
+            magnitude = instrumental_magnitude(float(source.flux), exposure_s=exposure_s)
+            signal_snr = source.flux_snr if source.flux_snr is not None else source.snr
+            if magnitude is None or signal_snr is None or not np.isfinite(float(signal_snr)) or float(signal_snr) <= 0:
+                continue
+            observations.append(
+                Observation(
+                    frame_id=frame_index,
+                    source_id=f"track:{track.track_id}",
+                    instrumental_magnitude=float(magnitude),
+                    magnitude_error=float(1.0857362047581296 / float(signal_snr)),
+                    x=float(source.x),
+                    y=float(source.y),
+                    quality_passed=True,
+                    is_moving=False,
+                )
+            )
+
+    return fit_relative_photometry(
+        observations,
+        spatial_order=spatial_order,
+        validation_fraction=validation_fraction,
+        random_state=0,
+        min_sources=2,
+        min_frames=2,
+    )
+
+
 def analyze_sequence(
     paths: Iterable[str | Path],
     *,
@@ -3801,6 +3882,10 @@ def analyze_sequence(
     stack_min_flux_snr: float = 5.0,
     stack_frame_min_flux_snr: float = 3.0,
     stack_min_presence: int | None = None,
+    relative_photometry: bool = False,
+    relative_photometry_max_sources: int = 400,
+    relative_photometry_spatial_order: int = 0,
+    relative_photometry_validation_fraction: float = 0.2,
     progress: Callable[[str, int, int], None] | None = None,
     detail_progress: Callable[[int, int, float, str], None] | None = None,
     **detector_kwargs: object,
@@ -3820,6 +3905,9 @@ def analyze_sequence(
     关闭；它适合研究窄 PSF 漏检，不能仅凭候选数增加就当作正式星表口径。
     序列还会输出固定像素值审计及其孔径影响关联；这些字段只用于定位
     坏像素/填充值对候选测量的影响，不会自动屏蔽固定值。
+    ``relative_photometry=True`` 时，序列结束前会从跨帧静态质量轨迹中
+    选择有限个高 SNR 参考源，拟合帧间相对零点和源相对星等；该结果不
+    需要联网，也不声称已经完成 Gaia/标准系统或绝对星等标定。
     整数 FITS 默认启用序列快速路径：每个 256 px 背景块最多抽样
     ``DEFAULT_SEQUENCE_BACKGROUND_SAMPLE_LIMIT`` 个像素，并在稀疏掩膜时
     使用单遍匹配滤波；快速口径会写入返回结果，单图默认不启用。
@@ -3869,6 +3957,12 @@ def analyze_sequence(
         raise ValueError("stack_faint thresholds must be positive")
     if stack_min_presence is not None and stack_min_presence < 1:
         raise ValueError("stack_min_presence must be positive when provided")
+    if relative_photometry_max_sources < 1:
+        raise ValueError("relative_photometry_max_sources must be positive")
+    if relative_photometry_spatial_order not in {0, 1, 2}:
+        raise ValueError("relative_photometry_spatial_order must be 0, 1, or 2")
+    if not 0.0 <= float(relative_photometry_validation_fraction) < 1.0:
+        raise ValueError("relative_photometry_validation_fraction must be in [0, 1)")
     if detector_kwargs.get("max_sources") is None and sequence_max_sources is not None:
         detector_kwargs["max_sources"] = int(sequence_max_sources)
     # 序列只需要稳定的空间噪声场；更大的网格减少背景统计开销，仍会在
@@ -3983,6 +4077,20 @@ def analyze_sequence(
         max_motion_fit_rms_px=max_motion_fit_rms_px,
         persistent_min_presence=persistent_min_presence,
     )
+    relative_photometry_result: RelativePhotometryResult | None = None
+    if relative_photometry:
+        if progress is not None:
+            progress("relative-photometry", 0, total)
+        relative_photometry_result = _fit_sequence_relative_photometry(
+            resolved_analyses,
+            result.tracks,
+            min_presence=result.min_presence,
+            max_sources=int(relative_photometry_max_sources),
+            spatial_order=int(relative_photometry_spatial_order),
+            validation_fraction=float(relative_photometry_validation_fraction),
+        )
+        if progress is not None:
+            progress("relative-photometry", total, total)
     fast_point_quality_tracks: tuple[SourceTrack, ...] = ()
     if fast_point_motion and total >= 2:
         if progress is not None:
@@ -4222,7 +4330,7 @@ def analyze_sequence(
             returned_count=analysis.detection.returned_count,
             quality_count=analysis.detection.star_count,
             timestamp=str(analysis.frame.header.get("DATE-OBS")) if analysis.frame.header.get("DATE-OBS") is not None else None,
-            exposure_ms=float(analysis.frame.header["EXPOSURE"]) if isinstance(analysis.frame.header.get("EXPOSURE"), (int, float)) else None,
+            exposure_ms=exposure_milliseconds(analysis.frame.header),
             auxiliary=tuple(analysis.frame.auxiliary.as_dict().items()) if analysis.frame.auxiliary is not None else (),
             width_px=analysis.frame.width,
             height_px=analysis.frame.height,
@@ -4335,4 +4443,5 @@ def analyze_sequence(
         stack_min_presence=resolved_stack_min_presence,
         fixed_sentinel_audit=fixed_sentinel_audit,
         fixed_sentinel_impact_audit=fixed_sentinel_impact_audit,
+        relative_photometry=relative_photometry_result,
     )

@@ -1,10 +1,24 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 from PIL import Image
 
-from rst19.innovation import _difference_rows, _fit_constant_velocity, _motion_audit_rows, _motion_point_rows, _motion_rows, _telemetry_consistency, _telemetry_position_chart, _telemetry_prediction, _vector_metrics
+from rst19.innovation import (
+    _difference_rows,
+    _fit_constant_velocity,
+    _motion_audit_rows,
+    _motion_point_rows,
+    _motion_rows,
+    _photometric_evidence_section,
+    _telemetry_consistency,
+    _telemetry_position_chart,
+    _telemetry_prediction,
+    _vector_metrics,
+    build_innovation_report_from_payload,
+)
 
 
 def test_constant_velocity_fit_reports_small_sample_uncertainty() -> None:
@@ -227,3 +241,215 @@ def test_telemetry_position_chart_writes_observation_and_forecast_panels(tmp_pat
     assert output.is_file()
     with Image.open(output) as image:
         assert image.size == (1200, 680)
+
+
+def _minimal_innovation_payload(**extra: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "frames": [],
+        "cumulative_shifts": [],
+        "motion_features": [],
+    }
+    payload.update(extra)
+    return payload
+
+
+def test_innovation_report_consumes_relative_scale_without_promoting_absolute_magnitude() -> None:
+    payload = _minimal_innovation_payload(
+        relative_photometry={
+            "status": "VALID",
+            "flags": ["HOLDOUT_SOURCE_BLOCK"],
+            "reference_sample_count": 12,
+            "frame_zero_points": {"0": 0.12, "1": -0.12},
+            "relative_magnitudes": {"101": 3.4, "102": 4.1},
+            "training_residual_rms": 0.018,
+            "validation_residual_rms": 0.027,
+            "validation_sample_count": 2,
+        }
+    )
+
+    report = build_innovation_report_from_payload(payload)
+    evidence = report["photometric_evidence"]
+    relative = evidence["relative_photometry"]
+
+    assert evidence["status"] == "AVAILABLE"
+    assert evidence["evidence_sources"] == ["relative_photometry"]
+    assert relative["usable"] is True
+    assert relative["relative_magnitude_count"] == 2
+    assert relative["relative_magnitudes"] == {"101": 3.4, "102": 4.1}
+    assert relative["training_residual_rms_mag"] == pytest.approx(0.018)
+    assert evidence["summary"]["reported_apparent_magnitude_count"] == 0
+    assert evidence["summary"]["reported_absolute_magnitude_value_count"] == 0
+    assert evidence["boundary"]["relative_magnitude"]["status"] == "CONSUMED_WITH_RELATIVE_LABEL"
+    assert evidence["boundary"]["absolute_magnitude"]["status"] == "NOT_INFERRED"
+    assert relative["absolute_magnitude_claim"] == "NOT_DERIVED_FROM_RELATIVE_SCALE"
+
+    # The additive section must remain strict-JSON serialisable for artifact export.
+    json.dumps(report, ensure_ascii=False, allow_nan=False)
+
+
+def test_innovation_report_consumes_quality_report_and_preserves_false_valid_gate() -> None:
+    quality_report = {
+        "frame_count": 2,
+        "source_count": 3,
+        "level_counts": {
+            "INSTRUMENTAL_ONLY": 1,
+            "APPARENT_CALIBRATED": 1,
+            "ABSOLUTE_ELIGIBLE": 1,
+        },
+        "false_valid": False,
+        "false_valid_gate": {"passed": True, "violation_count": 0},
+        "provenance": {"catalog": ["Gaia DR3"], "wcs": "astrometric-solution-v1"},
+        "rows": [
+            {
+                "row_key": "0:10",
+                "frame_id": "0",
+                "source_id": "10",
+                "observability_level": "APPARENT_CALIBRATED",
+                "m_inst": 15.2,
+                "m_cal": 13.7,
+                "status": "CALIBRATED",
+            },
+            {
+                "row_key": "0:11",
+                "frame_id": "0",
+                "source_id": "11",
+                "observability_level": "ABSOLUTE_ELIGIBLE",
+                "m_inst": 16.0,
+                "m_cal": 14.5,
+                "M": 4.2,
+                "status": "ABSOLUTE_ELIGIBLE",
+            },
+        ],
+    }
+
+    evidence = _photometric_evidence_section({"photometric_quality_report": quality_report})
+
+    assert evidence["status"] == "AVAILABLE"
+    quality = evidence["photometric_quality"]
+    assert quality["present"] is True
+    assert quality["source"] == "photometric_quality_report"
+    assert quality["row_count"] == 2
+    assert quality["level_counts"]["ABSOLUTE_ELIGIBLE"] == 1
+    assert quality["apparent_magnitude_count"] == 2
+    assert quality["absolute_magnitude_value_count"] == 1
+    assert quality["false_valid"] is False
+    assert quality["false_valid_gate_passed"] is True
+    assert quality["provenance"]["catalog"] == ["Gaia DR3"]
+    assert evidence["summary"]["reported_absolute_magnitude_value_count"] == 1
+    assert evidence["boundary"]["absolute_magnitude"]["status"] == "INPUT_EVIDENCE_ONLY"
+    assert evidence["boundary"]["absolute_magnitude"]["eligible_count"] == 1
+
+
+def test_innovation_report_promotes_nested_model_distance_absolute_result() -> None:
+    evidence = _photometric_evidence_section(
+        {
+            "source_photometry": [
+                {
+                    "source_id": "gsp-1",
+                    "status": "CALIBRATED",
+                    "m_inst": 16.0,
+                    "m_cal": 14.5,
+                    "absolute_magnitude": {
+                        "value": 4.2,
+                        "status": "VALID_MODEL_DISTANCE",
+                        "distance_source": "Gaia DR3 GSP-Phot",
+                    },
+                }
+            ],
+            "photometric_calibration": {"status": "VALID"},
+        }
+    )
+
+    quality = evidence["photometric_quality"]
+    assert quality["level_counts"]["ABSOLUTE_ELIGIBLE"] == 1
+    assert quality["absolute_magnitude_value_count"] == 1
+
+
+def test_innovation_report_rejects_quality_report_when_false_valid_gate_fails() -> None:
+    evidence = _photometric_evidence_section(
+        {
+            "photometric_report": {
+                "rows": [
+                    {
+                        "observability_level": "APPARENT_CALIBRATED",
+                        "m_cal": 12.0,
+                    }
+                ],
+                "false_valid_gate": {"passed": False},
+            }
+        }
+    )
+
+    assert evidence["status"] == "PRESENT_BUT_REJECTED"
+    assert evidence["photometric_quality"]["false_valid"] is True
+    assert evidence["boundary"]["apparent_magnitude"]["status"] == "REPORTED_BY_INPUT_ONLY"
+
+
+def test_innovation_report_accepts_count_only_quality_summary() -> None:
+    evidence = _photometric_evidence_section(
+        {
+            "photometric_quality": {
+                "observability_counts": {
+                    "APPARENT_CALIBRATED": 4,
+                    "ABSOLUTE_ELIGIBLE": 1,
+                }
+            }
+        }
+    )
+
+    assert evidence["status"] == "AVAILABLE"
+    assert evidence["summary"]["reported_apparent_magnitude_count"] == 5
+    assert evidence["summary"]["reported_absolute_eligible_count"] == 1
+    assert evidence["boundary"]["absolute_magnitude"]["status"] == "INPUT_EVIDENCE_ONLY"
+
+
+def test_innovation_report_keeps_old_payload_compatible_with_structured_boundary() -> None:
+    evidence = _photometric_evidence_section(_minimal_innovation_payload())
+
+    assert evidence["status"] == "NOT_PRESENT"
+    assert evidence["evidence_sources"] == []
+    assert evidence["relative_photometry"]["present"] is False
+    assert evidence["photometric_quality"]["present"] is False
+    assert evidence["boundary"]["instrumental_magnitude"]["status"] == "INPUT_MEASUREMENT_ONLY"
+    assert evidence["boundary"]["absolute_magnitude"]["status"] == "NOT_INFERRED"
+
+
+def test_innovation_report_accepts_result_like_payload_and_ignores_raw_detection_sources() -> None:
+    class ResultLike:
+        def as_dict(self) -> dict[str, object]:
+            return _minimal_innovation_payload(
+                detection={"sources": [{"peak": 999}]},
+                source_photometry=[
+                    {
+                        "detection_id": 4,
+                        "instrumental_magnitude": 17.0,
+                        "status": "INSTRUMENTAL",
+                    }
+                ],
+            )
+
+    report = build_innovation_report_from_payload(ResultLike())  # type: ignore[arg-type]
+    evidence = report["photometric_evidence"]
+
+    assert evidence["status"] == "INSTRUMENTAL_ONLY"
+    quality = evidence["photometric_quality"]
+    assert quality["source"] == "source_photometry"
+    assert quality["row_count"] == 1
+    assert quality["instrumental_magnitude_count"] == 1
+    assert quality["apparent_magnitude_count"] == 0
+    assert quality["absolute_magnitude_value_count"] == 0
+    assert evidence["boundary"]["absolute_magnitude"]["status"] == "NOT_INFERRED"
+
+
+def test_innovation_report_accepts_top_level_photometry_rows() -> None:
+    evidence = _photometric_evidence_section(
+        {
+            "photometry": [
+                {"source_id": "s1", "m_inst": 18.0, "status": "INSTRUMENTAL"},
+            ]
+        }
+    )
+
+    assert evidence["status"] == "INSTRUMENTAL_ONLY"
+    assert evidence["photometric_quality"]["source"] == "photometry"
+    assert evidence["photometric_quality"]["instrumental_magnitude_count"] == 1

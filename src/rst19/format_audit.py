@@ -18,7 +18,7 @@ from typing import Iterable, Mapping, Sequence
 
 import numpy as np
 
-from .fits import auxiliary_mask, read_fits
+from .fits import auxiliary_mask, exposure_milliseconds, read_fits
 from .models import FitsFrame
 
 
@@ -284,7 +284,7 @@ def _frame_row(index: int, path: Path, frame: FitsFrame, extreme_fraction: float
         has_bzero="BZERO" in frame.header,
         has_blank="BLANK" in frame.header,
         timestamp=_as_timestamp_text(frame.header.get("DATE-OBS")),
-        exposure_ms=_optional_float(frame.header.get("EXPOSURE")),
+        exposure_ms=exposure_milliseconds(frame.header),
         auxiliary_complete=frame.auxiliary is not None,
         auxiliary_masked_pixel_count=min(frame.width, 104) if frame.height > 0 else 0,
         wcs_standard_card_count=len(present_wcs_cards),

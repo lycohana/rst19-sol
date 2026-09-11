@@ -192,6 +192,47 @@ class AffineWCSCalibration:
             parity=self.parity,
         )
 
+    def world_to_pixel(
+        self, ra_deg: float | np.ndarray, dec_deg: float | np.ndarray
+    ) -> tuple[float | np.ndarray, float | np.ndarray]:
+        """用完整仿射矩阵把天球坐标投影到图像像素。
+
+        ``refined_wcs()`` 只保留旋转和平均尺度，适合兼容旧的可视化
+        接口；星表二次匹配和测光前的坐标预测必须使用这里保存的完整
+        矩阵，否则轻微的剪切/各向异性会在大视场边缘变成可观的匹配
+        误差。切平面投影仍以拟合时的 ``center_ra/dec`` 为参考。
+        """
+
+        ra_array, dec_array = np.broadcast_arrays(
+            np.asarray(ra_deg, dtype=np.float64),
+            np.asarray(dec_deg, dtype=np.float64),
+        )
+        reference_wcs = TangentPlaneWCS(
+            center_ra_deg=self.center_ra_deg,
+            center_dec_deg=self.center_dec_deg,
+            # 这里的尺度只用于保留切平面投影；完整像素映射由仿射
+            # 矩阵完成，因此不会把平均尺度重复应用。
+            pixel_scale_arcsec=1.0,
+            crpix_x=0.0,
+            crpix_y=0.0,
+        )
+        east_arcsec, north_arcsec = reference_wcs.world_to_tangent_arcsec(ra_array, dec_array)
+        tangent = np.column_stack(
+            (
+                np.asarray(east_arcsec, dtype=np.float64).reshape(-1),
+                np.asarray(north_arcsec, dtype=np.float64).reshape(-1),
+            )
+        )
+        matrix = np.asarray(self.matrix_px_per_arcsec, dtype=np.float64)
+        offset = np.asarray(self.offset_px, dtype=np.float64)
+        pixels = tangent @ matrix.T + offset
+        x = pixels[:, 0]
+        y = pixels[:, 1]
+        input_shape = ra_array.shape
+        if input_shape == ():
+            return float(x[0]), float(y[0])
+        return x.reshape(input_shape), y.reshape(input_shape)
+
     def pixel_velocity_to_tangent_arcsec(self, dx_px: float, dy_px: float) -> tuple[float, float]:
         """把图像平面速度分量换算为东/北角秒每秒。"""
 
