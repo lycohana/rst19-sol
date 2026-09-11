@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 from pathlib import Path
 
@@ -17,6 +18,9 @@ def _write_catalog(path: Path, rows: list[dict[str, str]]) -> None:
 
 
 def _write_audit(path: Path, *, min_g: float, max_g: float, complete: bool = True) -> None:
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    with path.open("r", encoding="utf-8", newline="") as stream:
+        row_count = sum(1 for _ in csv.DictReader(stream))
     path.with_suffix(path.suffix + ".meta.json").write_text(
         json.dumps(
             {
@@ -27,6 +31,8 @@ def _write_audit(path: Path, *, min_g: float, max_g: float, complete: bool = Tru
                 "search_radius_deg": 6.92,
                 "min_g_mag": min_g,
                 "max_g_mag": max_g,
+                "csv_row_count": row_count,
+                "csv_sha256": digest,
             }
         ),
         encoding="utf-8",
@@ -101,6 +107,8 @@ def test_merge_layers_preserves_richer_duplicate_and_audit(tmp_path: Path) -> No
     assert source_two.parallax_mas == 2.3
     audit = json.loads(result.audit_path.read_text(encoding="utf-8"))
     assert audit["complete"] is True
+    assert audit["csv_row_count"] == 3
+    assert audit["csv_sha256"]
     assert len(audit["inputs"]) == 2
 
 
@@ -153,3 +161,33 @@ def test_merge_rejects_critical_conflict(tmp_path: Path) -> None:
     assert result.complete is False
     assert result.conflict_count == 1
     assert result.conflicting_source_ids == ("1",)
+
+
+def test_merge_rejects_stale_complete_audit_binding(tmp_path: Path) -> None:
+    first = tmp_path / "first.csv"
+    second = tmp_path / "second.csv"
+    row = {
+        "source_id": "1",
+        "ra_deg": "129.5",
+        "dec_deg": "-1.8",
+        "magnitude": "6.2",
+        "color": "0.4",
+        "color_name": "BP-RP",
+        "photometric_system": "Gaia Vega",
+        "photometric_band": "G",
+    }
+    _write_catalog(first, [row])
+    _write_catalog(second, [dict(row, source_id="2", magnitude="15.0")])
+    _write_audit(first, min_g=5.0, max_g=13.5)
+    _write_audit(second, min_g=8.0, max_g=18.0)
+    first.write_text(
+        first.read_text(encoding="utf-8").replace("129.5", "129.5001"),
+        encoding="utf-8",
+    )
+
+    result = merge_catalog_csvs((first, second), tmp_path / "merged.csv")
+
+    assert result.complete is False
+    assert result.input_audit_bindings_valid is False
+    payload = json.loads(result.audit_path.read_text(encoding="utf-8"))
+    assert any("SHA-256" in reason for reason in payload["incomplete_reasons"])

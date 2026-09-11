@@ -148,6 +148,32 @@ def _footprint(payload: Mapping[str, object]) -> tuple[float, float, float] | No
     return ra % 360.0, dec, radius
 
 
+def _audit_binding_error(
+    rows: Sequence[Mapping[str, str]],
+    payload: Mapping[str, object] | None,
+    file_sha256: str,
+) -> str | None:
+    """验证 complete sidecar 是否仍然绑定当前 CSV。"""
+
+    if payload is None or payload.get("complete") is not True:
+        return None
+    declared_sha = payload.get("csv_sha256", payload.get("sha256"))
+    if not isinstance(declared_sha, str) or not declared_sha.strip():
+        return "complete=true 审计缺少 csv_sha256，无法绑定当前 CSV"
+    if declared_sha.strip().lower() != file_sha256.lower():
+        return "complete=true 审计的 csv_sha256 与当前 CSV 不一致"
+    declared_count = payload.get("csv_row_count", payload.get("row_count"))
+    try:
+        count = int(declared_count) if declared_count is not None else None
+    except (TypeError, ValueError):
+        count = None
+    if count is None:
+        return "complete=true 审计缺少 csv_row_count，无法核对当前 CSV 行数"
+    if count != len(rows):
+        return f"complete=true 审计的 csv_row_count={count} 与当前 CSV 行数={len(rows)} 不一致"
+    return None
+
+
 def _same_footprint(left: tuple[float, float, float], right: tuple[float, float, float]) -> bool:
     return all(math.isclose(a, b, rel_tol=0.0, abs_tol=1.0e-6) for a, b in zip(left, right, strict=True))
 
@@ -204,6 +230,7 @@ class CatalogMergeResult:
     complete: bool
     footprint_consistent: bool
     input_audits_complete: bool
+    input_audit_bindings_valid: bool
     conflicting_source_ids: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, object]:
@@ -220,6 +247,7 @@ class CatalogMergeResult:
             "complete": self.complete,
             "footprint_consistent": self.footprint_consistent,
             "input_audits_complete": self.input_audits_complete,
+            "input_audit_bindings_valid": self.input_audit_bindings_valid,
             "interpretation": (
                 "A merged catalog is eligible for formal downstream provenance only when complete is true. "
                 "Duplicate source_id rows are collapsed; field conflicts and missing input audits keep it incomplete."
@@ -249,6 +277,7 @@ def merge_catalog_csvs(
     input_records: list[dict[str, object]] = []
     footprints: list[tuple[float, float, float]] = []
     input_audits_complete = True
+    input_audit_bindings_valid = True
 
     for path in paths:
         rows, fieldnames = _read_csv(path)
@@ -263,6 +292,11 @@ def merge_catalog_csvs(
                 all_fields.append(field)
 
         audit, audit_path, audit_error = _read_audit(path)
+        file_sha256 = _sha256(path)
+        binding_error = _audit_binding_error(rows, audit, file_sha256)
+        if binding_error is not None:
+            audit_error = binding_error if audit_error is None else f"{audit_error}; {binding_error}"
+            input_audit_bindings_valid = False
         audit_complete = bool(audit is not None and audit.get("complete") is True and not audit_error)
         input_audits_complete = input_audits_complete and audit_complete
         footprint = _footprint(audit) if audit is not None else None
@@ -271,11 +305,12 @@ def merge_catalog_csvs(
         input_records.append(
             {
                 "path": str(path),
-                "sha256": _sha256(path),
+                "sha256": file_sha256,
                 "row_count": len(rows),
                 "audit_path": str(audit_path) if audit_path is not None else None,
                 "audit_complete": audit_complete,
                 "audit_error": audit_error,
+                "audit_binding_valid": binding_error is None,
                 "footprint": (
                     {
                         "center_ra_deg": footprint[0],
@@ -297,7 +332,12 @@ def merge_catalog_csvs(
     footprint_consistent = bool(footprints) and len(footprints) == len(paths) and all(
         _same_footprint(footprints[0], footprint) for footprint in footprints[1:]
     )
-    complete = input_audits_complete and footprint_consistent and not conflict_ids
+    complete = (
+        input_audits_complete
+        and input_audit_bindings_valid
+        and footprint_consistent
+        and not conflict_ids
+    )
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8", newline="") as stream:
@@ -332,14 +372,20 @@ def merge_catalog_csvs(
         complete=complete,
         footprint_consistent=footprint_consistent,
         input_audits_complete=input_audits_complete,
+        input_audit_bindings_valid=input_audit_bindings_valid,
         conflicting_source_ids=tuple(sorted(conflict_ids)),
     )
     payload = result.as_dict()
+    payload["csv_row_count"] = result.row_count
+    payload["csv_sha256"] = _sha256(output)
+    payload["csv_byte_count"] = output.stat().st_size
     payload["inputs"] = input_records
     if not complete:
         reasons: list[str] = []
         if not input_audits_complete:
             reasons.append("至少一份输入缺少 complete=true 审计")
+        if not input_audit_bindings_valid:
+            reasons.append("至少一份 complete=true 审计未与当前 CSV 的 SHA-256/行数绑定")
         if not footprint_consistent:
             reasons.append("输入天空覆盖不一致或缺少覆盖字段")
         if conflict_ids:

@@ -48,5 +48,8 @@ def test_public_catalog_download_is_explicit_and_writes_audit(tmp_path: Path) ->
     metadata = json.loads(result.audit_path.read_text(encoding="utf-8"))
     assert metadata["catalog"] == "Gaia DR3"
     assert metadata["complete"] is True
+    assert metadata["csv_row_count"] == 1
+    assert metadata["csv_sha256"]
+    assert metadata["csv_byte_count"] == output.stat().st_size
     assert metadata["provenance"]["photometric_band"] == "G"
     assert "rows" not in metadata["tiled"]

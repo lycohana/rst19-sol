@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from collections.abc import Callable, Mapping
@@ -45,6 +46,14 @@ def _finite_positive(value: object, *, name: str) -> float:
     if not math.isfinite(parsed) or parsed <= 0.0:
         raise ValueError(f"{name} must be a positive number")
     return parsed
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def camera_footprint_radius_deg(
@@ -101,6 +110,9 @@ class PublicCatalogDownload:
             "min_g_mag": self.min_g_mag,
             "max_g_mag": self.max_g_mag,
             "row_count": self.row_count,
+            "csv_row_count": self.row_count,
+            "csv_sha256": _sha256(self.output_path),
+            "csv_byte_count": self.output_path.stat().st_size,
             "complete": self.complete,
             "initial_tile_count": self.initial_tile_count,
             "queried_tile_count": self.queried_tile_count,
