@@ -516,6 +516,7 @@ from .photometric_report import (
 from .photometric_workflow import (
     AutoPhotometricResult,
     DEFAULT_CAMERA_PIXEL_SCALE_ARCSEC,
+    DEFAULT_PHOTOMETRY_MATCH_RADIUS_PX,
     DEFAULT_PLATE_MAX_LOO_RMS_PX,
     DEFAULT_PLATE_MAX_RMS_PX,
     DEFAULT_PLATE_MIN_COVERAGE,
@@ -704,6 +705,7 @@ __all__ = [
     "make_photometric_report",
     "AutoPhotometricResult",
     "DEFAULT_CAMERA_PIXEL_SCALE_ARCSEC",
+    "DEFAULT_PHOTOMETRY_MATCH_RADIUS_PX",
     "DEFAULT_PLATE_MAX_LOO_RMS_PX",
     "DEFAULT_PLATE_MAX_RMS_PX",
     "DEFAULT_PLATE_MIN_COVERAGE",

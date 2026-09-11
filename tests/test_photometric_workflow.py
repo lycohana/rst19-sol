@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from rst19 import photometric_workflow as workflow
 from rst19.catalog import CatalogSource
@@ -200,9 +201,20 @@ def test_auto_workflow_only_calls_calibrated_result_after_wcs_and_photometry_pas
     )
     calibrated_analysis = replace(analysis, photometric_calibration=photometric)
 
-    monkeypatch.setattr(workflow, "solve_plate", lambda *_args, **_kwargs: plate_solution)
+    solve_calls: list[dict[str, object]] = []
+    photometry_kwargs: dict[str, object] = {}
+
+    def fake_solve(*_args, **kwargs):
+        solve_calls.append(dict(kwargs))
+        return plate_solution
+
+    def fake_recalibrate(*_args, **kwargs):
+        photometry_kwargs.update(kwargs)
+        return calibrated_analysis
+
+    monkeypatch.setattr(workflow, "solve_plate", fake_solve)
     monkeypatch.setattr(workflow, "fit_affine_wcs_from_matches", lambda *_args, **_kwargs: affine)
-    monkeypatch.setattr(workflow, "recalibrate_frame_analysis", lambda *_args, **_kwargs: calibrated_analysis)
+    monkeypatch.setattr(workflow, "recalibrate_frame_analysis", fake_recalibrate)
 
     result = workflow.run_auto_photometric_workflow(
         frame,
@@ -215,12 +227,18 @@ def test_auto_workflow_only_calls_calibrated_result_after_wcs_and_photometry_pas
     assert result.affine_wcs is affine
     assert result.photometric_status == "VALID"
     assert "Gaia Vega/G" in result.reason
+    assert [call["match_radius_px"] for call in solve_calls] == [pytest.approx(3.0), pytest.approx(1.0)]
+    assert photometry_kwargs["match_radius_px"] == pytest.approx(1.0)
+    assert result.plate_match_radius_px == pytest.approx(3.0)
+    assert result.photometry_match_radius_px == pytest.approx(1.0)
 
     compact = result.as_dict()
     full = result.as_dict(include_all_sources=True)
     assert compact["analysis"]["detection"]["sources"] == []
     assert compact["analysis"]["detection"]["returned_count"] == 1
     assert compact["analysis"]["evidence_scope"] == "compact_auto_photometry"
+    assert compact["matching_policy"]["plate_match_radius_px"] == pytest.approx(3.0)
+    assert compact["matching_policy"]["photometry_match_radius_px"] == pytest.approx(1.0)
     assert len(full["analysis"]["detection"]["sources"]) == 1
     assert full["analysis"]["evidence_scope"] == "full_source_evidence"
 

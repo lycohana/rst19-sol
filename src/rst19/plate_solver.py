@@ -126,10 +126,31 @@ class PlateSolveCandidate:
         return len(self.matches)
 
     @property
-    def score(self) -> tuple[int, float, float, float]:
-        """用于排序的可解释分数：先内点数，再残差和视场覆盖。"""
+    def score(self) -> tuple[int, float, float, float, float, int]:
+        """按稳健几何支持、留一误差和覆盖度排序候选。
 
-        return (self.matched_count, -self.rms_residual_px, self.coverage_area, -self.max_residual_px)
+        宽匹配半径会把边缘近邻也纳入 ``matches``。如果只按匹配总数
+        排序，几个残差较大的巧合近邻可能压过一个匹配数略少但几何更
+        稳定的解。 ``_fit_affine`` 的最小剔除残差同样是 1 px，因此把
+        1 px 内的支持数作为第一排序项；总匹配数只在几何质量相近时
+        用作最后的次级依据。
+        """
+
+        tight_support = sum(float(match.residual_px) <= 1.0 for match in self.matches)
+        leave_one_out = self.leave_one_out_rms_residual_px
+        loo_score = (
+            -float(leave_one_out)
+            if leave_one_out is not None and math.isfinite(float(leave_one_out))
+            else float("-inf")
+        )
+        return (
+            int(tight_support),
+            loo_score,
+            -self.rms_residual_px,
+            self.coverage_area,
+            -self.max_residual_px,
+            self.matched_count,
+        )
 
     def as_dict(self) -> dict[str, object]:
         return {

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .photometric_workflow import (
     DEFAULT_CAMERA_PIXEL_SCALE_ARCSEC,
+    DEFAULT_PHOTOMETRY_MATCH_RADIUS_PX,
     run_auto_photometric_workflow,
 )
 
@@ -26,7 +27,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_CAMERA_PIXEL_SCALE_ARCSEC,
         help="像元角尺度先验（arcsec/px），默认 8.5",
     )
-    parser.add_argument("--match-radius", type=float, default=3.0, help="匹配半径（px）")
+    parser.add_argument(
+        "--match-radius",
+        type=float,
+        default=3.0,
+        help="板解阶段的宽匹配半径（px），默认 3.0",
+    )
+    parser.add_argument(
+        "--photometry-match-radius",
+        type=float,
+        default=None,
+        help=(
+            "仿射 WCS 通过后的测光细匹配半径（px）；默认取 min(--match-radius, "
+            f"{DEFAULT_PHOTOMETRY_MATCH_RADIUS_PX:.1f})"
+        ),
+    )
     parser.add_argument("--min-calibrators", type=int, default=6, help="最少光度参考星数量")
     parser.add_argument(
         "--include-all-sources",
@@ -50,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
             args.catalog,
             pixel_scale_arcsec=args.pixel_scale,
             match_radius_px=args.match_radius,
+            photometry_match_radius_px=args.photometry_match_radius,
             photometric_min_calibrators=args.min_calibrators,
             progress=lambda value, label: print(f"{value:5.1f}% · {label}", file=sys.stderr),
         )

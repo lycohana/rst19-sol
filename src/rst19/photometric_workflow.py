@@ -29,6 +29,7 @@ DEFAULT_PLATE_MIN_MATCHES = 8
 DEFAULT_PLATE_MIN_COVERAGE = 0.02
 DEFAULT_PLATE_MAX_RMS_PX = 2.0
 DEFAULT_PLATE_MAX_LOO_RMS_PX = 3.0
+DEFAULT_PHOTOMETRY_MATCH_RADIUS_PX = 1.0
 
 
 ProgressCallback = Callable[[float, str], object]
@@ -52,6 +53,8 @@ class AutoPhotometricResult:
     status: str
     reason: str
     catalog_provenance_status: str = "IN_MEMORY_UNVERIFIED"
+    plate_match_radius_px: float = 3.0
+    photometry_match_radius_px: float = DEFAULT_PHOTOMETRY_MATCH_RADIUS_PX
 
     @property
     def calibrated(self) -> bool:
@@ -132,6 +135,17 @@ class AutoPhotometricResult:
             "catalog_path": str(self.catalog_path) if self.catalog_path is not None else None,
             "catalog_provenance_status": self.catalog_provenance_status,
             "catalog_source_count": len(self.catalog_sources),
+            "matching_policy": {
+                "plate_match_radius_px": self.plate_match_radius_px,
+                "selected_plate_match_radius_px": self.plate_solution.acceptance.get(
+                    "match_radius_px", self.plate_match_radius_px
+                ),
+                "photometry_match_radius_px": self.photometry_match_radius_px,
+                "description": (
+                    "板解使用宽匹配半径提出几何候选；仿射 WCS 通过后，"
+                    "测光重匹配使用更严格半径以降低密集星场近邻误配。"
+                ),
+            },
             "reference_wcs": self.reference_wcs.as_dict(),
             "plate_solution": self.plate_solution.as_dict(),
             "affine_wcs": self.affine_wcs.as_dict() if self.affine_wcs is not None else None,
@@ -245,6 +259,7 @@ def run_auto_photometric_workflow(
     *,
     pixel_scale_arcsec: float = DEFAULT_CAMERA_PIXEL_SCALE_ARCSEC,
     match_radius_px: float = 3.0,
+    photometry_match_radius_px: float | None = None,
     epoch: float | None = None,
     scale_tolerance: float = DEFAULT_PLATE_SCALE_TOLERANCE,
     min_matches: int = DEFAULT_PLATE_MIN_MATCHES,
@@ -271,10 +286,15 @@ def run_auto_photometric_workflow(
     try:
         scale = float(pixel_scale_arcsec)
         match_radius = float(match_radius_px)
+        photometry_match_radius = (
+            min(match_radius, DEFAULT_PHOTOMETRY_MATCH_RADIUS_PX)
+            if photometry_match_radius_px is None
+            else float(photometry_match_radius_px)
+        )
     except (TypeError, ValueError) as exc:
-        raise ValueError("像元尺度和匹配半径必须是数字") from exc
-    if scale <= 0.0 or match_radius <= 0.0:
-        raise ValueError("像元尺度和匹配半径必须为正数")
+        raise ValueError("像元尺度和两级匹配半径必须是数字") from exc
+    if scale <= 0.0 or match_radius <= 0.0 or photometry_match_radius <= 0.0:
+        raise ValueError("像元尺度和两级匹配半径必须为正数")
     if initial_analysis is not None and initial_analysis.frame.path.resolve() != loaded.path.resolve():
         raise ValueError("initial_analysis 与当前 FITS 不是同一帧")
 
@@ -304,7 +324,7 @@ def run_auto_photometric_workflow(
         _report(progress, 67.0, "复用当前帧检测结果")
 
     _report(progress, 72.0, "正在用 Gaia 星对搜索 WCS")
-    plate_solution = solve_plate(
+    plate_screening_solution = solve_plate(
         analysis.detection.quality_sources,
         sources,
         reference_wcs,
@@ -317,6 +337,28 @@ def run_auto_photometric_workflow(
         max_rms_residual_px=max_rms_residual_px,
         max_leave_one_out_rms_px=max_leave_one_out_rms_px,
     )
+    plate_solution = plate_screening_solution
+    if photometry_match_radius < match_radius:
+        _report(
+            progress,
+            77.0,
+            f"宽门板解完成 · 正在用 {photometry_match_radius:.2f}px 细门复核几何解",
+        )
+        fine_plate_solution = solve_plate(
+            analysis.detection.quality_sources,
+            sources,
+            reference_wcs,
+            epoch=epoch,
+            image_shape=loaded.data.shape,
+            scale_tolerance=scale_tolerance,
+            match_radius_px=photometry_match_radius,
+            min_matches=min_matches,
+            min_coverage_area=min_coverage_area,
+            max_rms_residual_px=max_rms_residual_px,
+            max_leave_one_out_rms_px=max_leave_one_out_rms_px,
+        )
+        if fine_plate_solution.valid and fine_plate_solution.best is not None:
+            plate_solution = fine_plate_solution
     if not plate_solution.valid or plate_solution.best is None:
         _report(progress, 100.0, f"自动板解未通过 · {plate_solution.reason}")
         return AutoPhotometricResult(
@@ -329,6 +371,8 @@ def run_auto_photometric_workflow(
             status=f"WCS_{plate_solution.status}",
             reason=f"自动板解未通过：{plate_solution.reason}；仅保留 m_inst。",
             catalog_provenance_status=catalog_provenance_status,
+            plate_match_radius_px=match_radius,
+            photometry_match_radius_px=photometry_match_radius,
         )
 
     _report(progress, 82.0, f"板解通过 · 匹配 {plate_solution.best.matched_count} · 正在细化仿射 WCS")
@@ -352,6 +396,8 @@ def run_auto_photometric_workflow(
             status="WCS_REFINEMENT_FAILED",
             reason=f"星对板解通过但仿射细化失败：{exc}；仅保留 m_inst。",
             catalog_provenance_status=catalog_provenance_status,
+            plate_match_radius_px=match_radius,
+            photometry_match_radius_px=photometry_match_radius,
         )
 
     affine_gate_reason = _affine_wcs_rejection_reason(
@@ -372,19 +418,25 @@ def run_auto_photometric_workflow(
             status="WCS_REFINEMENT_REJECTED",
             reason=f"仿射 WCS 验收失败：{affine_gate_reason}；仅保留 m_inst。",
             catalog_provenance_status=catalog_provenance_status,
+            plate_match_radius_px=match_radius,
+            photometry_match_radius_px=photometry_match_radius,
         )
 
     first_source = sources[0]
     system = first_source.photometric_system or "Gaia Vega"
     band = first_source.photometric_band or "G"
     color_name = first_source.color_name or "BP-RP"
-    _report(progress, 90.0, "WCS 已细化 · 正在拟合多参考星光度零点")
+    _report(
+        progress,
+        90.0,
+        f"WCS 已细化 · {photometry_match_radius:.2f}px 细匹配拟合多参考星光度零点",
+    )
     try:
         refined_analysis = recalibrate_frame_analysis(
             analysis,
             sources,
             affine_wcs,
-            match_radius_px=match_radius,
+            match_radius_px=photometry_match_radius,
             epoch=epoch,
             photometric_system=system,
             photometric_band=band,
@@ -404,6 +456,8 @@ def run_auto_photometric_workflow(
             status="WCS_PHOTOMETRY_ERROR",
             reason=f"WCS 已通过但光度层发生异常：{exc}；仅保留 m_inst。",
             catalog_provenance_status=catalog_provenance_status,
+            plate_match_radius_px=match_radius,
+            photometry_match_radius_px=photometry_match_radius,
         )
     calibration = refined_analysis.photometric_calibration
     if calibration is not None and calibration.status in {"VALID", "VALID_NO_HOLDOUT"}:
@@ -449,6 +503,8 @@ def run_auto_photometric_workflow(
         status=status,
         reason=reason,
         catalog_provenance_status=catalog_provenance_status,
+        plate_match_radius_px=match_radius,
+        photometry_match_radius_px=photometry_match_radius,
     )
 
 
@@ -460,5 +516,6 @@ __all__ = [
     "DEFAULT_PLATE_MIN_COVERAGE",
     "DEFAULT_PLATE_MIN_MATCHES",
     "DEFAULT_PLATE_SCALE_TOLERANCE",
+    "DEFAULT_PHOTOMETRY_MATCH_RADIUS_PX",
     "run_auto_photometric_workflow",
 ]
