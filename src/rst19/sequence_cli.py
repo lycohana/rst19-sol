@@ -14,13 +14,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="检测一组 FITS 并区分稳定星点、运动目标和瞬态候选")
     parser.add_argument("data_dir", type=Path, help="包含 FITS 序列的目录")
     parser.add_argument("--threshold-sigma", type=float, default=4.0, help="匹配滤波候选阈值")
-    parser.add_argument("--min-distance", type=int, default=3, help="候选峰最小间距（pixel）")
+    parser.add_argument("--min-distance", type=int, default=4, help="候选峰最小间距（pixel）；默认与 GUI 论文口径一致")
     parser.add_argument("--aperture-radius", type=int, default=4, help="孔径半径（pixel）")
-    parser.add_argument("--psf-fwhm", type=float, default=3.0, help="Gaussian PSF FWHM（pixel）")
+    parser.add_argument("--psf-fwhm", type=float, default=2.0, help="Gaussian PSF FWHM（pixel）；默认与 GUI 论文口径一致")
     parser.add_argument(
         "--proposal-mode",
         choices=("gaussian", "hybrid", "ensemble"),
-        default="gaussian",
+        default="hybrid",
         help="宽筛选提案：Gaussian、Gaussian+DoG，或再加入 Starlet 小波",
     )
     parser.add_argument(
@@ -176,6 +176,58 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("--workers must be a positive integer")
         if args.relative_max_sources < 1:
             raise ValueError("--relative-max-sources must be positive")
+
+        stage_labels = {
+            "prepare": "准备输入",
+            "background": "建立共享背景",
+            "frame": "逐帧检测",
+            "sentinel-audit": "固定值审计",
+            "registration": "星场配准与轨迹关联",
+            "relative-photometry": "相对测光",
+            "fast-point-motion": "点状高速目标",
+            "temporal-coadd": "时间参考补提案",
+            "stack-faint": "叠加暗星回查",
+            "consensus": "跨帧共识",
+            "motion-detail": "线状残差筛选",
+            "motion": "运动证据汇总",
+            "complete": "完成",
+        }
+
+        def report(stage: str, completed: int, total: int) -> None:
+            if stage == "frame":
+                percent = 8.0 + 52.0 * (float(completed) / max(1, total))
+            elif stage == "motion-detail":
+                percent = 82.0 + 15.0 * (float(completed) / max(1, total))
+            elif stage == "complete":
+                percent = 100.0
+            else:
+                percent = {
+                    "prepare": 2.0,
+                    "background": 6.0,
+                    "sentinel-audit": 62.0,
+                    "registration": 65.0,
+                    "relative-photometry": 68.0,
+                    "fast-point-motion": 72.0,
+                    "temporal-coadd": 76.0,
+                    "stack-faint": 80.0,
+                    "consensus": 86.0,
+                    "motion": 98.0,
+                }.get(stage, 0.0)
+            label = stage_labels.get(stage, stage)
+            print(
+                f"rst19-sequence: {percent:5.1f}% · {label} ({completed}/{total})",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        def detail_report(frame_index: int, total: int, value: float, label: str) -> None:
+            percent = 8.0 + 52.0 * (float(frame_index) / max(1, total))
+            print(
+                f"rst19-sequence: {percent:5.1f}% · F{frame_index:02d}/{total} · {label}",
+                file=sys.stderr,
+                flush=True,
+            )
+
         result = analyze_sequence(
             paths,
             threshold_sigma=args.threshold_sigma,
@@ -211,6 +263,8 @@ def main(argv: list[str] | None = None) -> int:
             relative_photometry_validation_fraction=args.relative_validation_fraction,
             use_float32=not args.float64,
             reject_linear_artifacts=not args.keep_linear_artifacts,
+            progress=report,
+            detail_progress=detail_report,
         )
         rendered = json.dumps(result.as_dict(), ensure_ascii=False, indent=2, allow_nan=False)
         if args.json_out:
@@ -227,6 +281,9 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as exc:
         print(f"rst19-sequence: {exc}", file=sys.stderr)
         return 2
+    except Exception as exc:  # noqa: BLE001 - CLI must expose a stable failure boundary
+        print(f"rst19-sequence: stage=runtime error={type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

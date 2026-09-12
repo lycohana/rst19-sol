@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +31,7 @@ from typing import Any, Callable, Mapping, Sequence
 import numpy as np
 from scipy import ndimage
 
+from .cache import _file_identity
 from .fits import auxiliary_mask, read_fits
 
 
@@ -424,8 +427,9 @@ def mosaic_cache_key(
     files = []
     for item in frame_paths:
         path = Path(item).resolve()
-        stat = path.stat()
-        files.append({"path": str(path), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns})
+        # 只用 size+mtime 会在文件被等长替换且恢复时间戳时误命中旧
+        # 大图。复用普通缓存的内容摘要契约，确保显示层也绑定原始 FITS。
+        files.append(_file_identity(path))
     payload = {
         "mosaic_cache_version": MOSAIC_CACHE_VERSION,
         "frames": files,
@@ -450,7 +454,13 @@ def save_mosaic_cache(cache_dir: Path, key: str, result: MosaicResult) -> Path:
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     path = mosaic_cache_path(cache_dir, key)
-    temporary = path.with_suffix(".tmp")
+    temporary_fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=cache_dir,
+    )
+    os.close(temporary_fd)
+    temporary = Path(temporary_name)
     metadata = json.dumps(result.as_dict(), ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     try:
         with temporary.open("wb") as stream:

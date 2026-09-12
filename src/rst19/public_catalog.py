@@ -30,8 +30,13 @@ DEFAULT_CAMERA_FOV_WIDTH_DEG = 9.78
 DEFAULT_CAMERA_FOV_HEIGHT_DEG = 9.78
 DEFAULT_GAIA_MIN_G_MAG = 5.0
 DEFAULT_GAIA_MAX_G_MAG = 13.5
-DEFAULT_GAIA_TILE_RADIUS_DEG = 1.5
-DEFAULT_GAIA_TILE_LIMIT = 5_000
+# The nominal camera footprint is already a 6.92° half-diagonal.  Start with
+# one large cone and let ``query_gaia_tiled`` subdivide only if the service
+# reports saturation.  The former 1.5°/5,000-row defaults caused roughly 185
+# overlapping requests for this field before the program could even attempt
+# a plate solve.
+DEFAULT_GAIA_TILE_RADIUS_DEG = 7.0
+DEFAULT_GAIA_TILE_LIMIT = 50_000
 DEFAULT_GAIA_MAX_SUBDIVIDE_DEPTH = 2
 DEFAULT_GAIA_MAX_QUERIES = 2_000
 

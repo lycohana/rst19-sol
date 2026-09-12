@@ -4632,25 +4632,31 @@ class StarfieldApp(tk.Tk):
                         elif stage == "frame":
                             with frame_progress_lock:
                                 measured = sum(frame_progress_values) / (100.0 * max(1, total))
-                            value = max(8.0 + 72.0 * index / max(1, total), 8.0 + 72.0 * measured)
+                            value = max(8.0 + 52.0 * index / max(1, total), 8.0 + 52.0 * measured)
                             label = f"已完成 {index}/{total} 帧"
                         elif stage == "registration":
-                            value, label = 84.0, "配准关联"
+                            value, label = 64.0, "配准关联"
+                        elif stage == "relative-photometry":
+                            value = 66.0 if index <= 0 else 68.0
+                            label = "相对测光" if index <= 0 else "相对测光完成"
                         elif stage == "fast-point-motion":
-                            value, label = 86.0, "高速点源关联"
+                            value = 70.0 if index <= 0 else 72.0
+                            label = "高速点源关联" if index <= 0 else "高速点源关联完成"
                         elif stage == "sentinel-audit":
-                            value, label = 83.5, "固定值异常码审计"
+                            value, label = 62.0, "固定值异常码审计"
                         elif stage == "consensus":
-                            value, label = 84.0, "全量候选跨帧共识"
+                            value, label = 82.0, "全量候选跨帧共识"
                         elif stage == "temporal-coadd":
-                            value, label = 84.0, "构建多帧稳健叠加提案"
+                            value = 74.0 if index <= 0 else 76.0
+                            label = "构建多帧稳健叠加提案" if index <= 0 else "多帧稳健叠加提案完成"
                         elif stage == "stack-faint":
-                            value, label = 85.0, "叠加参考图暗星恢复"
+                            value = 78.0 if index <= 0 else 80.0
+                            label = "叠加参考图暗星恢复" if index <= 0 else "叠加参考图暗星恢复完成"
                         elif stage == "motion-detail":
-                            value = 84.0 + 10.0 * max(0, min(100, index)) / max(1, total)
+                            value = 84.0 + 14.0 * max(0, min(100, index)) / max(1, total)
                             label = f"线状筛选 · {index}%"
                         elif stage == "motion":
-                            value, label = 94.0, "线状筛选"
+                            value, label = 98.0, "线状筛选"
                         else:
                             value, label = 100.0, "完成"
                         self._queue_task_result("analysis-progress", token, cache_generation, (value, label))
@@ -4662,7 +4668,7 @@ class StarfieldApp(tk.Tk):
                             frame_progress_values[position] = max(frame_progress_values[position], bounded)
                             completed_equivalent = sum(frame_progress_values) / 100.0
                             finished = sum(item >= 100.0 for item in frame_progress_values)
-                        overall = 8.0 + 72.0 * completed_equivalent / max(1, total)
+                        overall = 8.0 + 52.0 * completed_equivalent / max(1, total)
                         progress_label = f"完成 {finished}/{total} · F{frame_index:02d} {label}"
                         self._queue_task_result(
                             "analysis-progress",
@@ -6091,7 +6097,24 @@ class StarfieldApp(tk.Tk):
                 if filter_counts
                 else ""
             )
-            return f"{context} · 系统/波段 {system} / {band} · {evidence} · {fit_text}{validation_text}{filter_text}{flags}"
+            model_text = ""
+            auto_result = self.__dict__.get("catalog_auto_result")
+            sensitivity = getattr(auto_result, "calibration_model_sensitivity", None)
+            if isinstance(sensitivity, dict):
+                sensitivity_status = str(sensitivity.get("status") or "").strip()
+                ranking = sensitivity.get("faintest_ranking")
+                agreement = ranking.get("winner_agreement_fraction") if isinstance(ranking, dict) else None
+                usable = sensitivity.get("model_count_usable")
+                if sensitivity_status and sensitivity_status != "ERROR":
+                    agreement_text = (
+                        f" · 最暗排序一致 {float(agreement):.0%}"
+                        if isinstance(agreement, (int, float)) and math.isfinite(float(agreement))
+                        else ""
+                    )
+                    model_text = f" · 颜色模型 {sensitivity_status} ({usable or 0} 个){agreement_text}"
+                elif sensitivity_status == "ERROR":
+                    model_text = " · 颜色模型敏感性审计失败（不影响主测光）"
+            return f"{context} · 系统/波段 {system} / {band} · {evidence} · {fit_text}{validation_text}{filter_text}{flags}{model_text}"
 
         def render(
             analysis: FrameAnalysis,
@@ -6332,6 +6355,9 @@ class StarfieldApp(tk.Tk):
                 "calibration": calibration.as_dict() if calibration is not None else None,
                 "photometric_calibration": (
                     photometric_calibration.as_dict() if photometric_calibration is not None else None
+                ),
+                "calibration_model_sensitivity": (
+                    getattr(self.__dict__.get("catalog_auto_result"), "calibration_model_sensitivity", None)
                 ),
                 "note": "WCS 校准依赖先验 WCS 引导的唯一匹配，不是全天空盲解算或轨道速度；光度标定来自多颗匹配参考星，不等于本设备绝对响应已完成实验室定标。",
             }

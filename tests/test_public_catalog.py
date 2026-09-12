@@ -5,7 +5,13 @@ import json
 import math
 from pathlib import Path
 
-from rst19.public_catalog import camera_footprint_radius_deg, download_public_gaia_catalog
+from rst19.gaia_tiled import plan_gaia_tiles
+from rst19.public_catalog import (
+    DEFAULT_GAIA_TILE_LIMIT,
+    DEFAULT_GAIA_TILE_RADIUS_DEG,
+    camera_footprint_radius_deg,
+    download_public_gaia_catalog,
+)
 
 
 def _query_rows(*_args: object, **_kwargs: object) -> tuple[dict[str, object], ...]:
@@ -23,6 +29,19 @@ def _query_rows(*_args: object, **_kwargs: object) -> tuple[dict[str, object], .
 
 def test_camera_query_radius_covers_square_field_diagonal() -> None:
     assert math.isclose(camera_footprint_radius_deg(9.78, 9.78), 6.915504, rel_tol=0.0, abs_tol=1.0e-6)
+
+
+def test_default_public_catalog_starts_with_one_large_cone() -> None:
+    tiles = plan_gaia_tiles(
+        129.533548,
+        -1.845372,
+        camera_footprint_radius_deg(),
+        tile_radius_deg=DEFAULT_GAIA_TILE_RADIUS_DEG,
+    )
+
+    assert DEFAULT_GAIA_TILE_RADIUS_DEG > camera_footprint_radius_deg()
+    assert DEFAULT_GAIA_TILE_LIMIT == 50_000
+    assert len(tiles) == 1
 
 
 def test_public_catalog_download_is_explicit_and_writes_audit(tmp_path: Path) -> None:

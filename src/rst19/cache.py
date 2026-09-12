@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import tempfile
 from collections.abc import Mapping as ABCMapping
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -869,7 +870,13 @@ def save_analysis(cache_dir: Path, key: str, analysis: Any) -> Path:
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     path = cache_path(cache_dir, key)
-    temporary_path = path.with_suffix(".tmp")
+    temporary_fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=cache_dir,
+    )
+    os.close(temporary_fd)
+    temporary_path = Path(temporary_name)
     frame = getattr(analysis, "frame", None)
     if not isinstance(frame, FitsFrame):
         raise TypeError("analysis cache requires a FrameAnalysis with a FitsFrame")
@@ -1247,6 +1254,12 @@ def _sequence_result_from_dict(payload: Mapping[str, Any]) -> Any:
         fixed_sentinel_audit=fixed_sentinel_audit,
         fixed_sentinel_impact_audit=fixed_sentinel_impact_audit,
         relative_photometry=relative_result,
+        track_association_method=str(payload.get("track_association_method", "local_component_hungarian")),
+        detector_parameters=tuple(
+            (str(key), value)
+            for key, value in dict(payload.get("detector_parameters", {})).items()
+            if isinstance(key, str) and (value is None or isinstance(value, (bool, int, float, str)))
+        ),
     )
 
 
@@ -1301,7 +1314,13 @@ def save_sequence_result(cache_dir: Path, key: str, result: Any) -> Path:
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     path = sequence_cache_path(cache_dir, key)
-    temporary_path = path.with_suffix(".tmp")
+    temporary_fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=cache_dir,
+    )
+    os.close(temporary_fd)
+    temporary_path = Path(temporary_name)
     sequence_payload = dict(result.as_dict())
     frame_payloads = sequence_payload.get("frames", [])
     if not isinstance(frame_payloads, Sequence) or isinstance(frame_payloads, (str, bytes)):

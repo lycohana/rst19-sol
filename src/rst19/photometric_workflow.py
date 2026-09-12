@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from .catalog import CatalogSource, load_catalog_csv
-from .fits import read_fits
+from .calibration_sensitivity import build_calibration_model_sensitivity
+from .fits import exposure_seconds, read_fits
 from .models import FitsFrame
 from .pipeline import FrameAnalysis, analyze_frame, recalibrate_frame_analysis
 from .plate_solver import PlateSolveResult, solve_plate
@@ -57,6 +58,7 @@ class AutoPhotometricResult:
     catalog_provenance_status: str = "IN_MEMORY_UNVERIFIED"
     plate_match_radius_px: float = 3.0
     photometry_match_radius_px: float = DEFAULT_PHOTOMETRY_MATCH_RADIUS_PX
+    calibration_model_sensitivity: dict[str, Any] | None = None
 
     @property
     def calibrated(self) -> bool:
@@ -163,6 +165,7 @@ class AutoPhotometricResult:
                 "m_cal is an empirically calibrated apparent magnitude in the declared catalog system; "
                 "it is not an automatic claim of camera-specific radiometric calibration."
             ),
+            "calibration_model_sensitivity": self.calibration_model_sensitivity,
         }
 
 
@@ -304,6 +307,10 @@ def run_auto_photometric_workflow(
     loaded = frame if isinstance(frame, FitsFrame) else read_fits(frame)
     if loaded.auxiliary is None:
         raise ValueError("FITS 没有可用的辅助 RA/DEC，无法自动规划 WCS")
+    # The primary photometry path derives the exposure from the same FITS
+    # header inside the frame-analysis pipeline.  Keep the innovation audit on
+    # exactly that value instead of introducing a second, implicit default.
+    exposure_s = exposure_seconds(loaded.header)
     sources, catalog_path = _resolve_catalog(catalog)
     catalog_provenance_status = _catalog_provenance_status(catalog_path)
     try:
@@ -483,6 +490,30 @@ def run_auto_photometric_workflow(
             photometry_match_radius_px=photometry_match_radius,
         )
     calibration = refined_analysis.photometric_calibration
+    calibration_model_sensitivity: dict[str, Any] | None = None
+    if refined_analysis.matching is not None:
+        try:
+            _report(progress, 96.0, "光度层完成 · 正在检查颜色模型对最暗星排序的敏感性")
+            calibration_model_sensitivity = build_calibration_model_sensitivity(
+                refined_analysis.matching.matches,
+                refined_analysis.detection.quality_sources,
+                sources,
+                exposure_s=exposure_s,
+                photometric_system=system,
+                photometric_band=band,
+                color_name=color_name,
+                min_snr=float(refined_analysis.detection.parameters.get("min_flux_snr", 5.0)),
+                min_calibrators=photometric_min_calibrators,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            # Sensitivity is an innovation/diagnostic layer.  It must never
+            # turn an otherwise valid primary calibration into a failed result.
+            calibration_model_sensitivity = {
+                "schema_version": 1,
+                "status": "ERROR",
+                "method": "low_order_color_model_sensitivity",
+                "reason": str(exc),
+            }
     if calibration is not None and calibration.status in {"VALID", "VALID_NO_HOLDOUT"}:
         selection_scope = (
             refined_analysis.faintest.selection_scope
@@ -528,6 +559,7 @@ def run_auto_photometric_workflow(
         catalog_provenance_status=catalog_provenance_status,
         plate_match_radius_px=match_radius,
         photometry_match_radius_px=photometry_match_radius,
+        calibration_model_sensitivity=calibration_model_sensitivity,
     )
 
 

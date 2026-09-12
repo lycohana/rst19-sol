@@ -8,6 +8,13 @@
 
 from .catalog import CatalogSource, load_catalog_csv
 from .catalog_merge import CatalogMergeError, CatalogMergeResult, merge_catalog_csvs
+from .calibration_sensitivity import (
+    DEFAULT_COLOR_MODEL_ORDERS,
+    MODEL_LABELS,
+    MODEL_NAMES,
+    VALID_CALIBRATION_STATUSES,
+    build_calibration_model_sensitivity,
+)
 from .attitude import (
     AuxiliaryBoresightAudit,
     audit_auxiliary_boresight,
@@ -564,6 +571,11 @@ __all__ = [
     "CatalogMergeError",
     "CatalogMergeResult",
     "merge_catalog_csvs",
+    "DEFAULT_COLOR_MODEL_ORDERS",
+    "MODEL_LABELS",
+    "MODEL_NAMES",
+    "VALID_CALIBRATION_STATUSES",
+    "build_calibration_model_sensitivity",
     "PlateSolveCandidate",
     "PlateSolveResult",
     "PlateTransform",

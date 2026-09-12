@@ -11,7 +11,7 @@ import pytest
 from rst19 import photometric_workflow as workflow
 from rst19.catalog import CatalogSource
 from rst19.detection import Detection, DetectionResult
-from rst19.matching import CatalogMatch
+from rst19.matching import CatalogMatch, MatchResult
 from rst19.models import AuxiliaryData, FitsFrame
 from rst19.photometry import PhotometricCalibration
 from rst19.pipeline import FrameAnalysis
@@ -234,10 +234,24 @@ def test_auto_workflow_only_calls_calibrated_result_after_wcs_and_photometry_pas
         color_max=1.0,
         status="VALID",
     )
-    calibrated_analysis = replace(analysis, photometric_calibration=photometric)
+    matching = MatchResult(
+        matches=(match,),
+        unmatched_detection_ids=(),
+        unmatched_catalog_ids=(),
+        max_residual_px=0.1,
+        rms_residual_px=0.1,
+        inlier_ratio=1.0,
+        radius_px=1.0,
+    )
+    calibrated_analysis = replace(
+        analysis,
+        photometric_calibration=photometric,
+        matching=matching,
+    )
 
     solve_calls: list[dict[str, object]] = []
     photometry_kwargs: dict[str, object] = {}
+    sensitivity_kwargs: dict[str, object] = {}
 
     def fake_solve(*_args, **kwargs):
         solve_calls.append(dict(kwargs))
@@ -247,9 +261,14 @@ def test_auto_workflow_only_calls_calibrated_result_after_wcs_and_photometry_pas
         photometry_kwargs.update(kwargs)
         return calibrated_analysis
 
+    def fake_sensitivity(*_args, **kwargs):
+        sensitivity_kwargs.update(kwargs)
+        return {"status": "MODEL_STABLE"}
+
     monkeypatch.setattr(workflow, "solve_plate", fake_solve)
     monkeypatch.setattr(workflow, "fit_affine_wcs_from_matches", lambda *_args, **_kwargs: affine)
     monkeypatch.setattr(workflow, "recalibrate_frame_analysis", fake_recalibrate)
+    monkeypatch.setattr(workflow, "build_calibration_model_sensitivity", fake_sensitivity)
 
     result = workflow.run_auto_photometric_workflow(
         frame,
@@ -264,6 +283,8 @@ def test_auto_workflow_only_calls_calibrated_result_after_wcs_and_photometry_pas
     assert "Gaia Vega/G" in result.reason
     assert [call["match_radius_px"] for call in solve_calls] == [pytest.approx(3.0), pytest.approx(1.0)]
     assert photometry_kwargs["match_radius_px"] == pytest.approx(1.0)
+    assert sensitivity_kwargs["exposure_s"] == pytest.approx(1.0)
+    assert result.calibration_model_sensitivity == {"status": "MODEL_STABLE"}
     assert result.plate_match_radius_px == pytest.approx(3.0)
     assert result.photometry_match_radius_px == pytest.approx(1.0)
 

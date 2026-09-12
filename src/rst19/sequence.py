@@ -15,6 +15,7 @@ from typing import Callable, Iterable, Mapping, MutableMapping, Sequence
 
 import numpy as np
 from scipy import ndimage
+from scipy.optimize import linear_sum_assignment
 from scipy.spatial import cKDTree
 
 from .detection import Detection, DetectionResult, _working_mask, build_background_model, detect_sources, sigma_clipped_stats
@@ -608,6 +609,8 @@ class SequenceResult:
     fixed_sentinel_audit: FixedSentinelAudit | None = None
     fixed_sentinel_impact_audit: FixedSentinelImpactAudit | None = None
     relative_photometry: RelativePhotometryResult | None = None
+    track_association_method: str = "local_component_hungarian"
+    detector_parameters: tuple[tuple[str, object], ...] = ()
 
     @property
     def stable_source_count(self) -> int:
@@ -690,6 +693,8 @@ class SequenceResult:
             "min_presence": self.min_presence,
             "motion_min_displacement_px": self.motion_min_displacement_px,
             "max_motion_fit_rms_px": self.max_motion_fit_rms_px,
+            "track_association_method": self.track_association_method,
+            "detector_parameters": dict(self.detector_parameters),
             "motion_residual_threshold_adu": self.motion_residual_threshold_adu,
             "motion_reference_mode": self.motion_reference_mode,
             "motion_frame_audits": [audit.as_dict() for audit in self.motion_frame_audits],
@@ -798,6 +803,98 @@ def _fit_track(points: Sequence[TrackPoint]) -> tuple[float, float, float | None
     return displacement, speed, rms
 
 
+def _global_frame_assignments(
+    track_positions: Sequence[tuple[int, float, float]],
+    current_points: np.ndarray,
+    *,
+    link_radius_px: float,
+) -> tuple[tuple[float, int, int], ...]:
+    """在当前帧内对候选轨迹和源点做局部全局一对一关联。
+
+    旧实现对每条轨迹只查询一个最近源，然后按距离贪心占用。这个策略
+    在两个轨迹共享一个最近源时会先满足距离更小的轨迹，可能让另一条轨迹
+    被拆断，即使存在一个总距离更小、且两条轨迹都能延续的组合。
+
+    这里先用半径邻域建立二分图的连通分量，再在每个小分量内运行
+    Hungarian assignment。分量化避免在整幅高密度星场上创建
+    ``轨迹数 × 源数`` 的巨大矩阵；没有邻域边的轨迹/源不参与匹配。
+    返回值仍保持旧调用方需要的 ``(distance, track_index, source_index)``
+    结构，并按确定性顺序排列。
+    """
+
+    if link_radius_px <= 0:
+        raise ValueError("link_radius_px must be positive")
+    if not track_positions or current_points.size == 0:
+        return ()
+    points = np.asarray(current_points, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 2:
+        raise ValueError("current_points must have shape (n, 2)")
+    positions = np.asarray([(item[1], item[2]) for item in track_positions], dtype=np.float64)
+    tree = cKDTree(points)
+    neighbors_by_row = [
+        sorted(int(index) for index in indices)
+        for indices in tree.query_ball_point(positions, float(link_radius_px))
+    ]
+    source_to_rows: dict[int, list[int]] = {}
+    for row_index, source_indices in enumerate(neighbors_by_row):
+        for source_index in source_indices:
+            source_to_rows.setdefault(source_index, []).append(row_index)
+    if not source_to_rows:
+        return ()
+
+    visited_rows: set[int] = set()
+    components: list[tuple[list[int], list[int]]] = []
+    for start_row, start_neighbors in enumerate(neighbors_by_row):
+        if not start_neighbors or start_row in visited_rows:
+            continue
+        component_rows: set[int] = set()
+        component_sources: set[int] = set()
+        pending_rows = [start_row]
+        while pending_rows:
+            row_index = pending_rows.pop()
+            if row_index in component_rows:
+                continue
+            component_rows.add(row_index)
+            visited_rows.add(row_index)
+            for source_index in neighbors_by_row[row_index]:
+                if source_index in component_sources:
+                    continue
+                component_sources.add(source_index)
+                pending_rows.extend(
+                    linked_row
+                    for linked_row in source_to_rows[source_index]
+                    if linked_row not in component_rows
+                )
+        components.append((sorted(component_rows), sorted(component_sources)))
+
+    assignments: list[tuple[float, int, int]] = []
+    invalid_cost = max(1.0, float(link_radius_px)) * 1_000_000.0
+    for component_rows, component_sources in components:
+        row_count = len(component_rows)
+        source_count = len(component_sources)
+        costs = np.full((row_count, source_count), invalid_cost, dtype=np.float64)
+        source_columns = {source_index: column for column, source_index in enumerate(component_sources)}
+        for row, global_row in enumerate(component_rows):
+            for source_index in neighbors_by_row[global_row]:
+                column = source_columns[source_index]
+                distance = float(np.hypot(*(positions[global_row] - points[source_index])))
+                # A tiny deterministic tie-break leaves the geometric cost
+                # unchanged at display precision but avoids platform-dependent
+                # choices for exactly symmetric points.
+                costs[row, column] = distance + 1e-9 * (row * source_count + column)
+        row_indices, source_columns_selected = linear_sum_assignment(costs)
+        for row, column in zip(row_indices.tolist(), source_columns_selected.tolist()):
+            cost = float(costs[row, column])
+            if cost > float(link_radius_px) + 1e-7:
+                continue
+            global_row = component_rows[row]
+            source_index = component_sources[column]
+            distance = float(np.hypot(*(positions[global_row] - points[source_index])))
+            assignments.append((distance, int(track_positions[global_row][0]), source_index))
+    assignments.sort(key=lambda item: (item[0], item[1], item[2]))
+    return tuple(assignments)
+
+
 def track_fast_point_movers(
     frame_sources: Sequence[Sequence[Detection]],
     cumulative_shifts: Sequence[tuple[float, float]],
@@ -838,6 +935,9 @@ def track_fast_point_movers(
     if not frame_sources:
         return ()
     frame_count = len(frame_sources)
+    if frame_count < 2:
+        # 点状运动至少需要一对跨帧观测；单帧只保留普通检测/长线候选。
+        return ()
     if len(cumulative_shifts) != frame_count:
         raise ValueError("cumulative_shifts length must match frame_sources")
     if link_radius_px <= 0 or motion_min_displacement_px <= 0:
@@ -2278,7 +2378,7 @@ def detect_motion_features(
     for frame_index, current in enumerate(feature_frames):
         if not current:
             continue
-        possible: list[tuple[float, int, int]] = []
+        predicted_tracks: list[tuple[int, float, float]] = []
         for track_index, history in enumerate(tracks):
             last = history[-1]
             if last.frame_index != frame_index - 1:
@@ -2289,11 +2389,18 @@ def detect_motion_features(
                 predicted_y = last.aligned_y + (last.aligned_y - previous.aligned_y)
             else:
                 predicted_x, predicted_y = last.aligned_x, last.aligned_y
-            for source_index, point in enumerate(current):
-                distance = float(np.hypot(point.aligned_x - predicted_x, point.aligned_y - predicted_y))
-                if distance <= link_radius_px:
-                    possible.append((distance, track_index, source_index))
-        possible.sort(key=lambda item: (item[0], item[1], item[2]))
+            predicted_tracks.append((track_index, predicted_x, predicted_y))
+        current_points = np.asarray(
+            [(point.aligned_x, point.aligned_y) for point in current],
+            dtype=np.float64,
+        )
+        # 线状候选也可能在端点或相邻结构处靠近；使用同一局部全局
+        # 分配器，避免“先到先得”让一条真实线被拆成多条候选轨迹。
+        possible = _global_frame_assignments(
+            predicted_tracks,
+            current_points,
+            link_radius_px=link_radius_px,
+        )
         assigned_tracks: set[int] = set()
         assigned_sources: set[int] = set()
         for _distance, track_index, source_index in possible:
@@ -2474,7 +2581,12 @@ def track_detections(
     frame_count = len(frame_sources)
     if max_motion_fit_rms_px <= 0:
         raise ValueError("max_motion_fit_rms_px must be positive")
-    required_presence = min_presence if min_presence is not None else max(3, int(np.ceil(frame_count * 0.8)))
+    # 三帧以上才有资格形成“持续运动”证据，但一/两帧仍应能完成
+    # 配准和基础序列结果；不能因为默认的三帧门槛把短序列直接打成参数错误。
+    required_presence = min(
+        frame_count,
+        min_presence if min_presence is not None else max(3, int(np.ceil(frame_count * 0.8))),
+    )
     if required_presence < 1 or required_presence > frame_count:
         raise ValueError("min_presence must be within the frame count")
     persistent_required = (
@@ -2526,8 +2638,7 @@ def track_detections(
         if not current:
             continue
         points = np.array([(x, y) for _, x, y in current], dtype=np.float64)
-        tree = cKDTree(points)
-        possible: list[tuple[float, int, int]] = []
+        eligible_tracks: list[tuple[int, float, float]] = []
         for track_index, history in enumerate(tracks):
             last = history[-1]
             # 严格的连续观测：漏掉一帧就结束旧轨迹，避免把两个不相邻
@@ -2535,10 +2646,14 @@ def track_detections(
             # 出现或拖线目标。
             if last.frame_index != frame_index - 1:
                 continue
-            distance, source_index = tree.query((last.aligned_x, last.aligned_y), distance_upper_bound=link_radius_px)
-            if np.isfinite(distance) and source_index < len(current):
-                possible.append((float(distance), track_index, int(source_index)))
-        possible.sort(key=lambda item: (item[0], item[1], item[2]))
+            eligible_tracks.append((track_index, last.aligned_x, last.aligned_y))
+        # 先按局部连通分量做全局一对一分配，避免近邻/交叉轨迹因贪心
+        # 抢占同一个当前源而被错误拆断。
+        possible = _global_frame_assignments(
+            eligible_tracks,
+            points,
+            link_radius_px=link_radius_px,
+        )
         assigned_tracks: set[int] = set()
         assigned_sources: set[int] = set()
         for _distance, track_index, source_index in possible:
@@ -2577,10 +2692,11 @@ def track_detections(
                 )
 
     rendered_tracks: list[SourceTrack] = []
+    motion_supported = frame_count >= 3
     for track_id, points in enumerate(tracks):
         displacement, speed, fit_rms = _fit_track(points)
         if len(points) >= required_presence and displacement >= motion_min_displacement_px and fit_rms is not None and fit_rms <= max_motion_fit_rms_px:
-            classification = "moving"
+            classification = "moving" if motion_supported else "static"
         elif len(points) >= required_presence:
             classification = "static"
         elif (
@@ -4066,7 +4182,7 @@ def analyze_sequence(
         else "float64"
     )
     if progress is not None:
-        progress("registration", total, total)
+        progress("registration", 0, total)
     result = track_detections(
         [analysis.detection.quality_sources for analysis in resolved_analyses],
         frame_names=[str(path) for path in frame_paths],
@@ -4077,6 +4193,8 @@ def analyze_sequence(
         max_motion_fit_rms_px=max_motion_fit_rms_px,
         persistent_min_presence=persistent_min_presence,
     )
+    if progress is not None:
+        progress("registration", total, total)
     relative_photometry_result: RelativePhotometryResult | None = None
     if relative_photometry:
         if progress is not None:
@@ -4277,7 +4395,7 @@ def analyze_sequence(
     stack_faint_tracks: tuple[SourceTrack, ...] = ()
     if stack_faint_recovery and total >= 2:
         if progress is not None:
-            progress("stack-faint", total, total)
+            progress("stack-faint", 0, total)
         stack_reference = temporal_reference
         if stack_reference_mode == "coadd":
             stack_reference = _registered_coadd_reference(
@@ -4320,6 +4438,8 @@ def analyze_sequence(
                 for index, track in enumerate(stack_faint_tracks)
             )
             all_tracks = all_tracks + stack_faint_with_ids
+        if progress is not None:
+            progress("stack-faint", total, total)
     if progress is not None:
         progress("consensus", total, total)
     summaries = tuple(
@@ -4387,6 +4507,41 @@ def analyze_sequence(
         background_model_mode = "shared_sequence_pilot_with_fallback"
     else:
         background_model_mode = "per_frame_local"
+    detector_parameter_names = (
+        "threshold_sigma",
+        "min_distance",
+        "aperture_radius",
+        "max_sources",
+        "psf_fwhm",
+        "min_flux_snr",
+        "min_psf_support_pixels",
+        "min_fwhm",
+        "max_fwhm",
+        "max_ellipticity",
+        "min_sharpness",
+        "max_sharpness",
+        "min_footprint_pixels",
+        "proposal_mode",
+        "enable_local_deblend",
+        "reject_linear_artifacts",
+        "mask_zero_pixels",
+        "background_box_size",
+        "refine_local_background",
+        "use_float32",
+        "background_sample_limit",
+        "fast_sequence",
+    )
+    detector_parameters: list[tuple[str, object]] = []
+    for name in detector_parameter_names:
+        value = detector_kwargs.get(name)
+        if isinstance(value, np.bool_):
+            value = bool(value)
+        elif isinstance(value, np.integer):
+            value = int(value)
+        elif isinstance(value, np.floating):
+            value = float(value)
+        if value is None or isinstance(value, (bool, int, float, str)):
+            detector_parameters.append((name, value))
     return SequenceResult(
         frames=summaries,
         cumulative_shifts=result.cumulative_shifts,
@@ -4444,4 +4599,6 @@ def analyze_sequence(
         fixed_sentinel_audit=fixed_sentinel_audit,
         fixed_sentinel_impact_audit=fixed_sentinel_impact_audit,
         relative_photometry=relative_photometry_result,
+        track_association_method="local_component_hungarian",
+        detector_parameters=tuple(detector_parameters),
     )

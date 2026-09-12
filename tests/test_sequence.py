@@ -14,6 +14,7 @@ from rst19.sequence import (
     SourceTrack,
     TrackPoint,
     _candidate_consensus_tracks,
+    _global_frame_assignments,
     _registered_coadd_reference,
     _registered_median_reference,
     _stack_faint_tracks,
@@ -233,6 +234,33 @@ def test_track_fast_point_movers_recovers_a_point_source_beyond_static_link_radi
     assert moving.presence == 15
     assert moving.speed_px_per_frame == pytest.approx(10.0, abs=0.01)
     assert moving.displacement_px == pytest.approx(140.0, abs=0.1)
+
+
+def test_global_frame_assignments_preserves_two_nearby_tracks() -> None:
+    # 贪心最近邻会先让 track 11 占用 source 0，随后 track 10 失去唯一
+    # 可用源；全局分配应选择两条轨迹都能延续的组合。
+    assignments = _global_frame_assignments(
+        ((10, 0.0, 0.0), (11, 1.0, 0.0)),
+        np.asarray(((0.9, 0.0), (2.8, 0.0)), dtype=np.float64),
+        link_radius_px=2.0,
+    )
+
+    assert {(track_index, source_index) for _, track_index, source_index in assignments} == {
+        (10, 0),
+        (11, 1),
+    }
+    assert [distance for distance, _, _ in assignments] == pytest.approx([0.9, 1.8])
+
+
+@pytest.mark.parametrize("frame_count", [1, 2, 3, 4])
+def test_track_detections_short_sequences_do_not_fail_default_presence(frame_count: int) -> None:
+    frames = [(_source(0, 10.0 + frame_index, 10.0),) for frame_index in range(frame_count)]
+
+    result = track_detections(frames, link_radius_px=3.0)
+
+    assert result.tracks
+    if frame_count < 3:
+        assert result.moving_track_count == 0
 
 
 def test_track_fast_point_movers_does_not_relabel_stationary_sources() -> None:
@@ -1061,9 +1089,11 @@ def test_analyze_sequence_reports_frame_and_stage_progress(monkeypatch: pytest.M
         ("frame", 1, 2),
         ("frame", 2, 2),
         ("sentinel-audit", 2, 2),
+        ("registration", 0, 2),
         ("registration", 2, 2),
         ("fast-point-motion", 0, 2),
         ("fast-point-motion", 2, 2),
+        ("stack-faint", 0, 2),
         ("stack-faint", 2, 2),
         ("consensus", 2, 2),
         ("motion-detail", 0, 100),

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from rst19.mosaic import (
     build_registered_mosaic,
     load_mosaic_cache,
+    mosaic_cache_key,
     render_mosaic_preview,
     save_mosaic_cache,
 )
@@ -56,6 +59,18 @@ def test_mosaic_cache_round_trip(tmp_path) -> None:
     assert restored.as_dict() == result.as_dict()
     assert np.array_equal(restored.coverage, result.coverage)
     assert np.allclose(restored.image, result.image, equal_nan=True)
+
+
+def test_mosaic_cache_key_changes_for_equal_size_equal_mtime_replacement(tmp_path) -> None:
+    path = tmp_path / "frame.fits"
+    path.write_bytes(b"AAAA")
+    timestamp_ns = path.stat().st_mtime_ns
+    first = mosaic_cache_key([path], [(0.0, 0.0)])
+
+    path.write_bytes(b"BBBB")
+    os.utime(path, ns=(timestamp_ns, timestamp_ns))
+
+    assert mosaic_cache_key([path], [(0.0, 0.0)]) != first
 
 
 def test_preview_keeps_uncovered_footprint_transparent() -> None:
