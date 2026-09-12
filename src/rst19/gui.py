@@ -212,6 +212,27 @@ def _analysis_matches_detector_parameters(
         elif expected != actual:
             return False
     return True
+
+
+def _usable_gaia_cache(path: Path) -> bool:
+    """判断本地 Gaia 查询缓存是否足以作为自动测光输入。
+
+    这里的文件是运行时缓存，不是随项目发布的离线星表。只有带有
+    ``complete=true`` 审计旁车文件的结果才会被一键流程复用；缺失或不完整
+    时重新在线查询，避免把上一次中断留下的 CSV 当成完整参考目录。
+    后续工作流还会继续校验 CSV 哈希和行数。
+    """
+
+    if not path.is_file():
+        return False
+    audit_path = path.with_suffix(path.suffix + ".meta.json")
+    if not audit_path.is_file():
+        return False
+    try:
+        audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+    return isinstance(audit, dict) and audit.get("complete") is True
 # 这些参数只作用于观察预览，不参与候选检测、孔径测光或星等计算。
 # 真实 FITS 的背景中位数约为 21 ADU，噪声约为 8--9 ADU；若直接对
 # 1--99.5 分位做平方根拉伸，背景会被抬到约 78/255，整幅图看起来像
@@ -1401,6 +1422,9 @@ class StarfieldApp(tk.Tk):
         self.catalog_auto_result: Any | None = None
         self.catalog_path: Path | None = None
         self.catalog_frame_path: Path | None = None
+        # 默认单帧流程会自动尝试 Gaia 测光；失败时保留检测结果并把原因
+        # 写入主界面，而不是静默回退成看起来像“没做任何事”。
+        self.single_auto_error: str | None = None
         self.catalog_window: tk.Toplevel | None = None
         self.sequence_result: SequenceResult | None = None
         self.sequence_brief: SequenceBrief | None = None
@@ -2694,7 +2718,7 @@ class StarfieldApp(tk.Tk):
         self.mosaic_button.pack(side="left")
         self.run_button = self._star_button(
             header,
-            "✦  一键分析单张",
+            "✦  一键分析单张（含 Gaia 测光）",
             self.run_analysis,
             kind="primary",
             padx=17,
@@ -2732,7 +2756,7 @@ class StarfieldApp(tk.Tk):
         self.photometry_button.pack(side="right", padx=(12, 0))
         self._label(
             photometry_row,
-            "单张分析得到仪器星等；标准星等需另运行 Gaia 标定。绝对星等还需距离与消光。",
+            "单张分析得到仪器星等后，一键流程会自动尝试 Gaia 板解与多参考星测光；绝对星等仍需距离与同波段消光。",
             color=INK_SOFT, size=8, bg=PAPER_LIGHT, anchor="w", justify="left", wraplength=650,
         ).pack(side="left", fill="x", expand=True)
 
@@ -3812,7 +3836,7 @@ class StarfieldApp(tk.Tk):
                 evidence_button.config(state="disabled")
         else:
             if run_button is not None:
-                run_button.config(state="normal", text="✦  一键分析单张")
+                run_button.config(state="normal", text="✦  一键分析单张（含 Gaia 测光）")
             if motion_button is not None:
                 motion_button.config(state="normal", text="15 帧动目标")
             mosaic_button = self.__dict__.get("mosaic_button")
@@ -3992,7 +4016,7 @@ class StarfieldApp(tk.Tk):
         self.preview_pan_x = 0.0
         self.preview_pan_y = 0.0
         mode_label = PREVIEW_MODE_LABELS.get(selected_mode, "增强显示")
-        self.hover_info_var.set(f"预览已载入 · {mode_label} · 点击“一键分析单张”运行检测")
+        self.hover_info_var.set(f"预览已载入 · {mode_label} · 点击“一键分析单张（含 Gaia 测光）”运行默认流程")
         self.status_var.set(f"预览已载入 · {mode_label} · 检测使用原始 FITS ADU")
         self._set_job_controls()
         self._update_overlay_hint()
@@ -4169,6 +4193,7 @@ class StarfieldApp(tk.Tk):
         self.catalog_calibration = None
         self.catalog_auto_result = None
         self.catalog_frame_path = None
+        self.single_auto_error = None
         self.hover_catalog_match = None
         self.sequence_brief = None
         if self.__dict__.get("sequence_brief_label") is not None:
@@ -4186,6 +4211,16 @@ class StarfieldApp(tk.Tk):
         frame_path = self.selected_frame
         token = self.frame_token
         cache_generation = self.cache_generation
+        auto_detector_kwargs = {
+            "threshold_sigma": threshold,
+            "min_distance": min_distance,
+            "max_sources": max_sources,
+            "psf_fwhm": psf_fwhm,
+            "min_flux_snr": min_flux_snr,
+            "proposal_mode": proposal_mode,
+            "reject_linear_artifacts": True,
+            "enable_local_deblend": enable_local_deblend,
+        }
 
         def worker() -> None:
             try:
@@ -4277,12 +4312,100 @@ class StarfieldApp(tk.Tk):
                     self._queue_task_result("analysis-progress", token, cache_generation, (94.0, "完成星点检测"))
                 self._queue_task_result("analysis-progress", token, cache_generation, (94.0, "生成预览"))
                 previews = _make_preview_variants(frame.data)
-                self._queue_task_result("analysis-progress", token, cache_generation, (100.0, "完成"))
+                auto_result = None
+                auto_catalog_path: Path | None = None
+                auto_error: str | None = None
+                if frame.auxiliary is None:
+                    auto_error = "FITS 没有 RA/DEC 辅助数据，无法自动规划 Gaia 板解"
+                    self._queue_task_result("analysis-progress", token, cache_generation, (100.0, "完成检测 · 跳过 Gaia 测光"))
+                else:
+                    auto_catalog_path = PROJECT_ROOT / "tmp" / "public-catalog" / f"{frame_path.stem}.gaia-dr3.csv"
+                    try:
+                        if _usable_gaia_cache(auto_catalog_path):
+                            self._queue_task_result(
+                                "analysis-progress",
+                                token,
+                                cache_generation,
+                                (94.5, "Gaia 星表缓存命中 · 开始自动板解"),
+                            )
+                        else:
+                            self._queue_task_result(
+                                "analysis-progress",
+                                token,
+                                cache_generation,
+                                (94.5, "正在在线获取 Gaia DR3 · 结果写入运行时缓存"),
+                            )
+
+                            def catalog_progress(message: str) -> None:
+                                self._queue_task_result(
+                                    "analysis-progress",
+                                    token,
+                                    cache_generation,
+                                    (94.5, f"Gaia 星表 · {message}"),
+                                )
+
+                            fetched = download_public_gaia_catalog_for_frame(
+                                frame,
+                                auto_catalog_path,
+                                search_radius_deg=camera_footprint_radius_deg(),
+                                min_g_mag=DEFAULT_GAIA_MIN_G_MAG,
+                                max_g_mag=DEFAULT_GAIA_MAX_G_MAG,
+                                tile_radius_deg=DEFAULT_GAIA_TILE_RADIUS_DEG,
+                                include_gspphot_model=True,
+                                endpoint=AIP_GAIA_TAP_SYNC_URL,
+                                progress=catalog_progress,
+                            )
+                            if not fetched.complete:
+                                raise ValueError(
+                                    f"Gaia 查询不完整，已保存 {fetched.output_path}；不能把不完整星表用于正式标定"
+                                )
+                        auto_result = run_auto_photometric_workflow(
+                            frame,
+                            auto_catalog_path,
+                            pixel_scale_arcsec=DEFAULT_CAMERA_PIXEL_SCALE_ARCSEC,
+                            match_radius_px=3.0,
+                            detector_kwargs=auto_detector_kwargs,
+                            initial_analysis=analysis,
+                            progress=lambda value, label: self._queue_task_result(
+                                "analysis-progress",
+                                token,
+                                cache_generation,
+                                (94.0 + 0.06 * float(value), f"Gaia 测光 · {label}"),
+                            ),
+                        )
+                        if auto_result.calibrated:
+                            analysis = auto_result.analysis
+                        else:
+                            auto_error = auto_result.reason
+                    except Exception as exc:  # noqa: BLE001 - keep detection usable if public calibration fails
+                        auto_error = f"{type(exc).__name__}: {exc}"
+                        self._queue_task_result(
+                            "analysis-progress",
+                            token,
+                            cache_generation,
+                            (99.0, f"Gaia 测光未完成 · {auto_error}"),
+                        )
+                    self._queue_task_result(
+                        "analysis-progress",
+                        token,
+                        cache_generation,
+                        (100.0, "完成 · 已回写 Gaia 测光" if auto_result is not None and auto_result.calibrated else "完成 · 保留 m_inst"),
+                    )
                 self._queue_task_result(
                     "analysis",
                     token,
                     cache_generation,
-                    (analysis, frame.data.shape, previews, cache_state, cache_hit, long_trails),
+                    (
+                        analysis,
+                        frame.data.shape,
+                        previews,
+                        cache_state,
+                        cache_hit,
+                        long_trails,
+                        auto_result,
+                        auto_catalog_path,
+                        auto_error,
+                    ),
                 )
             except Exception as exc:  # noqa: BLE001 - worker must return a user-facing error
                 self._queue_task_result("analysis-error", token, cache_generation, exc)
@@ -5315,7 +5438,34 @@ class StarfieldApp(tk.Tk):
             self.active_job_kind = None
             self._set_job_controls()
             self._set_progress(100.0, "完成")
-            self.analysis, shape, previews, cache_state, _cache_hit, self.long_trails = payload
+            (
+                self.analysis,
+                shape,
+                previews,
+                cache_state,
+                _cache_hit,
+                self.long_trails,
+                auto_result,
+                auto_catalog_path,
+                auto_error,
+            ) = payload
+            self.single_auto_error = auto_error
+            if auto_result is not None:
+                self.catalog_auto_result = auto_result
+                self.catalog_path = auto_catalog_path
+                self.catalog_frame_path = self.selected_frame
+                self.catalog_analysis = self.analysis
+                self.catalog_match_result = self.analysis.matching
+                self.catalog_wcs = auto_result.affine_wcs or auto_result.reference_wcs
+                self.catalog_calibration = auto_result.affine_wcs
+            else:
+                self.catalog_auto_result = None
+                self.catalog_path = None
+                self.catalog_frame_path = None
+                self.catalog_analysis = None
+                self.catalog_match_result = None
+                self.catalog_wcs = None
+                self.catalog_calibration = None
             self.preview_variants = dict(previews)
             self.preview = self.preview_variants.get(self.preview_mode_var.get()) or self.preview_variants.get(PREVIEW_MODE_ENHANCED)
             # 单帧分析是新的证据上下文，不能继续显示上一次 15 帧分析的轨迹。
@@ -5353,7 +5503,20 @@ class StarfieldApp(tk.Tk):
                 single_frame_lines.append(f"其余 {len(self.long_trails) - 3} 条候选见运动层悬停信息")
             self.sequence_evidence_label.config(text="\n".join(single_frame_lines))
             trail_text = f" · 单帧长线候选 {len(self.long_trails):,}" if self.long_trails else " · 未发现满足几何门槛的单帧长线"
-            self.status_var.set(f"{cache_state} · 候选峰 {detection.candidate_count:,} · 可信星点 {detection.star_count:,} · 审计返回 {detection.returned_count:,}{trail_text}")
+            if auto_result is not None and auto_result.calibrated:
+                calibration_text = (
+                    f" · Gaia 测光完成 · 匹配 {auto_result.analysis.matching.matched_count if auto_result.analysis.matching is not None else 0:,}"
+                    f" · {getattr(auto_result.analysis.photometric_calibration, 'photometric_system', 'Gaia Vega')}/"
+                    f"{getattr(auto_result.analysis.photometric_calibration, 'photometric_band', 'G')}"
+                )
+            elif auto_error:
+                calibration_text = f" · m_cal 未标定：{auto_error}"
+            else:
+                calibration_text = " · m_cal 未标定"
+            self.status_var.set(
+                f"{cache_state} · 候选峰 {detection.candidate_count:,} · 可信星点 {detection.star_count:,} · "
+                f"审计返回 {detection.returned_count:,}{calibration_text}{trail_text}"
+            )
             # 单帧分析完成后始终回到可信源主层。长线候选保留为叠加证据，
             # 不再让“发现长线”把整张图切成只显示轨迹的模式。
             self.overlay_mode_var.set("quality")
@@ -5450,8 +5613,8 @@ class StarfieldApp(tk.Tk):
         self.faintest_detail.config(text="尚未运行分析")
         self.faintest_note.config(
             text=(
-                "测光状态：普通单张分析仅给 m_inst（ADU/s），不会隐式联网匹配星表；"
-                "要得到 m_cal，请点击‘星等标定 · Gaia’→‘自动板解 + 测光’。"
+                "测光状态：一键单帧会自动尝试 Gaia 星表、板解和多参考星测光；"
+                "缓存不完整或联网失败时保留 m_inst，不把未标定值冒充标准星等。"
                 "严格 M 还需要可靠距离/视差和同波段消光。"
             )
         )
@@ -5499,8 +5662,10 @@ class StarfieldApp(tk.Tk):
         }
         wcs_verified = self.catalog_calibration is not None and self.catalog_analysis is self.analysis
         auto_result = self.__dict__.get("catalog_auto_result")
+        single_auto_error = self.__dict__.get("single_auto_error")
         if self.catalog_frame_path != self.selected_frame:
             auto_result = None
+            single_auto_error = None
         calibration = getattr(self.analysis, "photometric_calibration", None)
         display_band = _gui_field(calibration, "photometric_band")
         self.source_tree.heading("cal", text=_gui_magnitude_label("m", display_band))
@@ -5518,8 +5683,12 @@ class StarfieldApp(tk.Tk):
             self.faintest_note.config(
                 text=(
                     "请检查阈值、掩膜和边缘筛选；没有通过质量门控的亮点不参与最暗源判定。"
-                    "普通单张分析只产生 m_inst；要得到 m_cal，请点击‘星等标定 · Gaia’"
-                    "并运行‘自动板解 + 测光’，严格 M 还需要距离/视差和同波段消光。"
+                    + (
+                        f"默认 Gaia 测光未完成：{single_auto_error}。"
+                        if single_auto_error
+                        else "默认流程会在检测后自动尝试 Gaia 测光。"
+                    )
+                    + "严格 M 还需要距离/视差和同波段消光。"
                 )
             )
         else:
