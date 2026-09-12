@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +17,39 @@ from rst19.photometry import PhotometricCalibration
 from rst19.pipeline import FrameAnalysis
 from rst19.plate_solver import PlateSolveCandidate, PlateSolveResult, PlateTransform
 from rst19.wcs import AffineWCSCalibration
+
+
+def test_file_catalog_provenance_requires_an_audit_bound_to_the_csv(tmp_path: Path) -> None:
+    path = tmp_path / "gaia.csv"
+    path.write_text("source_id,ra,dec\n1,10,20\n", encoding="utf-8")
+    audit = path.with_suffix(".csv.meta.json")
+    assert workflow._catalog_provenance_status(path) == "PROVENANCE_UNKNOWN"
+    audit.write_text(json.dumps({"complete": True}), encoding="utf-8")
+    assert workflow._catalog_provenance_status(path) == "PROVENANCE_UNBOUND"
+    payload = {
+        "complete": True,
+        "csv_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "csv_row_count": 1,
+    }
+    audit.write_text(json.dumps(payload), encoding="utf-8")
+    assert workflow._catalog_provenance_status(path) == "COMPLETE"
+    path.write_text("source_id,ra,dec\n2,10,20\n", encoding="utf-8")
+    assert workflow._catalog_provenance_status(path) == "PROVENANCE_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [(2, "PROVENANCE_INVALID"), (1.5, "PROVENANCE_UNBOUND"), (True, "PROVENANCE_UNBOUND")],
+)
+def test_file_catalog_provenance_checks_exact_integer_row_count(tmp_path: Path, count, expected) -> None:
+    path = tmp_path / "gaia.csv"
+    path.write_text("source_id,ra,dec\n1,10,20\n", encoding="utf-8")
+    path.with_suffix(".csv.meta.json").write_text(json.dumps({
+        "complete": True,
+        "csv_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "csv_row_count": count,
+    }), encoding="utf-8")
+    assert workflow._catalog_provenance_status(path) == expected
 
 
 def _frame(tmp_path: Path) -> FitsFrame:

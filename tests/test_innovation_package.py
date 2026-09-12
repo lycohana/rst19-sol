@@ -129,6 +129,39 @@ def test_loader_rejects_bad_counts_and_duplicate_grid_cells(tmp_path: Path) -> N
         load_stratified_rows(_write_artifact(tmp_path, [duplicate_a, duplicate_b], "duplicate.json"))
 
 
+def test_loader_accepts_fractional_summary_means_from_experiment_cli(tmp_path: Path) -> None:
+    row = _row("blank", 56.0, 7, 2, trial_count=3)
+    row.update(
+        {
+            "mean_candidate_count": 84573.0,
+            "mean_quality_count": 29268.666666666668,
+            "mean_background_candidate_count": 84565.66666666667,
+            "mean_background_quality_count": 29268.333333333332,
+        }
+    )
+
+    loaded = load_stratified_rows(_write_artifact(tmp_path, [row], "cli-shaped.json"))
+
+    assert loaded[0]["mean_candidate_count"] == pytest.approx(84573.0)
+    assert loaded[0]["mean_quality_count"] == pytest.approx(29268.666666666668)
+    assert loaded[0]["mean_background_candidate_count"] == pytest.approx(84565.66666666667)
+    assert loaded[0]["mean_background_quality_count"] == pytest.approx(29268.333333333332)
+
+
+@pytest.mark.parametrize("field", [
+    "mean_candidate_count",
+    "mean_quality_count",
+    "mean_background_candidate_count",
+    "mean_background_quality_count",
+])
+def test_loader_rejects_invalid_summary_means(tmp_path: Path, field: str) -> None:
+    row = _row("blank", 56.0, 7, 2)
+    row[field] = -0.1
+
+    with pytest.raises(ValueError, match=f"{field} must be a finite non-negative number"):
+        load_stratified_rows(_write_artifact(tmp_path, [row], f"bad-{field}.json"))
+
+
 def test_optional_evidence_is_explicitly_classified(tmp_path: Path) -> None:
     injection_path = _write_artifact(tmp_path, _core_rows())
     sequence_path = tmp_path / "sequence.json"

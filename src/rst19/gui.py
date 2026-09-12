@@ -62,6 +62,8 @@ from .photometric_workflow import (
     run_auto_photometric_workflow,
 )
 from .public_catalog import (
+    AIP_GAIA_TAP_SYNC_URL,
+    DEFAULT_GAIA_TAP_SYNC_URL,
     DEFAULT_GAIA_MAX_G_MAG,
     DEFAULT_GAIA_MIN_G_MAG,
     DEFAULT_GAIA_TILE_RADIUS_DEG,
@@ -386,7 +388,10 @@ def _gui_auto_result_gate(auto_result: object = None) -> tuple[bool, str]:
     status = _gui_status_value(_gui_field(auto_result, "status"))
     if status is None:
         return False, "自动测光状态缺失，不能确认正式标定"
-    if status.upper() != "CALIBRATED":
+    # PARTIAL describes coverage of the faintest-selection set, not failure
+    # of the fit. Individual validated rows remain reportable; unmatched rows
+    # still fail the independent source gate below.
+    if status.upper() not in {"CALIBRATED", "CALIBRATED_PARTIAL"}:
         return False, _gui_auto_result_reason(auto_result, f"自动测光状态 {status} 不是正式标定")
     provenance = _gui_status_value(_gui_field(auto_result, "catalog_provenance_status"))
     if provenance is None:
@@ -549,7 +554,11 @@ def _gui_absolute_magnitude_gate(
     declared_band = _gui_text_value(band)
     if absolute_system is None or absolute_band is None:
         reasons.append("绝对星等缺少消光系统/波段")
-    if absolute_system is not None and declared_system is not None and absolute_system != declared_system:
+    if (
+        absolute_system is not None
+        and declared_system is not None
+        and _gui_photometric_system_key(absolute_system) != _gui_photometric_system_key(declared_system)
+    ):
         reasons.append("绝对星等消光系统与 m_cal 来源不一致")
     if absolute_band is not None and declared_band is not None and absolute_band != declared_band:
         reasons.append("绝对星等消光波段与 m_cal 波段不一致")
@@ -569,6 +578,20 @@ def _gui_photometric_provenance(system: object = None, band: object = None) -> s
     if system_text:
         return system_text
     return "未声明系统/波段"
+
+
+def _gui_photometric_system_key(value: object) -> str | None:
+    """Normalize documented aliases for magnitude/extinction provenance."""
+
+    text = _gui_text_value(value)
+    if text is None:
+        return None
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in {"gaia", "gaiavega", "gaiadr3", "gaiadr3vega"}:
+        return "gaia"
+    if key in {"johnson", "johnsonv", "johnsoncousins", "johnsoncousinsv"}:
+        return "johnson"
+    return key
 
 
 def _gui_magnitude_label(prefix: str, band: object = None) -> str:
@@ -734,7 +757,12 @@ def _gui_primary_faintest_display(
             and _gui_text_value(band) is not None
         )
     if calibrated_allowed and calibrated_value is not None:
-        return f"{_gui_magnitude_label('m', band)},cal · 已标定", f"{calibrated_value:.2f}", True
+        subset = (
+            _gui_field(faintest, "selection_scope") == "CALIBRATED_MATCHES_PARTIAL"
+            or _gui_field(auto_result, "status") == "CALIBRATED_PARTIAL"
+        )
+        qualifier = "已标定子集最暗" if subset else "已标定"
+        return f"{_gui_magnitude_label('m', band)},cal · {qualifier}", f"{calibrated_value:.2f}", True
     return "m_inst（未定标）", instrumental_text, False
 
 
@@ -2695,6 +2723,19 @@ class StarfieldApp(tk.Tk):
                     pady=(2, 0),
                 )
 
+        photometry_row = tk.Frame(controls, bg=PAPER_LIGHT)
+        photometry_row.pack(fill="x", padx=16, pady=(0, 8))
+        self.photometry_button = self._star_button(
+            photometry_row, "星等标定 · Gaia", self._show_catalog_match,
+            kind="secondary", padx=12, pady=6, size=9,
+        )
+        self.photometry_button.pack(side="right", padx=(12, 0))
+        self._label(
+            photometry_row,
+            "单张分析得到仪器星等；标准星等需另运行 Gaia 标定。绝对星等还需距离与消光。",
+            color=INK_SOFT, size=8, bg=PAPER_LIGHT, anchor="w", justify="left", wraplength=650,
+        ).pack(side="left", fill="x", expand=True)
+
         sequence_progress_row = tk.Frame(controls, bg=PAPER_LIGHT)
         self.sequence_progress_row = sequence_progress_row
         sequence_progress_row.pack(fill="x", padx=16, pady=(0, 8))
@@ -3746,6 +3787,9 @@ class StarfieldApp(tk.Tk):
     def _set_job_controls(self) -> None:
         """根据当前后台任务状态同步按钮，避免切帧把旧任务误报成空闲。"""
 
+        photometry_button = self.__dict__.get("photometry_button")
+        if photometry_button is not None:
+            photometry_button.config(state="disabled" if self.busy or self.selected_frame is None else "normal")
         run_button = self.__dict__.get("run_button")
         motion_button = self.__dict__.get("motion_button")
         cache_button = self.__dict__.get("cache_button")
@@ -5881,6 +5925,11 @@ class StarfieldApp(tk.Tk):
         query_radius_var = tk.StringVar(value=f"{camera_footprint_radius_deg():.4f}")
         min_g_var = tk.StringVar(value=f"{DEFAULT_GAIA_MIN_G_MAG:.1f}")
         max_g_var = tk.StringVar(value=f"{DEFAULT_GAIA_MAX_G_MAG:.1f}")
+        gaia_services = {
+            "Gaia AIP（公共数据中心）": AIP_GAIA_TAP_SYNC_URL,
+            "Gaia ESA（主档案）": DEFAULT_GAIA_TAP_SYNC_URL,
+        }
+        service_var = tk.StringVar(value="Gaia AIP（公共数据中心）")
 
         self._mono_label(form, "CATALOG CSV", color=AMBER, size=8, bg=PAPER_LIGHT).grid(row=0, column=0, padx=(14, 7), pady=(13, 7), sticky="e")
         path_entry = tk.Entry(form, textvariable=catalog_path_var, bg=PAPER, fg=INK, insertbackground=INK, relief="flat", highlightbackground=PAPER_LINE, highlightthickness=1, font=(MONO, 9))
@@ -5912,22 +5961,28 @@ class StarfieldApp(tk.Tk):
             self._mono_label(form, label_text, color=INK_SOFT, size=8, bg=PAPER_LIGHT).grid(row=row, column=label_column, padx=(14 if label_column == 0 else 12, 7), pady=(4, 13), sticky="e")
             tk.Entry(form, textvariable=variable, width=12, bg=PAPER, fg=INK, insertbackground=INK, relief="flat", highlightbackground=PAPER_LINE, highlightthickness=1, font=(MONO, 9)).grid(row=row, column=label_column + 1, padx=(0, 8), pady=(4, 13), sticky="ew")
 
+        self._mono_label(form, "GAIA SERVICE", color=INK_SOFT, size=8, bg=PAPER_LIGHT).grid(
+            row=4, column=0, padx=(14, 7), pady=(0, 10), sticky="e",
+        )
+        ttk.Combobox(form, textvariable=service_var, values=tuple(gaia_services), state="readonly", width=30).grid(
+            row=4, column=1, columnspan=3, padx=(0, 8), pady=(0, 10), sticky="w",
+        )
         note = self._label(
             form,
-            "当前 FITS 没有标准 WCS。RA/DEC、像元尺度、旋转和 parity 只是本次匹配的先验；先运行身份匹配，再点击“根据匹配拟合 WCS”。“在线获取 Gaia DR3”只在点击后联网，默认下载 G≤13.5 的标定参考子表并保留 GSP-Phot M_G 区间，完整性写入旁车 JSON；它不会把 Gaia G 直接改名为开运相机 450–750 nm 星等。",
+            "推荐：CSV 留空，点击“自动板解 + 测光”，程序会获取公开 Gaia 星表、解算 WCS 并拟合零点与颜色项；已下载的完整 CSV 也可直接选择。默认 G≤13.5 仅为参考子表，不保证覆盖最暗星。联网只发送查询参数，不上传 FITS。结果为经验 Gaia G 视星等，不等同于相机 450–750 nm 星等；绝对 M_G 另需距离与同波段消光。",
             color=INK_SOFT,
             size=8,
             bg=PAPER_LIGHT,
             justify="left",
             wraplength=950,
         )
-        note.grid(row=4, column=0, columnspan=7, padx=14, pady=(0, 12), sticky="w")
+        note.grid(row=5, column=0, columnspan=7, padx=14, pady=(0, 12), sticky="w")
 
         body = tk.Frame(window, bg=PAPER_LIGHT, highlightbackground=PAPER_LINE, highlightthickness=1)
         body.pack(fill="both", expand=True, padx=24, pady=(0, 24))
         toolbar = tk.Frame(body, bg=PAPER_LIGHT)
         toolbar.pack(fill="x", padx=14, pady=(12, 8))
-        status = self._mono_label(toolbar, "尚未运行 · 需要 CSV + 光轴先验（不是已标定 WCS）", color=INK_SOFT, size=8, bg=PAPER_LIGHT)
+        status = self._mono_label(toolbar, "尚未运行", color=INK_SOFT, size=8, bg=PAPER_LIGHT)
         status.pack(side="left")
         run_button = tk.Button(toolbar, text="运行星表核验", bg=NAVY, fg=WHITE, activebackground=NAVY_SOFT, activeforeground=WHITE, relief="flat", bd=0, padx=13, pady=7, font=(SANS, 9, "bold"))
         run_button.pack(side="right")
@@ -6333,6 +6388,7 @@ class StarfieldApp(tk.Tk):
 
             try:
                 catalog_text = catalog_path_var.get().strip()
+                endpoint_value = gaia_services[service_var.get()]
                 if catalog_text:
                     catalog_path_for_run = Path(catalog_text).expanduser().resolve()
                     if not catalog_path_for_run.is_file():
@@ -6358,7 +6414,9 @@ class StarfieldApp(tk.Tk):
 
             # 若存在查询审计，明确拒绝把已知不完整的公共目录送进板解。
             audit_path = catalog_path_for_run.with_suffix(catalog_path_for_run.suffix + ".meta.json")
-            if audit_path.is_file():
+            # A blank CSV explicitly requests a new download. An incomplete
+            # result from an earlier attempt must not prevent that retry.
+            if catalog_text and audit_path.is_file():
                 try:
                     audit = json.loads(audit_path.read_text(encoding="utf-8"))
                 except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -6428,6 +6486,7 @@ class StarfieldApp(tk.Tk):
                             max_g_mag=max_g_value,
                             tile_radius_deg=DEFAULT_GAIA_TILE_RADIUS_DEG,
                             include_gspphot_model=True,
+                            endpoint=endpoint_value,
                             progress=fetch_progress,
                         )
                         if not fetched.complete:
@@ -6475,6 +6534,7 @@ class StarfieldApp(tk.Tk):
             """显式联网获取 Gaia 参考子表；下载过程永远在后台线程执行。"""
 
             try:
+                endpoint_value = gaia_services[service_var.get()]
                 center_ra_value = float(ra_var.get())
                 center_dec_value = float(dec_var.get())
                 search_radius_value = float(query_radius_var.get())
@@ -6518,6 +6578,7 @@ class StarfieldApp(tk.Tk):
                         max_g_mag=max_g_value,
                         tile_radius_deg=DEFAULT_GAIA_TILE_RADIUS_DEG,
                         include_gspphot_model=True,
+                        endpoint=endpoint_value,
                         frame_path=requested_frame,
                         progress=progress,
                     )

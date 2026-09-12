@@ -55,6 +55,20 @@ def test_public_catalog_download_is_explicit_and_writes_audit(tmp_path: Path) ->
     assert "rows" not in metadata["tiled"]
 
 
+def test_public_catalog_records_selected_endpoint(tmp_path: Path) -> None:
+    endpoint = "https://gaia.aip.de/tap/sync"
+
+    def query(*args: object, **kwargs: object) -> tuple[dict[str, object], ...]:
+        assert kwargs["endpoint"] == endpoint
+        return _query_rows()
+
+    result = download_public_gaia_catalog(
+        129.5, -1.8, tmp_path / "gaia.csv", search_radius_deg=0.1,
+        endpoint=endpoint, query_fn=query,
+    )
+    assert json.loads(result.audit_path.read_text(encoding="utf-8"))["endpoint"] == endpoint
+
+
 def test_public_catalog_can_preserve_gspphot_model_absolute_magnitude(tmp_path: Path) -> None:
     seen: list[dict[str, object]] = []
 

@@ -813,6 +813,13 @@ def fit_photometric_calibration(
         ):
             metadata_mismatch = True
             continue
+        # Gaia legitimately has sources without BP/RP photometry. They cannot
+        # constrain a color term, but do not imply two conflicting color systems
+        # in otherwise usable reference stars. Keep them out of this fit.
+        if color_order and (source.color is None or not math.isfinite(float(source.color))):
+            missing_color = True
+            catalog_filter_counts["MISSING_COLOR"] = catalog_filter_counts.get("MISSING_COLOR", 0) + 1
+            continue
         if color_order and (
             _normalise_photometric_label(color_name) is None
             or _normalise_photometric_label(source.color_name) != _normalise_photometric_label(color_name)
@@ -839,9 +846,6 @@ def fit_photometric_calibration(
         if catalog_magnitude is None or not math.isfinite(float(catalog_magnitude)):
             continue
         if color_order:
-            if source.color is None or not math.isfinite(float(source.color)):
-                missing_color = True
-                continue
             color = float(source.color)
         else:
             color = 0.0
@@ -1995,6 +1999,9 @@ def build_source_photometry(
             )
             if not metadata_matches:
                 status = "CALIBRATION_METADATA_MISMATCH"
+                flags.append("CALIBRATION_NOT_APPLIED")
+            elif photometric_calibration.color_order and color is None:
+                status = "CALIBRATION_MISSING_COLOR"
                 flags.append("CALIBRATION_NOT_APPLIED")
             elif not color_metadata_matches:
                 status = "CALIBRATION_COLOR_METADATA_MISMATCH"

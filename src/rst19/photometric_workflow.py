@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+import csv
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -208,6 +210,27 @@ def _catalog_provenance_status(path: Path | None) -> str:
         return "INCOMPLETE"
     if payload.get("complete") is not True:
         return "PROVENANCE_UNKNOWN"
+    # A success flag alone cannot certify a CSV that has since been replaced.
+    # Public downloads and catalog merges bind their audit to exact contents.
+    expected_hash = payload.get("csv_sha256")
+    expected_rows = payload.get("csv_row_count")
+    if not isinstance(expected_hash, str) or len(expected_hash) != 64:
+        return "PROVENANCE_UNBOUND"
+    if type(expected_rows) is not int or expected_rows < 0:
+        return "PROVENANCE_UNBOUND"
+    try:
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != expected_hash.lower():
+            return "PROVENANCE_INVALID"
+        with path.open("r", encoding="utf-8-sig", newline="") as stream:
+            actual_rows = sum(1 for _ in csv.DictReader(stream))
+        if actual_rows != expected_rows:
+            return "PROVENANCE_INVALID"
+    except (OSError, UnicodeError, csv.Error):
+        return "PROVENANCE_INVALID"
     if payload.get("coverage_warning"):
         return "COMPLETE_WITH_WARNING"
     return "COMPLETE"

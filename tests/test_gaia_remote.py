@@ -28,6 +28,59 @@ GAIA_HEADER = ",".join(gaia_remote.GAIA_REQUIRED_COLUMNS)
 GAIA_ROW = "123,129.5,-1.25,2016.0,1.2,-2.3,15.4,1000,10,100,15.8,14.9,1.2,2.1,0.1,1.05,false,12,NOT_AVAILABLE,100.0,90.0,110.0,0.12,0.10,0.15,0.08"
 
 
+def _votable_fixture(*, trailing_status: str = "", data: str | None = None) -> str:
+    fields = "".join(f'<FIELD name="{name}"/>' for name in gaia_remote.GAIA_REQUIRED_COLUMNS)
+    values = GAIA_ROW.split(",")
+    values[0] = "465819100526030209"  # Must not pass through float64.
+    values[4] = ""  # Nullable proper motion.
+    cells = "".join(f"<TD>{value}</TD>" for value in values)
+    if data is None:
+        data = f"<TABLEDATA><TR>{cells}</TR></TABLEDATA>"
+    return (
+        '<VOTABLE xmlns="http://www.ivoa.net/xml/VOTable/v1.3">'
+        '<RESOURCE type="results"><INFO name="QUERY_STATUS" value="OK"/>'
+        f"<TABLE>{fields}<DATA>{data}</DATA></TABLE>{trailing_status}</RESOURCE>"
+        '<RESOURCE type="meta"><PARAM name="unrelated"/></RESOURCE></VOTABLE>'
+    )
+
+
+def test_csv_request_can_receive_aip_votable_without_losing_source_ids() -> None:
+    def opener(request: urllib.request.Request, *, timeout: float) -> io.BytesIO:
+        assert "*/*" in request.get_header("Accept")
+        return io.BytesIO(_votable_fixture().encode("utf-8"))
+
+    rows = query_gaia(129.5, -1.25, 0.1, response_format="csv", opener=opener)
+    assert rows[0]["source_id"] == "465819100526030209"
+    assert rows[0]["pmra_mas_yr"] == ""
+    assert rows[0]["magnitude"] == "15.4"
+    assert rows[0]["extinction_band"] == "G"
+
+
+@pytest.mark.parametrize("status", ["ERROR", "OVERFLOW"])
+def test_votable_rejects_post_table_query_failure_or_truncation(status: str) -> None:
+    payload = _votable_fixture(trailing_status=f'<INFO name="QUERY_STATUS" value="{status}">cut</INFO>')
+    with pytest.raises(gaia_remote.GaiaResponseError, match=status):
+        gaia_remote.parse_gaia_response(payload, response_format="csv")
+
+
+def test_votable_accepts_complete_empty_table_with_columns() -> None:
+    assert gaia_remote.parse_gaia_response(_votable_fixture(data="<TABLEDATA/>")) == ()
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ("<html><body>Bad gateway</body></html>", "not a VOTable"),
+        (_votable_fixture(data="<BINARY><STREAM>opaque</STREAM></BINARY>"), "TABLEDATA"),
+        (_votable_fixture(data="<TABLEDATA><TR><TD>1</TD></TR></TABLEDATA>"), "column count"),
+        (_votable_fixture().replace('<INFO name="QUERY_STATUS" value="OK"/>', ""), "QUERY_STATUS"),
+    ],
+)
+def test_votable_rejects_non_table_or_unverifiable_results(payload: str, message: str) -> None:
+    with pytest.raises(gaia_remote.GaiaResponseError, match=message):
+        gaia_remote.parse_gaia_response(payload)
+
+
 def test_build_gaia_adql_selects_required_columns_and_encodes_numeric_values() -> None:
     query = build_gaia_adql(129.5, -1.25, 0.2, limit=25)
 

@@ -342,3 +342,20 @@ def test_auto_photometry_wires_detector_fingerprint_and_cache_generation() -> No
     assert "not self.manual_tuning_dirty" in text
     assert "cache_generation = self.cache_generation" in text
     assert "_queue_task_result" in text
+    assert "if catalog_text and audit_path.is_file():" in text
+    assert "endpoint=endpoint_value" in text
+
+
+def test_active_gui_exposes_explicit_photometry_and_public_service_selection() -> None:
+    source = Path(gui.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    methods = {
+        node.name: ast.get_source_segment(source, node) or ""
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"_build_controls_starfield", "_show_catalog_match"}
+    }
+    assert '"星等标定 · Gaia", self._show_catalog_match' in methods["_build_controls_starfield"]
+    assert "单张分析得到仪器星等" in methods["_build_controls_starfield"]
+    assert "AIP_GAIA_TAP_SYNC_URL" in methods["_show_catalog_match"]
+    assert "DEFAULT_GAIA_TAP_SYNC_URL" in methods["_show_catalog_match"]

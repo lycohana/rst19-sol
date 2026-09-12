@@ -19,7 +19,7 @@ from typing import Any
 
 from .fits import read_fits
 from .gaia_tiled import GaiaTiledResult, query_gaia_tiled
-from .gaia_remote import DEFAULT_GAIA_TAP_SYNC_URL, write_catalog_csv
+from .gaia_remote import AIP_GAIA_TAP_SYNC_URL, DEFAULT_GAIA_TAP_SYNC_URL, write_catalog_csv
 from .models import FitsFrame
 
 
@@ -92,6 +92,7 @@ class PublicCatalogDownload:
     outside_scope_count: int
     tiled_result: GaiaTiledResult
     include_gspphot_model: bool = False
+    endpoint: str = DEFAULT_GAIA_TAP_SYNC_URL
 
     def as_dict(self) -> dict[str, object]:
         # The CSV is the row-level artifact.  Keep the sidecar audit compact;
@@ -101,6 +102,7 @@ class PublicCatalogDownload:
         tiled_audit.pop("rows", None)
         return {
             "catalog": "Gaia DR3",
+            "endpoint": self.endpoint,
             "table": (
                 "gaiadr3.gaia_source LEFT OUTER JOIN gaiadr3.astrophysical_parameters"
                 if self.include_gspphot_model
@@ -249,6 +251,7 @@ def download_public_gaia_catalog(
         outside_scope_count=result.outside_scope_count,
         tiled_result=result,
         include_gspphot_model=include_gspphot_model,
+        endpoint=endpoint,
     )
     _write_audit(download)
     return download
@@ -274,6 +277,8 @@ def download_public_gaia_catalog_for_frame(
 
 
 __all__ = [
+    "AIP_GAIA_TAP_SYNC_URL",
+    "DEFAULT_GAIA_TAP_SYNC_URL",
     "DEFAULT_CAMERA_FOV_HEIGHT_DEG",
     "DEFAULT_CAMERA_FOV_WIDTH_DEG",
     "DEFAULT_GAIA_MAX_G_MAG",

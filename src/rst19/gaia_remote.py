@@ -1,6 +1,6 @@
 """公共 Gaia DR3 TAP 接入。
 
-这个模块只负责构造安全的 ADQL、访问 Gaia TAP 以及把 TAP 的 CSV/JSON
+这个模块只负责构造安全的 ADQL、访问 Gaia TAP 以及把 TAP 的 CSV/JSON/VOTable
 表格响应规整成可供 rst19 离线星表读取器消费的行字典。它刻意不导入
 ``rst19.catalog``，因此导入本模块不会触发网络访问，也不会把远程服务
 耦合进已有的离线星表实现。
@@ -20,12 +20,14 @@ import socket
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 
 DEFAULT_GAIA_TAP_SYNC_URL = "https://gea.esac.esa.int/tap-server/tap/sync"
+AIP_GAIA_TAP_SYNC_URL = "https://gaia.aip.de/tap/sync"
 GAIA_DR3_TABLE = "gaiadr3.gaia_source"
 GAIA_DR3_ASTROPHYSICAL_PARAMETERS_TABLE = "gaiadr3.astrophysical_parameters"
 GAIA_GSPPHOT_MODEL_COLUMNS = (
@@ -507,7 +509,13 @@ def download_gaia(
     request = urllib.request.Request(
         url,
         headers={
-            "Accept": "text/csv, text/plain;q=0.9" if format_value == "csv" else "application/json",
+            # Some TAP services (including Gaia@AIP) return VOTable even for
+            # FORMAT=csv. Permit their XML response without relaxing TLS.
+            "Accept": (
+                "text/csv, text/plain;q=0.9, application/xml;q=0.8, */*;q=0.1"
+                if format_value == "csv"
+                else "application/json, application/xml;q=0.8, */*;q=0.1"
+            ),
             "User-Agent": "rst19-gaia-remote/1.0",
         },
         method="GET",
@@ -963,6 +971,64 @@ def parse_gaia_csv(payload: bytes | bytearray | str) -> tuple[dict[str, str], ..
     return _normalise_rows(headers, records, response_format="CSV")
 
 
+def parse_gaia_votable(payload: bytes | bytearray | str) -> tuple[dict[str, str], ...]:
+    """Read TAP TABLEDATA, preserving identifiers and rejecting incomplete results.
+
+    QUERY_STATUS may occur after TABLE, so check the whole result resource
+    before consuming rows. Binary encodings are deliberately not guessed.
+    """
+
+    text = _decode_text(payload, context="VOTable")
+    if "<!DOCTYPE" in text.upper() or "<!ENTITY" in text.upper():
+        raise GaiaResponseError("Gaia VOTable response must not contain a DTD or entity declaration")
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError as exc:
+        raise GaiaResponseError(f"Gaia VOTable response is invalid XML: {exc}") from exc
+
+    def local_name(element: ET.Element) -> str:
+        return element.tag.rsplit("}", 1)[-1]
+
+    if local_name(root) != "VOTABLE":
+        raise GaiaResponseError("Gaia XML response is not a VOTable (possibly an HTML error page)")
+    resources = [
+        element for element in root.iter()
+        if local_name(element) == "RESOURCE" and element.get("type", "").lower() == "results"
+    ]
+    if len(resources) != 1:
+        raise GaiaResponseError("Gaia VOTable must contain exactly one TAP results resource")
+    resource = resources[0]
+    statuses = [
+        element for element in resource.iter()
+        if local_name(element) == "INFO" and element.get("name", "").upper() == "QUERY_STATUS"
+    ]
+    if not statuses:
+        raise GaiaResponseError("Gaia VOTable is missing TAP QUERY_STATUS")
+    for status in statuses:
+        value = status.get("value", "").upper()
+        if value != "OK":
+            detail = "".join(status.itertext()).strip()[:500]
+            raise GaiaResponseError(f"Gaia TAP QUERY_STATUS={value}: {detail}; result is not complete")
+    tables = [element for element in resource if local_name(element) == "TABLE"]
+    if len(tables) != 1:
+        raise GaiaResponseError("Gaia VOTable must contain exactly one result table")
+    table = tables[0]
+    fields = [element for element in table if local_name(element) == "FIELD"]
+    headers = _prepare_headers((field.get("name") for field in fields), response_format="VOTable")
+    table_data = [element for element in table.iter() if local_name(element) == "TABLEDATA"]
+    if len(table_data) != 1:
+        raise GaiaResponseError("Gaia VOTable requires TABLEDATA; binary encodings are not supported")
+    records: list[dict[str, object]] = []
+    for row_number, row in enumerate(table_data[0], start=1):
+        if local_name(row) != "TR":
+            raise GaiaResponseError(f"Gaia VOTable row {row_number}: expected TR")
+        cells = list(row)
+        if len(cells) != len(headers) or any(local_name(cell) != "TD" for cell in cells):
+            raise GaiaResponseError(f"Gaia VOTable row {row_number}: column count/type mismatch")
+        records.append(dict(zip(headers, (cell.text or "" for cell in cells))))
+    return _normalise_rows(headers, records, response_format="VOTable")
+
+
 def _metadata_columns(metadata: object) -> list[object]:
     if metadata is None:
         return []
@@ -1076,9 +1142,13 @@ def parse_gaia_response(
     payload: bytes | bytearray | str | Mapping[str, object] | list[object],
     response_format: str | None = None,
 ) -> tuple[dict[str, str], ...]:
-    """按显式格式或内容首字符解析 Gaia CSV/JSON 响应。"""
+    """解析 CSV/JSON，兼容服务端返回的 TAP VOTable TABLEDATA。"""
 
     format_value = _normalise_response_format(response_format, allow_auto=True)
+    if isinstance(payload, (bytes, bytearray, str)):
+        text = _decode_text(payload, context="response")
+        if text.lstrip().startswith("<"):
+            return parse_gaia_votable(text)
     if format_value == "auto":
         if isinstance(payload, (Mapping, list)):
             format_value = "json"
@@ -1148,6 +1218,7 @@ def write_catalog_csv(rows: Iterable[Mapping[str, object]], path: str | Path) ->
 
 
 __all__ = [
+    "AIP_GAIA_TAP_SYNC_URL",
     "CATALOG_COMPAT_COLUMNS",
     "DEFAULT_GAIA_TAP_SYNC_URL",
     "GAIA_DR3_ASTROPHYSICAL_PARAMETERS_TABLE",
@@ -1170,6 +1241,7 @@ __all__ = [
     "parse_gaia_csv",
     "parse_gaia_json",
     "parse_gaia_response",
+    "parse_gaia_votable",
     "query_gaia",
     "query_gaia_catalog",
     "write_catalog_csv",

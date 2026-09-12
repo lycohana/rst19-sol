@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -78,6 +79,41 @@ def _catalog_source_with_forced_extinction_semantics(
 
 def test_instrumental_magnitude_uses_positive_flux() -> None:
     assert instrumental_magnitude(10.0) == pytest.approx(-2.5)
+
+
+@pytest.mark.parametrize("missing_name", [None, "BP-RP"])
+def test_missing_gaia_color_excludes_only_that_reference_not_the_whole_frame(missing_name) -> None:
+    detections = tuple(_source(index, 100.0 + 10 * index, snr=30.0) for index in range(12))
+    catalog = tuple(
+        CatalogSource(
+            str(index), 10.0, 20.0,
+            magnitude=instrumental_magnitude(detection.flux) + 20.0 + 0.1 * (index / 10),
+            color=index / 10, color_name="BP-RP", photometric_system="Gaia Vega", photometric_band="G",
+        )
+        for index, detection in enumerate(detections)
+    )
+    catalog = (*catalog[:-1], replace(catalog[-1], color=None, color_name=missing_name))
+    matches = tuple(
+        CatalogMatch(index, str(index), detection.x, detection.y, detection.x, detection.y, 0.1, catalog[index].magnitude)
+        for index, detection in enumerate(detections)
+    )
+    calibration = fit_photometric_calibration(
+        matches, detections, catalog, photometric_system="Gaia Vega", photometric_band="G", color_name="BP-RP",
+    )
+    assert calibration.status == "VALID"
+    assert calibration.calibrator_count == 11
+    assert dict(calibration.catalog_filter_counts)["MISSING_COLOR"] == 1
+    rows = build_source_photometry(detections, matches=matches, catalog=catalog, photometric_calibration=calibration)
+    assert rows[-1].status == "CALIBRATION_MISSING_COLOR"
+    assert rows[-1].calibrated_magnitude is None
+    assert rows[-1].absolute_magnitude is None
+    # A genuinely contradictory numeric color remains a hard failure.
+    contradictory = (*catalog[:-2], replace(catalog[-2], color_name="B-V"), catalog[-1])
+    invalid = fit_photometric_calibration(
+        matches, detections, contradictory,
+        photometric_system="Gaia Vega", photometric_band="G", color_name="BP-RP",
+    )
+    assert invalid.status == "COLOR_METADATA_MISMATCH"
     assert instrumental_magnitude(10.0, exposure_s=2.0) == pytest.approx(-1.747425)
     assert instrumental_magnitude(0.0) is None
     assert instrumental_magnitude(-1.0) is None

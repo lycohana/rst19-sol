@@ -53,10 +53,6 @@ _INT_FIELDS = {
     "unambiguous_injected_count",
     "baseline_candidate_count",
     "baseline_quality_count",
-    "mean_candidate_count",
-    "mean_quality_count",
-    "mean_background_candidate_count",
-    "mean_background_quality_count",
     "trial_count",
 }
 
@@ -74,6 +70,13 @@ _FLOAT_FIELDS = {
     "local_noise_adu",
     "special_pixel_fraction",
     "nearest_baseline_source_px",
+    # These values are means over independent injection layouts.  They are
+    # expected to be fractional when the per-layout counts differ, so they
+    # must not be parsed as integer event counts.
+    "mean_candidate_count",
+    "mean_quality_count",
+    "mean_background_candidate_count",
+    "mean_background_quality_count",
 }
 
 _COUNT_FIELDS = _INT_FIELDS - {"trial_count"}
@@ -215,6 +218,19 @@ def _validate_row(row: Mapping[str, Any], row_index: int) -> None:
     noise = row.get("local_noise_adu")
     if noise is not None and (not isinstance(noise, (int, float)) or not math.isfinite(float(noise)) or float(noise) < 0):
         raise ValueError(f"rows[{row_index}].local_noise_adu must be a finite non-negative number")
+    for field in (
+        "mean_candidate_count",
+        "mean_quality_count",
+        "mean_background_candidate_count",
+        "mean_background_quality_count",
+    ):
+        value = row.get(field)
+        if value is not None and (
+            not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            or float(value) < 0
+        ):
+            raise ValueError(f"rows[{row_index}].{field} must be a finite non-negative number")
 
 
 def load_stratified_rows(source: str | Path | Mapping[str, Any]) -> list[dict[str, Any]]:

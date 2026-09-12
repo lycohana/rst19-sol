@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .gaia_remote import GaiaError
+from .gaia_remote import DEFAULT_GAIA_TAP_SYNC_URL, GaiaError
 from .gaia_tiled import GaiaTilingError
 from .public_catalog import (
     DEFAULT_GAIA_MAX_G_MAG,
@@ -43,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="额外连接 Gaia astrophysical_parameters，保留 GSP-Phot mg_gspphot 及 16/84%% 分位界",
     )
     parser.add_argument("--timeout", type=float, default=30.0, help="单块 HTTP 超时秒数")
+    parser.add_argument("--endpoint", default=DEFAULT_GAIA_TAP_SYNC_URL, help="Gaia TAP sync 地址；可选 https://gaia.aip.de/tap/sync")
     return parser
 
 
@@ -64,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
             max_queries=args.max_queries,
             include_gspphot_model=args.include_gspphot_model,
             timeout=args.timeout,
+            endpoint=args.endpoint,
             progress=lambda message: print(message, file=sys.stderr),
         )
     except (GaiaError, GaiaTilingError, OSError, ValueError) as exc:

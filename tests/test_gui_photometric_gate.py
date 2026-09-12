@@ -138,6 +138,33 @@ def test_strict_absolute_display_requires_auto_source_strict_and_distance_gates(
         assert reason in rendered
 
 
+def test_partial_catalog_coverage_does_not_hide_individually_valid_magnitudes() -> None:
+    auto = _auto_result(status="CALIBRATED_PARTIAL")
+    kwargs = _strict_kwargs()
+    kwargs["auto_result"] = auto
+    assert "M_G = 4.200" in gui._gui_format_absolute_magnitude(_absolute(), **kwargs)
+    assert "m_G [Gaia Vega/G] = 12.700" in gui._gui_format_calibrated_magnitude(12.7, **kwargs)
+    faintest = SimpleNamespace(
+        instrumental_magnitude=-7.0, calibrated_magnitude=12.7,
+        photometric_system="Gaia Vega", photometric_band="G", calibration_status="VALID",
+        selection_scope="CALIBRATED_MATCHES_PARTIAL",
+    )
+    title, value, allowed = gui._gui_primary_faintest_display(
+        faintest, _calibration(), row=_row(), auto_result=auto, wcs_verified=True, strict_gate=True,
+    )
+    assert allowed and value == "12.70"
+    assert "已标定子集最暗" in title
+    for rejected_row in (_row(status="INSTRUMENTAL_ONLY"), _row(status="CATALOG_INCONSISTENT")):
+        kwargs["row"] = rejected_row
+        assert "不可用" in gui._gui_format_calibrated_magnitude(12.7, **kwargs)
+        assert "不可用" in gui._gui_format_absolute_magnitude(_absolute(), **kwargs)
+
+
+def test_gaia_extinction_provenance_alias_is_compatible_with_gaia_vega_magnitude() -> None:
+    rendered = gui._gui_format_absolute_magnitude(_absolute(system="Gaia"), **_strict_kwargs())
+    assert rendered.startswith("M_G = 4.200")
+
+
 def test_legacy_absolute_payload_without_is_strict_is_diagnostic_only() -> None:
     legacy_payload = {
         "status": "VALID",
