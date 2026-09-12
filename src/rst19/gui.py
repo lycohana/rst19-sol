@@ -5443,7 +5443,11 @@ class StarfieldApp(tk.Tk):
             self.faintest_physical_label.config(text="m_cal = 未标定 · M = 不可用")
         self.faintest_detail.config(text="尚未运行分析")
         self.faintest_note.config(
-            text="测光状态：仅 m_inst（ADU/s）· 无 WCS/星表；m_cal 需要标准系统与波段，M 还需要可靠视差和消光。"
+            text=(
+                "测光状态：普通单张分析仅给 m_inst（ADU/s），不会隐式联网匹配星表；"
+                "要得到 m_cal，请点击‘星等标定 · Gaia’→‘自动板解 + 测光’。"
+                "严格 M 还需要可靠距离/视差和同波段消光。"
+            )
         )
         if self.sequence_result is None:
             self.sequence_brief = None
@@ -5506,7 +5510,11 @@ class StarfieldApp(tk.Tk):
                 self.faintest_physical_label.config(text="m_cal = 未标定 · M = 不可用")
             self.faintest_detail.config(text="没有满足质量条件的源")
             self.faintest_note.config(
-                text="请检查阈值、掩膜和边缘筛选；没有通过质量门控的亮点不参与最暗源判定。当前没有可报告的星等。"
+                text=(
+                    "请检查阈值、掩膜和边缘筛选；没有通过质量门控的亮点不参与最暗源判定。"
+                    "普通单张分析只产生 m_inst；要得到 m_cal，请点击‘星等标定 · Gaia’"
+                    "并运行‘自动板解 + 测光’，严格 M 还需要距离/视差和同波段消光。"
+                )
             )
         else:
             faintest_row = self.source_photometry_by_id.get(int(faintest.detection_id))
