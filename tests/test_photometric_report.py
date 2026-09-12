@@ -9,6 +9,7 @@ from rst19.photometric_report import (
     audit_photometry,
     build_photometric_report,
 )
+from rst19.photometric_report_cli import _photometry_input
 from rst19.photometry import absolute_magnitude_estimate_from_distance
 
 
@@ -190,6 +191,63 @@ def test_false_valid_gate_flags_calibrated_and_absolute_values_with_bad_status()
             source_rows=[{"m_inst": 1.0, "m_cal": 2.0, "status": "INSTRUMENTAL_ONLY"}],
             strict=True,
         )
+
+
+def test_catalog_inconsistent_m_cal_is_retained_as_diagnostic_only() -> None:
+    report = audit_photometry(
+        source_rows=[
+            {
+                "source_id": "catalog-outlier",
+                "m_inst": 12.0,
+                "m_cal": 11.0,
+                "status": "CATALOG_INCONSISTENT",
+                "calibration_status": "VALID",
+                "catalog_name": "Gaia DR3",
+                "photometric_system": "Gaia Vega",
+                "photometric_band": "G",
+                "photometric_consistent": False,
+                "photometric_outlier_reason": "RESIDUAL_EXCEEDS_LIMIT",
+                "wcs_available": True,
+            }
+        ],
+        require_wcs=True,
+    )
+
+    row = report.rows[0]
+    assert row.m_cal == pytest.approx(11.0)
+    assert row.calibrated_magnitude_value_role == "DIAGNOSTIC_ONLY"
+    assert row.observability_level == "INSTRUMENTAL_ONLY"
+    assert report.false_valid is False
+    assert report.false_valid_gate.violation_count == 0
+    assert "M_CAL_DIAGNOSTIC_ONLY" in row.flags
+    assert "FALSE_VALID_M_CAL" not in row.flags
+    assert "M_CAL_DIAGNOSTIC_ONLY" in row.rejection_reasons
+
+
+def test_null_unavailable_layers_are_not_reported_as_nonfinite_values() -> None:
+    report = audit_photometry(
+        source_rows=[
+            {
+                "source_id": "unavailable-layers",
+                "m_inst": 12.0,
+                "m_cal": None,
+                "M": None,
+                "absolute_magnitude": {"value": None, "status": "NO_PARALLAX"},
+                "status": "INSTRUMENTAL_ONLY",
+                "wcs_available": True,
+            }
+        ],
+        require_wcs=True,
+    )
+
+    row = report.rows[0]
+    assert row.m_cal is None
+    assert row.absolute_magnitude is None
+    assert row.observability_level == "INSTRUMENTAL_ONLY"
+    assert report.false_valid is False
+    assert report.false_valid_gate.violation_count == 0
+    assert "NONFINITE_M_CAL" not in row.flags
+    assert "NONFINITE_M" not in row.flags
 
 
 def test_empty_and_unknown_rows_are_safe_and_json_serializable() -> None:
@@ -615,3 +673,47 @@ def test_strict_absolute_report_requires_compatible_extinction_provenance(
     assert report.rows[0].observability_level == "APPARENT_CALIBRATED"
     assert expected_flag in report.rows[0].flags
     assert report.false_valid is True
+
+
+def test_report_cli_unwraps_automatic_photometry_envelope() -> None:
+    payload = {
+        "status": "CALIBRATED_PARTIAL",
+        "calibrated": True,
+        "frame_path": "frame.fits",
+        "catalog_path": "gaia.csv",
+        "affine_wcs": {"rms_residual_px": 0.5},
+        "analysis": {
+            "path": "frame.fits",
+            "detection": {"sources": []},
+            "photometric_calibration": {
+                "status": "VALID",
+                "photometric_system": "Gaia Vega",
+                "photometric_band": "G",
+            },
+            "source_photometry": [
+                {
+                    "detection_id": 7,
+                    "source_id": "gaia-7",
+                    "m_inst": -7.5,
+                    "calibrated_magnitude": 12.4,
+                    "catalog_magnitude": 12.5,
+                    "photometric_system": "Gaia Vega",
+                    "photometric_band": "G",
+                    "status": "CALIBRATED",
+                }
+            ],
+        },
+    }
+
+    report_input, calibration, raw_only = _photometry_input(payload)
+    report = build_photometric_report(
+        report_input,
+        calibration=calibration,
+        require_wcs=True,
+    )
+
+    assert raw_only is False
+    assert report.source_count == 1
+    assert report.rows[0].source_id == "gaia-7"
+    assert report.rows[0].catalog_available is True
+    assert report.rows[0].observability_level == "APPARENT_CALIBRATED"

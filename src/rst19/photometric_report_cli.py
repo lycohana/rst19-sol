@@ -41,19 +41,46 @@ def _photometry_input(payload: object) -> tuple[object, object | None, bool]:
     detection records, not photometry rows, and can contain tens of thousands
     of entries.  The report is intentionally scoped to ``source_photometry``;
     if that section is absent, return an empty one-frame report instead of
-    recursively walking the raw detector payload.
+    recursively walking the raw detector payload.  The automatic Gaia
+    workflow wraps the same ``FrameAnalysis`` payload under ``analysis``;
+    unwrap that documented envelope so its compact matched-source rows are
+    audited instead of treating the wrapper itself as one malformed row.
     """
 
-    if not isinstance(payload, dict) or "detection" not in payload:
+    if not isinstance(payload, dict):
         return payload, None, False
-    source_rows = payload.get("source_photometry")
+
+    # ``AutoPhotometricResult.as_dict()`` stores the actual frame result under
+    # ``analysis`` and keeps the verified affine WCS at the outer level.  Do
+    # not use the outer status as a calibration row: the source-level status,
+    # nested calibration and WCS are the evidence the report gate needs.
+    analysis_payload = payload
+    is_auto_result = isinstance(payload.get("analysis"), dict) and "detection" in payload["analysis"]
+    if is_auto_result:
+        analysis_payload = payload["analysis"]
+
+    if "detection" not in analysis_payload:
+        return payload, None, False
+
+    source_rows = analysis_payload.get("source_photometry")
     frame: dict[str, object] = {
-        "frame_id": str(payload.get("path", "frame")),
+        "frame_id": str(
+            analysis_payload.get(
+                "path",
+                payload.get("frame_path", "frame"),
+            )
+        ),
         "sources": source_rows if isinstance(source_rows, list) else [],
     }
-    if "wcs" in payload:
+    if is_auto_result:
+        # ``affine_wcs`` is present only when the geometric refinement was
+        # produced.  A reference WCS alone is merely a prior and must not
+        # satisfy ``--require-wcs``.
+        if payload.get("affine_wcs") is not None:
+            frame["wcs"] = payload["affine_wcs"]
+    elif "wcs" in payload:
         frame["wcs"] = payload["wcs"]
-    return [frame], payload.get("photometric_calibration"), not isinstance(source_rows, list) or not source_rows
+    return [frame], analysis_payload.get("photometric_calibration"), not isinstance(source_rows, list) or not source_rows
 
 
 def main(argv: list[str] | None = None) -> int:

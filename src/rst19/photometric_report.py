@@ -10,7 +10,8 @@ GUI or changing the active pipeline.
 The report is conservative by design:
 
 * a value is never promoted merely because it is numerically present;
-* a calibrated value needs a legal status;
+* a formal calibrated value needs a legal status; explicitly retained
+  outlier values remain diagnostic-only and are never promoted;
 * an absolute value also needs catalogue, a qualified parallax or explicitly
   sourced distance estimate, extinction and geometry evidence;
 * missing inputs are retained as structured evidence instead of being
@@ -98,6 +99,13 @@ _INVALID_STATUS_WORDS = {
     "GEOMETRY_UNAVAILABLE",
     "NO_WCS",
 }
+
+# ``SourcePhotometry`` intentionally retains the fitted value for a source
+# whose catalogue residual is too large.  That value is useful for explaining
+# the rejection, but it is not a valid calibrated magnitude.  Keep this list
+# deliberately narrow: other invalid statuses with a numeric value still
+# trigger the false-valid gate so malformed/unsafe payloads are not hidden.
+_CALIBRATION_DIAGNOSTIC_STATUSES = frozenset({"CATALOG_INCONSISTENT"})
 
 _ROW_COLLECTION_KEYS = (
     "sources",
@@ -264,6 +272,21 @@ def _present_number(mapping: Mapping[str, object] | None, aliases: Iterable[str]
     return found and value is not None and value != "", _number(value)
 
 
+def _explicit_field_present(mapping: Mapping[str, object] | None, aliases: Iterable[str]) -> bool:
+    """Return whether a field contains a supplied value rather than JSON null.
+
+    Photometry payloads use ``null`` for a legitimately unavailable layer
+    (for example, a matched source without a distance or extinction).  Such a
+    field is missing evidence, not a false-valid non-finite number.  Keep
+    actual non-finite tokens such as ``NaN`` visible to the false-valid gate.
+    """
+
+    found, value = _lookup(mapping, aliases)
+    if not found or value is None:
+        return False
+    return not isinstance(value, str) or bool(value.strip())
+
+
 def _bool_value(value: object) -> bool | None:
     if isinstance(value, bool):
         return value
@@ -290,6 +313,18 @@ def _norm_status(value: object) -> str:
 def _status(mapping: Mapping[str, object] | None, aliases: Iterable[str] = ("status",)) -> str:
     value = _value(mapping, aliases, default=None)
     return _norm_status(value) if _nonempty(value) else ""
+
+
+def _is_diagnostic_calibration_value(row: Mapping[str, object], row_status: str | None) -> bool:
+    """Return whether a numeric ``m_cal`` is explicitly retained for review.
+
+    The pipeline keeps a fitted magnitude on ``CATALOG_INCONSISTENT`` rows so
+    users can inspect the residual that caused rejection.  It is therefore a
+    diagnostic value, not a contradictory claim of valid calibration.  Do not
+    generalise this exception to arbitrary invalid statuses.
+    """
+
+    return bool(row_status in _CALIBRATION_DIAGNOSTIC_STATUSES)
 
 
 def _level(value: object) -> str | None:
@@ -1151,6 +1186,10 @@ class PhotometricAuditRow:
     absolute_magnitude_extinction_band: str | None = None
     absolute_magnitude_extinction_system: str | None = None
     absolute_magnitude_extinction_source: str | None = None
+    # A rejected catalogue-residual outlier may retain a fitted value for
+    # diagnostics.  Consumers must check this role before using ``m_cal``.
+    # Kept at the end to preserve the positional order of older report rows.
+    calibrated_magnitude_value_role: str = "ABSENT"
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -1167,6 +1206,7 @@ class PhotometricAuditRow:
             "instrumental_magnitude": self.m_inst,
             "m_cal": self.m_cal,
             "calibrated_magnitude": self.m_cal,
+            "calibrated_magnitude_value_role": self.calibrated_magnitude_value_role,
             "M": self.absolute_magnitude,
             "absolute_magnitude": self.absolute_magnitude,
             "strict_M": self.strict_absolute_magnitude,
@@ -1328,16 +1368,24 @@ def _absolute_value_details(
             found, raw_value = _lookup(mapping, (alias,))
             if not found:
                 continue
-            present = True
-            value_alias = alias
+            candidate_alias = alias
             nested_value = _as_mapping(raw_value)
             if nested_value is not None:
+                nested_found = False
                 for nested_alias in value_aliases:
                     nested_found, nested_raw = _lookup(nested_value, (nested_alias,))
                     if nested_found:
-                        value_alias = nested_alias
                         raw_value = nested_raw
+                        candidate_alias = nested_alias
                         break
+                # A structured ``absolute_magnitude: {value: null, ...}``
+                # records an unavailable result, not a malformed number.
+                if not nested_found:
+                    continue
+            if raw_value is None or (isinstance(raw_value, str) and not raw_value.strip()):
+                continue
+            present = True
+            value_alias = candidate_alias
             value = _number(raw_value)
             if value is not None:
                 break
@@ -1568,12 +1616,15 @@ def _audit_row(
         _absolute_value_alias,
     ) = _absolute_value_details(row, absolute_value_mapping)
     absolute_support = _absolute_support_details(row, absolute_value_mapping)
-    if not m_inst_present and m_inst is None and _lookup(row, ("m_inst", "instrumental_magnitude"))[0]:
-        m_inst_present = True
-    if not m_cal_present and _lookup(row, ("m_cal", "calibrated_magnitude"))[0]:
-        m_cal_present = True
-    if not absolute_present and _lookup(row, ("M", "absolute_magnitude_value"))[0]:
-        absolute_present = True
+    if not m_inst_present and m_inst is None:
+        m_inst_present = _explicit_field_present(row, ("m_inst", "instrumental_magnitude"))
+    if not m_cal_present:
+        m_cal_present = _explicit_field_present(
+            row,
+            ("m_cal", "calibrated_magnitude", "apparent_magnitude", "m_std", "standard_magnitude"),
+        )
+    if not absolute_present:
+        absolute_present = _explicit_field_present(row, ("M", "absolute_magnitude_value"))
 
     geometry = str(row.get("__report_geometry_state", _geometry_state(row, default="unknown")))
     if geometry not in {"available", "unavailable", "unknown"}:
@@ -1597,6 +1648,18 @@ def _audit_row(
         calibration_statuses,
         explicit_level=explicit_level,
         calibration=calibration_value_mapping,
+    )
+    m_cal_diagnostic_only = bool(
+        m_cal is not None and _is_diagnostic_calibration_value(row, row_status)
+    )
+    calibrated_magnitude_value_role = (
+        "VALID"
+        if m_cal is not None and calibration_valid
+        else "DIAGNOSTIC_ONLY"
+        if m_cal_diagnostic_only
+        else "INVALID"
+        if m_cal is not None
+        else "ABSENT"
     )
     absolute_status_valid = absolute_magnitude is not None and _absolute_status_valid(
         absolute_statuses,
@@ -1635,7 +1698,7 @@ def _audit_row(
         violations.append(
             FalseValidViolation(row_key, "m_cal", "NONFINITE_M_CAL", "m_cal is present but is not finite")
         )
-    elif m_cal is not None and not calibration_valid:
+    elif m_cal is not None and not calibration_valid and not m_cal_diagnostic_only:
         code = "M_CAL_STATUS_MISSING" if not calibration_statuses else "M_CAL_STATUS_INVALID"
         violations.append(
             FalseValidViolation(
@@ -1777,6 +1840,9 @@ def _audit_row(
     if row_status and _contains_invalid_status(row_status):
         source_flags.append(row_status)
         reasons.append(row_status)
+    if m_cal_diagnostic_only:
+        source_flags.append("M_CAL_DIAGNOSTIC_ONLY")
+        reasons.append("M_CAL_DIAGNOSTIC_ONLY")
     quality_passed = _bool_value(_value(row, ("quality_passed", "quality_ok"), default=None))
     if quality_passed is False:
         source_flags.append("QUALITY_REJECTED")
@@ -1828,7 +1894,7 @@ def _audit_row(
         reasons.append("GEOMETRY_UNAVAILABLE")
     if violations:
         source_flags.append("FALSE_VALID")
-    if m_cal is not None and not calibration_valid:
+    if m_cal is not None and not calibration_valid and not m_cal_diagnostic_only:
         source_flags.append("FALSE_VALID_M_CAL")
     if absolute_magnitude is not None and not absolute_status_valid:
         source_flags.append("FALSE_VALID_M")
@@ -1862,6 +1928,7 @@ def _audit_row(
             absolute_magnitude=absolute_magnitude,
             wcs_available=geometry_available,
             catalog_available=catalog_available,
+            calibrated_magnitude_value_role=calibrated_magnitude_value_role,
             flags=unique_flags,
             rejection_reasons=unique_reasons,
             missing_inputs=unique_missing,
