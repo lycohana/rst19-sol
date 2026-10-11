@@ -97,6 +97,7 @@ rst19-contaminated-pair-injection = "rst19.contaminated_pair_injection_cli:main"
 rst19-contaminated-pair-class = "rst19.contaminated_pair_class_cli:main"
 rst19-ablation = "rst19.ablation_cli:main"
 rst19-motion-ablation = "rst19.motion_ablation_cli:main"
+rst19-motion-proposal-ablation = "rst19.motion_proposal_ablation_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

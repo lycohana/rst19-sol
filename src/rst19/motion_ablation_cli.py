@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import platform
 import subprocess
@@ -66,12 +67,29 @@ def main(argv: list[str] | None = None) -> int:
             ["git", "rev-parse", "HEAD"], cwd=repo_root, check=False, capture_output=True, text=True
         ).stdout.strip() or None
         source_dirty = bool(subprocess.run(
-            ["git", "status", "--porcelain", "--", "src/rst19", "pyproject.toml", "tests/test_ablation.py"],
+            ["git", "status", "--porcelain", "--", "src/rst19", "pyproject.toml", "tests"],
             cwd=repo_root,
             check=False,
             capture_output=True,
             text=True,
         ).stdout.strip())
+        source_paths = (
+            "src/rst19/motion_ablation.py",
+            "src/rst19/motion_ablation_cli.py",
+            "src/rst19/sequence.py",
+            "src/rst19/cache.py",
+            "src/rst19/detection.py",
+        )
+        source_hashes = {
+            relative: hashlib.sha256((repo_root / relative).read_bytes()).hexdigest()
+            for relative in source_paths
+        }
+        source_diff = subprocess.run(
+            ["git", "diff", "HEAD", "--", *source_paths],
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+        ).stdout
         manifest["execution"] = {
             "argv": sys.argv if argv is None else ["rst19-motion-ablation", *argv],
             "python": sys.version,
@@ -80,6 +98,8 @@ def main(argv: list[str] | None = None) -> int:
             "pillow": PIL.__version__,
             "source_revision": revision,
             "source_worktree_dirty": source_dirty,
+            "source_file_sha256": source_hashes,
+            "relevant_tracked_diff_sha256": hashlib.sha256(source_diff).hexdigest(),
         }
         manifest_path = Path(args.out_dir).resolve() / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")

@@ -190,7 +190,24 @@ def _save_case_sheet(
         panel_draw.ellipse((tx - 5, ty - 5, tx + 5, ty + 5), outline=(255, 222, 80), width=2)
         _draw_case_detection_marker(panel_draw, panel, gray_image, row, x0, y0, scale_x, scale_y, "gaussian", (78, 168, 255))
         _draw_case_detection_marker(panel_draw, panel, gray_image, row, x0, y0, scale_x, scale_y, "hybrid", (72, 224, 161))
-        panel_draw.text((4, panel.height - 17), f"{row['target_id']} A:{int(bool(row['gaussian_candidate_hit']))} B:{int(bool(row['hybrid_candidate_hit']))} C:{int(bool(row['quality_gate_hit']))}", fill=(240, 244, 248), font=font)
+        quality_x, quality_y = row.get("quality_x_px"), row.get("quality_y_px")
+        if (
+            quality_x in (None, "")
+            and bool(row.get("hybrid_candidate_hit"))
+            and not bool(row.get("quality_gate_hit"))
+        ):
+            quality_x, quality_y = row.get("hybrid_x_px"), row.get("hybrid_y_px")
+        if quality_x not in (None, "") and quality_y not in (None, ""):
+            qx = (float(quality_x) - x0) * scale_x + (panel.width - gray_image.width) / 2
+            qy = (float(quality_y) - y0) * scale_y + 2
+            if bool(row.get("quality_gate_hit")):
+                panel_draw.rectangle((qx - 6, qy - 6, qx + 6, qy + 6), outline=(255, 157, 66), width=2)
+            else:
+                panel_draw.line((qx - 6, qy - 6, qx + 6, qy + 6), fill=(255, 91, 91), width=2)
+                panel_draw.line((qx - 6, qy + 6, qx + 6, qy - 6), fill=(255, 91, 91), width=2)
+        flags = str(row.get("quality_rejection_flags", ""))
+        suffix = f" !{flags[:12]}" if flags else ""
+        panel_draw.text((4, panel.height - 17), f"{row['target_id']} A:{int(bool(row['gaussian_candidate_hit']))} B:{int(bool(row['hybrid_candidate_hit']))} C:{int(bool(row['quality_gate_hit']))}{suffix}", fill=(240, 244, 248), font=font)
         col, line = index % columns, index // columns
         sheet.paste(panel, (col * tile + 4, line * tile + 4))
     sheet.save(output_path)
@@ -294,6 +311,20 @@ def run_point_source_ablation(
         **{**common_options, "mask": common_options["mask"].copy()},
     )
     control_seconds = time.perf_counter() - started
+    detector_parameters: dict[str, object] = {"site_selection_ensemble": control_result.parameters}
+    control_versions: dict[str, tuple[DetectionResult, float]] = {}
+    for mode in ("gaussian", "hybrid"):
+        if progress:
+            progress(f"无注入同图控制：{mode} 检测")
+        started = time.perf_counter()
+        result = detect_sources(
+            control_image,
+            proposal_mode=mode,
+            **{**common_options, "mask": common_options["mask"].copy()},
+        )
+        elapsed = time.perf_counter() - started
+        control_versions[mode] = (result, elapsed)
+        detector_parameters[f"control_{mode}"] = result.parameters
     raw_sha = _sha256_file(source)
     if fixed_targets_manifest_path is not None:
         fixed_manifest_path = Path(fixed_targets_manifest_path).resolve()
@@ -324,7 +355,7 @@ def run_point_source_ablation(
         rng = np.random.default_rng(seed)
         sites, local_stats = _select_real_background_positions(
             control_image,
-            control_result.sources,
+            (*control_result.sources, *control_versions["gaussian"][0].sources, *control_versions["hybrid"][0].sources),
             rng,
             target_count,
             noise_adu=float(control_result.noise),
@@ -343,7 +374,7 @@ def run_point_source_ablation(
                 "control_candidate_within_match_radius": False,
                 "truth_type": "synthetic Gaussian point-source injection",
             })
-        selection_method = "Ensemble candidates plus local 98th-percentile blank patch screen; positions frozen before injected versions"
+        selection_method = "Ensemble/Gaussian/Hybrid candidates plus local 98th-percentile blank patch screen; positions frozen before injected versions"
     if len(sites) != target_count:
         raise ValueError("selected site count differs from target count")
     for x, y in sites:
@@ -351,15 +382,70 @@ def run_point_source_ablation(
             raise ValueError("fixed target coordinate lies outside the image")
     control_matches, control_nearby = _match_one_to_one(truths, control_result.sources, actual_match_radius)
     if control_matches or any(control_nearby.values()):
-        raise RuntimeError("a pre-injection candidate lies within the true-match radius; refusing a confounded run")
+        raise RuntimeError("the site-selection ensemble has a candidate within the true-match radius")
+    control_gaussian, control_gaussian_seconds = control_versions["gaussian"]
+    control_hybrid, control_hybrid_seconds = control_versions["hybrid"]
+    control_gaussian_matches, control_gaussian_nearby = _match_one_to_one(
+        truths, control_gaussian.sources, actual_match_radius
+    )
+    control_hybrid_matches, control_hybrid_nearby = _match_one_to_one(
+        truths, control_hybrid.sources, actual_match_radius
+    )
+    control_quality = tuple(source for source in control_hybrid.sources if source.quality_passed)
+    _control_quality_matches, control_quality_nearby = _match_one_to_one(
+        truths, control_quality, actual_match_radius
+    )
+    if any(control_gaussian_nearby.values()) or any(control_hybrid_nearby.values()):
+        raise RuntimeError("a Gaussian/Hybrid control candidate lies within the true-match radius")
+    if control_gaussian_matches or control_hybrid_matches:
+        raise RuntimeError("a no-injection A/B version matched a target site; refusing a confounded run")
+    control_summary_rows = [
+        {
+            "version": "A 基线 Gaussian 提案",
+            "input": "same float32 no-injection control",
+            "candidate_count": control_gaussian.candidate_count,
+            "returned_count": len(control_gaussian.sources),
+            "quality_count": control_gaussian.star_count,
+            "output_count": len(control_gaussian.sources),
+            "target_site_candidates_within_match_radius": sum(control_gaussian_nearby.values()),
+            "detector_seconds": control_gaussian_seconds,
+            "reused_version": "",
+        },
+        {
+            "version": "B Gaussian+DoG 多尺度提案",
+            "input": "same float32 no-injection control",
+            "candidate_count": control_hybrid.candidate_count,
+            "returned_count": len(control_hybrid.sources),
+            "quality_count": control_hybrid.star_count,
+            "output_count": len(control_hybrid.sources),
+            "target_site_candidates_within_match_radius": sum(control_hybrid_nearby.values()),
+            "detector_seconds": control_hybrid_seconds,
+            "reused_version": "",
+        },
+        {
+            "version": "C 对 B 候选应用现有质量门",
+            "input": "same float32 no-injection control",
+            "candidate_count": control_hybrid.candidate_count,
+            "returned_count": len(control_hybrid.sources),
+            "quality_count": control_hybrid.star_count,
+            "output_count": len(control_quality),
+            "target_site_candidates_within_match_radius": sum(control_quality_nearby.values()),
+            "detector_seconds": control_hybrid_seconds,
+            "reused_version": "B candidate objects",
+        },
+    ]
 
     target_rows: list[dict[str, object]] = []
     summary_rows: list[dict[str, object]] = []
     run_artifacts: dict[str, object] = {}
     images_for_cases: dict[float, np.ndarray] = {}
-    timings: dict[str, list[float]] = {"control_ensemble": [control_seconds], "gaussian": [], "hybrid": []}
-    detector_parameters: dict[str, object] = {
-        "control_ensemble": control_result.parameters,
+    case_rows_by_level: dict[float, list[dict[str, object]]] = {}
+    timings: dict[str, list[float]] = {
+        "site_selection_ensemble": [control_seconds],
+        "control_gaussian": [control_gaussian_seconds],
+        "control_hybrid": [control_hybrid_seconds],
+        "gaussian": [],
+        "hybrid": [],
     }
     for level in levels:
         if progress:
@@ -426,13 +512,20 @@ def run_point_source_ablation(
             row = {
                 **truth,
                 "control_candidates_within_match_radius": control_nearby[target_id],
+                "control_gaussian_candidates_within_match_radius": control_gaussian_nearby[target_id],
+                "control_hybrid_candidates_within_match_radius": control_hybrid_nearby[target_id],
+                "control_quality_candidates_within_match_radius": control_quality_nearby[target_id],
                 "gaussian_candidate_hit": am is not None,
                 "gaussian_nearby_candidate_count": gaussian_nearby[target_id],
                 "hybrid_candidate_hit": bm is not None,
                 "hybrid_nearby_candidate_count": hybrid_nearby[target_id],
+                "hybrid_matched_candidate_quality_passed": bool(bm.quality_passed) if bm is not None else None,
                 "quality_gate_hit": cm is not None,
                 "quality_gate_loss_from_hybrid_candidate": bm is not None and cm is None,
-                "quality_rejection_flags": "|".join(bm.flags) if bm is not None and cm is None else "",
+                "quality_matching_assignment_changed": (
+                    (bm.detection_id if bm is not None else None) != (cm.detection_id if cm is not None else None)
+                ),
+                "quality_rejection_flags": "|".join(bm.flags) if bm is not None and not bm.quality_passed else "",
                 "hybrid_candidate_status": "recovered" if bm is not None else "missed",
                 "quality_gate_status": "passed" if cm is not None else ("rejected" if bm is not None else "not reached"),
                 **{f"gaussian_{key}": value for key, value in _detection_record(am, float(truth["x_px"]), float(truth["y_px"])).items()},
@@ -442,6 +535,7 @@ def run_point_source_ablation(
                 "frozen_injection_image_sha256": image_hash,
             }
             target_rows.append(row)
+        case_rows_by_level[level] = [row for row in target_rows if float(row["gaussian_center_amplitude_adu"]) == level]
         run_artifacts[str(level)] = {
             "frozen_image": str(image_path),
             "frozen_image_sha256": image_hash,
@@ -458,11 +552,18 @@ def run_point_source_ablation(
 
     summary_path = output / "summary.csv"
     target_path = output / "target_results.csv"
+    control_summary_path = output / "control_summary.csv"
     _write_csv(summary_path, summary_rows)
     _write_csv(target_path, target_rows)
+    _write_csv(control_summary_path, control_summary_rows)
+    case_sheet_paths: dict[str, str] = {}
+    for level in levels:
+        image_name = f"cases-{level:g}-adu.png"
+        _save_case_sheet(images_for_cases, case_rows_by_level[level], output / image_name, level)
+        case_sheet_paths[f"{level:g}"] = str(output / image_name)
     elapsed_all = time.perf_counter() - start_all
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "experiment": "point_source_detection_ablation",
         "status": "completed",
         "created_local_time": datetime.now(timezone(timedelta(hours=8))).isoformat(timespec="seconds"),
@@ -485,6 +586,8 @@ def run_point_source_ablation(
             "control_candidate_count": control_result.candidate_count,
             "control_quality_count": control_result.star_count,
             "background_candidate_collisions_within_match_radius": 0,
+            "versions": control_summary_rows,
+            "versions_summary_csv": str(control_summary_path),
         },
         "targets": truths,
         "gaussian_center_amplitudes_adu": list(levels),
@@ -514,7 +617,7 @@ def run_point_source_ablation(
             "dtype_for_all_detector_versions": "float32",
             "background_handling": "original raw FITS values converted once to float32; no global background subtraction before injection; detector local background estimation unchanged",
             "psf_model": "discrete Gaussian kernel",
-            "negative_control": "same float32 original image, detected before injection; all target sites must have zero candidates within match radius or the run aborts",
+            "negative_control": "same float32 original image is run through A and B; C reuses B candidates. All frozen target sites must have zero A/B/C candidates within match radius or the run aborts",
         },
         "detector_parameters_actual": detector_parameters,
         "injected_images": run_artifacts,
@@ -528,7 +631,12 @@ def run_point_source_ablation(
             "interval": "95% Wilson interval shown descriptively by target at each signal level; target positions share a single image and repeated levels, so it is not a population-level independent-sample interval",
         },
         "runtime": {"total_experiment_seconds": elapsed_all, "detector_seconds_by_version": timings},
-        "outputs": {"summary_csv": str(summary_path), "target_csv": str(target_path), "case_sheet": str(output / "cases-weakest-level.png")},
+        "outputs": {
+            "summary_csv": str(summary_path),
+            "target_csv": str(target_path),
+            "control_summary_csv": str(control_summary_path),
+            "case_sheets": case_sheet_paths,
+        },
         "limitations": [
             "The truth is an artificial Gaussian injection, not an independently catalogued physical star.",
             "No full-image precision or false-positive rate is reported because the real background is not fully labelled.",
@@ -537,7 +645,6 @@ def run_point_source_ablation(
         ],
     }
     _write_json(output / "manifest.json", manifest)
-    _save_case_sheet(images_for_cases, target_rows, output / "cases-weakest-level.png", min(levels))
     return manifest
 
 
@@ -546,12 +653,14 @@ def write_ablation_html(
     report_path: str | Path,
     *,
     motion_run_dir: str | Path | None = None,
+    motion_proposal_run_dir: str | Path | None = None,
+    demo_summary_path: str | Path | None = None,
 ) -> Path:
     run_dir = Path(run_dir).resolve()
     report = Path(report_path).resolve()
     payload = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
-    if payload.get("schema_version") != 2 or payload.get("experiment") != "point_source_detection_ablation":
-        raise ValueError("point-source report requires schema_version 2 ablation output; rerun the experiment")
+    if payload.get("schema_version") != 3 or payload.get("experiment") != "point_source_detection_ablation":
+        raise ValueError("point-source report requires schema_version 3 ablation output; rerun the experiment")
     with (run_dir / "summary.csv").open("r", encoding="utf-8-sig", newline="") as stream:
         summaries = list(csv.DictReader(stream))
     with (run_dir / "target_results.csv").open("r", encoding="utf-8-sig", newline="") as stream:
@@ -559,8 +668,14 @@ def write_ablation_html(
     report.parent.mkdir(parents=True, exist_ok=True)
     point_evidence_dir = report.parent / "evidence" / "point"
     point_evidence_dir.mkdir(parents=True, exist_ok=True)
-    for filename in ("manifest.json", "summary.csv", "target_results.csv", "cases-weakest-level.png"):
-        shutil.copy2(run_dir / filename, point_evidence_dir / filename)
+    case_sheet_names = [Path(path).name for path in payload["outputs"]["case_sheets"].values()]
+    for filename in ("manifest.json", "summary.csv", "target_results.csv", "control_summary.csv", *case_sheet_names):
+        source_file = run_dir / filename
+        target_file = point_evidence_dir / filename
+        if source_file.resolve() != target_file.resolve():
+            shutil.copy2(source_file, target_file)
+    with (run_dir / "control_summary.csv").open("r", encoding="utf-8-sig", newline="") as stream:
+        control_summaries = list(csv.DictReader(stream))
 
     def link(path: str | Path, label: str) -> str:
         target = Path(path).resolve()
@@ -603,19 +718,84 @@ def write_ablation_html(
         c = sum(row["quality_gate_hit"] == "True" for row in rows)
         loss = b - c
         loss_by_level.append(f"{level:g} ADU：B {b}/{len(rows)} → C {c}/{len(rows)}，质量门损失 {loss}/{b if b else 0} 候选命中。")
+    control_rows_html = "".join(
+        "<tr>"
+        f"<td>{html.escape(row['version'])}</td><td>{row['candidate_count']}</td>"
+        f"<td>{row['returned_count']}</td><td>{row['quality_count']}</td>"
+        f"<td>{row['output_count']}</td><td>{row['target_site_candidates_within_match_radius']}</td>"
+        f"<td>{fmt(row['detector_seconds'], 1)} s</td></tr>"
+        for row in control_summaries
+    )
+    case_image_html = "".join(
+        f'<div><p>{html.escape(level)} ADU</p><img src="{quote(os.path.relpath(point_evidence_dir / Path(path).name, report.parent).replace(os.sep, "/"), safe="/._-")}" alt="{html.escape(level)} ADU 注入案例图"></div>'
+        for level, path in payload["outputs"]["case_sheets"].items()
+    )
+    example_lines = []
+    for level in (24.0, 56.0):
+        level_rows = [row for row in summaries if float(row["gaussian_center_amplitude_adu"]) == level]
+        if not level_rows:
+            continue
+        a = next(row for row in level_rows if row["version"].startswith("A "))
+        b = next(row for row in level_rows if row["version"].startswith("B "))
+        c = next(row for row in level_rows if row["version"].startswith("C "))
+        example_lines.append(
+            f"{level:g} ADU：A {a['matched_targets']}/{a['target_total']}，B {b['matched_targets']}/{b['target_total']}，C {c['matched_targets']}/{c['target_total']}；"
+            f"B 定位误差中位数 {fmt(b['median_position_error_px'])} px。"
+        )
     source = payload["source_fits"]
     execution = payload.get("execution", {})
     actual_argv = " ".join(str(part) for part in execution.get("argv", []))
     level_args = " ".join(f"{float(level):g}" for level in payload["gaussian_center_amplitudes_adu"])
-    replay_command = (
-        f'uv run rst19-ablation "{source["path"]}" --targets {len(payload["targets"])} '
-        f'--peak-levels {level_args} --reuse-manifest "{run_dir / "manifest.json"}" '
-        '--out-dir "tmp/ablation/replay" --report "deliverables/ablation/index.html"'
+    repo_root = Path(__file__).resolve().parents[2]
+    try:
+        replay_source_path = Path(os.path.relpath(Path(source["path"]).resolve(), repo_root)).as_posix()
+    except ValueError:
+        replay_source_path = str(source["path"])
+    parameters = payload["parameters_requested"]
+    replay_parts = [
+        "uv run rst19-ablation",
+        f'"{replay_source_path}"',
+        "--targets", str(len(payload["targets"])),
+        "--seed", str(payload["shared_control"]["selection_seed"]),
+        "--peak-levels", level_args,
+        "--psf-fwhm", f'{float(parameters["psf_fwhm_px"]):g}',
+        "--injected-psf-fwhm", f'{float(parameters["injected_psf_fwhm_px"]):g}',
+        "--threshold-sigma", f'{float(parameters["threshold_sigma"]):g}',
+        "--min-distance", str(parameters["min_distance_px"]),
+        "--aperture-radius", str(parameters["aperture_radius_px"]),
+        "--background-box-size", str(parameters["background_box_size_px"]),
+        "--min-flux-snr", f'{float(parameters["min_flux_snr"]):g}',
+        "--min-psf-support-pixels", str(parameters["min_psf_support_pixels"]),
+    ]
+    if parameters["match_radius_requested_px"] is not None:
+        replay_parts.extend(("--match-radius-px", f'{float(parameters["match_radius_requested_px"]):g}'))
+    replay_parts.extend(
+        (
+            "--reuse-manifest", '"deliverables/ablation/evidence/point/manifest.json"',
+            "--out-dir", '"tmp/ablation/replay-rerun"',
+            "--report", '"tmp/ablation/replay-rerun/report.html"',
+        )
+    )
+    replay_command = " ".join(replay_parts)
+    selected_demo_summary = (
+        Path(demo_summary_path).resolve()
+        if demo_summary_path is not None
+        else report.parent / "evidence" / "demo" / "summary.json"
+    )
+    demo_summary = (
+        json.loads(selected_demo_summary.read_text(encoding="utf-8"))
+        if selected_demo_summary.is_file()
+        else None
+    )
+    demo_summary_link = (
+        link(selected_demo_summary, "单帧程序演示摘要与输出哈希")
+        if selected_demo_summary.is_file()
+        else ""
     )
     report.write_text(
         """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>rst19 统一条件点源消融实验</title><style>
+<title>rst19 统一条件算法消融实验</title><style>
 :root{color-scheme:light;--ink:#17243a;--muted:#58677d;--line:#dce3eb;--accent:#245bb2;--soft:#f3f7fb;--ok:#176b4d;--warn:#895319}
 *{box-sizing:border-box}body{margin:0;background:#eef2f6;color:var(--ink);font:16px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}
 main{max-width:1100px;margin:32px auto;padding:0 20px 56px}.hero,.card{background:white;border:1px solid var(--line);border-radius:16px;padding:24px;margin:16px 0;box-shadow:0 8px 30px #1e35500a}
@@ -627,53 +807,149 @@ table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,t
 code{background:#edf1f5;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}a{color:var(--accent)}.note{border-left:4px solid #dca241;background:#fff8eb;padding:12px 14px;border-radius:6px}.good{border-left:4px solid #3b9773;background:#eff8f4;padding:12px 14px;border-radius:6px}
 @media(max-width:700px){main{margin:12px auto;padding:0 12px 32px}.hero,.card{padding:17px}h1{font-size:25px}}
 </style></head><body><main>
-<header class="hero"><div class="eyebrow">RST19 · 可复现算法验证</div><h1>同一真值集下的点源检测消融</h1>
-<p>这次完成了真实 FITS 背景上的一套点源注入对照：先固定注入位置和图像，再比较 Gaussian 基线、多尺度 DoG 提案，以及在同一 Hybrid 候选上应用现有质量门。</p>
-<p><span class="tag">点源实验已运行</span> <span class="tag warn">运动关联待验证</span></p>
+<header class="hero"><div class="eyebrow">RST19 · 可复现算法验证</div><h1>统一条件下的检测与运动算法消融</h1>
+<p>点源实验在同一真实 FITS 背景上冻结注入位置和图像，比较 Gaussian 基线、多尺度 DoG 提案及现有质量门；运动提案像素实验与轨迹关联实验各自使用冻结输入作配对比较。</p>
+<p><span class="tag">点源 A/B/C 已运行</span> <span class="tag warn">运动结果按各自输入边界解读</span></p>
 <p class="muted">真实输入：""" + html.escape(Path(source["path"]).name) + """ · SHA-256：<code>""" + html.escape(source["sha256"]) + """</code> · 运行时间：""" + fmt(payload["runtime"]["total_experiment_seconds"], 1) + """ 秒</p></header>
 <section class="card"><h2>1. 本次完成了什么</h2><p>已实现共享输入的实验编排，冻结 float32 控制图、各信号档注入图、目标坐标、随机种子和生效参数；逐个目标导出 A/B/C 命中、质心偏差及质量拒绝原因。真实 FITS 运行完成，具体结果见下表。</p>
-<div class="note"><b>范围边界：</b>这证明的是已知人工 Gaussian 注入目标在此图像和参数下的回收表现。它不证明真实恒星身份，也没有测量完整星图的精确率。运动提案与轨迹关联需要独立冻结逐帧检测和注入轨迹真值，本节不将其计作像素检测证据。</div></section>
+<div class="note"><b>范围边界：</b>点源结果证明的是已知人工 Gaussian 注入目标在此图像和参数下的回收表现，不证明真实恒星身份，也没有测量完整星图的精确率。运动提案章节是小型合成像素级机制测试；轨迹关联章节注入的是已冻结的 Detection 记录，不将其视为像素检出证据。</div></section>
 <section class="card"><h2>2. 实验为什么公平</h2><div class="flow"><span>同一原始 FITS<br>同一 float32 控制图</span><b>→</b><span>固定目标 ID、坐标、PSF<br>分别生成冻结注入图</span><b>→</b><span>A / B / C 读取<br>完全相同的图像</span><b>→</b><span>同一半径<br>一对一匹配</span></div>
 <ul><li>A：Gaussian 候选提案基线。</li><li>B：只把提案扩展为 Gaussian + DoG；候选阈值、FWHM、测量和背景规则不变。</li><li>C：不重跑检测，直接对同一 B 候选池应用现有 <code>quality_passed</code> 质量门；拒绝旗标保留。</li></ul>
-<p>无注入控制在目标位置的匹配半径内有 <b>0</b> 个已有候选。实际匹配半径是 <b>""" + fmt(payload["parameters_requested"]["match_radius_actual_px"], 1) + " px</b>；规则为最近距离优先的一对一分配。" + """</p></section>
-<section class="card"><h2>3. 主要结果：逐信号强度配对</h2><p class="muted">振幅指连续 Gaussian 在亚像素质心处的模型中心振幅；斜线后列出 8 个固定位置对应的理论最高采样像素增量范围。召回写成命中数／注入数。区间为逐目标 Wilson 95% 描述区间；同一图像上的位置和多个信号档相关，因此不能据此做独立样本总体推断。</p>
+<p>在 """ + str(len(payload["targets"])) + """ 个固定注入位置附近，A/B/C 无注入控制均为零候选。实际匹配半径是 <b>""" + fmt(payload["parameters_requested"]["match_radius_actual_px"], 1) + " px</b>；规则为最近距离优先的一对一分配。</p>"
+        + "<h3>无注入负对照：A/B/C 处理同一 float32 控制图</h3><div class=\"scroll\"><table><thead><tr><th>版本</th><th>检测候选峰数</th><th>返回候选数</th><th>质量通过数</th><th>该版本输出数</th><th>目标邻域候选数</th><th>用时</th></tr></thead><tbody>" + control_rows_html + "</tbody></table></div><p class=\"muted\">候选总量是未标注图像背景中的算法输出，不能当作假阳性或误检率；C 复用 B 的候选对象。</p></section>" + """
+<section class="card"><h2>3. 主要结果：逐信号强度配对</h2><p class="muted">振幅指连续 Gaussian 在亚像素质心处的模型中心振幅；斜线后列出 """ + str(len(payload["targets"])) + """ 个固定位置对应的理论最高采样像素增量范围。召回写成命中数／注入数。区间为逐目标 Wilson 95% 描述区间；同一图像上的位置和多个信号档相关，因此不能据此做独立样本总体推断。</p>
 <div class="scroll"><table><thead><tr><th>Gaussian 中心振幅 / 理论最高采样像素增量范围（ADU）</th><th>版本</th><th>命中／目标数（召回）</th><th>Wilson 95% 区间*</th><th>定位误差中位数 / P90（px）</th><th>未回收</th><th>候选检测耗时（C 复用 B；门控未单独计时）</th></tr></thead><tbody>""" + "".join(table_rows) + """</tbody></table></div>
 <h3>质量门的配对变化</h3><p>""" + " ".join(loss_by_level) + """</p><p class="muted">额外候选仅统计目标匹配半径内一对一分配后剩余的候选，不称作假阳性。未标注背景中的其他候选也没有用于计算精确率或误检率。</p></section>
-<section class="card"><h2>4. 具体注入目标对比</h2><div class="casekey"><span><i class="dot yellow"></i>注入真值</span><span><i class="dot blue"></i>A Gaussian</span><span><i class="dot green"></i>B Hybrid</span></div>
-<p>下图展示最低信号档的每个固定注入点。标题里的 A/B/C 为该目标是否被回收（1=是，0=否）；C 表示质量门后的命中。</p>""" + f'<img src="{quote(os.path.relpath(point_evidence_dir / "cases-weakest-level.png", report.parent).replace(os.sep, "/"), safe="/._-")}" alt="最低注入强度下所有注入目标的检测前后对比">' + """
-<p class="muted">真实目标的新增回收、仍漏检与质量误拒绝均可在逐目标 CSV 中按状态筛选；如果本轮未出现某类情况，则表格中对应分子为零，不补造示例。</p></section>
+<section class="card"><h2>4. 具体注入目标对比</h2><div class="casekey"><span><i class="dot yellow"></i>注入真值</span><span><i class="dot blue"></i>A Gaussian</span><span><i class="dot green"></i>B Hybrid</span><span>橙框：C 通过</span><span style="color:#d55">红叉：C 拒绝</span></div>
+<p>每张图展示该信号档全部固定注入点；标题中的 A/B/C 表示相应版本是否命中，质量门拒绝时保留标记和拒绝旗标。各信号档的召回与质量门变化以对应表格为准。</p><div class="grid">""" + case_image_html + """</div>
+<p class="muted">目标命中与质量门结果使用固定匹配半径；图中 C 复用同一个 B 检测对象，未再次定位。</p></section>
 <section class="card"><h2>5. 这些结果能证明什么</h2><div class="grid"><div class="metric"><strong>模块实现</strong>固定输入、共享注入真值、候选到质量门的配对输出可运行并已落盘。</div><div class="metric"><strong>本轮实验结论</strong>只适用于所列强度、首帧真实背景、Gaussian 注入 PSF 和当前参数；观察到的增益或损失以表格为准。</div><div class="metric"><strong>未确认事项</strong>官方星表身份、真实目标总体完备率、整幅图误检率，以及运动轨迹关联效果。</div></div>
 <p>由于同一组坐标重复测试多个强度，样本之间有关联。本轮是可复核的算法工程对照，不作为广泛天文总体结论或物理解释。</p></section>
-<section class="card"><h2>6. 比赛如何呈现</h2><h3>7 分钟陈述可用的核心表</h3><p>展示上面的逐强度 A/B/C 召回表，并同时说出分母：例如“在同一真实背景上的 N 个已知注入目标中，基线回收 x 个，多尺度回收 y 个，质量门后 z 个”。再用案例图解释新增召回和质量损失。不要把候选总数说成真实星数。</p>
-<h3>3 分钟程序演示建议</h3><ol><li>现场打开固定 FITS，展示常规识别入口和当前候选/质量层定义。</li><li>展示预先完成的逐目标消融报告，说明相同输入、位置和匹配半径。</li><li>现场只运行一次选定识别参数并展示输出；不要把完整多版本消融放入 3 分钟计时。</li></ol><p class="note">当前只实测了消融内的 detector 用时，尚未测 GUI 启动、载入 FITS 和现场操作总耗时。报告中的运行时间为本次离线实验时间，不代表比赛现场演示时长。</p></section>
+<section class="card"><h2>6. 比赛如何呈现</h2><h3>7 分钟陈述可用的核心结论</h3><p>""" + " ".join(example_lines) + """ A/B/C 的差异按本表中的输入和参数解读；这些结果不外推为完整星图精确率或真实恒星总体完备率。运动实验分别说明像素提案与检测后轨迹关联的证据边界。不要把候选总数说成真实星数。</p>
+<h3>3 分钟程序演示实测</h3>""" + (
+            (
+                f'<p>本机实测单帧 CLI 正常识别：输入 4096×4096 FITS，端到端 {fmt(demo_summary.get("elapsed_seconds"), 1)} 秒，退出码 {html.escape(str(demo_summary.get("exit_code")))}；候选峰 {html.escape(str(demo_summary.get("candidate_count")))}，质量通过 {html.escape(str(demo_summary.get("quality_count")))}。结果 JSON SHA-256：<code>{html.escape(str(demo_summary.get("recognition_json_sha256")))}</code>。</p>'
+                '<p class="muted">计时从 CLI 进程启动到完整 JSON 写盘；这是单帧正常识别命令，不代表 GUI 总时长或 15 帧序列分析时长。原始 JSON 未纳入交付，摘要保留于 evidence/demo/summary.json。</p>'
+            )
+            if demo_summary is not None
+            else '<p class="note">尚未记录单帧正常识别的端到端计时。</p>'
+        ) + """</section>
 <section class="card"><h2>7. 复现与原始证据</h2><p>本次实际命令：</p><pre><code>""" + html.escape(actual_argv) + """</code></pre><p>使用 manifest 中冻结坐标重放：</p><pre><code>""" + html.escape(replay_command) + """</code></pre>
-<ul><li>""" + link(point_evidence_dir / "manifest.json", "完整配置、哈希、真实生效参数和耗时 manifest.json") + """</li><li>""" + link(point_evidence_dir / "summary.csv", "按版本和信号档汇总 summary.csv") + """</li><li>""" + link(point_evidence_dir / "target_results.csv", "逐目标命中、定位和拒绝原因 target_results.csv") + """</li><li>冻结 float32 图像：""" + link(run_dir / "frozen_inputs", "frozen_inputs 目录") + """（含无注入控制和各档注入 .npy 文件）</li><li>""" + link(point_evidence_dir / "cases-weakest-level.png", "最低信号档案例图") + """</li></ul>
-<p class="muted">摘要和逐目标 CSV 随交付报告保存；较大的冻结图像保存在项目忽略的本地实验目录，未纳入 Git。重放命令会读取同一原始 FITS 并验证 SHA-256，然后从 manifest 直接复用坐标。逐档注入图像仍会重新生成并记录新的哈希，以检查输入是否可复现。</p>
+<ul><li>""" + link(point_evidence_dir / "manifest.json", "完整配置、哈希、真实生效参数和耗时 manifest.json") + """</li><li>""" + link(point_evidence_dir / "summary.csv", "按版本和信号档汇总 summary.csv") + """</li><li>""" + link(point_evidence_dir / "control_summary.csv", "无注入 A/B/C 对照 control_summary.csv") + """</li><li>""" + link(point_evidence_dir / "target_results.csv", "逐目标命中、定位和拒绝原因 target_results.csv") + """</li><li>""" + " / ".join(link(point_evidence_dir / name, name) for name in case_sheet_names) + """</li>""" + (f"<li>{demo_summary_link}</li>" if demo_summary_link else "") + """</ul>
+<p class="muted">摘要、逐目标 CSV、无注入 A/B/C 控制表和三档案例图随交付报告保存。较大的冻结点源图像保存在本机 ignored tmp 目录，并可由命令重新生成。重放需要同一原始 FITS 输入并核对 SHA-256；该本地观测数据未纳入 Git。原始 FITS：<code>""" + html.escape(replay_source_path) + """</code> · SHA-256：<code>""" + html.escape(source["sha256"]) + """</code>。</p>
 <p class="muted">实验输出目录：<code>""" + html.escape(str(run_dir)) + """</code> · 报告生成时间：""" + html.escape(str(payload["created_local_time"])) + """</p></section>
 </main></body></html>
 """,
         encoding="utf-8",
     )
+    motion_sections = []
+    next_section = 6
+    if motion_proposal_run_dir is not None:
+        motion_sections.append(
+            _render_motion_proposal_section(
+                Path(motion_proposal_run_dir).resolve(),
+                report.parent,
+                next_section,
+                point_evidence_dir,
+            )
+        )
+        next_section += 1
     if motion_run_dir is not None:
-        motion_section = _render_motion_section(Path(motion_run_dir).resolve(), report.parent)
+        motion_sections.append(
+            _render_motion_section(Path(motion_run_dir).resolve(), report.parent, next_section)
+        )
+        next_section += 1
+    if motion_sections:
         document = report.read_text(encoding="utf-8")
-        closing = "</main></body></html>"
-        if closing not in document:
-            raise RuntimeError("generated ablation report is missing its closing marker")
-        document = document.replace("运动关联待验证", "运动关联补充实验已运行")
+        anchor = '<section class="card"><h2>6. 比赛如何呈现</h2>'
+        if anchor not in document or "</main></body></html>" not in document:
+            raise RuntimeError("generated ablation report is missing its section markers")
+        presentation_number = next_section
+        reproduction_number = next_section + 1
         document = document.replace(
-            "本节不将其计作像素检测证据。",
-            "本节不将其计作像素检测证据；关联层结果见第 8 节。",
+            anchor,
+            "".join(motion_sections)
+            + f'<section class="card"><h2>{presentation_number}. 比赛如何呈现</h2>',
+            1,
         )
         document = document.replace(
-            "官方星表身份、真实目标总体完备率、整幅图误检率，以及运动轨迹关联效果。",
-            "官方星表身份、真实目标总体完备率、整幅图误检率，以及真实场景中的运动目标回收率。",
+            '<section class="card"><h2>7. 复现与原始证据</h2>',
+            f'<section class="card"><h2>{reproduction_number}. 复现与原始证据</h2>',
+            1,
         )
-        report.write_text(document.replace(closing, motion_section + closing), encoding="utf-8")
+        report.write_text(document, encoding="utf-8")
     return report
 
 
-def _render_motion_section(run_dir: Path, report_parent: Path) -> str:
+def _render_motion_proposal_section(
+    run_dir: Path,
+    report_parent: Path,
+    section_number: int,
+    point_evidence_dir: Path,
+) -> str:
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != 1 or manifest.get("experiment") != "synthetic_pixel_level_motion_multiscale_proposal_ablation":
+        raise ValueError("motion proposal report requires schema_version 1 pixel-level proposal output")
+    evidence_dir = report_parent / "evidence" / "motion_proposal"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    filenames = (
+        "manifest.json",
+        "summary.csv",
+        "frame_audit.csv",
+        "track_results.csv",
+        "truth_trajectory.csv",
+        "frozen_motion_frames.npz",
+        "motion_proposal_cases.png",
+    )
+    for filename in filenames:
+        source_file = run_dir / filename
+        target_file = evidence_dir / filename
+        if source_file.resolve() != target_file.resolve():
+            shutil.copy2(source_file, target_file)
+    with (run_dir / "summary.csv").open("r", encoding="utf-8-sig", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+
+    def link(path: str | Path, label: str) -> str:
+        relative = os.path.relpath(Path(path).resolve(), report_parent).replace(os.sep, "/")
+        return f'<a href="{quote(relative, safe="/._-")}">{html.escape(label)}</a>'
+
+    table_rows = []
+    for row in rows:
+        table_rows.append(
+            "<tr>"
+            f'<td>{html.escape(row["scene"])}</td><td>{html.escape(row["version"])}</td>'
+            f'<td>{row["proposal_feature_observations"]}</td><td>{row["moving_track_count"]}</td>'
+            f'<td>{html.escape(row["target_recovered_frames"]) or "—"}</td>'
+            f'<td>{html.escape(str(row["target_recovery"])) or "—"}</td>'
+            f'<td>{row["median_position_error_px"] or "—"} / {row["p90_position_error_px"] or "—"}</td>'
+            f'<td>{float(row["runtime_seconds"]):.2f} s</td></tr>'
+        )
+    execution = manifest.get("execution", {})
+    actual_argv = " ".join(str(part) for part in execution.get("argv", []))
+    return (
+        f'<section class="card"><h2>{section_number}. 运动多尺度提案：像素级配对对照</h2>'
+        '<p>A 关闭、B 开启 <code>multiscale_line_proposals</code>；两版读取逐帧相同的冻结 float32 像素数组、共用固定背景时间参考、原图形态门和运动关联器。'
+        '目标是低峰、有限曝光 Gaussian-PSF 线段；每个版本另在同一噪声帧上运行无注入控制。</p>'
+        '<div class="scroll"><table><thead><tr><th>场景</th><th>版本</th><th>逐帧线候选总数</th><th>运动轨迹数</th>'
+        '<th>目标命中帧</th><th>完整目标回收</th><th>定位误差中位数 / P90（px）</th><th>用时</th></tr></thead><tbody>'
+        + "".join(table_rows)
+        + "</tbody></table></div>"
+        + f'<img src="{quote(os.path.relpath(evidence_dir / "motion_proposal_cases.png", report_parent).replace(os.sep, "/"), safe="/._-")}" alt="低峰移动线段的逐帧真值与检测坐标">'
+        + '<p class="muted">该实验验证的是现有像素级运动提案代码在这组 96×96 合成帧上的机制行为，不是原始 FITS 上真实运动目标的检测结果。'
+        '无注入噪声帧的候选数是小型控制观测，不代表完整画面的误检率；本轮没有测试交叉轨迹或拥挤身份交换。</p>'
+        + '<p>可重跑命令：<code>uv run rst19-motion-proposal-ablation --point-run-dir \"deliverables/ablation/evidence/point\" --association-run-dir \"deliverables/ablation/evidence/motion\" --out-dir \"tmp/ablation/motion-proposal-rerun\" --seed '
+        + str(manifest["seed"])
+        + "</code>。本次命令：" + html.escape(actual_argv) + "</p><ul>"
+        + f'<li>{link(evidence_dir / "manifest.json", "运动提案配置、真值、数组哈希与代码哈希")}</li>'
+        + f'<li>{link(evidence_dir / "summary.csv", "A/B 场景与版本汇总")}</li>'
+        + f'<li>{link(evidence_dir / "frame_audit.csv", "逐帧候选诊断")}</li>'
+        + f'<li>{link(evidence_dir / "track_results.csv", "关联轨迹结果")}</li>'
+        + f'<li>{link(evidence_dir / "truth_trajectory.csv", "固定逐帧轨迹真值")}</li>'
+        + f'<li>{link(evidence_dir / "frozen_motion_frames.npz", "冻结输入像素数组")}</li></ul></section>'
+    )
+
+
+def _render_motion_section(run_dir: Path, report_parent: Path, section_number: int = 8) -> str:
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     if manifest.get("schema_version") != 2 or manifest.get("experiment") != "association_stage_motion_constraint_ablation":
         raise ValueError("motion report requires schema_version 2 association output; rerun the motion ablation")
@@ -687,7 +963,10 @@ def _render_motion_section(run_dir: Path, report_parent: Path) -> str:
         "frozen_frame_sources.csv.gz",
         "motion_tracks.png",
     ):
-        shutil.copy2(run_dir / filename, evidence_dir / filename)
+        source_file = run_dir / filename
+        target_file = evidence_dir / filename
+        if source_file.resolve() != target_file.resolve():
+            shutil.copy2(source_file, target_file)
     with (run_dir / "trajectory_results.csv").open("r", encoding="utf-8-sig", newline="") as stream:
         rows = list(csv.DictReader(stream))
 
@@ -711,7 +990,7 @@ def _render_motion_section(run_dir: Path, report_parent: Path) -> str:
     actual_argv = " ".join(str(part) for part in execution.get("argv", []))
     values = manifest["parameters"]
     return (
-        '<section class="card"><h2>8. 运动约束：独立的轨迹关联对照</h2>'
+        f'<section class="card"><h2>{section_number}. 运动约束：独立的轨迹关联对照</h2>'
         '<p>该实验冻结同一逐帧质量源列表，A 使用普通最近邻轨迹关联，B 在保留 A 多帧轨迹的同时，对未被 A 串联的质量点运行速度预测补充关联。'
         '轨迹真值按每帧实际观测时间生成，速度以中位相邻帧间隔归一化；图中横轴按帧序显示。注入对象是逐帧 <code>Detection</code> 记录，不重新经过图像像素检测；因此它验证的是关联阶段，不是运动目标的像素检出能力。</p>'
         '<div class="note"><b>比较口径：</b>表中 A 的“精确轨迹”要求普通关联单独形成完整真值轨迹；B 的“精确补充轨迹”表示速度预测补充层形成完整轨迹。'
