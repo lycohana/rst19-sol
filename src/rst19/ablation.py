@@ -654,6 +654,8 @@ def write_ablation_html(
     *,
     motion_run_dir: str | Path | None = None,
     motion_proposal_run_dir: str | Path | None = None,
+    motion_crossing_run_dir: str | Path | None = None,
+    crowded_run_dir: str | Path | None = None,
     demo_summary_path: str | Path | None = None,
 ) -> Path:
     run_dir = Path(run_dir).resolve()
@@ -792,6 +794,62 @@ def write_ablation_html(
         if selected_demo_summary.is_file()
         else ""
     )
+    demo_flow_html = (
+        '<h3>建议的 3 分钟现场顺序</h3><ol>'
+        '<li>0:00–0:25：说明输入 FITS、当前参数和候选／质量通过两层输出。</li>'
+        f'<li>0:25–0:55：现场运行已实测的正常单帧 CLI（实际命令：<code>{html.escape(str(demo_summary.get("command", "")))}</code>）；记录耗时约 {fmt(demo_summary.get("elapsed_seconds"), 1)} 秒。</li>'
+        '<li>0:55–1:30：打开 JSON 结果，指出候选数和质量通过数是算法输出，不等于真实星数。</li>'
+        '<li>1:30–2:30：打开本报告的预先完成配对案例，讲一个质量门误拒绝或交叉关联边界。</li>'
+        '<li>2:30–3:00：用真实测得的召回和限制收尾。完整消融约需数分钟，现场展示预先冻结的实验结果，不声称三分钟内重新完成全部消融。</li>'
+        '</ol>'
+        if demo_summary is not None else ""
+    )
+    gate = payload["detector_parameters_actual"]["hybrid"]
+    quality_rules_html = (
+        "<p class=\"muted\"><b>本次 C 质量门实际规则：</b>净通量 SNR ≥ "
+        f"{fmt(gate.get('min_flux_snr'), 1)}；FWHM ∈ [{fmt(gate.get('min_fwhm'), 1)}, {fmt(gate.get('max_fwhm'), 1)}] px；"
+        f"椭率 ≤ {fmt(gate.get('max_ellipticity'), 2)}；sharpness ∈ ({fmt(gate.get('min_sharpness'), 3)}, {fmt(gate.get('max_sharpness'), 2)})；"
+        f"足迹像素 ≥ {fmt(gate.get('min_footprint_pixels'), 0)}；3×3 核心 PSF 支持像素 ≥ {fmt(gate.get('min_psf_support_pixels'), 0)}；"
+        "并执行数据有效性、边缘/掩膜与线状伪迹筛查。每个目标的拒绝旗标见逐目标 CSV，完整实际参数在 manifest。</p>"
+    )
+    presentation_addons: list[str] = []
+    if crowded_run_dir is not None:
+        with (Path(crowded_run_dir).resolve() / "summary.csv").open("r", encoding="utf-8-sig", newline="") as stream:
+            crowded_rows = list(csv.DictReader(stream))
+        pair_deblend = next(row for row in crowded_rows if row["scene"] == "pair" and row["version"] == "D")
+        single_deblend = next(row for row in crowded_rows if row["scene"] == "single" and row["version"] == "D")
+        presentation_addons.append(
+            f"拥挤对照：D 候选层回收 {pair_deblend['candidate_matched_targets']}/{pair_deblend['injected_truth_total']}，"
+            f"质量后为 {pair_deblend['quality_matched_targets']}/{pair_deblend['injected_truth_total']}；"
+            f"单星阴性位候选 {single_deblend['negative_companion_site_candidates']}/{single_deblend['negative_companion_sites_total']}。"
+        )
+    if motion_crossing_run_dir is not None:
+        with (Path(motion_crossing_run_dir).resolve() / "summary.csv").open("r", encoding="utf-8-sig", newline="") as stream:
+            crossing_rows = list(csv.DictReader(stream))
+        slow_a = next(row for row in crossing_rows if row["scenario"] == "slow_linked_identity_swap" and row["version"] == "A")
+        fast_b = next(row for row in crossing_rows if row["scenario"] == "fast_orthogonal_supplement" and row["version"] == "B_supplement")
+        fast_union = next(row for row in crossing_rows if row["scenario"] == "fast_orthogonal_supplement" and row["version"] == "B_union")
+        presentation_addons.append(
+            f"交叉关联边界：慢速交叉 A 有 {slow_a['identity_switch_count']} 次身份切换且 B 无法修复；"
+            f"快速交叉的 B 补充轨迹为 {fast_b['targets_with_full_clean_track_present']}/{fast_b['target_count']}，"
+            f"并集仍有 {fast_union['duplicated_truth_observation_assignments']} 条重复观测赋值。"
+        )
+    presentation_addons_html = (
+        '<p class="muted">' + " ".join(html.escape(line) for line in presentation_addons) + '</p>'
+        if presentation_addons else ""
+    )
+    status_tags = ['<span class="tag">点源 A/B/C：真实 FITS 已运行</span>']
+    completion_extras: list[str] = []
+    if crowded_run_dir is not None:
+        crowded_manifest = json.loads((Path(crowded_run_dir).resolve() / "manifest.json").read_text(encoding="utf-8"))
+        anchor_total = int(crowded_manifest["patch_selection"]["accepted_anchor_count"])
+        status_tags.append(f'<span class="tag">拥挤配对：真实 FITS {anchor_total} 块</span>')
+        completion_extras.append(f"另在同一真实 FITS 的 {anchor_total} 个冻结背景块完成拥挤双源与单星阴性位对照。")
+    if motion_crossing_run_dir is not None:
+        status_tags.append('<span class="tag warn">交叉轨迹：合成 Detection 关联测试</span>')
+        completion_extras.append("交叉轨迹使用合成 Detection 记录，只验证关联行为，不包含像素检测或物理身份判定。")
+    status_tags_html = " ".join(status_tags)
+    completion_extras_html = " ".join(completion_extras)
     report.write_text(
         """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -809,13 +867,14 @@ code{background:#edf1f5;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere
 </style></head><body><main>
 <header class="hero"><div class="eyebrow">RST19 · 可复现算法验证</div><h1>统一条件下的检测与运动算法消融</h1>
 <p>点源实验在同一真实 FITS 背景上冻结注入位置和图像，比较 Gaussian 基线、多尺度 DoG 提案及现有质量门；运动提案像素实验与轨迹关联实验各自使用冻结输入作配对比较。</p>
-<p><span class="tag">点源 A/B/C 已运行</span> <span class="tag warn">运动结果按各自输入边界解读</span></p>
+<p>""" + status_tags_html + """ <span class="tag warn">运动结果按各自输入边界解读</span></p>
 <p class="muted">真实输入：""" + html.escape(Path(source["path"]).name) + """ · SHA-256：<code>""" + html.escape(source["sha256"]) + """</code> · 运行时间：""" + fmt(payload["runtime"]["total_experiment_seconds"], 1) + """ 秒</p></header>
-<section class="card"><h2>1. 本次完成了什么</h2><p>已实现共享输入的实验编排，冻结 float32 控制图、各信号档注入图、目标坐标、随机种子和生效参数；逐个目标导出 A/B/C 命中、质心偏差及质量拒绝原因。真实 FITS 运行完成，具体结果见下表。</p>
+<section class="card"><h2>1. 本次完成了什么</h2><p>已实现共享输入的实验编排，冻结 float32 控制图、各信号档注入图、目标坐标、随机种子和生效参数；逐个目标导出 A/B/C 命中、质心偏差及质量拒绝原因。真实 FITS 运行完成，具体结果见下表。""" + html.escape(completion_extras_html) + """</p>
 <div class="note"><b>范围边界：</b>点源结果证明的是已知人工 Gaussian 注入目标在此图像和参数下的回收表现，不证明真实恒星身份，也没有测量完整星图的精确率。运动提案章节是小型合成像素级机制测试；轨迹关联章节注入的是已冻结的 Detection 记录，不将其视为像素检出证据。</div></section>
 <section class="card"><h2>2. 实验为什么公平</h2><div class="flow"><span>同一原始 FITS<br>同一 float32 控制图</span><b>→</b><span>固定目标 ID、坐标、PSF<br>分别生成冻结注入图</span><b>→</b><span>A / B / C 读取<br>完全相同的图像</span><b>→</b><span>同一半径<br>一对一匹配</span></div>
 <ul><li>A：Gaussian 候选提案基线。</li><li>B：只把提案扩展为 Gaussian + DoG；候选阈值、FWHM、测量和背景规则不变。</li><li>C：不重跑检测，直接对同一 B 候选池应用现有 <code>quality_passed</code> 质量门；拒绝旗标保留。</li></ul>
 <p>在 """ + str(len(payload["targets"])) + """ 个固定注入位置附近，A/B/C 无注入控制均为零候选。实际匹配半径是 <b>""" + fmt(payload["parameters_requested"]["match_radius_actual_px"], 1) + " px</b>；规则为最近距离优先的一对一分配。</p>"
+        + quality_rules_html
         + "<h3>无注入负对照：A/B/C 处理同一 float32 控制图</h3><div class=\"scroll\"><table><thead><tr><th>版本</th><th>检测候选峰数</th><th>返回候选数</th><th>质量通过数</th><th>该版本输出数</th><th>目标邻域候选数</th><th>用时</th></tr></thead><tbody>" + control_rows_html + "</tbody></table></div><p class=\"muted\">候选总量是未标注图像背景中的算法输出，不能当作假阳性或误检率；C 复用 B 的候选对象。</p></section>" + """
 <section class="card"><h2>3. 主要结果：逐信号强度配对</h2><p class="muted">振幅指连续 Gaussian 在亚像素质心处的模型中心振幅；斜线后列出 """ + str(len(payload["targets"])) + """ 个固定位置对应的理论最高采样像素增量范围。召回写成命中数／注入数。区间为逐目标 Wilson 95% 描述区间；同一图像上的位置和多个信号档相关，因此不能据此做独立样本总体推断。</p>
 <div class="scroll"><table><thead><tr><th>Gaussian 中心振幅 / 理论最高采样像素增量范围（ADU）</th><th>版本</th><th>命中／目标数（召回）</th><th>Wilson 95% 区间*</th><th>定位误差中位数 / P90（px）</th><th>未回收</th><th>候选检测耗时（C 复用 B；门控未单独计时）</th></tr></thead><tbody>""" + "".join(table_rows) + """</tbody></table></div>
@@ -825,7 +884,7 @@ code{background:#edf1f5;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere
 <p class="muted">目标命中与质量门结果使用固定匹配半径；图中 C 复用同一个 B 检测对象，未再次定位。</p></section>
 <section class="card"><h2>5. 这些结果能证明什么</h2><div class="grid"><div class="metric"><strong>模块实现</strong>固定输入、共享注入真值、候选到质量门的配对输出可运行并已落盘。</div><div class="metric"><strong>本轮实验结论</strong>只适用于所列强度、首帧真实背景、Gaussian 注入 PSF 和当前参数；观察到的增益或损失以表格为准。</div><div class="metric"><strong>未确认事项</strong>官方星表身份、真实目标总体完备率、整幅图误检率，以及运动轨迹关联效果。</div></div>
 <p>由于同一组坐标重复测试多个强度，样本之间有关联。本轮是可复核的算法工程对照，不作为广泛天文总体结论或物理解释。</p></section>
-<section class="card"><h2>6. 比赛如何呈现</h2><h3>7 分钟陈述可用的核心结论</h3><p>""" + " ".join(example_lines) + """ A/B/C 的差异按本表中的输入和参数解读；这些结果不外推为完整星图精确率或真实恒星总体完备率。运动实验分别说明像素提案与检测后轨迹关联的证据边界。不要把候选总数说成真实星数。</p>
+<section class="card"><h2>6. 比赛如何呈现</h2><h3>7 分钟陈述可用的核心结论</h3><p>""" + " ".join(example_lines) + """ A/B/C 的差异按本表中的输入和参数解读；这些结果不外推为完整星图精确率或真实恒星总体完备率。运动实验分别说明像素提案与检测后轨迹关联的证据边界。不要把候选总数说成真实星数。</p>""" + presentation_addons_html + """
 <h3>3 分钟程序演示实测</h3>""" + (
             (
                 f'<p>本机实测单帧 CLI 正常识别：输入 4096×4096 FITS，端到端 {fmt(demo_summary.get("elapsed_seconds"), 1)} 秒，退出码 {html.escape(str(demo_summary.get("exit_code")))}；候选峰 {html.escape(str(demo_summary.get("candidate_count")))}，质量通过 {html.escape(str(demo_summary.get("quality_count")))}。结果 JSON SHA-256：<code>{html.escape(str(demo_summary.get("recognition_json_sha256")))}</code>。</p>'
@@ -833,7 +892,7 @@ code{background:#edf1f5;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere
             )
             if demo_summary is not None
             else '<p class="note">尚未记录单帧正常识别的端到端计时。</p>'
-        ) + """</section>
+        ) + demo_flow_html + """</section>
 <section class="card"><h2>7. 复现与原始证据</h2><p>本次实际命令：</p><pre><code>""" + html.escape(actual_argv) + """</code></pre><p>使用 manifest 中冻结坐标重放：</p><pre><code>""" + html.escape(replay_command) + """</code></pre>
 <ul><li>""" + link(point_evidence_dir / "manifest.json", "完整配置、哈希、真实生效参数和耗时 manifest.json") + """</li><li>""" + link(point_evidence_dir / "summary.csv", "按版本和信号档汇总 summary.csv") + """</li><li>""" + link(point_evidence_dir / "control_summary.csv", "无注入 A/B/C 对照 control_summary.csv") + """</li><li>""" + link(point_evidence_dir / "target_results.csv", "逐目标命中、定位和拒绝原因 target_results.csv") + """</li><li>""" + " / ".join(link(point_evidence_dir / name, name) for name in case_sheet_names) + """</li>""" + (f"<li>{demo_summary_link}</li>" if demo_summary_link else "") + """</ul>
 <p class="muted">摘要、逐目标 CSV、无注入 A/B/C 控制表和三档案例图随交付报告保存。较大的冻结点源图像保存在本机 ignored tmp 目录，并可由命令重新生成。重放需要同一原始 FITS 输入并核对 SHA-256；该本地观测数据未纳入 Git。原始 FITS：<code>""" + html.escape(replay_source_path) + """</code> · SHA-256：<code>""" + html.escape(source["sha256"]) + """</code>。</p>
@@ -859,6 +918,16 @@ code{background:#edf1f5;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere
             _render_motion_section(Path(motion_run_dir).resolve(), report.parent, next_section)
         )
         next_section += 1
+    if motion_crossing_run_dir is not None:
+        motion_sections.append(
+            _render_motion_crossing_section(Path(motion_crossing_run_dir).resolve(), report.parent, next_section)
+        )
+        next_section += 1
+    if crowded_run_dir is not None:
+        motion_sections.append(
+            _render_crowded_section(Path(crowded_run_dir).resolve(), report.parent, next_section)
+        )
+        next_section += 1
     if motion_sections:
         document = report.read_text(encoding="utf-8")
         anchor = '<section class="card"><h2>6. 比赛如何呈现</h2>'
@@ -879,6 +948,169 @@ code{background:#edf1f5;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere
         )
         report.write_text(document, encoding="utf-8")
     return report
+
+
+def _render_crowded_section(run_dir: Path, report_parent: Path, section_number: int) -> str:
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != 1 or manifest.get("experiment") != "paired_real_fits_crowded_companion_ablation":
+        raise ValueError("crowded report requires schema_version 1 paired FITS-patch output")
+    evidence_dir = report_parent / "evidence" / "crowded"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    frozen_target = evidence_dir / "frozen_inputs"
+    frozen_target.mkdir(parents=True, exist_ok=True)
+    filenames = (
+        "manifest.json",
+        "summary.csv",
+        "anchor_summary.csv",
+        "target_results.csv",
+        "control_summary.csv",
+        "detector_runs.csv",
+        "crowded_pair_cases.png",
+    )
+    for filename in filenames:
+        source_file = run_dir / filename
+        target_file = evidence_dir / filename
+        if source_file.resolve() != target_file.resolve():
+            shutil.copy2(source_file, target_file)
+    frozen_names: list[str] = []
+    for source_file in sorted((run_dir / "frozen_inputs").glob("*.npy")):
+        target_file = frozen_target / source_file.name
+        if source_file.resolve() != target_file.resolve():
+            shutil.copy2(source_file, target_file)
+        frozen_names.append(source_file.name)
+    with (run_dir / "summary.csv").open("r", encoding="utf-8-sig", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+
+    def fmt(value: object, digits: int = 3) -> str:
+        try:
+            return f"{float(value):.{digits}f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    table_rows = []
+    for row in rows:
+        false_site = (
+            f"{row['negative_companion_site_candidates']}/{row['negative_companion_sites_total']}"
+            if int(row["negative_companion_sites_total"]) > 0 else "—"
+        )
+        table_rows.append(
+            "<tr>"
+            f"<td>{html.escape(row['scene'])}</td><td>{html.escape(row['version'])} {html.escape(row['version_name'])}</td>"
+            f"<td>{row['candidate_matched_targets']}/{row['injected_truth_total']} ({fmt(row['candidate_recall'])})</td>"
+            f"<td>{row['quality_matched_targets']}/{row['injected_truth_total']} ({fmt(row['quality_recall'])})</td>"
+            f"<td>{false_site}</td><td>{fmt(row['median_position_error_px'])} / {fmt(row['p90_position_error_px'])}</td>"
+            f"<td>{fmt(row['median_detector_seconds_per_patch'], 2)} s</td></tr>"
+        )
+    execution = manifest.get("execution", {})
+    actual_argv = " ".join(str(part) for part in execution.get("argv", []))
+    links = [
+        ("manifest.json", "配置、哈希、实际检测参数和限制"),
+        ("summary.csv", "按场景和版本汇总"),
+        ("anchor_summary.csv", "逐背景块指标"),
+        ("target_results.csv", "逐目标候选、质量门、定位与阴性位结果"),
+        ("control_summary.csv", "无注入候选冲突筛选"),
+        ("detector_runs.csv", "逐次 detector 输入哈希、参数、候选数与耗时"),
+    ]
+    link_list = "".join(
+        f'<li><a href="evidence/crowded/{filename}">{html.escape(label)}</a></li>'
+        for filename, label in links
+    )
+    frozen_link_list = "".join(
+        f'<li><a href="evidence/crowded/frozen_inputs/{quote(name, safe="._-")}">{html.escape(name)}</a></li>'
+        for name in frozen_names
+    )
+    return (
+        f'<section class="card"><h2>{section_number}. 拥挤双源与单星阴性对照</h2>'
+        f'<p>从同一真实 FITS 选取并冻结 {int(manifest["patch_selection"]["accepted_anchor_count"])} 个 96×96 背景块；每块派生成一组亮主源+弱伴星，以及只注入主源的配对图。'
+        f'主源为 160 ADU、FWHM 1.4 px，伴星为 40 ADU、FWHM 0.8 px，间隔 {fmt(manifest["injections"]["pair_separation_px"], 1)} px，匹配半径 {fmt(manifest["parameters_requested"]["match_radius_px"], 1)} px。'
+        '所有版本对同一个冻结输入文件运行；C 复用 B 的候选并只保留通过质量门的源，D 是独立的 Gaussian+局部去混叠单帧条件。</p>'
+        '<div class="scroll"><table><thead><tr><th>场景</th><th>版本</th><th>注入真值候选回收</th><th>质量通过回收</th>'
+        '<th>单星对照伴星位候选</th><th>定位误差中位数 / P90（px）</th><th>每块中位耗时</th></tr></thead><tbody>'
+        + "".join(table_rows)
+        + '</tbody></table></div>'
+        + '<img src="evidence/crowded/crowded_pair_cases.png" alt="同一真实 FITS 背景块的双源和单星阴性位候选对照">'
+        + '<p>单星场景的伴星坐标是预先标记的“未注入伴星位”，只用于观察局部误拆；它不代表附近天区没有真实结构。候选回收与质量通过回收分开报告，因此弱伴星被提案但遭质量门拒绝时不会被写成已确认源。</p>'
+        + '<p>本次实际命令：<code>' + html.escape(actual_argv) + '</code></p><ul>' + link_list + frozen_link_list + '</ul>'
+        + '</section>'
+    )
+
+
+def _render_motion_crossing_section(run_dir: Path, report_parent: Path, section_number: int) -> str:
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != 1 or manifest.get("experiment") != "synthetic_crossing_track_association_ablation":
+        raise ValueError("crossing report requires schema_version 1 synthetic crossing association output")
+    evidence_dir = report_parent / "evidence" / "motion_crossing"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    frozen_target = evidence_dir / "frozen_inputs"
+    frozen_target.mkdir(parents=True, exist_ok=True)
+    filenames = (
+        "manifest.json",
+        "summary.csv",
+        "target_summary.csv",
+        "track_level.csv",
+        "track_points.csv",
+        "truth.csv",
+        "motion_crossing_tracks.png",
+    )
+    for filename in filenames:
+        source_file = run_dir / filename
+        target_file = evidence_dir / filename
+        if source_file.resolve() != target_file.resolve():
+            shutil.copy2(source_file, target_file)
+    frozen_names: list[str] = []
+    for source_file in sorted((run_dir / "frozen_inputs").glob("*.csv.gz")):
+        target_file = frozen_target / source_file.name
+        if source_file.resolve() != target_file.resolve():
+            shutil.copy2(source_file, target_file)
+        frozen_names.append(source_file.name)
+    with (run_dir / "summary.csv").open("r", encoding="utf-8-sig", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    scenario_labels = {
+        "slow_linked_identity_swap": "慢速直线交叉：A 已错连",
+        "fast_orthogonal_supplement": "快速正交交叉：A 半径不足",
+    }
+    version_labels = {"A": "A 普通关联", "B_supplement": "B 速度补充", "B_union": "A+B 并集"}
+    table_rows = []
+    for row in rows:
+        table_rows.append(
+            "<tr>"
+            f"<td>{html.escape(scenario_labels.get(row['scenario'], row['scenario']))}</td>"
+            f"<td>{html.escape(version_labels.get(row['version'], row['version']))}</td>"
+            f"<td>{row['targets_with_full_clean_track_present']}/{row['target_count']}</td>"
+            f"<td>{row['identity_switch_count']}</td><td>{row['mixed_truth_track_count']}</td>"
+            f"<td>{row['target_track_assignments_fragment_count_sum']}</td>"
+            f"<td>{row['duplicated_truth_observation_assignments']}</td></tr>"
+        )
+    execution = manifest.get("execution", {})
+    actual_argv = " ".join(str(part) for part in execution.get("argv", []))
+    links = (
+        ("manifest.json", "配置、输入 fingerprint、注册与代码哈希"),
+        ("summary.csv", "场景/版本指标"),
+        ("target_summary.csv", "逐真值轨迹配对结果"),
+        ("track_level.csv", "预测轨迹中的真值 ID、switch 与混合连接"),
+        ("track_points.csv", "逐轨迹点赋值和重复记录"),
+        ("truth.csv", "15 帧逐目标位置真值"),
+    )
+    link_list = "".join(
+        f'<li><a href="evidence/motion_crossing/{filename}">{html.escape(label)}</a></li>'
+        for filename, label in links
+    )
+    frozen_link_list = "".join(
+        f'<li><a href="evidence/motion_crossing/frozen_inputs/{quote(name, safe="._-")}">{html.escape(name)}</a></li>'
+        for name in frozen_names
+    )
+    return (
+        f'<section class="card"><h2>{section_number}. 交叉轨迹：速度补充能做与不能做的事</h2>'
+        '<p>此项冻结两组 15 帧 <code>Detection</code> 记录和逐帧真值 ID，24 个固定锚点使注册累计位移为 0；A、B 读入的源列表 fingerprint 相同。它只测关联器，不重新运行图像检测。</p>'
+        '<div class="scroll"><table><thead><tr><th>场景</th><th>版本</th><th>有完整纯净真值轨迹</th><th>ID 切换</th><th>混合 ID 轨迹</th><th>目标碎片赋值总数</th><th>重复真值观测赋值</th></tr></thead><tbody>'
+        + "".join(table_rows)
+        + '</tbody></table></div>'
+        + '<img src="evidence/motion_crossing/motion_crossing_tracks.png" alt="慢速错连和快速交叉补充关联轨迹图">'
+        + '<p>慢速直线交叉中，A 已把两个身份错接；补充层 B 因这些点已被 A 的多帧轨迹占用，新增 0 条轨迹，无法修正 2 次 ID 切换。快速正交交叉中，A 的 4 px 半径产生 30 个单点碎片，B 单独补出 2/2 条纯净轨迹；但 A+B 并集保留了 30 个重复观测赋值。因此现有 B 证明的是“补回尚未被 A 串起的快速轨迹”，不是可替换 A 的纠错关联器，也不是去重后的完整系统收益。</p>'
+        + '<p class="muted">输入是合成的像素坐标与 Detection 属性，没有经过图像检出，也不证明现实天体的身份。结果仅用于揭示关联策略边界。</p>'
+        + '<p>本次实际命令：<code>' + html.escape(actual_argv) + '</code></p><ul>' + link_list + frozen_link_list + '</ul>'
+        + '</section>'
+    )
 
 
 def _render_motion_proposal_section(
