@@ -795,7 +795,7 @@ def write_ablation_html(
     report.write_text(
         """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>rst19 统一条件算法消融实验</title><style>
+<title>rst19 统一条件算法消融实验</title><link rel="icon" href="data:,"><style>
 :root{color-scheme:light;--ink:#17243a;--muted:#58677d;--line:#dce3eb;--accent:#245bb2;--soft:#f3f7fb;--ok:#176b4d;--warn:#895319}
 *{box-sizing:border-box}body{margin:0;background:#eef2f6;color:var(--ink);font:16px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}
 main{max-width:1100px;margin:32px auto;padding:0 20px 56px}.hero,.card{background:white;border:1px solid var(--line);border-radius:16px;padding:24px;margin:16px 0;box-shadow:0 8px 30px #1e35500a}
@@ -803,7 +803,7 @@ h1{font-size:30px;line-height:1.25;margin:8px 0 12px}h2{font-size:21px;margin:0 
 .tag{display:inline-block;border-radius:999px;padding:3px 10px;background:#e4f4ed;color:var(--ok);font-size:13px;font-weight:700}.tag.warn{background:#fff1dc;color:var(--warn)}.muted{color:var(--muted)}
 .flow{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:18px 0}.flow span{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-weight:650}.flow b{color:var(--accent)}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#f5f8fb;font-size:14px}td{font-size:14px}
-.scroll{overflow:auto;border:1px solid var(--line);border-radius:10px}img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#151a22}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.metric{background:var(--soft);border-radius:12px;padding:14px}.metric strong{display:block;font-size:22px}.casekey{display:flex;gap:15px;flex-wrap:wrap;font-size:14px}.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px}.blue{background:#4ea8ff}.green{background:#48e0a1}.yellow{background:#ffde50}
+.scroll{overflow:auto;border:1px solid var(--line);border-radius:10px}pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-width:100%}img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#151a22}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.metric{background:var(--soft);border-radius:12px;padding:14px}.metric strong{display:block;font-size:22px}.casekey{display:flex;gap:15px;flex-wrap:wrap;font-size:14px}.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px}.blue{background:#4ea8ff}.green{background:#48e0a1}.yellow{background:#ffde50}
 code{background:#edf1f5;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}a{color:var(--accent)}.note{border-left:4px solid #dca241;background:#fff8eb;padding:12px 14px;border-radius:6px}.good{border-left:4px solid #3b9773;background:#eff8f4;padding:12px 14px;border-radius:6px}
 @media(max-width:700px){main{margin:12px auto;padding:0 12px 32px}.hero,.card{padding:17px}h1{font-size:25px}}
 </style></head><body><main>
