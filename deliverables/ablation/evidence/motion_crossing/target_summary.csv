@@ -1,0 +1,13 @@
+﻿scenario,version,target_id,expected_observations,covered_observations,observation_coverage_fraction,predicted_tracks_containing_target,full_clean_track_count,full_clean_track_present,exclusive_full_track,identity_switches_on_containing_tracks
+slow_linked_identity_swap,A,SLOW-CROSS-A,15,15,1.000000,2,0,0,0,2
+slow_linked_identity_swap,A,SLOW-CROSS-B,15,15,1.000000,2,0,0,0,2
+slow_linked_identity_swap,B_supplement,SLOW-CROSS-A,15,0,0.000000,0,0,0,0,0
+slow_linked_identity_swap,B_supplement,SLOW-CROSS-B,15,0,0.000000,0,0,0,0,0
+slow_linked_identity_swap,B_union,SLOW-CROSS-A,15,15,1.000000,2,0,0,0,2
+slow_linked_identity_swap,B_union,SLOW-CROSS-B,15,15,1.000000,2,0,0,0,2
+fast_orthogonal_supplement,A,FAST-CROSS-A,15,15,1.000000,15,0,0,0,0
+fast_orthogonal_supplement,A,FAST-CROSS-B,15,15,1.000000,15,0,0,0,0
+fast_orthogonal_supplement,B_supplement,FAST-CROSS-A,15,15,1.000000,1,1,1,1,0
+fast_orthogonal_supplement,B_supplement,FAST-CROSS-B,15,15,1.000000,1,1,1,1,0
+fast_orthogonal_supplement,B_union,FAST-CROSS-A,15,15,1.000000,16,1,1,0,0
+fast_orthogonal_supplement,B_union,FAST-CROSS-B,15,15,1.000000,16,1,1,0,0

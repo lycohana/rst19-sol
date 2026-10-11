@@ -1,0 +1,546 @@
+{
+  "schema_version": 1,
+  "experiment": "synthetic_crossing_track_association_ablation",
+  "status": "completed",
+  "created_local_time": "2026-10-12T02:11:16+08:00",
+  "scope": "association-stage synthetic Detection experiment; no image detector or physical identity is tested",
+  "frame_count": 15,
+  "frame_times_seconds": [
+    0.0,
+    1.0,
+    2.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0,
+    7.0,
+    8.0,
+    9.0,
+    10.0,
+    11.0,
+    12.0,
+    13.0,
+    14.0
+  ],
+  "scenarios": {
+    "slow_linked_identity_swap": {
+      "targets": [
+        {
+          "target_id": "SLOW-CROSS-A",
+          "detection_id": 1000001,
+          "start_registered_xy_px": [
+            1500.0,
+            1800.0
+          ],
+          "velocity_px_per_frame": [
+            4.0,
+            0.0
+          ],
+          "expected_frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ]
+        },
+        {
+          "target_id": "SLOW-CROSS-B",
+          "detection_id": 1000002,
+          "start_registered_xy_px": [
+            1552.0,
+            1800.0
+          ],
+          "velocity_px_per_frame": [
+            -4.0,
+            0.0
+          ],
+          "expected_frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ]
+        }
+      ],
+      "input": {
+        "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\frozen_inputs\\slow_linked_identity_swap.csv.gz",
+        "sha256": "85df320f9074208bc92b17c1f01d57f30c367456443756fed7a8f5669e96d81a",
+        "detection_count": 390,
+        "detection_count_by_frame": [
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26
+        ],
+        "same_input_sha256_for_A_and_B": true,
+        "A_input_fingerprint": "bb742f3a8530616b90e4dc65cdaa25a5ba7b5705124c9fe506fb4053a4da2b62",
+        "B_input_fingerprint": "bb742f3a8530616b90e4dc65cdaa25a5ba7b5705124c9fe506fb4053a4da2b62",
+        "post_B_input_fingerprint": "bb742f3a8530616b90e4dc65cdaa25a5ba7b5705124c9fe506fb4053a4da2b62",
+        "A_and_B_same_Detection_list": true
+      },
+      "registration": {
+        "cumulative_shifts_px": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "max_shift_px": 0.0,
+        "zero_verified": true,
+        "static_anchor_count_per_frame": 24
+      },
+      "runtime_seconds": {
+        "A_baseline_seconds": 0.1658672999983537,
+        "B_supplement_seconds": 0.00015310000162571669
+      }
+    },
+    "fast_orthogonal_supplement": {
+      "targets": [
+        {
+          "target_id": "FAST-CROSS-A",
+          "detection_id": 1000011,
+          "start_registered_xy_px": [
+            1948.0,
+            2000.0
+          ],
+          "velocity_px_per_frame": [
+            8.0,
+            0.0
+          ],
+          "expected_frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ]
+        },
+        {
+          "target_id": "FAST-CROSS-B",
+          "detection_id": 1000012,
+          "start_registered_xy_px": [
+            2000.0,
+            1948.0
+          ],
+          "velocity_px_per_frame": [
+            0.0,
+            8.0
+          ],
+          "expected_frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ]
+        }
+      ],
+      "input": {
+        "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\frozen_inputs\\fast_orthogonal_supplement.csv.gz",
+        "sha256": "2e1b077b1ba2c087100f388adfaf766f64d02adddfe902d122727b22035a7a63",
+        "detection_count": 390,
+        "detection_count_by_frame": [
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26,
+          26
+        ],
+        "same_input_sha256_for_A_and_B": true,
+        "A_input_fingerprint": "5e5a60d2c68e2c030d407a9d758d048a72d0d5e60f3a752a99222006e543477f",
+        "B_input_fingerprint": "5e5a60d2c68e2c030d407a9d758d048a72d0d5e60f3a752a99222006e543477f",
+        "post_B_input_fingerprint": "5e5a60d2c68e2c030d407a9d758d048a72d0d5e60f3a752a99222006e543477f",
+        "A_and_B_same_Detection_list": true
+      },
+      "registration": {
+        "cumulative_shifts_px": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "max_shift_px": 0.0,
+        "zero_verified": true,
+        "static_anchor_count_per_frame": 24
+      },
+      "runtime_seconds": {
+        "A_baseline_seconds": 0.16430640000180574,
+        "B_supplement_seconds": 0.019321399995533284
+      }
+    }
+  },
+  "static_anchors": {
+    "count_per_frame": 24,
+    "positions_px": [
+      [
+        120.0,
+        120.0
+      ],
+      [
+        320.0,
+        120.0
+      ],
+      [
+        520.0,
+        120.0
+      ],
+      [
+        720.0,
+        120.0
+      ],
+      [
+        920.0,
+        120.0
+      ],
+      [
+        1120.0,
+        120.0
+      ],
+      [
+        120.0,
+        320.0
+      ],
+      [
+        320.0,
+        320.0
+      ],
+      [
+        520.0,
+        320.0
+      ],
+      [
+        720.0,
+        320.0
+      ],
+      [
+        920.0,
+        320.0
+      ],
+      [
+        1120.0,
+        320.0
+      ],
+      [
+        120.0,
+        520.0
+      ],
+      [
+        320.0,
+        520.0
+      ],
+      [
+        520.0,
+        520.0
+      ],
+      [
+        720.0,
+        520.0
+      ],
+      [
+        920.0,
+        520.0
+      ],
+      [
+        1120.0,
+        520.0
+      ],
+      [
+        120.0,
+        720.0
+      ],
+      [
+        320.0,
+        720.0
+      ],
+      [
+        520.0,
+        720.0
+      ],
+      [
+        720.0,
+        720.0
+      ],
+      [
+        920.0,
+        720.0
+      ],
+      [
+        1120.0,
+        720.0
+      ]
+    ],
+    "purpose": "hold the estimated global translation at exactly zero while crossing detections are associated"
+  },
+  "versions": [
+    {
+      "id": "A",
+      "definition": "track_detections output with fixed link/registration parameters"
+    },
+    {
+      "id": "B_supplement",
+      "definition": "track_fast_point_movers on the same frozen Detection list; A tracks are passed as existing_tracks"
+    },
+    {
+      "id": "B_union",
+      "definition": "A tracks concatenated with B_supplement tracks; duplicate observations are retained and counted"
+    }
+  ],
+  "parameters": {
+    "link_radius_px": 4.0,
+    "registration_radius_px": 8.0,
+    "min_presence_frames": 12,
+    "motion_min_displacement_px": 2.0,
+    "baseline_max_motion_fit_rms_px": 0.75,
+    "supplement_min_flux_snr": 7.0,
+    "supplement_max_step_px_per_frame": 20.0,
+    "supplement_prediction_gate_px": 4.5,
+    "supplement_max_fit_rms_px": 1.5,
+    "detection_dtype": "not applicable; this is a frozen Detection-record experiment without pixel arrays",
+    "anchor_detection_snr": 20.0,
+    "target_detection_snr": 20.0
+  },
+  "metric_definitions": {
+    "identity_switch": "adjacent truth-labelled observations in a predicted track have different target IDs",
+    "mixed_truth_track": "one predicted track contains detections from more than one injected target ID",
+    "fragment_count": "number of output tracks containing at least one observation for the target; B_union retains A and supplement outputs",
+    "full_clean_track_present": "at least one output track contains exactly every expected target observation and no other observation",
+    "exclusive_full_track": "exactly one target-containing track exists and it is a full clean track",
+    "duplicate_observation_assignment": "the same (frame_index, detection_id) appears in multiple output tracks",
+    "truth_observation_coverage": "unique expected (frame_index, detection_id) keys represented in output tracks divided by expected keys"
+  },
+  "limitations": [
+    "All Detection records are synthetic and quality_passed; no FITS pixels, detector proposals, photometry uncertainty, or quality gate are exercised.",
+    "The two crossing scenarios establish deterministic behavior of these association functions only; they do not establish physical identity or sky-wide precision.",
+    "B is an additive supplement and cannot replace or correct any A track; B_union intentionally preserves duplicate baseline singleton assignments.",
+    "The cases use two clean targets and static anchors; crowded backgrounds, noise, missing frames, and detector misses are not part of this crossing experiment."
+  ],
+  "outputs": {
+    "truth_csv": {
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\truth.csv",
+      "sha256": "684fb76cf14997a149b8cce56b2599c446e936e82c9d07fee0935b31fcf24fe3"
+    },
+    "summary_csv": {
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\summary.csv",
+      "sha256": "e70ce33ecb5996d67bfb185e1741175ec5737c2efb3855a02fb5ab8dd2a6b82d"
+    },
+    "track_level_csv": {
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\track_level.csv",
+      "sha256": "645fcfc49b1ca26d76293020479a0c30008f1722539a0df21998a0eb129d973d"
+    },
+    "target_summary_csv": {
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\target_summary.csv",
+      "sha256": "2204c656f7a2c5b9e1366ce17d3c7eff06ee83141f06925e5170b950c0599bfa"
+    },
+    "track_points_csv": {
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\track_points.csv",
+      "sha256": "8b5071a8855199b94902ae35642d50579647b611ec26677086aa9700aaee01f5"
+    },
+    "motion_crossing_plot": {
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\motion_crossing_tracks.png",
+      "sha256": "07e5f7c5017d30fc70f9013296d8648abfc9f0a3be71cf6d263cd0c161f8cba3"
+    },
+    "frozen_input_slow_linked_identity_swap": {
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\frozen_inputs\\slow_linked_identity_swap.csv.gz",
+      "sha256": "85df320f9074208bc92b17c1f01d57f30c367456443756fed7a8f5669e96d81a"
+    },
+    "frozen_input_fast_orthogonal_supplement": {
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-crossing-final-unified-20261012-r4\\frozen_inputs\\fast_orthogonal_supplement.csv.gz",
+      "sha256": "2e1b077b1ba2c087100f388adfaf766f64d02adddfe902d122727b22035a7a63"
+    }
+  },
+  "execution": {
+    "argv": [
+      "C:\\Users\\lycohana\\Desktop\\rst19\\.venv\\Scripts\\rst19-motion-crossing-ablation",
+      "--out-dir",
+      "tmp/ablation/motion-crossing-final-unified-20261012-r4"
+    ],
+    "python": "3.14.3 (main, Mar 24 2026, 22:56:56) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "source_revision": "a69148740f461805bc5bf97ce20a4a5abc96762a",
+    "source_worktree_dirty": false,
+    "source_file_sha256": {
+      "src/rst19/motion_crossing_ablation.py": "589876091c3d098135da23eac15a30d2d459a0fb70939ee0d8cd8e240439521e",
+      "src/rst19/motion_crossing_ablation_cli.py": "905e1dc25b3d0d6550d8cb7998573b28516c87b9926ba4ec8e6b4b8f118eb370",
+      "src/rst19/sequence.py": "daeed65b2793f39272f5073942a379b32d4926ead3f4e130eb719fcf18498411",
+      "src/rst19/detection.py": "b790c1451e76906e8a2b1f01bc1bc06aec399229ecd3e5f971d34e6f30846e6c",
+      "pyproject.toml": "1de953030d57e52375b2867c241329c75c8d2b1ec66cf1774f9e28d54388b043"
+    }
+  }
+}

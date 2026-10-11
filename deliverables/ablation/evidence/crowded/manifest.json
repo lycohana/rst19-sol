@@ -1,0 +1,836 @@
+{
+  "schema_version": 1,
+  "experiment": "paired_real_fits_crowded_companion_ablation",
+  "status": "completed",
+  "created_utc": "2026-10-11T18:11:26+00:00",
+  "source_fits": {
+    "path": "C:\\Users\\lycohana\\Desktop\\rst19\\doc\\00-项目资料\\原始数据\\20260330163205413_9901.fits",
+    "sha256": "6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6",
+    "size_bytes": 33557312
+  },
+  "fixed_anchor_manifest": {
+    "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\manifest.json",
+    "sha256": "2a8d22008df9b22d4829cf617c864d550a63f2bbf0dea445a2efa0356bd9110b",
+    "source_experiment": "point_source_detection_ablation"
+  },
+  "patch_selection": {
+    "requested_anchor_count": 8,
+    "accepted_anchor_count": 8,
+    "patch_shape": [
+      96,
+      96
+    ],
+    "site_screen": "A Gaussian, B hybrid, and D Gaussian+local-deblend all have zero returned candidates within 3 px of both prospective sites on the same no-injection patch",
+    "accepted_anchors": [
+      {
+        "anchor_id": "PSF-001",
+        "original_fits_center_px": [
+          1196.8763032692764,
+          3245.5152960987602
+        ],
+        "crop_origin_px": [
+          1149,
+          3198
+        ],
+        "patch_shape": [
+          96,
+          96
+        ],
+        "base_array_sha256": "27e9c58c5f6ee2762a506af9c70a9827111cf87e06e6defbf1cb27b10c4e9f75",
+        "base_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-001-base-float32.npy",
+        "base_file_sha256": "df4ef1ea462f23fd2a5663d0209ad5744af5431c17c61e90d165977b38feddd5",
+        "baseline_collisions": {
+          "A": {
+            "primary": 0,
+            "companion": 0
+          },
+          "B": {
+            "primary": 0,
+            "companion": 0
+          },
+          "D": {
+            "primary": 0,
+            "companion": 0
+          }
+        },
+        "scenes": {
+          "pair": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-001-pair-float32.npy",
+            "file_sha256": "5c0053ba43ca4f0b6434db7185c92a3aaebce3081133bdf9f37342e1be9c0e1e",
+            "array_sha256": "ad0e0e62a7f9ebca9faeb9173feb8072f135d909fb11532780be7d139642286a",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-001-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-001",
+                "scene_array_sha256": "ad0e0e62a7f9ebca9faeb9173feb8072f135d909fb11532780be7d139642286a"
+              },
+              {
+                "target_id": "PSF-001-COMPANION",
+                "role": "weak companion",
+                "injected": true,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-001",
+                "scene_array_sha256": "ad0e0e62a7f9ebca9faeb9173feb8072f135d909fb11532780be7d139642286a"
+              }
+            ]
+          },
+          "single": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-001-single-float32.npy",
+            "file_sha256": "f11a0796ba1f12cfbbc2d1ceb90689a6f70912150e50f98caf70d3bde5fc69b4",
+            "array_sha256": "d70b15c6fe38d0380474ab9151394b2ab3fdecb6d20bf270f7675d2283577a40",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-001-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-001",
+                "scene_array_sha256": "d70b15c6fe38d0380474ab9151394b2ab3fdecb6d20bf270f7675d2283577a40"
+              },
+              {
+                "target_id": "PSF-001-NO-COMPANION",
+                "role": "not-injected companion negative site",
+                "injected": false,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-001",
+                "scene_array_sha256": "d70b15c6fe38d0380474ab9151394b2ab3fdecb6d20bf270f7675d2283577a40"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "anchor_id": "PSF-002",
+        "original_fits_center_px": [
+          3035.8018521545314,
+          1700.112706226976
+        ],
+        "crop_origin_px": [
+          2988,
+          1652
+        ],
+        "patch_shape": [
+          96,
+          96
+        ],
+        "base_array_sha256": "3be4ac46c1bb54be9c1ee53bc203b5641692b8c969075cb92120535d720f6452",
+        "base_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-002-base-float32.npy",
+        "base_file_sha256": "66e723dc9698c2a646e7133f8b708cc510af2de6cd4b606fa8629c9fdcb28e8e",
+        "baseline_collisions": {
+          "A": {
+            "primary": 0,
+            "companion": 0
+          },
+          "B": {
+            "primary": 0,
+            "companion": 0
+          },
+          "D": {
+            "primary": 0,
+            "companion": 0
+          }
+        },
+        "scenes": {
+          "pair": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-002-pair-float32.npy",
+            "file_sha256": "aa88f147adc9c3308737c2dde447a07c95348d07d00485bb6594e6bda047ac23",
+            "array_sha256": "145340c0397e402ee1adccdaa13403d612c99f96cf80bf297aed4015cdaac188",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-002-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-002",
+                "scene_array_sha256": "145340c0397e402ee1adccdaa13403d612c99f96cf80bf297aed4015cdaac188"
+              },
+              {
+                "target_id": "PSF-002-COMPANION",
+                "role": "weak companion",
+                "injected": true,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-002",
+                "scene_array_sha256": "145340c0397e402ee1adccdaa13403d612c99f96cf80bf297aed4015cdaac188"
+              }
+            ]
+          },
+          "single": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-002-single-float32.npy",
+            "file_sha256": "830408abf3c0d34ecebe814ccccb57eb5b17a14ac506841e3f7d42b5c411658b",
+            "array_sha256": "d7d4444797e6b42fa038a516a47eb0af1b7b3233a344c696f07af104a0d6ceef",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-002-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-002",
+                "scene_array_sha256": "d7d4444797e6b42fa038a516a47eb0af1b7b3233a344c696f07af104a0d6ceef"
+              },
+              {
+                "target_id": "PSF-002-NO-COMPANION",
+                "role": "not-injected companion negative site",
+                "injected": false,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-002",
+                "scene_array_sha256": "d7d4444797e6b42fa038a516a47eb0af1b7b3233a344c696f07af104a0d6ceef"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "anchor_id": "PSF-003",
+        "original_fits_center_px": [
+          2339.682853045571,
+          2258.959630425091
+        ],
+        "crop_origin_px": [
+          2292,
+          2211
+        ],
+        "patch_shape": [
+          96,
+          96
+        ],
+        "base_array_sha256": "93c87d6e894f28030e14cb98237a8d5627ecda1ca10ef04b9543213418a55dc5",
+        "base_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-003-base-float32.npy",
+        "base_file_sha256": "d8c7e2cd5f7f6660ffa6c84ab6bcf2a077168d9607fc070b8b4d022c06379636",
+        "baseline_collisions": {
+          "A": {
+            "primary": 0,
+            "companion": 0
+          },
+          "B": {
+            "primary": 0,
+            "companion": 0
+          },
+          "D": {
+            "primary": 0,
+            "companion": 0
+          }
+        },
+        "scenes": {
+          "pair": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-003-pair-float32.npy",
+            "file_sha256": "5b7f6489912fb52827f2e268aa69ad5f23d23556f9c36bc317f6475e38735a8c",
+            "array_sha256": "98e70b3dc2cd4bdd68367e417c7d493322fb3b60e478f3f047500b462975e2a7",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-003-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-003",
+                "scene_array_sha256": "98e70b3dc2cd4bdd68367e417c7d493322fb3b60e478f3f047500b462975e2a7"
+              },
+              {
+                "target_id": "PSF-003-COMPANION",
+                "role": "weak companion",
+                "injected": true,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-003",
+                "scene_array_sha256": "98e70b3dc2cd4bdd68367e417c7d493322fb3b60e478f3f047500b462975e2a7"
+              }
+            ]
+          },
+          "single": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-003-single-float32.npy",
+            "file_sha256": "5230e703279dc3f79aec7187d58b620477af50245fc914b1865632adae7350c5",
+            "array_sha256": "2f5dacc195a718c9919e107c7fe90f67f4b39fbd9478e822696c1d70ade3dcbe",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-003-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-003",
+                "scene_array_sha256": "2f5dacc195a718c9919e107c7fe90f67f4b39fbd9478e822696c1d70ade3dcbe"
+              },
+              {
+                "target_id": "PSF-003-NO-COMPANION",
+                "role": "not-injected companion negative site",
+                "injected": false,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-003",
+                "scene_array_sha256": "2f5dacc195a718c9919e107c7fe90f67f4b39fbd9478e822696c1d70ade3dcbe"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "anchor_id": "PSF-004",
+        "original_fits_center_px": [
+          269.6936651878906,
+          3080.8472476499264
+        ],
+        "crop_origin_px": [
+          222,
+          3033
+        ],
+        "patch_shape": [
+          96,
+          96
+        ],
+        "base_array_sha256": "8a9feddc0e3e06ddd81bcfe624d8bd4a911d2e0aab1308d82d49f55985a331d7",
+        "base_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-004-base-float32.npy",
+        "base_file_sha256": "0274666b7b66c9dae52cbb003c888e1197b61284e9b7cb6a55ae320f0d92a0fd",
+        "baseline_collisions": {
+          "A": {
+            "primary": 0,
+            "companion": 0
+          },
+          "B": {
+            "primary": 0,
+            "companion": 0
+          },
+          "D": {
+            "primary": 0,
+            "companion": 0
+          }
+        },
+        "scenes": {
+          "pair": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-004-pair-float32.npy",
+            "file_sha256": "5e97ff042d565b2ad907cfcb63010b03b9906ac652cdc1d53bc005d11cbc5e35",
+            "array_sha256": "fd64d8f3cbabff203ed84b887d0f615cf1200fe9f5cc027b5a181bc7f8ae4eef",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-004-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-004",
+                "scene_array_sha256": "fd64d8f3cbabff203ed84b887d0f615cf1200fe9f5cc027b5a181bc7f8ae4eef"
+              },
+              {
+                "target_id": "PSF-004-COMPANION",
+                "role": "weak companion",
+                "injected": true,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-004",
+                "scene_array_sha256": "fd64d8f3cbabff203ed84b887d0f615cf1200fe9f5cc027b5a181bc7f8ae4eef"
+              }
+            ]
+          },
+          "single": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-004-single-float32.npy",
+            "file_sha256": "b05c9c23455798eba901702d3e5de24cc0b9bb9b19a86e7d83da4a71852c51f3",
+            "array_sha256": "b70f180badb81fbda5f3a47ba2930ce5d1349e429d2774f656d64d35b01ed4fc",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-004-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-004",
+                "scene_array_sha256": "b70f180badb81fbda5f3a47ba2930ce5d1349e429d2774f656d64d35b01ed4fc"
+              },
+              {
+                "target_id": "PSF-004-NO-COMPANION",
+                "role": "not-injected companion negative site",
+                "injected": false,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-004",
+                "scene_array_sha256": "b70f180badb81fbda5f3a47ba2930ce5d1349e429d2774f656d64d35b01ed4fc"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "anchor_id": "PSF-005",
+        "original_fits_center_px": [
+          1384.3199621009624,
+          2179.7420537664825
+        ],
+        "crop_origin_px": [
+          1336,
+          2132
+        ],
+        "patch_shape": [
+          96,
+          96
+        ],
+        "base_array_sha256": "9f39e2386725af6386e73a1e50b93082537109466c06bf5b792270a75ecb9821",
+        "base_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-005-base-float32.npy",
+        "base_file_sha256": "d1edfa8a7da08e7adf8f0c26787213458bcd038308790eaade09e6bde1b069aa",
+        "baseline_collisions": {
+          "A": {
+            "primary": 0,
+            "companion": 0
+          },
+          "B": {
+            "primary": 0,
+            "companion": 0
+          },
+          "D": {
+            "primary": 0,
+            "companion": 0
+          }
+        },
+        "scenes": {
+          "pair": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-005-pair-float32.npy",
+            "file_sha256": "53095ede337f57f64e1850ae70488095ce35aa7f8143b8f68d56838d417ac48c",
+            "array_sha256": "710fc259b60814aa0f22469c7e0a99321de2e6699b728e18cc1515d0645c11ae",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-005-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-005",
+                "scene_array_sha256": "710fc259b60814aa0f22469c7e0a99321de2e6699b728e18cc1515d0645c11ae"
+              },
+              {
+                "target_id": "PSF-005-COMPANION",
+                "role": "weak companion",
+                "injected": true,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-005",
+                "scene_array_sha256": "710fc259b60814aa0f22469c7e0a99321de2e6699b728e18cc1515d0645c11ae"
+              }
+            ]
+          },
+          "single": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-005-single-float32.npy",
+            "file_sha256": "223749a417a52288c9741d7f1d95703338dc94d2a56b703cde2a70bd1ddac9dd",
+            "array_sha256": "ec1e65a4d34060920b237a51899e6ce969732ec8a4c91b378140ab031960eef1",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-005-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-005",
+                "scene_array_sha256": "ec1e65a4d34060920b237a51899e6ce969732ec8a4c91b378140ab031960eef1"
+              },
+              {
+                "target_id": "PSF-005-NO-COMPANION",
+                "role": "not-injected companion negative site",
+                "injected": false,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-005",
+                "scene_array_sha256": "ec1e65a4d34060920b237a51899e6ce969732ec8a4c91b378140ab031960eef1"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "anchor_id": "PSF-006",
+        "original_fits_center_px": [
+          2036.8309113511284,
+          1529.2744228678532
+        ],
+        "crop_origin_px": [
+          1989,
+          1481
+        ],
+        "patch_shape": [
+          96,
+          96
+        ],
+        "base_array_sha256": "fc011d0bb0776cca4d2643660e31d850a4710740f3820722d14ed5202cf71466",
+        "base_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-006-base-float32.npy",
+        "base_file_sha256": "9dc891118601b760fda12bc707c8e44ddb5291326a4c0598950a41a44a8f7e8e",
+        "baseline_collisions": {
+          "A": {
+            "primary": 0,
+            "companion": 0
+          },
+          "B": {
+            "primary": 0,
+            "companion": 0
+          },
+          "D": {
+            "primary": 0,
+            "companion": 0
+          }
+        },
+        "scenes": {
+          "pair": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-006-pair-float32.npy",
+            "file_sha256": "4003735ba9aa73a98456f4687dae873b2c21b8755851e21c0b4579bbc161cf43",
+            "array_sha256": "2fbc74d9a65abd47be0c5ae9e5da331754d3b06326d884aa8f968fc2deab2e24",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-006-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-006",
+                "scene_array_sha256": "2fbc74d9a65abd47be0c5ae9e5da331754d3b06326d884aa8f968fc2deab2e24"
+              },
+              {
+                "target_id": "PSF-006-COMPANION",
+                "role": "weak companion",
+                "injected": true,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-006",
+                "scene_array_sha256": "2fbc74d9a65abd47be0c5ae9e5da331754d3b06326d884aa8f968fc2deab2e24"
+              }
+            ]
+          },
+          "single": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-006-single-float32.npy",
+            "file_sha256": "d38e0b4e12ce7545e27733a8c626a7396ba2b9ad3adf1c2f315c5a0e363a5abc",
+            "array_sha256": "9e9f084ba7e909eb706cc27238f1dc84469bc55f1f244fcad2407b25d80a276e",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-006-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-006",
+                "scene_array_sha256": "9e9f084ba7e909eb706cc27238f1dc84469bc55f1f244fcad2407b25d80a276e"
+              },
+              {
+                "target_id": "PSF-006-NO-COMPANION",
+                "role": "not-injected companion negative site",
+                "injected": false,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-006",
+                "scene_array_sha256": "9e9f084ba7e909eb706cc27238f1dc84469bc55f1f244fcad2407b25d80a276e"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "anchor_id": "PSF-007",
+        "original_fits_center_px": [
+          1739.914383507787,
+          2474.01457466045
+        ],
+        "crop_origin_px": [
+          1692,
+          2426
+        ],
+        "patch_shape": [
+          96,
+          96
+        ],
+        "base_array_sha256": "c8c2d91bd44e1a3a77d86bc754087d4aa82f59cc4df4241881da38e059c05bfd",
+        "base_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-007-base-float32.npy",
+        "base_file_sha256": "5f1be009e851093ee28ecd1804af0af04dd33aafa9d9e1841cdbb346a26fdc07",
+        "baseline_collisions": {
+          "A": {
+            "primary": 0,
+            "companion": 0
+          },
+          "B": {
+            "primary": 0,
+            "companion": 0
+          },
+          "D": {
+            "primary": 0,
+            "companion": 0
+          }
+        },
+        "scenes": {
+          "pair": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-007-pair-float32.npy",
+            "file_sha256": "04b3b0f35f340a37565c71d06025c7c4b837ef77215cf23396247bc38f320376",
+            "array_sha256": "ab4ecbb925778bd55110a6cb3af1b3d7dc499b8b2d9c89791f4095276d8dd01c",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-007-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-007",
+                "scene_array_sha256": "ab4ecbb925778bd55110a6cb3af1b3d7dc499b8b2d9c89791f4095276d8dd01c"
+              },
+              {
+                "target_id": "PSF-007-COMPANION",
+                "role": "weak companion",
+                "injected": true,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-007",
+                "scene_array_sha256": "ab4ecbb925778bd55110a6cb3af1b3d7dc499b8b2d9c89791f4095276d8dd01c"
+              }
+            ]
+          },
+          "single": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-007-single-float32.npy",
+            "file_sha256": "dd15ecc877f51f08c612567bc0047ef5711e8235d0d6e51ce1b82660f6d439d0",
+            "array_sha256": "2017f12df7cc679b6a9b75bc2e5cb68c2eea461a2c8dbc7ee23c1992ec249fba",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-007-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-007",
+                "scene_array_sha256": "2017f12df7cc679b6a9b75bc2e5cb68c2eea461a2c8dbc7ee23c1992ec249fba"
+              },
+              {
+                "target_id": "PSF-007-NO-COMPANION",
+                "role": "not-injected companion negative site",
+                "injected": false,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-007",
+                "scene_array_sha256": "2017f12df7cc679b6a9b75bc2e5cb68c2eea461a2c8dbc7ee23c1992ec249fba"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "anchor_id": "PSF-008",
+        "original_fits_center_px": [
+          2596.8463958796183,
+          1823.2990145297783
+        ],
+        "crop_origin_px": [
+          2549,
+          1775
+        ],
+        "patch_shape": [
+          96,
+          96
+        ],
+        "base_array_sha256": "3efbfa069341ae4e6f883c0f35afdf221573467ae8aca1d0b99bd6227bede596",
+        "base_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-008-base-float32.npy",
+        "base_file_sha256": "81a0342347d6bcc93089b57d49427dbce62e9e2384f42b1f2a06546fac9e8c37",
+        "baseline_collisions": {
+          "A": {
+            "primary": 0,
+            "companion": 0
+          },
+          "B": {
+            "primary": 0,
+            "companion": 0
+          },
+          "D": {
+            "primary": 0,
+            "companion": 0
+          }
+        },
+        "scenes": {
+          "pair": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-008-pair-float32.npy",
+            "file_sha256": "a1046ac95f63cbbbc7941f6606db8c02c92a6e0ce668b5aa37346ac8d1e3c9b1",
+            "array_sha256": "5949dafe8928b1b7d841a0c94f59d033955bd7a27002cab07b182a64f222eb63",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-008-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-008",
+                "scene_array_sha256": "5949dafe8928b1b7d841a0c94f59d033955bd7a27002cab07b182a64f222eb63"
+              },
+              {
+                "target_id": "PSF-008-COMPANION",
+                "role": "weak companion",
+                "injected": true,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-008",
+                "scene_array_sha256": "5949dafe8928b1b7d841a0c94f59d033955bd7a27002cab07b182a64f222eb63"
+              }
+            ]
+          },
+          "single": {
+            "file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs\\PSF-008-single-float32.npy",
+            "file_sha256": "f9fa47b750e549002f498da542447bfe642477ffe824beea34dca57085da9846",
+            "array_sha256": "815ed331d534d79b3523b241a14b3a51d16ef2744a92d54e6440b344c74792d2",
+            "dtype": "float32",
+            "truths": [
+              {
+                "target_id": "PSF-008-PRIMARY",
+                "role": "bright primary",
+                "injected": true,
+                "x_px": 48.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-008",
+                "scene_array_sha256": "815ed331d534d79b3523b241a14b3a51d16ef2744a92d54e6440b344c74792d2"
+              },
+              {
+                "target_id": "PSF-008-NO-COMPANION",
+                "role": "not-injected companion negative site",
+                "injected": false,
+                "x_px": 54.0,
+                "y_px": 48.0,
+                "anchor_id": "PSF-008",
+                "scene_array_sha256": "815ed331d534d79b3523b241a14b3a51d16ef2744a92d54e6440b344c74792d2"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "rejected_anchors": []
+  },
+  "injections": {
+    "primary": {
+      "x_px": 48.0,
+      "y_px": 48.0,
+      "center_peak_excess_adu": 160.0,
+      "fwhm_px": 1.4
+    },
+    "companion": {
+      "x_px": 54.0,
+      "y_px": 48.0,
+      "center_peak_excess_adu": 40.0,
+      "fwhm_px": 0.8
+    },
+    "pair_separation_px": 6.0,
+    "negative_control": "single-source scenes contain the primary only; the companion coordinate is a known not-injected site, not a claim of physical blank sky",
+    "all_version_inputs": "each detector variant loads the same frozen float32 NPY for a given anchor and scene"
+  },
+  "versions": [
+    {
+      "id": "A",
+      "name": "Gaussian baseline proposals",
+      "proposal_mode": "gaussian",
+      "enable_local_deblend": false
+    },
+    {
+      "id": "B",
+      "name": "Gaussian + DoG multiscale proposals",
+      "proposal_mode": "hybrid",
+      "enable_local_deblend": false
+    },
+    {
+      "id": "C",
+      "name": "B candidates passed through existing quality gate",
+      "candidate_pool": "same B Detection objects; quality_passed only"
+    },
+    {
+      "id": "D",
+      "name": "Gaussian proposals + local deblend",
+      "proposal_mode": "gaussian",
+      "enable_local_deblend": true
+    }
+  ],
+  "parameters_requested": {
+    "threshold_sigma": 6.0,
+    "min_distance": 4,
+    "aperture_radius": 4,
+    "psf_fwhm": 3.0,
+    "background_box_size": 32,
+    "min_flux_snr": 2.0,
+    "min_psf_support_pixels": 3,
+    "dog_threshold_sigma": 5.0,
+    "match_radius_px": 3.0,
+    "injected_psf_fwhm_px": {
+      "primary": 1.4,
+      "companion": 0.8
+    },
+    "dtype": "float32"
+  },
+  "outputs": {
+    "summary_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\summary.csv",
+    "anchor_summary_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\anchor_summary.csv",
+    "target_results_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\target_results.csv",
+    "control_summary_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\control_summary.csv",
+    "detector_runs_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\detector_runs.csv",
+    "case_sheet_png": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\crowded_pair_cases.png",
+    "frozen_inputs_dir": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\crowded-final-unified-20261012-r2\\frozen_inputs"
+  },
+  "metrics": {
+    "candidate_recall": "one-to-one matched injected sources / injected truth count, separately from quality-passed recall",
+    "position_error": "Euclidean distance in pixels; median and P90 over matched injected truths only",
+    "quality_gate_loss": "candidate hit minus matched quality-passed hit count; C uses the same B candidate pool",
+    "false_split_control": "count of candidate and quality detections within 3 px of the not-injected companion site in paired single-source scenes",
+    "matching": "minimum-distance sorted greedy one-to-one assignment, maximum radius 3 px"
+  },
+  "runtime": {
+    "total_experiment_seconds": 0.8235829000041122,
+    "site_screen_seconds": 0.24907360000361223
+  },
+  "limitations": [
+    "Injected Gaussian sources are labelled synthetic truths on real FITS image patches; they are not independently catalogued physical stars.",
+    "The not-injected companion coordinate is a local negative control only; it does not establish that the surrounding sky is physically empty.",
+    "Eight patches from one FITS frame are paired measurements, not an independent survey population; no full-frame precision or physical completeness is estimated.",
+    "D measures an optional single-frame deblend path. It is a separate crowded-pair condition and not a replacement for the A/B/C point-source ablation."
+  ],
+  "execution": {
+    "argv": [
+      "C:\\Users\\lycohana\\Desktop\\rst19\\.venv\\Scripts\\rst19-crowded-ablation",
+      "doc/00-项目资料/原始数据/20260330163205413_9901.fits",
+      "--reuse-manifest",
+      "tmp/ablation/point-final-unified-r3-20261012/manifest.json",
+      "--point-run-dir",
+      "tmp/ablation/point-final-unified-r3-20261012",
+      "--motion-run-dir",
+      "tmp/ablation/motion-final-unified-r3-20261012",
+      "--motion-proposal-run-dir",
+      "tmp/ablation/motion-proposal-final-unified-r3-20261012",
+      "--motion-crossing-run-dir",
+      "tmp/ablation/motion-crossing-final-unified-20261012-r4",
+      "--demo-summary",
+      "deliverables/ablation/evidence/demo/summary.json",
+      "--out-dir",
+      "tmp/ablation/crowded-final-unified-20261012-r2",
+      "--report",
+      "deliverables/ablation/index.html"
+    ],
+    "python": "3.14.3 (main, Mar 24 2026, 22:56:56) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "source_revision": "a69148740f461805bc5bf97ce20a4a5abc96762a",
+    "source_file_sha256": {
+      "src/rst19/crowded_ablation.py": "2a8e4543cd6b7cc60e31c916bf29877e895b3d2bdf0aded9a8c1cc1ea66ea6d1",
+      "src/rst19/crowded_ablation_cli.py": "781a504561a9c305a1253c1f2feab78b0bf6e9e0d21c3f06c5917d7928b34ec5",
+      "src/rst19/ablation.py": "b97929666d8632524442b5035db5c01d519d52535d2f199dc75237be5dcdbe9f",
+      "src/rst19/detection.py": "b790c1451e76906e8a2b1f01bc1bc06aec399229ecd3e5f971d34e6f30846e6c",
+      "src/rst19/experiments.py": "f0eb598408ab275024dd403aad7c09e8aadd898747d351bbff003be3a7c98d09",
+      "src/rst19/fits.py": "c9b711b38c812efdd39aca03bf15d45d43b2fe68384d7213511e8c4d5792277b"
+    },
+    "source_worktree_dirty": false
+  }
+}

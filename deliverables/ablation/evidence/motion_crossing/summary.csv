@@ -1,0 +1,7 @@
+﻿scenario,version,input_sha256,target_count,truth_observations_total,truth_observations_covered_unique,truth_observation_assignments_in_tracks,duplicated_truth_observation_assignments,targets_with_all_observations_covered,targets_with_full_clean_track_present,targets_with_exclusive_full_track,target_track_assignments_fragment_count_sum,identity_switch_count,mixed_truth_track_count,background_contaminated_target_track_count,predicted_track_count,registration_max_shift_px,runtime_seconds,supplement_track_count
+slow_linked_identity_swap,A,85df320f9074208bc92b17c1f01d57f30c367456443756fed7a8f5669e96d81a,2,30,30,30,0,2,0,0,4,2,2,0,26,0.000000000,0.165867300,0
+slow_linked_identity_swap,B_supplement,85df320f9074208bc92b17c1f01d57f30c367456443756fed7a8f5669e96d81a,2,30,0,0,0,0,0,0,0,0,0,0,0,0.000000000,0.000153100,0
+slow_linked_identity_swap,B_union,85df320f9074208bc92b17c1f01d57f30c367456443756fed7a8f5669e96d81a,2,30,30,30,0,2,0,0,4,2,2,0,26,0.000000000,0.166020400,0
+fast_orthogonal_supplement,A,2e1b077b1ba2c087100f388adfaf766f64d02adddfe902d122727b22035a7a63,2,30,30,30,0,2,0,0,30,0,0,0,54,0.000000000,0.164306400,2
+fast_orthogonal_supplement,B_supplement,2e1b077b1ba2c087100f388adfaf766f64d02adddfe902d122727b22035a7a63,2,30,30,30,0,2,2,2,2,0,0,0,2,0.000000000,0.019321400,2
+fast_orthogonal_supplement,B_union,2e1b077b1ba2c087100f388adfaf766f64d02adddfe902d122727b22035a7a63,2,30,30,60,30,2,2,0,32,0,0,0,56,0.000000000,0.183627800,2
