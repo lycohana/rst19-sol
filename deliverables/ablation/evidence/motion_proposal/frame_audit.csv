@@ -1,0 +1,17 @@
+﻿scene,version,frame_index,feature_count,component_count,support_pixel_count,threshold_adu,max_feature_residual_snr
+no_injection_control,A 基础线提案,0,0,0,0,100.0,
+no_injection_control,A 基础线提案,1,0,0,0,100.0,
+no_injection_control,A 基础线提案,2,0,0,0,100.0,
+no_injection_control,A 基础线提案,3,0,0,0,100.0,
+no_injection_control,B 多尺度运动线提案,0,0,0,0,100.0,
+no_injection_control,B 多尺度运动线提案,1,0,0,0,100.0,
+no_injection_control,B 多尺度运动线提案,2,0,0,0,100.0,
+no_injection_control,B 多尺度运动线提案,3,0,0,0,100.0,
+low_peak_moving_trail,A 基础线提案,0,0,0,0,100.0,
+low_peak_moving_trail,A 基础线提案,1,0,0,0,100.0,
+low_peak_moving_trail,A 基础线提案,2,0,0,0,100.0,
+low_peak_moving_trail,A 基础线提案,3,0,0,0,100.0,
+low_peak_moving_trail,B 多尺度运动线提案,0,1,0,0,100.0,9.901176764454643
+low_peak_moving_trail,B 多尺度运动线提案,1,1,0,0,100.0,9.568766930472739
+low_peak_moving_trail,B 多尺度运动线提案,2,1,0,0,100.0,9.525754217106037
+low_peak_moving_trail,B 多尺度运动线提案,3,1,0,0,100.0,9.664135470584037

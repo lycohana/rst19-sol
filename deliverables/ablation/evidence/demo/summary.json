@@ -1,0 +1,18 @@
+{
+  "experiment": "single_frame_cli_end_to_end_demo",
+  "input_path": "doc\\00-项目资料\\原始数据\\20260330163205413_9901.fits",
+  "input_sha256": "6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6",
+  "image_shape": [
+    4096,
+    4096
+  ],
+  "elapsed_seconds": 24.618525,
+  "exit_code": 0,
+  "candidate_count": 66469,
+  "returned_count": 66469,
+  "quality_count": 27553,
+  "rejected_count": 38916,
+  "recognition_json_sha256": "4717e6384fba68470bdfc25bebe6579b8594f7698ab67e648d8f7dbd8273d752",
+  "source_revision": "d6b0ddac3b5670ec79d69a958e9e2aac01049a15",
+  "command": "rst19.exe doc\\00-项目资料\\原始数据\\20260330163205413_9901.fits --json-out tmp\\ablation\\live-demo-final-r3-20261012\\recognition.json"
+}

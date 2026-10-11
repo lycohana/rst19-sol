@@ -2,7 +2,7 @@
   "schema_version": 2,
   "experiment": "association_stage_motion_constraint_ablation",
   "status": "completed",
-  "created_local_time": "2026-10-12T00:47:12+08:00",
+  "created_local_time": "2026-10-12T01:38:23+08:00",
   "input_cache": {
     "path": "C:\\Users\\lycohana\\Desktop\\rst19\\.rst19-cache\\3cbeaf34b7381421ab13d688048b6eaa1a084da0c91cf0862800759e9e52a955.sequence.json.gz",
     "sha256": "faad5e153b6e4991b5558fed1dd1f291ae74a43eba2c665275183beb9b0bfc85",
@@ -106,9 +106,9 @@
     ]
   },
   "frozen_association_input": {
-    "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-20261012\\frozen_frame_sources.csv.gz",
+    "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-unified-r3-20261012\\frozen_frame_sources.csv.gz",
     "sha256": "7cc02ca6d9d4c213f58d89d87cf12579f8d44fed7f458650ba407d6ddc9adc1e",
-    "truth_path_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-20261012\\truth_trajectories.json",
+    "truth_path_file": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-unified-r3-20261012\\truth_trajectories.json",
     "truth_path_sha256": "f820043e700ddf5339509c7f054f0fa15978dba2f49d8254ade9788ab59d1c60",
     "dtype": "Detection objects reconstructed from cached quality points; synthetic points appended",
     "coordinate_rule": "synthetic raw position = frozen registered truth position + cached cumulative shift",
@@ -773,15 +773,15 @@
     "negative_control": "the 11/15 path should not produce a fast supplement because min_presence is 12; it is not a false-positive estimate"
   },
   "runtime": {
-    "baseline_seconds": 1.7068970000036643,
-    "supplement_seconds": 0.039173099998151883
+    "baseline_seconds": 1.7590808999957517,
+    "supplement_seconds": 0.036354099996970035
   },
   "outputs": {
-    "trajectory_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-20261012\\trajectory_results.csv",
-    "pairing_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-20261012\\motion_pairing.csv",
-    "frozen_sources_csv_gz": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-20261012\\frozen_frame_sources.csv.gz",
-    "truth_json": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-20261012\\truth_trajectories.json",
-    "track_plot": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-20261012\\motion_tracks.png"
+    "trajectory_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-unified-r3-20261012\\trajectory_results.csv",
+    "pairing_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-unified-r3-20261012\\motion_pairing.csv",
+    "frozen_sources_csv_gz": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-unified-r3-20261012\\frozen_frame_sources.csv.gz",
+    "truth_json": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-unified-r3-20261012\\truth_trajectories.json",
+    "track_plot": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-final-unified-r3-20261012\\motion_tracks.png"
   },
   "limitations": [
     "This is an association-stage test: artificial Detection records are appended to a frozen quality-source list.",
@@ -794,19 +794,43 @@
     "argv": [
       "C:\\Users\\lycohana\\Desktop\\rst19\\.venv\\Scripts\\rst19-motion-ablation",
       "--cache",
-      ".rst19-cache/3cbeaf34b7381421ab13d688048b6eaa1a084da0c91cf0862800759e9e52a955.sequence.json.gz",
+      "C:\\Users\\lycohana\\Desktop\\rst19\\.rst19-cache\\3cbeaf34b7381421ab13d688048b6eaa1a084da0c91cf0862800759e9e52a955.sequence.json.gz",
       "--point-run-dir",
-      "tmp/ablation/point-final-20261012",
+      "tmp\\ablation\\point-final-unified-r3-20261012",
       "--out-dir",
-      "tmp/ablation/motion-final-20261012",
+      "tmp\\ablation\\motion-final-unified-r3-20261012",
       "--report",
-      "deliverables/ablation/index.html"
+      "deliverables\\ablation\\index.html",
+      "--seed",
+      "19019",
+      "--min-presence",
+      "12",
+      "--link-radius-px",
+      "4",
+      "--registration-radius-px",
+      "8",
+      "--min-flux-snr",
+      "7",
+      "--max-step-px",
+      "20",
+      "--prediction-gate-px",
+      "4.5",
+      "--max-fit-rms-px",
+      "1.5"
     ],
     "python": "3.14.3 (main, Mar 24 2026, 22:56:56) [MSC v.1944 64 bit (AMD64)]",
     "platform": "Windows-11-10.0.26200-SP0",
     "scipy": "1.18.1",
     "pillow": "12.3.0",
-    "source_revision": "3a51da33536693b84f0ef3ab93e21ca83368d410",
-    "source_worktree_dirty": false
+    "source_revision": "d6b0ddac3b5670ec79d69a958e9e2aac01049a15",
+    "source_worktree_dirty": false,
+    "source_file_sha256": {
+      "src/rst19/motion_ablation.py": "4a9a79a0b100257dae3c152c1150487c45476e31c5775e9f463e592baf110dab",
+      "src/rst19/motion_ablation_cli.py": "91bc1f0739363f941a4f1fd915f963121fd6cf364e2944b95ae4ce21aca54284",
+      "src/rst19/sequence.py": "daeed65b2793f39272f5073942a379b32d4926ead3f4e130eb719fcf18498411",
+      "src/rst19/cache.py": "49e9a39720871dffdf9f90f0b4ff87d66af10bd4661cb4e639b3156c3840c955",
+      "src/rst19/detection.py": "b790c1451e76906e8a2b1f01bc1bc06aec399229ecd3e5f971d34e6f30846e6c"
+    },
+    "relevant_tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
 }

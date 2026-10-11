@@ -1,8 +1,8 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "experiment": "point_source_detection_ablation",
   "status": "completed",
-  "created_local_time": "2026-10-12T00:47:02+08:00",
+  "created_local_time": "2026-10-12T01:38:07+08:00",
   "source_fits": {
     "path": "C:\\Users\\lycohana\\Desktop\\rst19\\doc\\00-项目资料\\原始数据\\20260330163205413_9901.fits",
     "sha256": "6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6",
@@ -24,7 +24,7 @@
     }
   },
   "shared_control": {
-    "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-20261012\\frozen_inputs\\control-float32.npy",
+    "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\frozen_inputs\\control-float32.npy",
     "file_sha256": "f4933f25c9094241716934d2773056cf63a85e6af071fb6d5ef5b2b8e99d34e9",
     "array_sha256": "69d94c247413d960540f1c73ab7ce39680d47445108c86ad18ebc502bbd010b6",
     "dtype": "float32",
@@ -32,12 +32,48 @@
       4096,
       4096
     ],
-    "selection_method": "reused frozen coordinates from C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-complete-20261012\\manifest.json",
+    "selection_method": "reused frozen coordinates from C:\\Users\\lycohana\\Desktop\\rst19\\deliverables\\ablation\\evidence\\point\\manifest.json",
     "selection_seed": 19019,
-    "control_detector_seconds": 26.979610400005186,
+    "control_detector_seconds": 27.289148700001533,
     "control_candidate_count": 84643,
     "control_quality_count": 29015,
-    "background_candidate_collisions_within_match_radius": 0
+    "background_candidate_collisions_within_match_radius": 0,
+    "versions": [
+      {
+        "version": "A 基线 Gaussian 提案",
+        "input": "same float32 no-injection control",
+        "candidate_count": 81286,
+        "returned_count": 81286,
+        "quality_count": 28711,
+        "output_count": 81286,
+        "target_site_candidates_within_match_radius": 0,
+        "detector_seconds": 15.616285600000992,
+        "reused_version": ""
+      },
+      {
+        "version": "B Gaussian+DoG 多尺度提案",
+        "input": "same float32 no-injection control",
+        "candidate_count": 84617,
+        "returned_count": 84617,
+        "quality_count": 29009,
+        "output_count": 84617,
+        "target_site_candidates_within_match_radius": 0,
+        "detector_seconds": 22.37729180000315,
+        "reused_version": ""
+      },
+      {
+        "version": "C 对 B 候选应用现有质量门",
+        "input": "same float32 no-injection control",
+        "candidate_count": 84617,
+        "returned_count": 84617,
+        "quality_count": 29009,
+        "output_count": 29009,
+        "target_site_candidates_within_match_radius": 0,
+        "detector_seconds": 22.37729180000315,
+        "reused_version": "B candidate objects"
+      }
+    ],
+    "versions_summary_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\control_summary.csv"
   },
   "targets": [
     {
@@ -163,10 +199,10 @@
     "dtype_for_all_detector_versions": "float32",
     "background_handling": "original raw FITS values converted once to float32; no global background subtraction before injection; detector local background estimation unchanged",
     "psf_model": "discrete Gaussian kernel",
-    "negative_control": "same float32 original image, detected before injection; all target sites must have zero candidates within match radius or the run aborts"
+    "negative_control": "same float32 original image is run through A and B; C reuses B candidates. All frozen target sites must have zero A/B/C candidates within match radius or the run aborts"
   },
   "detector_parameters_actual": {
-    "control_ensemble": {
+    "site_selection_ensemble": {
       "threshold_sigma": 4.0,
       "min_distance": 4,
       "aperture_radius": 4,
@@ -217,6 +253,138 @@
       "proposal_count_starlet_s1": 58709,
       "proposal_count_starlet_s2": 41569,
       "proposal_count_merged": 84643,
+      "refine_local_background": 1,
+      "background_clip_iterations": 4,
+      "fast_sequence": 0,
+      "masked_filter_mode": "normalized_two_pass",
+      "background_stats_mode": "full_grid",
+      "background_model_mode": "per_frame_local",
+      "use_float32": 0,
+      "line_artifact_pixels": 9426,
+      "saturation_level": -1.0,
+      "negative_overflow_limit": null,
+      "global_background": 21.0,
+      "global_noise": 7.90946548646176,
+      "filter_noise": 2.9702199406647822,
+      "centroid_method": "psf_weighted_noise_floor"
+    },
+    "control_gaussian": {
+      "threshold_sigma": 4.0,
+      "min_distance": 4,
+      "aperture_radius": 4,
+      "max_sources": -1,
+      "psf_fwhm": 2.0,
+      "background_box_size": 128,
+      "background_sample_limit": 100000,
+      "statistics_sample_limit": 1000000,
+      "min_flux_snr": 5.0,
+      "min_fwhm": 0.8,
+      "max_fwhm": 12.0,
+      "max_ellipticity": 0.65,
+      "min_sharpness": 0.005,
+      "max_sharpness": 0.85,
+      "min_footprint_pixels": 2,
+      "min_psf_support_pixels": 3,
+      "gain_e_per_adu": -1.0,
+      "read_noise_adu": 0.0,
+      "mask_zero_pixels": 0,
+      "allow_partial_zero_mask": 0,
+      "partial_mask_policy": "disabled",
+      "reject_linear_artifacts": 1,
+      "proposal_mode": "gaussian",
+      "dog_threshold_sigma": 6.0,
+      "dog_min_peak_sigma": 2.0,
+      "dog_blend_radius_factor": 2.5,
+      "dog_blend_radius_px": 5.0,
+      "dog_narrow_factor": 0.75,
+      "dog_broad_factor": 1.6,
+      "starlet_threshold_sigma": 7.0,
+      "starlet_min_peak_sigma": 2.5,
+      "deblend_delta_bic_min": 10.0,
+      "deblend_component_snr_min": 5.0,
+      "deblend_primary_snr_min": 12.0,
+      "deblend_min_residual_sigma": 4.0,
+      "deblend_search_radius_factor": 2.0,
+      "enable_local_deblend": 0,
+      "repeated_high_code_values": [],
+      "repeated_high_code_min_count": 128,
+      "code_pattern_negative_limit_adu": -1000.0,
+      "close_pair_guard_radius_px": 3.0,
+      "close_pair_guard_tested_count": 5,
+      "close_pair_guarded_source_count": 5,
+      "proposal_count_deblend_local": 0,
+      "proposal_count_gaussian": 81286,
+      "proposal_count_dog_narrow": 0,
+      "proposal_count_dog_broad": 0,
+      "proposal_count_starlet_s1": 0,
+      "proposal_count_starlet_s2": 0,
+      "proposal_count_merged": 81286,
+      "refine_local_background": 1,
+      "background_clip_iterations": 4,
+      "fast_sequence": 0,
+      "masked_filter_mode": "normalized_two_pass",
+      "background_stats_mode": "full_grid",
+      "background_model_mode": "per_frame_local",
+      "use_float32": 0,
+      "line_artifact_pixels": 9426,
+      "saturation_level": -1.0,
+      "negative_overflow_limit": null,
+      "global_background": 21.0,
+      "global_noise": 7.90946548646176,
+      "filter_noise": 2.9702199406647822,
+      "centroid_method": "psf_weighted_noise_floor"
+    },
+    "control_hybrid": {
+      "threshold_sigma": 4.0,
+      "min_distance": 4,
+      "aperture_radius": 4,
+      "max_sources": -1,
+      "psf_fwhm": 2.0,
+      "background_box_size": 128,
+      "background_sample_limit": 100000,
+      "statistics_sample_limit": 1000000,
+      "min_flux_snr": 5.0,
+      "min_fwhm": 0.8,
+      "max_fwhm": 12.0,
+      "max_ellipticity": 0.65,
+      "min_sharpness": 0.005,
+      "max_sharpness": 0.85,
+      "min_footprint_pixels": 2,
+      "min_psf_support_pixels": 3,
+      "gain_e_per_adu": -1.0,
+      "read_noise_adu": 0.0,
+      "mask_zero_pixels": 0,
+      "allow_partial_zero_mask": 0,
+      "partial_mask_policy": "disabled",
+      "reject_linear_artifacts": 1,
+      "proposal_mode": "hybrid",
+      "dog_threshold_sigma": 6.0,
+      "dog_min_peak_sigma": 2.0,
+      "dog_blend_radius_factor": 2.5,
+      "dog_blend_radius_px": 5.0,
+      "dog_narrow_factor": 0.75,
+      "dog_broad_factor": 1.6,
+      "starlet_threshold_sigma": 7.0,
+      "starlet_min_peak_sigma": 2.5,
+      "deblend_delta_bic_min": 10.0,
+      "deblend_component_snr_min": 5.0,
+      "deblend_primary_snr_min": 12.0,
+      "deblend_min_residual_sigma": 4.0,
+      "deblend_search_radius_factor": 2.0,
+      "enable_local_deblend": 0,
+      "repeated_high_code_values": [],
+      "repeated_high_code_min_count": 128,
+      "code_pattern_negative_limit_adu": -1000.0,
+      "close_pair_guard_radius_px": 3.0,
+      "close_pair_guard_tested_count": 5,
+      "close_pair_guarded_source_count": 5,
+      "proposal_count_deblend_local": 0,
+      "proposal_count_gaussian": 81286,
+      "proposal_count_dog_narrow": 67605,
+      "proposal_count_dog_broad": 60119,
+      "proposal_count_starlet_s1": 0,
+      "proposal_count_starlet_s2": 0,
+      "proposal_count_merged": 84617,
       "refine_local_background": 1,
       "background_clip_iterations": 4,
       "fast_sequence": 0,
@@ -367,7 +535,7 @@
   },
   "injected_images": {
     "12.0": {
-      "frozen_image": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-20261012\\frozen_inputs\\injected-peak-12-adu.npy",
+      "frozen_image": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\frozen_inputs\\injected-peak-12-adu.npy",
       "frozen_image_sha256": "8b747855b2bd5ee325646d4dcbffebb3bb0b6159d55ce4032d6daf101c91ed2d",
       "array_sha256": "f4fb616f1383e26a9f78694f15689e168159bd81c825398db7b9d3047467c629",
       "dtype": "float32",
@@ -375,15 +543,15 @@
         4096,
         4096
       ],
-      "gaussian_detection_seconds": 15.50945800000045,
-      "hybrid_detection_seconds": 22.427167100002407,
+      "gaussian_detection_seconds": 15.952740199994878,
+      "hybrid_detection_seconds": 22.57006709999405,
       "gaussian_candidate_count": 81285,
       "gaussian_quality_count": 28711,
       "hybrid_candidate_count": 84616,
       "hybrid_quality_count": 29008
     },
     "24.0": {
-      "frozen_image": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-20261012\\frozen_inputs\\injected-peak-24-adu.npy",
+      "frozen_image": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\frozen_inputs\\injected-peak-24-adu.npy",
       "frozen_image_sha256": "dad807405edb3826d18066317dabf9de584c12938ae2e66ba1e5cda460f75fe8",
       "array_sha256": "7453d7f0d166ca06c1ec654d578fd2e421b3aac6222be34948622910ba227980",
       "dtype": "float32",
@@ -391,15 +559,15 @@
         4096,
         4096
       ],
-      "gaussian_detection_seconds": 15.914768399998138,
-      "hybrid_detection_seconds": 22.159682400000747,
+      "gaussian_detection_seconds": 15.919555299995409,
+      "hybrid_detection_seconds": 22.4267256000021,
       "gaussian_candidate_count": 81290,
       "gaussian_quality_count": 28711,
       "hybrid_candidate_count": 84622,
       "hybrid_quality_count": 29008
     },
     "56.0": {
-      "frozen_image": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-20261012\\frozen_inputs\\injected-peak-56-adu.npy",
+      "frozen_image": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\frozen_inputs\\injected-peak-56-adu.npy",
       "frozen_image_sha256": "699283cddb82f8d4aeb6f8cd9776862cee190f44a4e5c60ed322419bffb1e0f2",
       "array_sha256": "dd9421fed8f7f6bd3788db2d5cee0cf8a3e73f08991668fe6dede67f8d637691",
       "dtype": "float32",
@@ -407,8 +575,8 @@
         4096,
         4096
       ],
-      "gaussian_detection_seconds": 15.529045999996015,
-      "hybrid_detection_seconds": 22.494825399997353,
+      "gaussian_detection_seconds": 16.09701330000098,
+      "hybrid_detection_seconds": 22.60480970000208,
       "gaussian_candidate_count": 81294,
       "gaussian_quality_count": 28713,
       "hybrid_candidate_count": 84626,
@@ -425,27 +593,38 @@
     "interval": "95% Wilson interval shown descriptively by target at each signal level; target positions share a single image and repeated levels, so it is not a population-level independent-sample interval"
   },
   "runtime": {
-    "total_experiment_seconds": 142.22902489999979,
+    "total_experiment_seconds": 182.22929250000016,
     "detector_seconds_by_version": {
-      "control_ensemble": [
-        26.979610400005186
+      "site_selection_ensemble": [
+        27.289148700001533
+      ],
+      "control_gaussian": [
+        15.616285600000992
+      ],
+      "control_hybrid": [
+        22.37729180000315
       ],
       "gaussian": [
-        15.50945800000045,
-        15.914768399998138,
-        15.529045999996015
+        15.952740199994878,
+        15.919555299995409,
+        16.09701330000098
       ],
       "hybrid": [
-        22.427167100002407,
-        22.159682400000747,
-        22.494825399997353
+        22.57006709999405,
+        22.4267256000021,
+        22.60480970000208
       ]
     }
   },
   "outputs": {
-    "summary_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-20261012\\summary.csv",
-    "target_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-20261012\\target_results.csv",
-    "case_sheet": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-20261012\\cases-weakest-level.png"
+    "summary_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\summary.csv",
+    "target_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\target_results.csv",
+    "control_summary_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\control_summary.csv",
+    "case_sheets": {
+      "12": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\cases-12-adu.png",
+      "24": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\cases-24-adu.png",
+      "56": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\point-final-unified-r3-20261012\\cases-56-adu.png"
+    }
   },
   "limitations": [
     "The truth is an artificial Gaussian injection, not an independently catalogued physical star.",
@@ -456,11 +635,11 @@
   "execution": {
     "argv": [
       "C:\\Users\\lycohana\\Desktop\\rst19\\.venv\\Scripts\\rst19-ablation",
-      "doc/00-项目资料/原始数据/20260330163205413_9901.fits",
+      "doc\\00-项目资料\\原始数据\\20260330163205413_9901.fits",
       "--out-dir",
-      "tmp/ablation/point-final-20261012",
+      "tmp\\ablation\\point-final-unified-r3-20261012",
       "--report",
-      "deliverables/ablation/index.html",
+      "deliverables\\ablation\\index.html",
       "--peak-levels",
       "12",
       "24",
@@ -488,14 +667,22 @@
       "--match-radius-px",
       "3",
       "--reuse-manifest",
-      "tmp/ablation/point-complete-20261012/manifest.json"
+      "deliverables\\ablation\\evidence\\point\\manifest.json"
     ],
     "python": "3.14.3 (main, Mar 24 2026, 22:56:56) [MSC v.1944 64 bit (AMD64)]",
     "platform": "Windows-11-10.0.26200-SP0",
     "numpy": "2.5.3",
     "scipy": "1.18.1",
     "pillow": "12.3.0",
-    "source_revision": "3a51da33536693b84f0ef3ab93e21ca83368d410",
-    "source_worktree_dirty": false
+    "source_revision": "d6b0ddac3b5670ec79d69a958e9e2aac01049a15",
+    "source_worktree_dirty": false,
+    "source_file_sha256": {
+      "src/rst19/ablation.py": "97c1862e8c71f9b1fa4e6c465bb14c6e29da0b2e2227103b03e5498f2a7ea320",
+      "src/rst19/ablation_cli.py": "413de0062804873d06fcf6ef14814e96f4a78ceec37f1ad82cc0d1a38d485f5a",
+      "src/rst19/detection.py": "b790c1451e76906e8a2b1f01bc1bc06aec399229ecd3e5f971d34e6f30846e6c",
+      "src/rst19/experiments.py": "f0eb598408ab275024dd403aad7c09e8aadd898747d351bbff003be3a7c98d09",
+      "src/rst19/fits.py": "c9b711b38c812efdd39aca03bf15d45d43b2fe68384d7213511e8c4d5792277b"
+    },
+    "relevant_tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
 }

@@ -1,0 +1,2 @@
+﻿scene,version,track_index,classification,presence,point_count,evidence_level,median_residual_snr
+low_peak_moving_trail,B 多尺度运动线提案,1,moving,4,4,center_motion+single_frame_shape,9.616451200528388

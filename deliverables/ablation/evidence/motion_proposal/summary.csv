@@ -1,0 +1,5 @@
+﻿scene,version,frame_count,input_array_sha256,proposal_feature_observations,moving_track_count,target_recovered_frames,target_recovery,median_position_error_px,p90_position_error_px,runtime_seconds
+no_injection_control,A 基础线提案,4,4ad38a2acc38713abe9a41751da2e1797565c0e484986282a9b857e6b0797c8f,0,0,,,,,0.002924599997641053
+no_injection_control,B 多尺度运动线提案,4,4ad38a2acc38713abe9a41751da2e1797565c0e484986282a9b857e6b0797c8f,0,0,,,,,0.004863599999225698
+low_peak_moving_trail,A 基础线提案,4,44e71eb9645065612994835d012dfe29886311a9867a0ef2d5641752560ee2f8,0,0,0/4,False,,,0.0023423000020557083
+low_peak_moving_trail,B 多尺度运动线提案,4,44e71eb9645065612994835d012dfe29886311a9867a0ef2d5641752560ee2f8,4,1,4/4,True,0.5,1.0,0.7256721000012476

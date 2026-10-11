@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "experiment": "synthetic_pixel_level_motion_multiscale_proposal_ablation",
+  "status": "completed",
+  "created_local_time": "2026-10-12T01:38:33+08:00",
+  "seed": 19019,
+  "input": {
+    "path": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-proposal-final-unified-r3-20261012\\frozen_motion_frames.npz",
+    "sha256": "00ec94321dbf1cae2755dd50261501fc1f74d5f81fb5ac5d93a21ca6c42bcea8",
+    "dtype": "float32",
+    "shape_per_scene": [
+      4,
+      96,
+      96
+    ],
+    "control_array_sha256": "4ad38a2acc38713abe9a41751da2e1797565c0e484986282a9b857e6b0797c8f",
+    "injected_array_sha256": "44e71eb9645065612994835d012dfe29886311a9867a0ef2d5641752560ee2f8",
+    "paired_noise": true,
+    "frames": 4
+  },
+  "truth": {
+    "target_id": "LOW-PEAK-01",
+    "type": "synthetic finite-exposure horizontal Gaussian-PSF trail",
+    "positions_px": [
+      {
+        "frame_index": 0,
+        "x_px": 22.0,
+        "y_px": 40.0
+      },
+      {
+        "frame_index": 1,
+        "x_px": 32.0,
+        "y_px": 40.0
+      },
+      {
+        "frame_index": 2,
+        "x_px": 42.0,
+        "y_px": 40.0
+      },
+      {
+        "frame_index": 3,
+        "x_px": 52.0,
+        "y_px": 40.0
+      }
+    ],
+    "line_length_px": 12.0,
+    "line_kernel_coefficient_adu": 4.0,
+    "signal_definition": "each 0.5 px line sample adds 0.5 times the kernel coefficient times a Gaussian PSF; the coefficient is not the sampled peak, which is recorded per frame below",
+    "sampled_peak_pixel_increment_adu_by_frame": [
+      12.773594856262207,
+      12.77359390258789,
+      12.77359390258789,
+      12.773592948913574
+    ],
+    "frame_to_frame_step_px": 10.0
+  },
+  "parameters": {
+    "background_adu": 10.0,
+    "noise_sigma_adu": 1.0,
+    "psf_fwhm_px": 3.0,
+    "match_radius_px": 7.0,
+    "same_detector_options": {
+      "psf_fwhm": 3.0,
+      "residual_sigma": 15.0,
+      "min_residual_adu": 100.0,
+      "min_feature_area": 40,
+      "min_axis_ratio": 4.0,
+      "min_length_px": 8.0,
+      "bridge_gaps": true,
+      "raw_fallback_workers": 1
+    },
+    "ablation_variable": "multiscale_line_proposals=False (A) vs True (B)",
+    "temporal_reference": "constant shared background image, same for every frame and version",
+    "association_and_shape_gates": "unchanged production detect_motion_features path"
+  },
+  "metrics": {
+    "proposal_feature_observations": "sum of per-frame final MotionFrameAudit.feature_count; not a full-frame false-positive rate",
+    "target_recovery": "one moving track has a proposal within the fixed 7 px truth tolerance in all 4 frames",
+    "position_error": "distance to the injected trail center among matched moving points",
+    "negative_control": "paired noise frames with no injected trail; count observed outputs but do not infer population precision"
+  },
+  "runtime": {
+    "seconds_by_scene_and_version": {
+      "no_injection_control:A": 0.002924599997641053,
+      "no_injection_control:B": 0.004863599999225698,
+      "low_peak_moving_trail:A": 0.0023423000020557083,
+      "low_peak_moving_trail:B": 0.7256721000012476
+    }
+  },
+  "outputs": {
+    "summary_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-proposal-final-unified-r3-20261012\\summary.csv",
+    "frame_audit_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-proposal-final-unified-r3-20261012\\frame_audit.csv",
+    "track_results_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-proposal-final-unified-r3-20261012\\track_results.csv",
+    "truth_trajectory_csv": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-proposal-final-unified-r3-20261012\\truth_trajectory.csv",
+    "case_sheet": "C:\\Users\\lycohana\\Desktop\\rst19\\tmp\\ablation\\motion-proposal-final-unified-r3-20261012\\motion_proposal_cases.png"
+  },
+  "limitations": [
+    "This is a small synthetic pixel-level mechanism test, not a real FITS motion-source recovery test.",
+    "No crossing or crowded-trajectory identity test is included.",
+    "The negative control is four paired noise frames and is not an estimate of full-frame false-positive rate."
+  ],
+  "execution": {
+    "argv": [
+      "C:\\Users\\lycohana\\Desktop\\rst19\\.venv\\Scripts\\rst19-motion-proposal-ablation",
+      "--point-run-dir",
+      "tmp\\ablation\\point-final-unified-r3-20261012",
+      "--association-run-dir",
+      "tmp\\ablation\\motion-final-unified-r3-20261012",
+      "--out-dir",
+      "tmp\\ablation\\motion-proposal-final-unified-r3-20261012",
+      "--seed",
+      "19019",
+      "--report",
+      "deliverables\\ablation\\index.html"
+    ],
+    "python": "3.14.3 (main, Mar 24 2026, 22:56:56) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "scipy": "1.18.1",
+    "pillow": "12.3.0",
+    "source_revision": "d6b0ddac3b5670ec79d69a958e9e2aac01049a15",
+    "source_worktree_dirty": false,
+    "source_file_sha256": {
+      "src/rst19/motion_proposal_ablation.py": "e0bd0292e89e8360a8f16e8b058d2b9ad4300fa1fad41b0a590d5d12f00ae29b",
+      "src/rst19/sequence.py": "daeed65b2793f39272f5073942a379b32d4926ead3f4e130eb719fcf18498411",
+      "src/rst19/single_frame_trails.py": "172c8852496fb0ea3cb0176d3726e28921366f912932f9e45f024fe6486841e5"
+    },
+    "relevant_tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

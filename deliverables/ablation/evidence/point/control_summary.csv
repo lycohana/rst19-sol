@@ -1,0 +1,4 @@
+﻿version,input,candidate_count,returned_count,quality_count,output_count,target_site_candidates_within_match_radius,detector_seconds,reused_version
+A 基线 Gaussian 提案,same float32 no-injection control,81286,81286,28711,81286,0,15.616285600000992,
+B Gaussian+DoG 多尺度提案,same float32 no-injection control,84617,84617,29009,84617,0,22.37729180000315,
+C 对 B 候选应用现有质量门,same float32 no-injection control,84617,84617,29009,29009,0,22.37729180000315,B candidate objects
