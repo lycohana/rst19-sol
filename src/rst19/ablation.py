@@ -798,7 +798,7 @@ def write_ablation_html(
 <title>rst19 统一条件算法消融实验</title><link rel="icon" href="data:,"><style>
 :root{color-scheme:light;--ink:#17243a;--muted:#58677d;--line:#dce3eb;--accent:#245bb2;--soft:#f3f7fb;--ok:#176b4d;--warn:#895319}
 *{box-sizing:border-box}body{margin:0;background:#eef2f6;color:var(--ink);font:16px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}
-main{max-width:1100px;margin:32px auto;padding:0 20px 56px}.hero,.card{background:white;border:1px solid var(--line);border-radius:16px;padding:24px;margin:16px 0;box-shadow:0 8px 30px #1e35500a}
+main{max-width:1100px;margin:32px auto;padding:0 20px 56px}.hero,.card{background:white;border:1px solid var(--line);border-radius:16px;padding:24px;margin:16px 0;box-shadow:0 8px 30px #1e35500a}.card p{overflow-wrap:anywhere}
 h1{font-size:30px;line-height:1.25;margin:8px 0 12px}h2{font-size:21px;margin:0 0 12px}h3{font-size:17px;margin:18px 0 8px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.08em}
 .tag{display:inline-block;border-radius:999px;padding:3px 10px;background:#e4f4ed;color:var(--ok);font-size:13px;font-weight:700}.tag.warn{background:#fff1dc;color:var(--warn)}.muted{color:var(--muted)}
 .flow{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:18px 0}.flow span{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-weight:650}.flow b{color:var(--accent)}
