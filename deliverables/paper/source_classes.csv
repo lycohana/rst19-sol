@@ -1,0 +1,9 @@
+﻿feature_class,label,candidate_count,quality_count
+compact_quality,紧凑质量,26483,26483
+spike_or_support,尖峰／支持不足,23824,0
+weak_or_background,弱通量／背景,21250,0
+masked_or_edge,边缘／掩膜,11971,2777
+crowded_blend,拥挤／未分辨,905,0
+linear_artifact,线状／拖影,96,0
+range_anomaly,范围异常,44,0
+shape_outlier,形状异常,21,0

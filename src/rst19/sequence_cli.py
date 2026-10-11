@@ -43,7 +43,17 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="较低置信静态候选至少出现的帧数；默认要求约 50%% 帧，且不超过 --min-presence",
     )
-    parser.add_argument("--motion-min-displacement-px", type=float, default=2.0, help="运动轨迹最小总位移（pixel）")
+    parser.add_argument(
+        "--motion-min-displacement-px",
+        type=float,
+        default=2.0,
+        help="用户设定的运动轨迹最小总位移（pixel）；有足够星场时会按全局配准残差自动提高有效下限",
+    )
+    parser.add_argument(
+        "--motion-line-link-radius-px",
+        type=float,
+        help="线状曝光候选的跨帧关联半径（pixel）；留空时按 max(48, 32×PSF FWHM) 自动设置，与点源关联半径分开",
+    )
     parser.add_argument("--max-motion-fit-rms-px", type=float, default=0.75, help="运动直线拟合最大 RMS（pixel）")
     parser.add_argument(
         "--source-limit",
@@ -242,6 +252,7 @@ def main(argv: list[str] | None = None) -> int:
             min_presence=args.min_presence,
             persistent_min_presence=args.persistent_min_presence,
             motion_min_displacement_px=args.motion_min_displacement_px,
+            motion_line_link_radius_px=args.motion_line_link_radius_px,
             max_motion_fit_rms_px=args.max_motion_fit_rms_px,
             sequence_max_sources=None if args.source_limit == 0 else args.source_limit,
             background_box_size=args.background_box_size,

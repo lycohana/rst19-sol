@@ -114,6 +114,14 @@ def test_single_one_click_does_not_implicitly_match_or_calibrate() -> None:
     assert "_set_task_mode(\"single\")" in (ast.get_source_segment(GUI_SOURCE, run_analysis) or "")
 
 
+def test_single_one_click_uses_only_the_single_frame_trail_route() -> None:
+    run_analysis = _method("run_analysis")
+    call_names = _call_names(run_analysis)
+
+    assert "detect_single_frame_long_trails" in call_names
+    assert {"detect_motion_features", "analyze_sequence"}.isdisjoint(call_names)
+
+
 def test_zoom_is_runtime_clamped_to_fifteen_times() -> None:
     class _Canvas:
         def winfo_width(self) -> int:
@@ -156,6 +164,32 @@ def test_viewer_has_hover_pan_zoom_and_explicit_overlay_layers() -> None:
     assert "quality_sources" in draw_text
     assert "moving_points_for_frame" in draw_text
     assert "_draw_motion_trajectory_overlay" in draw_text
+    # 15 帧任务可能暂时保留上一轮单帧 analysis；绘图必须先按工作区隔离，
+    # 否则旧的 STAR SRC 标签会和新 motion 层叠在一起，制造误判。
+    assert "not self._sequence_workspace_active()" in draw_text
+    assert "self._sequence_workspace_active() and mode == \"quality\"" in draw_text
+
+
+def test_sequence_workspace_does_not_hit_retained_single_frame_source_grid() -> None:
+    source_finder = _method("_find_source_at")
+    source_text = ast.get_source_segment(GUI_SOURCE, source_finder) or ""
+    assert "self._sequence_workspace_active()" in source_text
+    assert "source_grid" in source_text
+
+    motion_handler = _method("_on_canvas_motion")
+    motion_text = ast.get_source_segment(GUI_SOURCE, motion_handler) or ""
+    assert 'mode == "quality" and self._sequence_workspace_active()' in motion_text
+
+
+def test_single_workspace_cannot_select_sequence_only_overlay_layers() -> None:
+    mode_text = ast.get_source_segment(GUI_SOURCE, _method("_set_task_mode")) or ""
+    content_text = ast.get_source_segment(GUI_SOURCE, _method("_build_content_starfield")) or ""
+
+    assert 'brief_section = "SINGLE-FRAME NOTE"' in mode_text
+    assert 'evidence_section = "SINGLE-FRAME EVIDENCE"' in mode_text
+    assert '"stable", "stack-faint"' in mode_text
+    assert 'button.config(state="disabled" if single_active else "normal")' in mode_text
+    assert 'self.overlay_mode_buttons[value] = mode_button' in content_text
 
 
 def test_single_and_sequence_paths_publish_visible_progress() -> None:
@@ -171,6 +205,10 @@ def test_single_and_sequence_paths_publish_visible_progress() -> None:
     assert 'self._render_running_progress' in progress_text
     assert 'self.active_job_kind == "single"' in render_text
     assert 'self.active_job_kind == "sequence"' in render_text
+    # 15 帧的 100% 必须由 sequence 结果写回路径发布；不能在后台线程
+    # 先发“完成”再等待结果事件，否则 UI 会出现 100% 但结果卡片/图像为空。
+    assert '(100.0, "完成")' not in sequence_text
+    assert 'self._queue_task_result("sequence"' in sequence_text
 
 
 def test_frame_switch_invalidates_old_preview_and_analysis_events() -> None:

@@ -6,8 +6,10 @@ from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from rst19.experiments import (
+    _inject_exposure_trail,
     _gaussian_source,
     _inject_source_signal,
     _empirical_source,
@@ -68,6 +70,63 @@ from rst19.detection import Detection, DetectionResult
 from rst19.models import FitsFrame
 from rst19.pipeline import FrameAnalysis
 from rst19.sequence import MotionFeaturePoint, MotionFeatureTrack
+
+
+def test_exposure_trail_injection_uses_one_speed_for_length_and_truth() -> None:
+    image = np.zeros((96, 96), dtype=np.float32)
+
+    truth = _inject_exposure_trail(
+        image,
+        center_x=48.0,
+        center_y=48.0,
+        vx_px_per_s=8.0,
+        vy_px_per_s=6.0,
+        exposure_s=1.5,
+        peak_excess_adu=120.0,
+        psf_fwhm=2.0,
+    )
+
+    assert truth.trail_length_px == pytest.approx(15.0)
+    assert truth.angle_deg == pytest.approx(np.degrees(np.arctan2(6.0, 8.0)))
+    assert truth.sample_count >= 3
+    assert truth.as_dict()["exposure_s"] == 1.5
+    assert float(image.max()) > 0.0
+    # The line is diagonal: pixels near both ends of the true exposure path
+    # must contain signal, not just a single point at the exposure centre.
+    assert image[43, 44] > 0.0
+    assert image[53, 52] > 0.0
+
+
+def test_exposure_trail_injection_clips_at_edges_without_negative_patch() -> None:
+    clipped = np.zeros((32, 32), dtype=np.float32)
+
+    truth = _inject_exposure_trail(
+        clipped,
+        center_x=1.0,
+        center_y=16.0,
+        vx_px_per_s=8.0,
+        vy_px_per_s=0.0,
+        exposure_s=1.5,
+        peak_excess_adu=120.0,
+        psf_fwhm=2.0,
+    )
+
+    assert truth.trail_length_px == pytest.approx(12.0)
+    assert np.count_nonzero(clipped) > 0
+
+    outside = np.zeros((32, 32), dtype=np.float32)
+    _inject_exposure_trail(
+        outside,
+        center_x=-100.0,
+        center_y=16.0,
+        vx_px_per_s=1.0,
+        vy_px_per_s=0.0,
+        exposure_s=1.5,
+        peak_excess_adu=120.0,
+        psf_fwhm=2.0,
+    )
+
+    assert np.count_nonzero(outside) == 0
 
 
 def test_injection_recovery_is_reproducible_and_reports_both_layers() -> None:
@@ -1252,9 +1311,15 @@ def test_single_frame_trail_audit_keeps_geometry_and_writes_artifacts(monkeypatc
         touches_edge=False,
     )
     trail = MotionFeatureTrack(7, "candidate", (point,), 0.0, 0.0, None)
+    detector_kwargs: dict[str, object] = {}
     monkeypatch.setattr("rst19.experiments.read_fits", lambda _path: frame)
     monkeypatch.setattr("rst19.experiments.analyze_frame", lambda _frame, **_kwargs: analysis)
-    monkeypatch.setattr("rst19.experiments.detect_long_trails", lambda _analysis, **_kwargs: (trail,))
+
+    def fake_detect(_analysis, **kwargs):
+        detector_kwargs.update(kwargs)
+        return (trail,)
+
+    monkeypatch.setattr("rst19.experiments.detect_long_trails", fake_detect)
 
     progress: list[tuple[int, int]] = []
     rows = run_single_frame_trail_audit(
@@ -1264,6 +1329,10 @@ def test_single_frame_trail_audit_keeps_geometry_and_writes_artifacts(monkeypatc
 
     assert progress == [(1, 2), (2, 2)]
     assert [row.trail_count for row in rows] == [1, 1]
+    assert detector_kwargs["fit_line_model"] is True
+    assert [row.accepted_trail_count for row in rows] == [1, 1]
+    assert [row.double_star_count for row in rows] == [0, 0]
+    assert [row.model_rejected_count for row in rows] == [0, 0]
     assert rows[0].max_length_px == 48.0
     assert rows[0].longest_angle_deg == -35.0
     assert rows[0].longest_bbox == "10,5,54,55"

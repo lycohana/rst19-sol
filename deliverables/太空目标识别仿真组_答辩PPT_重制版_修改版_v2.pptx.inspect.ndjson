@@ -1,0 +1,617 @@
+{"kind":"deck","id":"pr/05pcvb","name":"Deck"}
+{"kind":"layout","layoutId":"/ppt/slideMasters/slideMaster1.xml","name":"","type":"master","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout1.xml","name":"Title Slide","type":"title","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"subtitle","type":"subtitle","textPreview":"Click to edit Master subtitle style"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout2.xml","name":"Title and Content","type":"obj","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"content placeholder 2","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout3.xml","name":"Section Header","type":"secHead","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout4.xml","name":"Two Content","type":"twoObj","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"content placeholder 2","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"content placeholder 3","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout5.xml","name":"Comparison","type":"twoTxTwoObj","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"content placeholder 3","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"content placeholder 5","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout6.xml","name":"Title Only","type":"titleOnly","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout7.xml","name":"Blank","type":"blank","placeholders":[{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout8.xml","name":"Content with Caption","type":"objTx","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"content placeholder 2","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout9.xml","name":"Picture with Caption","type":"picTx","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"picture","type":"picture"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout10.xml","name":"Title and Vertical Text","type":"vertTx","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout11.xml","name":"Vertical Title and Text","type":"vertTitleAndTx","placeholders":[{"name":"title","type":"title","textPreview":"Click to edit Master title style"},{"name":"body","type":"body","textPreview":"Click to edit Master text styles | Second level | Third level | Fourth level | Fifth level"},{"name":"dateTime","type":"dateTime"},{"name":"footer","type":"footer"},{"name":"slideNumber","type":"slideNumber"}]}
+{"kind":"slide","id":"sl/y90nupkv","slide":1,"title":"基于局部噪声与 PSF 证据链的","textShapes":11}
+{"kind":"shape","id":"sh/547294r6","slide":1,"name":"Rectangle 1","bbox":[0,0,1279.97,7.68]}
+{"kind":"shape","id":"sh/k3yl0zql","slide":1,"name":"Rectangle 2","bbox":[57.6,192,7.68,172.8]}
+{"kind":"textbox","id":"sh/7qp4be9c","slide":1,"name":"TextBox 3","text":"基于局部噪声与 PSF 证据链的","textPreview":"基于局部噪声与 PSF 证据链的","textChars":16,"textLines":1,"bbox":[115.2,192,1056,67.2]}
+{"kind":"textbox","id":"sh/65g3298r","slide":1,"name":"TextBox 4","text":"天基星图识别与多帧目标分析","textPreview":"天基星图识别与多帧目标分析","textChars":13,"textLines":1,"bbox":[115.2,259.2,1056,67.2]}
+{"kind":"textbox","id":"sh/ts7md4r2","slide":1,"name":"TextBox 5","text":"B02 仿真技术赛道 · 太空目标识别仿真组","textPreview":"B02 仿真技术赛道 · 太空目标识别仿真组","textChars":22,"textLines":1,"bbox":[115.2,355.2,768,38.4]}
+{"kind":"shape","id":"sh/sryl4zqx","slide":1,"name":"Rectangle 6","bbox":[115.2,412.8,240,2.67]}
+{"kind":"textbox","id":"sh/fu94fe98","slide":1,"name":"TextBox 7","text":"数据来源","textPreview":"数据来源","textChars":4,"textLines":1,"bbox":[115.2,451.2,144,38.4]}
+{"kind":"textbox","id":"sh/utg3698n","slide":1,"name":"TextBox 8","text":"开运一号卫星 · 15帧 4096×4096 · 16bit · 1500ms 曝光","textPreview":"开运一号卫星 · 15帧 4096×4096 · 16bit · 1500ms 曝光","textChars":42,"textLines":1,"bbox":[268.8,451.2,768,38.4]}
+{"kind":"textbox","id":"sh/wn6dc7eh","slide":1,"name":"TextBox 9","text":"项目","textPreview":"项目","textChars":2,"textLines":1,"bbox":[115.2,504,144,38.4]}
+{"kind":"textbox","id":"sh/hofulsf2","slide":1,"name":"TextBox 10","text":"rst19-sol · 纯 Python 可离线复核方案","textPreview":"rst19-sol · 纯 Python 可离线复核方案","textChars":28,"textLines":1,"bbox":[268.8,504,768,38.4]}
+{"kind":"textbox","id":"sh/ul4vaxgb","slide":1,"name":"TextBox 11","text":"赛事","textPreview":"赛事","textChars":2,"textLines":1,"bbox":[115.2,556.8,144,38.4]}
+{"kind":"textbox","id":"sh/vmdcj2xw","slide":1,"name":"TextBox 12","text":"第十九届先进机器人及仿真技术大赛","textPreview":"第十九届先进机器人及仿真技术大赛","textChars":16,"textLines":1,"bbox":[268.8,556.8,768,38.4]}
+{"kind":"textbox","id":"sh/3qxwn2x8","slide":1,"name":"TextBox 16","text":"🚀","textPreview":"🚀","textChars":2,"textLines":1,"bbox":[1104,144,144,144]}
+{"kind":"textbox","id":"sh/sfqdkrep","slide":1,"name":"TextBox 17","text":"1/19","textPreview":"1/19","textChars":4,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/y90nupkv","slide":1,"text":""}
+{"kind":"slide","id":"sl/hwbqtkby","slide":2,"title":"目录","textShapes":39}
+{"kind":"shape","id":"sh/9072xkry","slide":2,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"textbox","id":"sh/ozy1ofad","slide":2,"name":"TextBox 2","text":"目录","textPreview":"目录","textChars":2,"textLines":1,"bbox":[57.6,33.6,288,48]}
+{"kind":"textbox","id":"sh/b29kza94","slide":2,"name":"TextBox 3","text":"CONTENTS","textPreview":"CONTENTS","textChars":8,"textLines":1,"bbox":[57.6,76.8,288,33.6]}
+{"kind":"shape","id":"sh/a10jqpsj","slide":2,"name":"Rectangle 4","bbox":[57.6,115.2,1161.6,1.33]}
+{"kind":"shape","id":"sh/x4r21kru","slide":2,"name":"Rounded Rectangle 5","bbox":[57.6,148.8,48,48]}
+{"kind":"textbox","id":"sh/w3i1sfa9","slide":2,"name":"TextBox 6","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[57.6,150.72,48,48]}
+{"kind":"textbox","id":"sh/r65knqtk","slide":2,"name":"TextBox 7","text":"数据边界与系统架构","textPreview":"数据边界与系统架构","textChars":9,"textLines":1,"bbox":[120,144,480,38.4]}
+{"kind":"textbox","id":"sh/q5wjelsz","slide":2,"name":"TextBox 8","text":"FITS 格式 · 辅助数据 · 姿态先验 · 四层证据体系","textPreview":"FITS 格式 · 辅助数据 · 姿态先验 · 四层证据体系","textChars":30,"textLines":1,"bbox":[120,182.4,480,33.6]}
+{"kind":"shape","id":"sh/ove9o7yd","slide":2,"name":"Rounded Rectangle 9","bbox":[652.8,148.8,48,48]}
+{"kind":"textbox","id":"sh/9wnqhczy","slide":2,"name":"TextBox 10","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[652.8,150.72,48,48]}
+{"kind":"textbox","id":"sh/mtwrmxg7","slide":2,"name":"TextBox 11","text":"星点识别：宽筛—细筛—确认","textPreview":"星点识别：宽筛—细筛—确认","textChars":13,"textLines":1,"bbox":[715.2,144,480,38.4]}
+{"kind":"textbox","id":"sh/nu58f2hs","slide":2,"name":"TextBox 12","text":"局部背景归一化 · 匹配滤波 · PSF/BIC 细筛","textPreview":"局部背景归一化 · 匹配滤波 · PSF/BIC 细筛","textChars":27,"textLines":1,"bbox":[715.2,182.4,480,33.6]}
+{"kind":"shape","id":"sh/wjy9sry9","slide":2,"name":"Rounded Rectangle 13","bbox":[57.6,240,48,48]}
+{"kind":"textbox","id":"sh/xk7qlczu","slide":2,"name":"TextBox 14","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[57.6,241.92,48,48]}
+{"kind":"textbox","id":"sh/ahwrqhgj","slide":2,"name":"TextBox 15","text":"星点识别：近邻去混叠","textPreview":"星点识别：近邻去混叠","textChars":10,"textLines":1,"bbox":[120,235.2,480,38.4]}
+{"kind":"textbox","id":"sh/bip8jmho","slide":2,"name":"TextBox 16","text":"ΔBIC 检验 · 经验 PSF · 截图双源复核","textPreview":"ΔBIC 检验 · 经验 PSF · 截图双源复核","textChars":25,"textLines":1,"bbox":[120,273.6,480,33.6]}
+{"kind":"shape","id":"sh/cnupgny5","slide":2,"name":"Rounded Rectangle 17","bbox":[652.8,240,48,48]}
+{"kind":"textbox","id":"sh/do3q9szq","slide":2,"name":"TextBox 18","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[652.8,241.92,48,48]}
+{"kind":"textbox","id":"sh/t8byxkn2","slide":2,"name":"TextBox 19","text":"星点识别：首帧检测结果","textPreview":"星点识别：首帧检测结果","textChars":11,"textLines":1,"bbox":[715.2,235.2,480,38.4]}
+{"kind":"textbox","id":"sh/s72xofmh","slide":2,"name":"TextBox 20","text":"八类候选分流 · feature_class 统计","textPreview":"八类候选分流 · feature_class 统计","textChars":25,"textLines":1,"bbox":[715.2,273.6,480,33.6]}
+{"kind":"shape","id":"sh/76twva5c","slide":2,"name":"Rounded Rectangle 21","bbox":[57.6,331.2,48,48]}
+{"kind":"textbox","id":"sh/65kfmpor","slide":2,"name":"TextBox 22","text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[57.6,333.12,48,48]}
+{"kind":"textbox","id":"sh/hcvy14ne","slide":2,"name":"TextBox 23","text":"星等识别与标定","textPreview":"星等识别与标定","textChars":7,"textLines":1,"bbox":[120,326.4,480,38.4]}
+{"kind":"textbox","id":"sh/gbmxszmt","slide":2,"name":"TextBox 24","text":"三层星等 · Gaia DR3 · 颜色模型敏感性","textPreview":"三层星等 · Gaia DR3 · 颜色模型敏感性","textChars":25,"textLines":1,"bbox":[120,364.8,480,33.6]}
+{"kind":"shape","id":"sh/fadgzu58","slide":2,"name":"Rounded Rectangle 25","bbox":[652.8,331.2,48,48]}
+{"kind":"textbox","id":"sh/u94fqp4n","slide":2,"name":"TextBox 26","text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[652.8,333.12,48,48]}
+{"kind":"textbox","id":"sh/p0vy54na","slide":2,"name":"TextBox 27","text":"运动目标识别","textPreview":"运动目标识别","textChars":6,"textLines":1,"bbox":[715.2,326.4,480,38.4]}
+{"kind":"textbox","id":"sh/4zmxwzmp","slide":2,"name":"TextBox 28","text":"平移配准 · Hungarian 关联 · 线状候选分层","textPreview":"平移配准 · Hungarian 关联 · 线状候选分层","textChars":28,"textLines":1,"bbox":[715.2,364.8,480,33.6]}
+{"kind":"shape","id":"sh/mlgvq147","slide":2,"name":"Rounded Rectangle 29","bbox":[57.6,422.4,48,48]}
+{"kind":"textbox","id":"sh/nmpcj6ls","slide":2,"name":"TextBox 30","text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[57.6,424.32,48,48]}
+{"kind":"textbox","id":"sh/onydsbmd","slide":2,"name":"TextBox 31","text":"创新分析：多维证据导出","textPreview":"创新分析：多维证据导出","textChars":11,"textLines":1,"bbox":[120,417.6,480,38.4]}
+{"kind":"textbox","id":"sh/9o7ulg3y","slide":2,"name":"TextBox 32","text":"可探测性 · 光度 · 持久性 · 遥测","textPreview":"可探测性 · 光度 · 持久性 · 遥测","textChars":20,"textLines":1,"bbox":[120,456,480,33.6]}
+{"kind":"shape","id":"sh/a9gvulkj","slide":2,"name":"Rounded Rectangle 33","bbox":[652.8,422.4,48,48]}
+{"kind":"textbox","id":"sh/ba9cn6l4","slide":2,"name":"TextBox 34","text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[652.8,424.32,48,48]}
+{"kind":"textbox","id":"sh/wbidwb29","slide":2,"name":"TextBox 35","text":"创新分析：注入回收实验","textPreview":"创新分析：注入回收实验","textChars":11,"textLines":1,"bbox":[715.2,417.6,480,38.4]}
+{"kind":"textbox","id":"sh/xcrupg3u","slide":2,"name":"TextBox 36","text":"四种注入口径 · 合成正负控制 · 关键发现","textPreview":"四种注入口径 · 合成正负控制 · 关键发现","textChars":22,"textLines":1,"bbox":[715.2,456,480,33.6]}
+{"kind":"shape","id":"sh/id0vylkf","slide":2,"name":"Rounded Rectangle 37","bbox":[57.6,513.6,48,48]}
+{"kind":"textbox","id":"sh/je9crql0","slide":2,"name":"TextBox 38","text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[57.6,515.52,48,48]}
+{"kind":"textbox","id":"sh/ru5cbqd4","slide":2,"name":"TextBox 39","text":"创新分析：合成大图与工具集","textPreview":"创新分析：合成大图与工具集","textChars":13,"textLines":1,"bbox":[120,508.8,480,38.4]}
+{"kind":"textbox","id":"sh/69wbilcj","slide":2,"name":"TextBox 40","text":"注册合成 · 证据导出 · 研究工具集","textPreview":"注册合成 · 证据导出 · 研究工具集","textChars":19,"textLines":1,"bbox":[120,547.2,480,33.6]}
+{"kind":"shape","id":"sh/tw7ud0va","slide":2,"name":"Rounded Rectangle 41","bbox":[652.8,513.6,48,48]}
+{"kind":"textbox","id":"sh/svedkvup","slide":2,"name":"TextBox 42","text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[652.8,515.52,48,48]}
+{"kind":"textbox","id":"sh/fypcfqdg","slide":2,"name":"TextBox 43","text":"关键消融实验与核心发现","textPreview":"关键消融实验与核心发现","textChars":11,"textLines":1,"bbox":[715.2,508.8,480,38.4]}
+{"kind":"textbox","id":"sh/exgvmlcv","slide":2,"name":"TextBox 44","text":"提案模式 · min_distance · 跨帧持续性","textPreview":"提案模式 · min_distance · 跨帧持续性","textChars":27,"textLines":1,"bbox":[715.2,547.2,480,33.6]}
+{"kind":"shape","id":"sh/107uh0v6","slide":2,"name":"Rounded Rectangle 45","bbox":[57.6,604.8,48,48]}
+{"kind":"textbox","id":"sh/gzydovul","slide":2,"name":"TextBox 46","text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[57.6,606.72,48,48]}
+{"kind":"textbox","id":"sh/v2lc36dw","slide":2,"name":"TextBox 47","text":"工程实现与性能优化","textPreview":"工程实现与性能优化","textChars":9,"textLines":1,"bbox":[120,600,480,38.4]}
+{"kind":"textbox","id":"sh/a1cba1wb","slide":2,"name":"TextBox 48","text":"技术栈 · 性能优化 · 缓存与进度系统","textPreview":"技术栈 · 性能优化 · 缓存与进度系统","textChars":20,"textLines":1,"bbox":[120,638.4,480,33.6]}
+{"kind":"shape","id":"sh/0vq1o36x","slide":2,"name":"Rounded Rectangle 49","bbox":[652.8,604.8,48,48]}
+{"kind":"textbox","id":"sh/1wzix87i","slide":2,"name":"TextBox 50","text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[652.8,606.72,48,48]}
+{"kind":"textbox","id":"sh/et8zmto7","slide":2,"name":"TextBox 51","text":"总结与核心贡献","textPreview":"总结与核心贡献","textChars":7,"textLines":1,"bbox":[715.2,600,480,38.4]}
+{"kind":"textbox","id":"sh/zuh0vypc","slide":2,"name":"TextBox 52","text":"六项核心贡献 · 评分对标","textPreview":"六项核心贡献 · 评分对标","textChars":13,"textLines":1,"bbox":[715.2,638.4,480,33.6]}
+{"kind":"textbox","id":"sh/c76hk361","slide":2,"name":"TextBox 53","text":"2/19","textPreview":"2/19","textChars":4,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/hwbqtkby","slide":2,"text":""}
+{"kind":"slide","id":"sl/ofy9wn61","slide":3,"title":"01","textShapes":26}
+{"kind":"shape","id":"sh/cza94vmx","slide":3,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/d0jax03i","slide":3,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/298ryl4v","slide":3,"name":"TextBox 3","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/3ah8rqlg","slide":3,"name":"TextBox 4","text":"数据边界与系统架构","textPreview":"数据边界与系统架构","textChars":9,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"shape","id":"sh/obq90bml","slide":3,"name":"Rectangle 5","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/pcjqtg36","slide":3,"name":"Rounded Rectangle 6","bbox":[57.6,144,268.8,115.2]}
+{"kind":"textbox","id":"sh/m5cra54z","slide":3,"name":"TextBox 7","text":"15帧","textPreview":"15帧","textChars":3,"textLines":1,"bbox":[76.8,148.8,230.4,48]}
+{"kind":"textbox","id":"sh/n6ls3alk","slide":3,"name":"TextBox 8","text":"连续时间序列，间隔~1.5s","textPreview":"连续时间序列，间隔~1.5s","textChars":14,"textLines":1,"bbox":[76.8,206.4,230.4,33.6]}
+{"kind":"shape","id":"sh/n2l4fq98","slide":3,"name":"Rounded Rectangle 9","bbox":[355.2,144,268.8,115.2]}
+{"kind":"textbox","id":"sh/m1c3mlsn","slide":3,"name":"TextBox 10","text":"4096×4096","textPreview":"4096×4096","textChars":9,"textLines":1,"bbox":[374.4,148.8,230.4,48]}
+{"kind":"textbox","id":"sh/943mhgre","slide":3,"name":"TextBox 11","text":"像素 · BITPIX=16","textPreview":"像素 · BITPIX=16","textChars":14,"textLines":1,"bbox":[374.4,206.4,230.4,33.6]}
+{"kind":"shape","id":"sh/83ulovat","slide":3,"name":"Rounded Rectangle 12","bbox":[652.8,144,268.8,115.2]}
+{"kind":"textbox","id":"sh/v6l4jq94","slide":3,"name":"TextBox 13","text":"1500 ms","textPreview":"1500 ms","textChars":7,"textLines":1,"bbox":[672,148.8,230.4,48]}
+{"kind":"textbox","id":"sh/a5c3ql8z","slide":3,"name":"TextBox 14","text":"曝光时间","textPreview":"曝光时间","textChars":4,"textLines":1,"bbox":[672,206.4,230.4,33.6]}
+{"kind":"shape","id":"sh/x8nml0ra","slide":3,"name":"Rounded Rectangle 15","bbox":[950.4,144,268.8,115.2]}
+{"kind":"textbox","id":"sh/w7ulsvqp","slide":3,"name":"TextBox 16","text":"≈8.44″/px*","textPreview":"≈8.44″/px*","textChars":10,"textLines":1,"bbox":[969.6,148.8,230.4,48]}
+{"kind":"textbox","id":"sh/ja54na9g","slide":3,"name":"TextBox 17","text":"几何尺度先验","textPreview":"几何尺度先验","textChars":6,"textLines":1,"bbox":[969.6,206.4,230.4,33.6]}
+{"kind":"textbox","id":"sh/i9w3u58v","slide":3,"name":"TextBox 18","text":"四层证据体系（不能相互替代）","textPreview":"四层证据体系（不能相互替代）","textChars":14,"textLines":1,"bbox":[57.6,288,480,33.6]}
+{"kind":"shape","id":"sh/e10f2twf","slide":3,"name":"Rounded Rectangle 19","bbox":[57.6,336,268.8,153.6]}
+{"kind":"textbox","id":"sh/f29gbyx0","slide":3,"name":"TextBox 20","text":"逐帧独立检测","textPreview":"逐帧独立检测","textChars":6,"textLines":1,"bbox":[72,345.6,240,33.6]}
+{"kind":"textbox","id":"sh/03ix43e5","slide":3,"name":"TextBox 21","text":"宽筛候选数（按帧）","textPreview":"宽筛候选数（按帧）","textChars":9,"textLines":1,"bbox":[72,379.2,240,27.2]}
+{"kind":"textbox","id":"sh/14ryd8fq","slide":3,"name":"TextBox 22","text":"哪里可能有局部响应","textPreview":"哪里可能有局部响应","textChars":9,"textLines":1,"bbox":[72,408,240,24]}
+{"kind":"shape","id":"sh/6d0fytg3","slide":3,"name":"Rounded Rectangle 23","bbox":[355.2,336,268.8,153.6]}
+{"kind":"textbox","id":"sh/re9g7yxo","slide":3,"name":"TextBox 24","text":"结果按帧保存","textPreview":"结果按帧保存","textChars":6,"textLines":1,"bbox":[369.6,345.6,240,33.6]}
+{"kind":"textbox","id":"sh/sfix03y9","slide":3,"name":"TextBox 25","text":"质量源数（按帧）","textPreview":"质量源数（按帧）","textChars":8,"textLines":1,"bbox":[369.6,379.2,240,27.2]}
+{"kind":"textbox","id":"sh/tgry9ofu","slide":3,"name":"TextBox 26","text":"是否满足点源质量规则","textPreview":"是否满足点源质量规则","textChars":10,"textLines":1,"bbox":[369.6,408,240,24]}
+{"kind":"shape","id":"sh/a9kfadwn","slide":3,"name":"Rounded Rectangle 27","bbox":[652.8,336,268.8,153.6]}
+{"kind":"textbox","id":"sh/batgjixs","slide":3,"name":"TextBox 28","text":"N_temporal","textPreview":"N_temporal","textChars":10,"textLines":1,"bbox":[667.2,345.6,240,33.6]}
+{"kind":"textbox","id":"sh/l4fi9cza","slide":3,"name":"TextBox 29","text":"稳定/运动候选","textPreview":"稳定/运动候选","textChars":7,"textLines":1,"bbox":[667.2,379.2,240,24]}
+{"kind":"textbox","id":"sh/k3m1g7yp","slide":3,"name":"TextBox 30","text":"时间上如何变化","textPreview":"时间上如何变化","textChars":7,"textLines":1,"bbox":[667.2,408,240,24]}
+{"kind":"shape","id":"sh/z2d07mh4","slide":3,"name":"Rounded Rectangle 31","bbox":[950.4,336,268.8,153.6]}
+{"kind":"textbox","id":"sh/y14jehgj","slide":3,"name":"TextBox 32","text":"N_catalog","textPreview":"N_catalog","textChars":9,"textLines":1,"bbox":[964.8,345.6,240,33.6]}
+{"kind":"textbox","id":"sh/x0vi5czy","slide":3,"name":"TextBox 33","text":"星表匹配数","textPreview":"星表匹配数","textChars":5,"textLines":1,"bbox":[964.8,379.2,240,24]}
+{"kind":"textbox","id":"sh/czmhc7id","slide":3,"name":"TextBox 34","text":"是否有外部天球身份","textPreview":"是否有外部天球身份","textChars":9,"textLines":1,"bbox":[964.8,408,240,24]}
+{"kind":"textbox","id":"sh/byd032h8","slide":3,"name":"TextBox 35","text":"辅助数据与姿态先验","textPreview":"辅助数据与姿态先验","textChars":9,"textLines":1,"bbox":[57.6,518.4,480,33.6]}
+{"kind":"textbox","id":"sh/ax4zax0n","slide":3,"name":"TextBox 36","text":"▸ 每帧 26 个辅助字段（8 字节 double）：光轴 RA/Dec、四元数、J2000/WGS84 位置速度、姿态角\n▸ 四元数模长偏差 < 2.3×10⁻¹⁶，推导光轴与辅助 RA/Dec 残差约 1.1×10⁻¹⁰ 角秒 → 字段内部自洽\n▸ 姿态先验可缩小星表搜索区域，但缺少像元尺度和畸变参数 → 不是完整 WCS\n▸ 位置差分与辅助速度相对误差约万分之几，支持按 m/s 解读；单位仍待主办方确认\n* 由像元尺寸和焦距计算；最终尺度以 Gaia/WCS 拟合为准","textPreview":"▸ 每帧 26 个辅助字段（8 字节 double）：光轴 RA/Dec、四元数、J2000/WGS84 位置速度、姿态角 | ▸ 四元数模长偏差 < 2.3×10⁻¹⁶，推导光轴与辅助 RA/Dec 残差约 1.1×10⁻¹⁰ 角秒 → 字段内部自洽 | ▸ 姿态先验可缩...","textChars":239,"textLines":5,"bbox":[57.6,561.6,1152,144]}
+{"kind":"textbox","id":"sh/hwzihwzi","slide":3,"name":"TextBox 37","text":"3/19","textPreview":"3/19","textChars":4,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/ofy9wn61","slide":3,"text":""}
+{"kind":"slide","id":"sl/jyx0ra1s","slide":4,"title":"技术路线总览","textShapes":36}
+{"kind":"shape","id":"sh/1cj2d8b6","slide":4,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"textbox","id":"sh/0ba143al","slide":4,"name":"TextBox 2","text":"技术路线总览","textPreview":"技术路线总览","textChars":6,"textLines":1,"bbox":[57.6,33.6,480,48]}
+{"kind":"textbox","id":"sh/rm1k7yt4","slide":4,"name":"TextBox 3","text":"核心方法论：宽筛—细筛—时序确认","textPreview":"核心方法论：宽筛—细筛—时序确认","textChars":16,"textLines":1,"bbox":[57.6,76.8,768,33.6]}
+{"kind":"shape","id":"sh/ql8jytsj","slide":4,"name":"Rectangle 4","bbox":[57.6,115.2,1161.6,1.33]}
+{"kind":"shape","id":"sh/doj29oba","slide":4,"name":"Rounded Rectangle 5","bbox":[38.4,144,182.4,172.8]}
+{"kind":"textbox","id":"sh/sna103ap","slide":4,"name":"TextBox 6","text":"①","textPreview":"①","textChars":1,"textLines":1,"bbox":[43.2,148.8,33.6,33.6]}
+{"kind":"textbox","id":"sh/3ihk3et8","slide":4,"name":"TextBox 7","text":"FITS 读取  辅助数据解码  数据校验","textPreview":"FITS 读取  辅助数据解码  数据校验","textChars":21,"textLines":1,"bbox":[48,187.2,163.2,115.2]}
+{"kind":"textbox","id":"sh/ih8ju9sn","slide":4,"name":"TextBox 8","text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[220.8,201.6,24,38.4]}
+{"kind":"shape","id":"sh/kbm987y5","slide":4,"name":"Rounded Rectangle 9","bbox":[240,144,182.4,172.8]}
+{"kind":"textbox","id":"sh/5cva1cfq","slide":4,"name":"TextBox 10","text":"②","textPreview":"②","textChars":1,"textLines":1,"bbox":[244.8,148.8,33.6,33.6]}
+{"kind":"textbox","id":"sh/i94r6xgz","slide":4,"name":"TextBox 11","text":"局部背景/RMS  Gaussian + DoG  hybrid 宽筛","textPreview":"局部背景/RMS  Gaussian + DoG  hybrid 宽筛","textChars":35,"textLines":1,"bbox":[249.6,187.2,163.2,115.2]}
+{"kind":"textbox","id":"sh/jadsz2xk","slide":4,"name":"TextBox 12","text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[422.4,201.6,24,38.4]}
+{"kind":"shape","id":"sh/w72947yt","slide":4,"name":"Rounded Rectangle 13","bbox":[441.6,144,182.4,172.8]}
+{"kind":"textbox","id":"sh/x8vaxsfe","slide":4,"name":"TextBox 14","text":"③","textPreview":"③","textChars":1,"textLines":1,"bbox":[446.4,148.8,33.6,33.6]}
+{"kind":"textbox","id":"sh/a5kr2xg3","slide":4,"name":"TextBox 15","text":"孔径测光  PSF/BIC 细筛  质量确认","textPreview":"孔径测光  PSF/BIC 细筛  质量确认","textChars":22,"textLines":1,"bbox":[451.2,187.2,163.2,115.2]}
+{"kind":"textbox","id":"sh/v6tsv2xo","slide":4,"name":"TextBox 16","text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[624,201.6,24,38.4]}
+{"kind":"shape","id":"sh/g36tgryd","slide":4,"name":"Rounded Rectangle 17","bbox":[643.2,144,182.4,172.8]}
+{"kind":"textbox","id":"sh/h4fa9wfy","slide":4,"name":"TextBox 18","text":"④","textPreview":"④","textChars":1,"textLines":1,"bbox":[648,148.8,33.6,33.6]}
+{"kind":"textbox","id":"sh/p0batw72","slide":4,"name":"TextBox 19","text":"平移配准  Hungarian 关联  时序分类","textPreview":"平移配准  Hungarian 关联  时序分类","textChars":24,"textLines":1,"bbox":[652.8,187.2,163.2,115.2]}
+{"kind":"textbox","id":"sh/oz29krqh","slide":4,"name":"TextBox 20","text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[825.6,201.6,24,38.4]}
+{"kind":"shape","id":"sh/3ytsrmpw","slide":4,"name":"Rounded Rectangle 21","bbox":[844.8,144,182.4,172.8]}
+{"kind":"textbox","id":"sh/2xkrih8b","slide":4,"name":"TextBox 22","text":"⑤","textPreview":"⑤","textChars":1,"textLines":1,"bbox":[849.6,148.8,33.6,33.6]}
+{"kind":"textbox","id":"sh/1wbapc7q","slide":4,"name":"TextBox 23","text":"星表匹配  WCS 标定  星等计算","textPreview":"星表匹配  WCS 标定  星等计算","textChars":18,"textLines":1,"bbox":[854.4,187.2,163.2,115.2]}
+{"kind":"textbox","id":"sh/gv29g7q5","slide":4,"name":"TextBox 24","text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[1027.2,201.6,24,38.4]}
+{"kind":"shape","id":"sh/fu9sn2p0","slide":4,"name":"Rounded Rectangle 25","bbox":[1046.4,144,182.4,172.8]}
+{"kind":"textbox","id":"sh/et0reh8f","slide":4,"name":"TextBox 26","text":"⑥","textPreview":"⑥","textChars":1,"textLines":1,"bbox":[1051.2,148.8,33.6,33.6]}
+{"kind":"textbox","id":"sh/tsrqlc7u","slide":4,"name":"TextBox 27","text":"创新分析  证据导出  审计报告","textPreview":"创新分析  证据导出  审计报告","textChars":16,"textLines":1,"bbox":[1056,187.2,163.2,115.2]}
+{"kind":"textbox","id":"sh/sri9s7q9","slide":4,"name":"TextBox 28","text":"核心方法论","textPreview":"核心方法论","textChars":5,"textLines":1,"bbox":[57.6,345.6,480,33.6]}
+{"kind":"shape","id":"sh/ilwf69kv","slide":4,"name":"Rectangle 29","bbox":[57.6,384,1161.6,1.33]}
+{"kind":"shape","id":"sh/jm5gze1g","slide":4,"name":"Rounded Rectangle 30","bbox":[57.6,403.2,33.6,33.6]}
+{"kind":"textbox","id":"sh/knex8j21","slide":4,"name":"TextBox 31","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[57.6,404.16,33.6,33.6]}
+{"kind":"textbox","id":"sh/5ony1oj6","slide":4,"name":"TextBox 32","text":"多尺度候选提案","textPreview":"多尺度候选提案","textChars":7,"textLines":1,"bbox":[105.6,401.28,268.8,28.8]}
+{"kind":"textbox","id":"sh/axcf29kj","slide":4,"name":"TextBox 33","text":"Gaussian + 双尺度 DoG 并集，覆盖不同空间尺度，候选阈值 4σ 是提案门槛而非恒星概率","textPreview":"Gaussian + 双尺度 DoG 并集，覆盖不同空间尺度，候选阈值 4σ 是提案门槛而非恒星概率","textChars":50,"textLines":1,"bbox":[384,401.28,835.2,33.6]}
+{"kind":"shape","id":"sh/vy5gbe14","slide":4,"name":"Rounded Rectangle 34","bbox":[57.6,462.72,33.6,33.6]}
+{"kind":"textbox","id":"sh/wzex4z2p","slide":4,"name":"TextBox 35","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[57.6,463.68,33.6,33.6]}
+{"kind":"textbox","id":"sh/xknyx4ja","slide":4,"name":"TextBox 36","text":"回到原图的点源细筛","textPreview":"回到原图的点源细筛","textChars":9,"textLines":1,"bbox":[105.6,460.8,268.8,28.8]}
+{"kind":"textbox","id":"sh/mtcfypkn","slide":4,"name":"TextBox 37","text":"三种 SNR（峰值/通量/滤波）分离测量；PSF 支持、形态、掩膜、数据范围多维门控","textPreview":"三种 SNR（峰值/通量/滤波）分离测量；PSF 支持、形态、掩膜、数据范围多维门控","textChars":42,"textLines":1,"bbox":[384,460.8,835.2,33.6]}
+{"kind":"shape","id":"sh/nulw7u18","slide":4,"name":"Rounded Rectangle 38","bbox":[57.6,522.24,33.6,33.6]}
+{"kind":"textbox","id":"sh/fm5c3q54","slide":4,"name":"TextBox 39","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[57.6,523.2,33.6,33.6]}
+{"kind":"textbox","id":"sh/elwba54j","slide":4,"name":"TextBox 40","text":"近邻去混叠","textPreview":"近邻去混叠","textChars":5,"textLines":1,"bbox":[105.6,520.32,268.8,28.8]}
+{"kind":"textbox","id":"sh/18nu50nu","slide":4,"name":"TextBox 41","text":"单/双 PSF 的 ΔBIC 检验，不按距离一刀切；支持 Gaussian 和经验 PSF 两种模板","textPreview":"单/双 PSF 的 ΔBIC 检验，不按距离一刀切；支持 Gaussian 和经验 PSF 两种模板","textChars":50,"textLines":1,"bbox":[384,520.32,835.2,33.6]}
+{"kind":"shape","id":"sh/0netcvm9","slide":4,"name":"Rounded Rectangle 42","bbox":[57.6,581.76,33.6,33.6]}
+{"kind":"textbox","id":"sh/rilczq5s","slide":4,"name":"TextBox 43","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[57.6,582.72,33.6,33.6]}
+{"kind":"textbox","id":"sh/qhcb6l47","slide":4,"name":"TextBox 44","text":"15帧时序确认","textPreview":"15帧时序确认","textChars":7,"textLines":1,"bbox":[105.6,579.84,268.8,28.8]}
+{"kind":"textbox","id":"sh/dknu10ny","slide":4,"name":"TextBox 45","text":"高质量静态源平移配准 → Hungarian 全局一对一关联 → 静态/瞬态/运动三层分离","textPreview":"高质量静态源平移配准 → Hungarian 全局一对一关联 → 静态/瞬态/运动三层分离","textChars":45,"textLines":1,"bbox":[384,579.84,835.2,33.6]}
+{"kind":"shape","id":"sh/sjut8vmd","slide":4,"name":"Rounded Rectangle 46","bbox":[57.6,641.28,33.6,33.6]}
+{"kind":"textbox","id":"sh/3elcv65w","slide":4,"name":"TextBox 47","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[57.6,642.24,33.6,33.6]}
+{"kind":"textbox","id":"sh/idcb2lob","slide":4,"name":"TextBox 48","text":"星表标定","textPreview":"星表标定","textChars":4,"textLines":1,"bbox":[105.6,639.36,268.8,28.8]}
+{"kind":"textbox","id":"sh/8jq9c72t","slide":4,"name":"TextBox 49","text":"Gaia DR3 公共星表接入，多参考星零点+颜色项标定，三层星等体系（m_inst / m_cal / M_G）","textPreview":"Gaia DR3 公共星表接入，多参考星零点+颜色项标定，三层星等体系（m_inst / m_cal / M_G）","textChars":57,"textLines":1,"bbox":[384,639.36,835.2,33.6]}
+{"kind":"textbox","id":"sh/tkjq5c3e","slide":4,"name":"TextBox 50","text":"4/19","textPreview":"4/19","textChars":4,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/jyx0ra1s","slide":4,"text":""}
+{"kind":"slide","id":"sl/i107q5of","slide":5,"title":"02","textShapes":8}
+{"kind":"shape","id":"sh/dgbulwnm","slide":5,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/cf2tcr61","slide":5,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/z2tcnm5s","slide":5,"name":"TextBox 3","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/yhkbe1o7","slide":5,"name":"TextBox 4","text":"星点识别：局部背景与匹配滤波","textPreview":"星点识别：局部背景与匹配滤波","textChars":14,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/l4bupwny","slide":5,"name":"TextBox 5","text":"基础赛项 · 星图识别 · 科学性","textPreview":"基础赛项 · 星图识别 · 科学性","textChars":17,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/032tgr6d","slide":5,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/n6dcr65o","slide":5,"name":"Rounded Rectangle 7","bbox":[57.6,144,556.8,528]}
+{"kind":"textbox","id":"sh/m5kbi1oj","slide":5,"name":"TextBox 8","text":"候选提案：局部背景归一化 + 匹配滤波","textPreview":"候选提案：局部背景归一化 + 匹配滤波","textChars":19,"textLines":1,"bbox":[86.4,153.6,499.2,33.6]}
+{"kind":"textbox","id":"sh/w32dkbuh","slide":5,"name":"TextBox 9","text":"背景估计\n  对原图 I(x,y) 在局部网格内用 sigma-clipping 估计背景 B(x,y) 和噪声 RMS（均方根）R(x,y)\n  D(x,y) = I(x,y) - B(x,y)（背景扣除后的残差图）\n\n匹配滤波响应\n  S = (Tᵀ C⁻¹ D) / √(Tᵀ C⁻¹ T)\n  T = Gaussian（高斯点扩散）模板，C = 噪声协方差（局部 RMS 近似）\n\n混合宽筛并集\n  ▸ Gaussian 匹配滤波：寻找标准点源响应\n  ▸ DoG（高斯差分）：覆盖不同空间尺度\n  ▸ à trous / Starlet（小波多尺度分解）：实验对照模式\n  ▸ 并集合并，4σ 只是候选提案门槛，不是恒星概率\n\n文献依据：WAVDETECT 用多尺度小波做候选提案；\n匹配滤波只有在信号形状和噪声假设成立时才有最大似然解释","textPreview":"背景估计 |   对原图 I(x,y) 在局部网格内用 sigma-clipping 估计背景 B(x,y) 和噪声 RMS（均方根）R(x,y) |   D(x,y) = I(x,y) - B(x,y)（背景扣除后的残差图） |  | 匹配滤波响应 |   S = (Tᵀ...","textChars":374,"textLines":16,"bbox":[86.4,196.8,499.2,460.8]}
+{"kind":"shape","id":"sh/x4vedgvm","slide":5,"name":"Rounded Rectangle 10","bbox":[652.8,144,556.8,528]}
+{"kind":"textbox","id":"sh/ahkvi1cb","slide":5,"name":"TextBox 11","text":"质量细筛：回到原图的多维门控","textPreview":"质量细筛：回到原图的多维门控","textChars":14,"textLines":1,"bbox":[681.6,153.6,499.2,33.6]}
+{"kind":"textbox","id":"sh/v2twb6dw","slide":5,"name":"TextBox 12","text":"三种 SNR（信噪比）分离\n  ▸ 峰值 SNR：局部峰值显著性\n  ▸ 通量 SNR：半径 4px 孔径测光\n  ▸ 滤波 SNR：匹配滤波响应值\n  三者不混为一个“可信度”\n\n孔径通量误差\n  σ_F² = N_ap·σ_b² + (N_ap²/N_bg)·σ_b² + σ_source² + σ_read²\n  flux_SNR = F / σ_F（通量信噪比）\n\n质量层门控条件\n  ▸ FWHM（半高全宽）/ 椭圆率 / sharpness（尖锐度）在合理范围\n  ▸ 3×3 核心至少 3 像素超过 max(2σ, 0.1×peak_excess)\n  ▸ 有效孔径比例、边界、数据范围审计\n  ▸ flux_SNR ≥ 5\n\n弱源如果只有单个高像素、没有小型核心支持，\n保留为候选但不进入质量层","textPreview":"三种 SNR（信噪比）分离 |   ▸ 峰值 SNR：局部峰值显著性 |   ▸ 通量 SNR：半径 4px 孔径测光 |   ▸ 滤波 SNR：匹配滤波响应值 |   三者不混为一个“可信度” |  | 孔径通量误差 |   σ_F² = N_ap·σ_b² + (N_a...","textChars":356,"textLines":18,"bbox":[681.6,196.8,499.2,460.8]}
+{"kind":"textbox","id":"sh/k7mxovud","slide":5,"name":"TextBox 13","text":"5/19","textPreview":"5/19","textChars":4,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/i107q5of","slide":5,"text":""}
+{"kind":"slide","id":"sl/x8f69ofe","slide":6,"title":"03","textShapes":10}
+{"kind":"shape","id":"sh/yhg7epsj","slide":6,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/zi98nu94","slide":6,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/87ipkzal","slide":6,"name":"TextBox 3","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/98rqt4r6","slide":6,"name":"TextBox 4","text":"星点识别：近邻去混叠","textPreview":"星点识别：近邻去混叠","textChars":10,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/ml07i9sv","slide":6,"name":"TextBox 5","text":"基础赛项 · 星图识别 · 创新性","textPreview":"基础赛项 · 星图识别 · 创新性","textChars":17,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/7m98ru9g","slide":6,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/oryp8fah","slide":6,"name":"Rounded Rectangle 7","bbox":[57.6,144,556.8,240]}
+{"kind":"textbox","id":"sh/pc76hkr2","slide":6,"name":"TextBox 8","text":"ΔBIC 双源检验","textPreview":"ΔBIC 双源检验","textChars":9,"textLines":1,"bbox":[86.4,153.6,480,33.6]}
+{"kind":"textbox","id":"sh/h4bupgn6","slide":6,"name":"TextBox 9","text":"ΔBIC（贝叶斯信息准则差值）= BIC（单 PSF）− BIC（双 PSF）\n通过条件：ΔBIC ≥ 10 且新增分量 SNR（信噪比）≥ 5\n▸ min_distance 只抑制候选峰，不等于物理去混叠\n▸ 不按距离一刀切删除，保留审计证据\n▸ 支持 Gaussian（高斯）PSF 和经验 PSF 两种模板","textPreview":"ΔBIC（贝叶斯信息准则差值）= BIC（单 PSF）− BIC（双 PSF） | 通过条件：ΔBIC ≥ 10 且新增分量 SNR（信噪比）≥ 5 | ▸ min_distance 只抑制候选峰，不等于物理去混叠 | ▸ 不按距离一刀切删除，保留审计证据 | ▸ 支持 G...","textChars":156,"textLines":5,"bbox":[86.4,201.6,499.2,172.8]}
+{"kind":"shape","id":"sh/w32twb6l","slide":6,"name":"Rounded Rectangle 10","bbox":[652.8,144,556.8,240]}
+{"kind":"textbox","id":"sh/v2tcn650","slide":6,"name":"TextBox 11","text":"PSF 加权相关与可分性","textPreview":"PSF 加权相关与可分性","textChars":12,"textLines":1,"bbox":[681.6,153.6,480,33.6]}
+{"kind":"textbox","id":"sh/u1kbu1ov","slide":6,"name":"TextBox 12","text":"ρ = (T_pᵀ C⁻¹ T_s) / √((T_pᵀ C⁻¹ T_p)(T_sᵀ C⁻¹ T_s))\n|ρ| 越大 → 两源参数越退化\n▸ 5.4 px 不是脱离 PSF、方向、强弱比的普适分辨率\n▸ 可分性取决于 PSF 形状和局部噪声条件\n▸ Astreaks（拖线源检测方法）：拖尾源可用 PSF 与运动线段的卷积建模","textPreview":"ρ = (T_pᵀ C⁻¹ T_s) / √((T_pᵀ C⁻¹ T_p)(T_sᵀ C⁻¹ T_s)) | |ρ| 越大 → 两源参数越退化 | ▸ 5.4 px 不是脱离 PSF、方向、强弱比的普适分辨率 | ▸ 可分性取决于 PSF 形状和局部噪声条件 | ▸ Ast...","textChars":164,"textLines":5,"bbox":[681.6,201.6,499.2,172.8]}
+{"kind":"shape","id":"sh/5svutgni","slide":6,"name":"Rounded Rectangle 13","bbox":[57.6,412.8,1161.6,259.2]}
+{"kind":"textbox","id":"sh/47mt0b6x","slide":6,"name":"TextBox 14","text":"实验验证：截图双源复核","textPreview":"实验验证：截图双源复核","textChars":11,"textLines":1,"bbox":[86.4,422.4,480,33.6]}
+{"kind":"textbox","id":"sh/j6dcr65c","slide":6,"name":"TextBox 15","text":"主响应 ID 70269：(1269,3465)  峰值 30,884 / flux_SNR 82.82  →  质量层保留\n副响应 ID 70320：(1274,3467)  峰值 3,991 / flux_SNR 10.85  →  极端负码污染，标 NEGATIVE_OVERFLOW\n▸ 间距 5.39 px，但副响应孔径含 31,586 正码 / −31,642 负码 / 固定 −1 像素块\n▸ 原始掩膜下 ΔBIC = −2.59，次分量 SNR = 1.55  →  未达双源线\n▸ 经验 PSF 模板：ΔBIC = −3.13，次分量 SNR = 1.36  →  同样未达\n▸ 15帧逐帧复核：严格双命中仅 2/15 帧，同时质量通过 0/15 帧\n结论：异常值域污染的非高斯亮斑被拆成两个提案，不报告为第二颗确认恒星","textPreview":"主响应 ID 70269：(1269,3465)  峰值 30,884 / flux_SNR 82.82  →  质量层保留 | 副响应 ID 70320：(1274,3467)  峰值 3,991 / flux_SNR 10.85  →  极端负码污染，标 NEGATIV...","textChars":369,"textLines":7,"bbox":[86.4,470.4,1104,192]}
+{"kind":"textbox","id":"sh/i54bylor","slide":6,"name":"TextBox 16","text":"6/19","textPreview":"6/19","textChars":4,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/x8f69ofe","slide":6,"text":""}
+{"kind":"slide","id":"sl/gnmp4jqx","slide":7,"title":"04","textShapes":58}
+{"kind":"shape","id":"sh/cb2tkvap","slide":7,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/dcbud0ra","slide":7,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/ydkbm5sv","slide":7,"name":"TextBox 3","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/zedcfa9g","slide":7,"name":"TextBox 4","text":"星点识别：首帧检测结果","textPreview":"星点识别：首帧检测结果","textChars":11,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/kzmdova1","slide":7,"name":"TextBox 5","text":"基础赛项 · 星图识别 · 科学性 | 检测参数：混合提案；FWHM（半高全宽）=2px；阈值4σ；候选峰最小间距4px；通量信噪比≥5","textPreview":"基础赛项 · 星图识别 · 科学性 | 检测参数：混合提案；FWHM（半高全宽）=2px；阈值4σ；候选峰最小间距4px；通量信噪比≥5","textChars":68,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/l0vuh0rm","slide":7,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/eh0ba1sr","slide":7,"name":"Rounded Rectangle 7","bbox":[57.6,144,268.8,115.2]}
+{"kind":"textbox","id":"sh/fi9c369c","slide":7,"name":"TextBox 8","text":"逐帧输出","textPreview":"逐帧输出","textChars":4,"textLines":1,"bbox":[76.8,148.8,230.4,51.2]}
+{"kind":"textbox","id":"sh/baxkjqlk","slide":7,"name":"TextBox 9","text":"每帧宽筛候选","textPreview":"每帧宽筛候选","textChars":6,"textLines":1,"bbox":[76.8,201.6,230.4,28.8]}
+{"kind":"shape","id":"sh/a9ojq5kz","slide":7,"name":"Rounded Rectangle 10","bbox":[355.2,144,268.8,115.2]}
+{"kind":"textbox","id":"sh/xcz2l03q","slide":7,"name":"TextBox 11","text":"逐帧质量结果","textPreview":"逐帧质量结果","textChars":6,"textLines":1,"bbox":[374.4,148.8,230.4,51.2]}
+{"kind":"textbox","id":"sh/cbq1sv25","slide":7,"name":"TextBox 12","text":"质量源（逐帧）","textPreview":"质量源（逐帧）","textChars":7,"textLines":1,"bbox":[374.4,201.6,230.4,28.8]}
+{"kind":"shape","id":"sh/n6x0fqlo","slide":7,"name":"Rounded Rectangle 13","bbox":[652.8,144,268.8,115.2]}
+{"kind":"textbox","id":"sh/25ojml43","slide":7,"name":"TextBox 14","text":"逐帧审计","textPreview":"逐帧审计","textChars":4,"textLines":1,"bbox":[672,148.8,230.4,51.2]}
+{"kind":"textbox","id":"sh/p8fih03e","slide":7,"name":"TextBox 15","text":"负码/范围异常","textPreview":"负码/范围异常","textChars":7,"textLines":1,"bbox":[672,201.6,230.4,28.8]}
+{"kind":"shape","id":"sh/o761ov2t","slide":7,"name":"Rounded Rectangle 16","bbox":[950.4,144,268.8,115.2]}
+{"kind":"textbox","id":"sh/f2d0b6lc","slide":7,"name":"TextBox 17","text":"不跨帧汇总","textPreview":"不跨帧汇总","textChars":5,"textLines":1,"bbox":[969.6,148.8,230.4,51.2]}
+{"kind":"textbox","id":"sh/eh4jil4r","slide":7,"name":"TextBox 18","text":"质量比例按帧计算","textPreview":"质量比例按帧计算","textChars":8,"textLines":1,"bbox":[969.6,201.6,230.4,28.8]}
+{"kind":"textbox","id":"sh/id4ju1oz","slide":7,"name":"TextBox 19","text":"逐帧特征类别分布（互斥分类）","textPreview":"逐帧特征类别分布（互斥分类）","textChars":14,"textLines":1,"bbox":[57.6,288,960,33.6]}
+{"kind":"textbox","id":"sh/jedkn654","slide":7,"name":"TextBox 20","text":"类别","textPreview":"类别","textChars":2,"textLines":1,"bbox":[57.6,331.2,240,24]}
+{"kind":"textbox","id":"sh/4fm1wb6p","slide":7,"name":"TextBox 21","text":"输出口径","textPreview":"输出口径","textChars":4,"textLines":1,"bbox":[307.2,331.2,115.2,25.6]}
+{"kind":"textbox","id":"sh/50v2pgna","slide":7,"name":"TextBox 22","text":"质量层","textPreview":"质量层","textChars":3,"textLines":1,"bbox":[432,331.2,115.2,25.6]}
+{"kind":"textbox","id":"sh/q143ylov","slide":7,"name":"TextBox 23","text":"跨帧合计","textPreview":"跨帧合计","textChars":4,"textLines":1,"bbox":[556.8,331.2,76.8,25.6]}
+{"kind":"textbox","id":"sh/r2dkrq5g","slide":7,"name":"TextBox 24","text":"说明","textPreview":"说明","textChars":2,"textLines":1,"bbox":[643.2,331.2,576,24]}
+{"kind":"shape","id":"sh/s3ml0v61","slide":7,"name":"Rectangle 25","bbox":[57.6,355.2,1161.6,1.33]}
+{"kind":"shape","id":"sh/d4f2t0nm","slide":7,"name":"Rectangle 26","bbox":[57.6,366.72,1161.6,35.52]}
+{"kind":"textbox","id":"sh/e5o32lor","slide":7,"name":"TextBox 27","text":"紧凑质量候选","textPreview":"紧凑质量候选","textChars":6,"textLines":1,"bbox":[67.2,370.56,220.8,28.8]}
+{"kind":"textbox","id":"sh/f6xkvq5c","slide":7,"name":"TextBox 28","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[307.2,370.56,105.6,28.8]}
+{"kind":"textbox","id":"sh/p0zmlk7u","slide":7,"name":"TextBox 29","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[432,370.56,105.6,28.8]}
+{"kind":"textbox","id":"sh/ozq5szq9","slide":7,"name":"TextBox 30","text":"—","textPreview":"—","textChars":1,"textLines":1,"bbox":[556.8,370.56,67.2,28.8]}
+{"kind":"textbox","id":"sh/nyh4jupo","slide":7,"name":"TextBox 31","text":"当前点源规则通过，不是星表真值","textPreview":"当前点源规则通过，不是星表真值","textChars":15,"textLines":1,"bbox":[643.2,370.56,576,28.8]}
+{"kind":"shape","id":"sh/2x8nqp83","slide":7,"name":"Rectangle 32","bbox":[57.6,404.16,1161.6,35.52]}
+{"kind":"textbox","id":"sh/x4j6p47q","slide":7,"name":"TextBox 33","text":"尖峰/PSF支持不足","textPreview":"尖峰/PSF支持不足","textChars":10,"textLines":1,"bbox":[67.2,408,220.8,28.8]}
+{"kind":"textbox","id":"sh/c3a5wzq5","slide":7,"name":"TextBox 34","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[307.2,408,105.6,28.8]}
+{"kind":"textbox","id":"sh/b2h4nupk","slide":7,"name":"TextBox 35","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[432,408,105.6,28.8]}
+{"kind":"textbox","id":"sh/a18nup8z","slide":7,"name":"TextBox 36","text":"—","textPreview":"—","textChars":1,"textLines":1,"bbox":[556.8,408,67.2,28.8]}
+{"kind":"textbox","id":"sh/lsj6t47m","slide":7,"name":"TextBox 37","text":"单像素或核心支持不足的响应","textPreview":"单像素或核心支持不足的响应","textChars":13,"textLines":1,"bbox":[643.2,408,576,28.8]}
+{"kind":"shape","id":"sh/kra50jqh","slide":7,"name":"Rectangle 38","bbox":[57.6,441.6,1161.6,35.52]}
+{"kind":"textbox","id":"sh/wneps3ap","slide":7,"name":"TextBox 39","text":"弱通量/背景不确定","textPreview":"弱通量/背景不确定","textChars":9,"textLines":1,"bbox":[67.2,445.44,220.8,28.8]}
+{"kind":"textbox","id":"sh/honq18ru","slide":7,"name":"TextBox 40","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[307.2,445.44,105.6,28.8]}
+{"kind":"textbox","id":"sh/ulc7qdsj","slide":7,"name":"TextBox 41","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[432,445.44,105.6,28.8]}
+{"kind":"textbox","id":"sh/vm58zi94","slide":7,"name":"TextBox 42","text":"—","textPreview":"—","textChars":1,"textLines":1,"bbox":[556.8,445.44,67.2,28.8]}
+{"kind":"textbox","id":"sh/8jupo3ad","slide":7,"name":"TextBox 43","text":"孔径通量 SNR 不足","textPreview":"孔径通量 SNR 不足","textChars":11,"textLines":1,"bbox":[643.2,445.44,576,28.8]}
+{"kind":"shape","id":"sh/9k3qx8ry","slide":7,"name":"Rectangle 44","bbox":[57.6,479.04,1161.6,35.52]}
+{"kind":"textbox","id":"sh/mxc7mts7","slide":7,"name":"TextBox 45","text":"边缘/掩膜","textPreview":"边缘/掩膜","textChars":5,"textLines":1,"bbox":[67.2,482.88,220.8,28.8]}
+{"kind":"textbox","id":"sh/7yl8vy9s","slide":7,"name":"TextBox 46","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[307.2,482.88,105.6,28.8]}
+{"kind":"textbox","id":"sh/sfy907ah","slide":7,"name":"TextBox 47","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[432,482.88,105.6,28.8]}
+{"kind":"textbox","id":"sh/tg7q9sr2","slide":7,"name":"TextBox 48","text":"—","textPreview":"—","textChars":1,"textLines":1,"bbox":[556.8,482.88,67.2,28.8]}
+{"kind":"textbox","id":"sh/na9sz6tk","slide":7,"name":"TextBox 49","text":"PARTIAL_MASKED 可按容错通过","textPreview":"PARTIAL_MASKED 可按容错通过","textChars":21,"textLines":1,"bbox":[643.2,482.88,576,28.8]}
+{"kind":"shape","id":"sh/290bq1cz","slide":7,"name":"Rectangle 50","bbox":[57.6,516.48,1161.6,35.52]}
+{"kind":"textbox","id":"sh/pcra1wba","slide":7,"name":"TextBox 51","text":"拥挤/未分辨近邻","textPreview":"拥挤/未分辨近邻","textChars":8,"textLines":1,"bbox":[67.2,520.32,220.8,28.8]}
+{"kind":"textbox","id":"sh/obitsrup","slide":7,"name":"TextBox 52","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[307.2,520.32,105.6,28.8]}
+{"kind":"textbox","id":"sh/betc36tg","slide":7,"name":"TextBox 53","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[432,520.32,105.6,28.8]}
+{"kind":"textbox","id":"sh/adkbu1cv","slide":7,"name":"TextBox 54","text":"—","textPreview":"—","textChars":1,"textLines":1,"bbox":[556.8,520.32,67.2,28.8]}
+{"kind":"textbox","id":"sh/xgbu5gbm","slide":7,"name":"TextBox 55","text":"双源证据不足，不按距离判假","textPreview":"双源证据不足，不按距离判假","textChars":13,"textLines":1,"bbox":[643.2,520.32,576,28.8]}
+{"kind":"shape","id":"sh/cf2twbu1","slide":7,"name":"Rectangle 56","bbox":[57.6,553.92,1161.6,35.52]}
+{"kind":"textbox","id":"sh/ripsrmtc","slide":7,"name":"TextBox 57","text":"线状/拖影","textPreview":"线状/拖影","textChars":5,"textLines":1,"bbox":[67.2,557.76,220.8,28.8]}
+{"kind":"textbox","id":"sh/6hgbihcr","slide":7,"name":"TextBox 58","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[307.2,557.76,105.6,28.8]}
+{"kind":"textbox","id":"sh/uponm90b","slide":7,"name":"TextBox 59","text":"线状层","textPreview":"线状层","textChars":3,"textLines":1,"bbox":[432,557.76,105.6,28.8]}
+{"kind":"textbox","id":"sh/vah4fehw","slide":7,"name":"TextBox 60","text":"—","textPreview":"—","textChars":1,"textLines":1,"bbox":[556.8,557.76,67.2,28.8]}
+{"kind":"textbox","id":"sh/gbq5ojih","slide":7,"name":"TextBox 61","text":"独立线状候选层","textPreview":"独立线状候选层","textChars":7,"textLines":1,"bbox":[643.2,557.76,576,28.8]}
+{"kind":"shape","id":"sh/hczmhoz2","slide":7,"name":"Rectangle 62","bbox":[57.6,591.36,1161.6,35.52]}
+{"kind":"textbox","id":"sh/6loni90f","slide":7,"name":"TextBox 63","text":"数据有效性/范围异常","textPreview":"数据有效性/范围异常","textChars":10,"textLines":1,"bbox":[67.2,595.2,220.8,28.8]}
+{"kind":"textbox","id":"sh/7mx4buh0","slide":7,"name":"TextBox 64","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[307.2,595.2,105.6,28.8]}
+{"kind":"textbox","id":"sh/8n65kzil","slide":7,"name":"TextBox 65","text":"审计层","textPreview":"审计层","textChars":3,"textLines":1,"bbox":[432,595.2,105.6,28.8]}
+{"kind":"textbox","id":"sh/tofmd4z6","slide":7,"name":"TextBox 66","text":"—","textPreview":"—","textChars":1,"textLines":1,"bbox":[556.8,595.2,67.2,28.8]}
+{"kind":"textbox","id":"sh/yh4nep0j","slide":7,"name":"TextBox 67","text":"含重复码/极端负码审计","textPreview":"含重复码/极端负码审计","textChars":11,"textLines":1,"bbox":[643.2,595.2,576,28.8]}
+{"kind":"shape","id":"sh/jix47uho","slide":7,"name":"Rectangle 68","bbox":[57.6,628.8,1161.6,35.52]}
+{"kind":"textbox","id":"sh/1c3qdsj6","slide":7,"name":"TextBox 69","text":"形状异常","textPreview":"形状异常","textChars":4,"textLines":1,"bbox":[67.2,632.64,220.8,28.8]}
+{"kind":"textbox","id":"sh/0bupkn21","slide":7,"name":"TextBox 70","text":"逐帧","textPreview":"逐帧","textChars":2,"textLines":1,"bbox":[307.2,632.64,105.6,28.8]}
+{"kind":"textbox","id":"sh/fal8bi1g","slide":7,"name":"TextBox 71","text":"审计层","textPreview":"审计层","textChars":3,"textLines":1,"bbox":[432,632.64,105.6,28.8]}
+{"kind":"textbox","id":"sh/e9c7ixkv","slide":7,"name":"TextBox 72","text":"—","textPreview":"—","textChars":1,"textLines":1,"bbox":[556.8,632.64,67.2,28.8]}
+{"kind":"textbox","id":"sh/d8jq9sja","slide":7,"name":"TextBox 73","text":"FWHM/椭圆率偏离当前规则","textPreview":"FWHM/椭圆率偏离当前规则","textChars":14,"textLines":1,"bbox":[643.2,632.64,576,28.8]}
+{"kind":"textbox","id":"sh/s7apgn2p","slide":7,"name":"TextBox 74","text":"7/19","textPreview":"7/19","textChars":4,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/gnmp4jqx","slide":7,"text":""}
+{"kind":"slide","id":"sl/fu1gfa1s","slide":8,"title":"05","textShapes":10}
+{"kind":"shape","id":"sh/18byd4zy","slide":8,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/g72x4zyd","slide":8,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/ri9g7uhw","slide":8,"name":"TextBox 3","text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/6h0fypgb","slide":8,"name":"TextBox 4","text":"星等识别与标定","textPreview":"星等识别与标定","textChars":7,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/tkby9kzm","slide":8,"name":"TextBox 5","text":"基础赛项 · 星图识别 · 科学性","textPreview":"基础赛项 · 星图识别 · 科学性","textChars":17,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/sjix0zy1","slide":8,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/je9g3ahk","slide":8,"name":"Rounded Rectangle 7","bbox":[57.6,144,374.4,528]}
+{"kind":"textbox","id":"sh/id0fu50z","slide":8,"name":"TextBox 8","text":"三层星等体系","textPreview":"三层星等体系","textChars":6,"textLines":1,"bbox":[76.8,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/o7ydoret","slide":8,"name":"TextBox 9","text":"第一层：m_inst（仪器星等）\n  由图像通量计算，只能比较同一图像内的亮暗\n  未消除相机响应、增益和波段差异\n\n第二层：m_cal（标定视星等）\n  用 Gaia 参考星拟合零点和颜色项\n  只有匹配、测光和波段条件通过才输出\n\n第三层：M（绝对星等）\n  还需要距离、消光和同波段转换\n  不能由 m_inst 直接得到\n\nGaia G：Gaia G 波段的视星等，不是绝对星等\nM_G：Gaia 模型或星表中的 G 波段绝对星等\n当前相机波段转换仍需外部标定证据","textPreview":"第一层：m_inst（仪器星等） |   由图像通量计算，只能比较同一图像内的亮暗 |   未消除相机响应、增益和波段差异 |  | 第二层：m_cal（标定视星等） |   用 Gaia 参考星拟合零点和颜色项 |   只有匹配、测光和波段条件通过才输出 |  | 第三层...","textChars":236,"textLines":15,"bbox":[76.8,201.6,336,460.8]}
+{"kind":"shape","id":"sh/98rehwve","slide":8,"name":"Rounded Rectangle 10","bbox":[456,144,374.4,528]}
+{"kind":"textbox","id":"sh/m5gvmhwn","slide":8,"name":"TextBox 11","text":"Gaia DR3 星表路线","textPreview":"Gaia DR3 星表路线","textChars":13,"textLines":1,"bbox":[475.2,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/n6pwfmd8","slide":8,"name":"TextBox 12","text":"显式 TAP 公共星表接入\n▸ rst19-gaia-frame 生成参考子表\n▸ GUI 在线获取 Gaia DR3\n参考星分层查询\n▸ 亮星定标层：G ≈ 5–13.5\n▸ 深星覆盖层：覆盖检测极限\n▸ rst19-gaia-merge 按 source_id 去重合并\nWCS 标定路径\n▸ 姿态先验 → 切平面 WCS\n▸ 先验引导一对一匹配\n▸ 匹配后局部仿射 WCS 校准\n▸ 输出像元角尺度/旋转/parity/RMS","textPreview":"显式 TAP 公共星表接入 | ▸ rst19-gaia-frame 生成参考子表 | ▸ GUI 在线获取 Gaia DR3 | 参考星分层查询 | ▸ 亮星定标层：G ≈ 5–13.5 | ▸ 深星覆盖层：覆盖检测极限 | ▸ rst19-gaia-merge 按 so...","textChars":216,"textLines":12,"bbox":[475.2,201.6,336,460.8]}
+{"kind":"shape","id":"sh/0jydkreh","slide":8,"name":"Rounded Rectangle 13","bbox":[854.4,144,374.4,528]}
+{"kind":"textbox","id":"sh/1k7edwv2","slide":8,"name":"TextBox 14","text":"颜色模型敏感性审计","textPreview":"颜色模型敏感性审计","textChars":9,"textLines":1,"bbox":[873.6,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/ehgvihwr","slide":8,"name":"TextBox 15","text":"三种颜色模型对比\n▸ 零阶：m_cal = m_inst + Z\n▸ 一次：+ c₁·(BP−RP)\n▸ 二次：+ c₁·(BP−RP) + c₂·(BP−RP)²\n敏感性审计\n▸ model_spread_mag 量化模型间差异\n▸ 最暗源排序一致率\n▸ 未知相机响应下的创新分析方法\n质量审计\n▸ rst19-photometric-report\n▸ 避免仪器星等冒充绝对星等\n▸ 消光波段/系统/来源完整保留","textPreview":"三种颜色模型对比 | ▸ 零阶：m_cal = m_inst + Z | ▸ 一次：+ c₁·(BP−RP) | ▸ 二次：+ c₁·(BP−RP) + c₂·(BP−RP)² | 敏感性审计 | ▸ model_spread_mag 量化模型间差异 | ▸ 最暗源排序一致...","textChars":207,"textLines":12,"bbox":[873.6,201.6,336,460.8]}
+{"kind":"textbox","id":"sh/zipwbmdc","slide":8,"name":"TextBox 16","text":"8/19","textPreview":"8/19","textChars":4,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/fu1gfa1s","slide":8,"text":""}
+{"kind":"slide","id":"sl/udsvah03","slide":9,"title":"06","textShapes":25}
+{"kind":"shape","id":"sh/1cfmhgne","slide":9,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/0b65obm9","slide":9,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/nex4jq5k","slide":9,"name":"TextBox 3","text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/mdonql4z","slide":9,"name":"TextBox 4","text":"运动目标识别：总体方法","textPreview":"运动目标识别：总体方法","textChars":11,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/9gzml0nq","slide":9,"name":"TextBox 5","text":"基础赛项 · 星图分析 · 科学性","textPreview":"基础赛项 · 星图分析 · 科学性","textChars":17,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/ofq5svm5","slide":9,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/bih4na5w","slide":9,"name":"Rounded Rectangle 7","bbox":[38.4,144,225.6,240]}
+{"kind":"shape","id":"sh/ah8nu54b","slide":9,"name":"Rounded Rectangle 8","bbox":[48,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/oza1gfyh","slide":9,"name":"TextBox 9","text":"Step 1","textPreview":"Step 1","textChars":6,"textLines":1,"bbox":[48,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/p0ji9kf2","slide":9,"name":"TextBox 10","text":"平移配准","textPreview":"平移配准","textChars":4,"textLines":1,"bbox":[115.2,153.6,134.4,28.8]}
+{"kind":"textbox","id":"sh/2xsjepgb","slide":9,"name":"TextBox 11","text":"用高质量静态源估计\n相邻帧全局平移\nΔt = median","textPreview":"用高质量静态源估计 | 相邻帧全局平移 | Δt = median","textChars":29,"textLines":3,"bbox":[52.8,201.6,201.6,172.8]}
+{"kind":"textbox","id":"sh/3y107axw","slide":9,"name":"TextBox 12","text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[264,220.8,24,38.4]}
+{"kind":"shape","id":"sh/cnu1kzyd","slide":9,"name":"Rounded Rectangle 13","bbox":[283.2,144,225.6,240]}
+{"kind":"shape","id":"sh/do3id4fy","slide":9,"name":"Rounded Rectangle 14","bbox":[292.8,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/qlcjipgn","slide":9,"name":"TextBox 15","text":"Step 2","textPreview":"Step 2","textChars":6,"textLines":1,"bbox":[292.8,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/bml0buxs","slide":9,"name":"TextBox 16","text":"轨迹关联","textPreview":"轨迹关联","textChars":4,"textLines":1,"bbox":[360,153.6,134.4,28.8]}
+{"kind":"textbox","id":"sh/0ru1ozyp","slide":9,"name":"TextBox 17","text":"扣除累计平移后\nHungarian 全局一对一\n禁止跨漏帧重连","textPreview":"扣除累计平移后 | Hungarian 全局一对一 | 禁止跨漏帧重连","textChars":31,"textLines":3,"bbox":[297.6,201.6,201.6,172.8]}
+{"kind":"textbox","id":"sh/lsn2h4fa","slide":9,"name":"TextBox 18","text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[508.8,220.8,24,38.4]}
+{"kind":"shape","id":"sh/98ji147e","slide":9,"name":"Rounded Rectangle 19","bbox":[528,144,225.6,240]}
+{"kind":"shape","id":"sh/87a18zqt","slide":9,"name":"Rounded Rectangle 20","bbox":[537.6,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/76h0zup8","slide":9,"name":"TextBox 21","text":"Step 3","textPreview":"Step 3","textChars":6,"textLines":1,"bbox":[537.6,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/ml8j6p8n","slide":9,"name":"TextBox 22","text":"三层分类","textPreview":"三层分类","textChars":4,"textLines":1,"bbox":[604.8,153.6,134.4,28.8]}
+{"kind":"textbox","id":"sh/hcji5o7a","slide":9,"name":"TextBox 23","text":"静态星场\n瞬态候选\n严格 moving","textPreview":"静态星场 | 瞬态候选 | 严格 moving","textChars":19,"textLines":3,"bbox":[542.4,201.6,201.6,172.8]}
+{"kind":"textbox","id":"sh/wba1cjqp","slide":9,"name":"TextBox 24","text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[753.6,220.8,24,38.4]}
+{"kind":"shape","id":"sh/va103ep4","slide":9,"name":"Rounded Rectangle 25","bbox":[772.8,144,225.6,240]}
+{"kind":"shape","id":"sh/u9sja98z","slide":9,"name":"Rounded Rectangle 26","bbox":[782.4,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/xgzitk76","slide":9,"name":"TextBox 27","text":"Step 4","textPreview":"Step 4","textChars":6,"textLines":1,"bbox":[782.4,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/cf6h0fql","slide":9,"name":"TextBox 28","text":"高速点源","textPreview":"高速点源","textChars":4,"textLines":1,"bbox":[849.6,153.6,134.4,28.8]}
+{"kind":"textbox","id":"sh/2l4faloj","slide":9,"name":"TextBox 29","text":"宽筛候选峰 →\n三帧常速度种子 →\n15帧关联 → ADU细筛","textPreview":"宽筛候选峰 → | 三帧常速度种子 → | 15帧关联 → ADU细筛","textChars":31,"textLines":3,"bbox":[787.2,201.6,201.6,172.8]}
+{"kind":"textbox","id":"sh/nmdg3q54","slide":9,"name":"TextBox 30","text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[998.4,220.8,24,38.4]}
+{"kind":"shape","id":"sh/onmxcv69","slide":9,"name":"Rounded Rectangle 31","bbox":[1017.6,144,225.6,240]}
+{"kind":"shape","id":"sh/pofy50nu","slide":9,"name":"Rounded Rectangle 32","bbox":[1027.2,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/apofe5of","slide":9,"name":"TextBox 33","text":"Step 5","textPreview":"Step 5","textChars":6,"textLines":1,"bbox":[1027.2,153.6,57.6,28.8]}
+{"kind":"textbox","id":"sh/bqxg7q50","slide":9,"name":"TextBox 34","text":"线状检测","textPreview":"线状检测","textChars":4,"textLines":1,"bbox":[1094.4,153.6,134.4,28.8]}
+{"kind":"textbox","id":"sh/cr6xgv6l","slide":9,"name":"TextBox 35","text":"原图高残差连通域\nPCA 几何筛选\n跨帧直线拟合","textPreview":"原图高残差连通域 | PCA 几何筛选 | 跨帧直线拟合","textChars":24,"textLines":3,"bbox":[1032,201.6,201.6,172.8]}
+{"kind":"textbox","id":"sh/xcfy90n6","slide":9,"name":"TextBox 36","text":"关键设计决策","textPreview":"关键设计决策","textChars":6,"textLines":1,"bbox":[57.6,412.8,480,33.6]}
+{"kind":"shape","id":"sh/qtkf21ob","slide":9,"name":"Rectangle 37","bbox":[57.6,451.2,1161.6,1.33]}
+{"kind":"textbox","id":"sh/rutwv65w","slide":9,"name":"TextBox 38","text":"▸ 点轨迹：拟合位移 + 禁止跨漏帧重连 → 避免虚假长轨迹\n▸ 线状候选：独立于点源层，单帧叫候选，跨帧才进入运动候选层\n▸ 运动叠加层：洋红色 moving 线状 + 橙色 candidate 线状 + 严格 moving 点轨迹，分层显示\n▸ 图像平面预测：最后两点匀速外推 +5 帧，标为 forecast，不宣称轨道预测\n▸ 速度不确定度：三点及以上 OLS 拟合，Student-t 95% 区间，delta method 传播误差\n▸ 注册中值差分基线：分块时间中值参考，减少帧间整体位移影响\n▸ 配准工作集：每帧前 6000 个 filter_snr 候选，全量 candidate_count 审计保留","textPreview":"▸ 点轨迹：拟合位移 + 禁止跨漏帧重连 → 避免虚假长轨迹 | ▸ 线状候选：独立于点源层，单帧叫候选，跨帧才进入运动候选层 | ▸ 运动叠加层：洋红色 moving 线状 + 橙色 candidate 线状 + 严格 moving 点轨迹，分层显示 | ▸ 图像平面预测...","textChars":310,"textLines":7,"bbox":[57.6,465.6,1152,240]}
+{"kind":"textbox","id":"sh/7y14jyd8","slide":9,"name":"TextBox 39","text":"9/19","textPreview":"9/19","textChars":4,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/udsvah03","slide":9,"text":""}
+{"kind":"slide","id":"sl/m90b6t0r","slide":10,"title":"06","textShapes":10}
+{"kind":"shape","id":"sh/xc3mho32","slide":10,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/cbu58j2h","slide":10,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/zelojyl8","slide":10,"name":"TextBox 3","text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/ydcnatkn","slide":10,"name":"TextBox 4","text":"运动目标：线状候选分层检测","textPreview":"运动目标：线状候选分层检测","textChars":13,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/l036l83y","slide":10,"name":"TextBox 5","text":"基础赛项 · 星图分析 · 创新性","textPreview":"基础赛项 · 星图分析 · 创新性","textChars":17,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/kzu5c32t","slide":10,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/725onyl4","slide":10,"name":"Rounded Rectangle 7","bbox":[57.6,144,374.4,480]}
+{"kind":"textbox","id":"sh/m1cnetkj","slide":10,"name":"TextBox 8","text":"单帧长线检测 (rst19-trails)","textPreview":"单帧长线检测 (rst19-trails)","textChars":21,"textLines":1,"bbox":[76.8,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/s7yt4b21","slide":10,"name":"TextBox 9","text":"残差图 → 有效像素掩膜 → 阈值连通域 → PCA 几何筛选\n▸ 输出：长度、宽度、方向、残差信噪比、触边状态和包围盒\n▸ 线状候选单独保留，不进入恒星质量源统计\n▸ 单帧只能说明“具有线状或异常形态”，运动确认放到 15 帧关联","textPreview":"残差图 → 有效像素掩膜 → 阈值连通域 → PCA 几何筛选 | ▸ 输出：长度、宽度、方向、残差信噪比、触边状态和包围盒 | ▸ 线状候选单独保留，不进入恒星质量源统计 | ▸ 单帧只能说明“具有线状或异常形态”，运动确认放到 15 帧关联","textChars":116,"textLines":4,"bbox":[76.8,201.6,336,403.2]}
+{"kind":"shape","id":"sh/d87uxg3m","slide":10,"name":"Rounded Rectangle 10","bbox":[456,144,374.4,480]}
+{"kind":"textbox","id":"sh/q5gb21kb","slide":10,"name":"TextBox 11","text":"跨帧线状关联","textPreview":"跨帧线状关联","textChars":6,"textLines":1,"bbox":[475.2,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/r6pcv6lw","slide":10,"name":"TextBox 12","text":"从原图高残差连通域建立独立线状候选池\n▸ 面积/PCA 形状 + 连续跨帧关联，排除普通静态点与孤立噪声\n▸ 注册坐标中拟合直线，RMS 合格标记 moving\n▸ 轨迹图：洋红色实测线 + 青绿色虚线预测（末帧 +5 帧外推）","textPreview":"从原图高残差连通域建立独立线状候选池 | ▸ 面积/PCA 形状 + 连续跨帧关联，排除普通静态点与孤立噪声 | ▸ 注册坐标中拟合直线，RMS 合格标记 moving | ▸ 轨迹图：洋红色实测线 + 青绿色虚线预测（末帧 +5 帧外推）","textChars":114,"textLines":4,"bbox":[475.2,201.6,336,403.2]}
+{"kind":"shape","id":"sh/0bit8b2d","slide":10,"name":"Rounded Rectangle 13","bbox":[854.4,144,374.4,480]}
+{"kind":"textbox","id":"sh/1cru1g3y","slide":10,"name":"TextBox 14","text":"逐帧线状筛选诊断漏斗 + 运动证据分层输出","textPreview":"逐帧线状筛选诊断漏斗 + 运动证据分层输出","textChars":21,"textLines":1,"bbox":[873.6,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/e9gb61k7","slide":10,"name":"TextBox 15","text":"先做单帧线状候选，再做多帧确认：\n▸ 线状候选表：记录长度、方向、宽度和质量标记\n▸ 逐帧点记录：记录每一帧的坐标和亮度\n▸ 运动轨迹表：给出持续帧数、位移、图像平面方向和速度\n▸ 这些是图像平面证据，不直接等同于真实轨道或天体身份","textPreview":"先做单帧线状候选，再做多帧确认： | ▸ 线状候选表：记录长度、方向、宽度和质量标记 | ▸ 逐帧点记录：记录每一帧的坐标和亮度 | ▸ 运动轨迹表：给出持续帧数、位移、图像平面方向和速度 | ▸ 这些是图像平面证据，不直接等同于真实轨道或天体身份","textChars":116,"textLines":5,"bbox":[873.6,201.6,336,403.2]}
+{"kind":"textbox","id":"sh/fapcz6ls","slide":10,"name":"TextBox 16","text":"10/19","textPreview":"10/19","textChars":5,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/m90b6t0r","slide":10,"text":""}
+{"kind":"slide","id":"sl/jetc3ut0","slide":11,"title":"07","textShapes":16}
+{"kind":"shape","id":"sh/xcryxg7y","slide":11,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/wbih4b6d","slide":11,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/n69grmpw","slide":11,"name":"TextBox 3","text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/250zy18b","slide":11,"name":"TextBox 4","text":"创新分析：多维证据导出","textPreview":"创新分析：多维证据导出","textChars":11,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/98rytw72","slide":11,"name":"TextBox 5","text":"创新赛项 · 创新性 15分 · 实用性 10分 · 科学性 5分","textPreview":"创新赛项 · 创新性 15分 · 实用性 10分 · 科学性 5分","textChars":33,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/o7ih0r6h","slide":11,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/72t03qp0","slide":11,"name":"Rounded Rectangle 7","bbox":[57.6,144,566.4,259.2]}
+{"kind":"textbox","id":"sh/61kzalof","slide":11,"name":"TextBox 8","text":"条件化可探测性剖面","textPreview":"条件化可探测性剖面","textChars":9,"textLines":1,"bbox":[76.8,153.6,528,33.6]}
+{"kind":"textbox","id":"sh/ofqtgnyt","slide":11,"name":"TextBox 9","text":"真实背景分层注入","textPreview":"真实背景分层注入","textChars":8,"textLines":1,"bbox":[76.8,192,528,24]}
+{"kind":"textbox","id":"sh/9gza9sze","slide":11,"name":"TextBox 10","text":"▸ 低纹理/高局部噪声/边缘/拥挤/特殊值域\n▸ 经验 PSF 覆盖 + 2×2 空间分区留出\n▸ 已知注入分母的召回率 + Wilson 区间\n▸ 候选回收与质量回收分开报告\n▸ 明确标注为条件性结果，不宣称完备率","textPreview":"▸ 低纹理/高局部噪声/边缘/拥挤/特殊值域 | ▸ 经验 PSF 覆盖 + 2×2 空间分区留出 | ▸ 已知注入分母的召回率 + Wilson 区间 | ▸ 候选回收与质量回收分开报告 | ▸ 明确标注为条件性结果，不宣称完备率","textChars":108,"textLines":5,"bbox":[76.8,225.6,528,172.8]}
+{"kind":"shape","id":"sh/mdobedg3","slide":11,"name":"Rounded Rectangle 11","bbox":[652.8,144,566.4,259.2]}
+{"kind":"textbox","id":"sh/nehs7iho","slide":11,"name":"TextBox 12","text":"15帧相对光度标尺","textPreview":"15帧相对光度标尺","textChars":9,"textLines":1,"bbox":[672,153.6,528,33.6]}
+{"kind":"textbox","id":"sh/0b6tc3yx","slide":11,"name":"TextBox 13","text":"跨帧一致性审计","textPreview":"跨帧一致性审计","textChars":7,"textLines":1,"bbox":[672,192,528,24]}
+{"kind":"textbox","id":"sh/1cfa58zi","slide":11,"name":"TextBox 14","text":"▸ 逐源误差与状态报告\n▸ 星等可观测性/false-valid 质量报告\n▸ rst19-photometric-report 工具\n▸ 避免仪器星等冒充绝对星等\n▸ 零阶/一次/二次颜色模型敏感性对比","textPreview":"▸ 逐源误差与状态报告 | ▸ 星等可观测性/false-valid 质量报告 | ▸ rst19-photometric-report 工具 | ▸ 避免仪器星等冒充绝对星等 | ▸ 零阶/一次/二次颜色模型敏感性对比","textChars":102,"textLines":5,"bbox":[672,225.6,528,172.8]}
+{"kind":"shape","id":"sh/epobatgr","slide":11,"name":"Rounded Rectangle 15","bbox":[57.6,422.4,566.4,259.2]}
+{"kind":"textbox","id":"sh/zaxs3yhc","slide":11,"name":"TextBox 16","text":"特征持久性审计","textPreview":"特征持久性审计","textChars":7,"textLines":1,"bbox":[76.8,432,528,33.6]}
+{"kind":"textbox","id":"sh/cn6t83y1","slide":11,"name":"TextBox 17","text":"15帧时间序列分析","textPreview":"15帧时间序列分析","textChars":9,"textLines":1,"bbox":[76.8,470.4,528,24]}
+{"kind":"textbox","id":"sh/dofa18z6","slide":11,"name":"TextBox 18","text":"▸ 首帧锚点 12/15 帧出现率统计\n▸ 类别条件跨帧转移矩阵\n▸ 提议器来源交叉（Gaussian/DoG/Starlet）\n▸ 紧凑质量子组 vs 非紧凑特征对照\n▸ 区分'重复的检测器结构'和'质量层通过的点源'","textPreview":"▸ 首帧锚点 12/15 帧出现率统计 | ▸ 类别条件跨帧转移矩阵 | ▸ 提议器来源交叉（Gaussian/DoG/Starlet） | ▸ 紧凑质量子组 vs 非紧凑特征对照 | ▸ 区分'重复的检测器结构'和'质量层通过的点源'","textChars":110,"textLines":5,"bbox":[76.8,504,528,172.8]}
+{"kind":"shape","id":"sh/tsnip0ny","slide":11,"name":"Rounded Rectangle 19","bbox":[652.8,422.4,566.4,259.2]}
+{"kind":"textbox","id":"sh/87ehgv6d","slide":11,"name":"TextBox 20","text":"辅助遥测分析","textPreview":"辅助遥测分析","textChars":6,"textLines":1,"bbox":[672,432,528,33.6]}
+{"kind":"textbox","id":"sh/7650nq5s","slide":11,"name":"TextBox 21","text":"卫星姿态与轨道","textPreview":"卫星姿态与轨道","textChars":7,"textLines":1,"bbox":[672,470.4,528,24]}
+{"kind":"textbox","id":"sh/65wzelo7","slide":11,"name":"TextBox 22","text":"▸ 四元数光轴 RA/Dec 推导（亚纳角秒级一致）\n▸ J2000/WGS84 位置速度自洽审计\n▸ 末帧常速度位置外推（+5 中位帧间隔）\n▸ m/s? 单位边界标注与待确认状态\n▸ 图像 px/s 与载体 m/s? 分栏显示","textPreview":"▸ 四元数光轴 RA/Dec 推导（亚纳角秒级一致） | ▸ J2000/WGS84 位置速度自洽审计 | ▸ 末帧常速度位置外推（+5 中位帧间隔） | ▸ m/s? 单位边界标注与待确认状态 | ▸ 图像 px/s 与载体 m/s? 分栏显示","textChars":115,"textLines":5,"bbox":[672,504,528,172.8]}
+{"kind":"textbox","id":"sh/l43ilgn2","slide":11,"name":"TextBox 23","text":"11/19","textPreview":"11/19","textChars":5,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/jetc3ut0","slide":11,"text":""}
+{"kind":"slide","id":"sl/8f2psfyx","slide":12,"title":"08","textShapes":44}
+{"kind":"shape","id":"sh/1gbm9s3a","slide":12,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/0f2lgnmp","slide":12,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/ra943il8","slide":12,"name":"TextBox 3","text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/q903ad4n","slide":12,"name":"TextBox 4","text":"创新分析：分层注入回收实验","textPreview":"创新分析：分层注入回收实验","textChars":13,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/dcbm583y","slide":12,"name":"TextBox 5","text":"创新赛项 · 科学性 + 实用性","textPreview":"创新赛项 · 科学性 + 实用性","textChars":16,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/sb2lcnmd","slide":12,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"textbox","id":"sh/b6d4f2lc","slide":12,"name":"TextBox 7","text":"四种注入口径（递进覆盖）","textPreview":"四种注入口径（递进覆盖）","textChars":12,"textLines":1,"bbox":[57.6,144,768,33.6]}
+{"kind":"shape","id":"sh/a543mx4r","slide":12,"name":"Rounded Rectangle 8","bbox":[57.6,182.4,268.8,96]}
+{"kind":"textbox","id":"sh/wvupgz6t","slide":12,"name":"TextBox 9","text":"① 简化 Gaussian 均匀背景","textPreview":"① 简化 Gaussian 均匀背景","textChars":18,"textLines":1,"bbox":[72,187.2,240,33.6]}
+{"kind":"textbox","id":"sh/xw3q94ne","slide":12,"name":"TextBox 10","text":"理想条件基线","textPreview":"理想条件基线","textChars":6,"textLines":1,"bbox":[72,225.6,240,33.6]}
+{"kind":"shape","id":"sh/atc7epon","slide":12,"name":"Rounded Rectangle 11","bbox":[355.2,182.4,268.8,96]}
+{"kind":"textbox","id":"sh/bulo7u58","slide":12,"name":"TextBox 12","text":"② 真实 FITS 相对空白背景","textPreview":"② 真实 FITS 相对空白背景","textChars":16,"textLines":1,"bbox":[369.6,187.2,240,33.6]}
+{"kind":"textbox","id":"sh/orapcf6h","slide":12,"name":"TextBox 13","text":"实测噪声条件","textPreview":"实测噪声条件","textChars":6,"textLines":1,"bbox":[369.6,225.6,240,33.6]}
+{"kind":"shape","id":"sh/9sj65kn2","slide":12,"name":"Rounded Rectangle 14","bbox":[652.8,182.4,268.8,96]}
+{"kind":"textbox","id":"sh/mps7a5or","slide":12,"name":"TextBox 15","text":"③ 真实 FITS 分层背景","textPreview":"③ 真实 FITS 分层背景","textChars":14,"textLines":1,"bbox":[667.2,187.2,240,33.6]}
+{"kind":"textbox","id":"sh/nq1o3a5w","slide":12,"name":"TextBox 16","text":"低纹理/高噪声/边缘/拥挤/特殊值域","textPreview":"低纹理/高噪声/边缘/拥挤/特殊值域","textChars":18,"textLines":1,"bbox":[667.2,225.6,240,33.6]}
+{"kind":"shape","id":"sh/0nap8f6l","slide":12,"name":"Rounded Rectangle 17","bbox":[950.4,182.4,268.8,96]}
+{"kind":"textbox","id":"sh/1oj61kn6","slide":12,"name":"TextBox 18","text":"④ 2×2 空间分区留出","textPreview":"④ 2×2 空间分区留出","textChars":12,"textLines":1,"bbox":[964.8,187.2,240,33.6]}
+{"kind":"textbox","id":"sh/hkbm5wzu","slide":12,"name":"TextBox 19","text":"候选回收与质量回收分开","textPreview":"候选回收与质量回收分开","textChars":11,"textLines":1,"bbox":[964.8,225.6,240,33.6]}
+{"kind":"textbox","id":"sh/gj25cry9","slide":12,"name":"TextBox 20","text":"合成正负控制结果（正样本 = 已知源回收，阴性 = 特征邻域泄漏）","textPreview":"合成正负控制结果（正样本 = 已知源回收，阴性 = 特征邻域泄漏）","textChars":33,"textLines":1,"bbox":[57.6,307.2,1152,33.6]}
+{"kind":"textbox","id":"sh/fit436ho","slide":12,"name":"TextBox 21","text":"场景","textPreview":"场景","textChars":2,"textLines":1,"bbox":[57.6,345.6,288,24]}
+{"kind":"textbox","id":"sh/uh0na1g3","slide":12,"name":"TextBox 22","text":"候选层","textPreview":"候选层","textChars":3,"textLines":1,"bbox":[355.2,345.6,115.2,24]}
+{"kind":"textbox","id":"sh/tgrm1wzy","slide":12,"name":"TextBox 23","text":"质量层","textPreview":"质量层","textChars":3,"textLines":1,"bbox":[480,345.6,115.2,24]}
+{"kind":"textbox","id":"sh/sfi58ryd","slide":12,"name":"TextBox 24","text":"说明","textPreview":"说明","textChars":2,"textLines":1,"bbox":[604.8,345.6,624,24]}
+{"kind":"shape","id":"sh/7u94zmhs","slide":12,"name":"Rectangle 25","bbox":[57.6,369.6,1161.6,1.33]}
+{"kind":"shape","id":"sh/6t0n6hg7","slide":12,"name":"Rectangle 26","bbox":[57.6,379.2,1161.6,38.4]}
+{"kind":"textbox","id":"sh/dcv6dgz2","slide":12,"name":"TextBox 27","text":"孤立 FWHM=2 源","textPreview":"孤立 FWHM=2 源","textChars":11,"textLines":1,"bbox":[67.2,384,268.8,28.8]}
+{"kind":"textbox","id":"sh/cbm5kbyh","slide":12,"name":"TextBox 28","text":"1/1","textPreview":"1/1","textChars":3,"textLines":1,"bbox":[355.2,384,105.6,28.8]}
+{"kind":"textbox","id":"sh/alwbitsn","slide":12,"name":"TextBox 29","text":"1/1","textPreview":"1/1","textChars":3,"textLines":1,"bbox":[480,384,105.6,28.8]}
+{"kind":"textbox","id":"sh/bm5sryt8","slide":12,"name":"TextBox 30","text":"标准紧凑源可回收","textPreview":"标准紧凑源可回收","textChars":8,"textLines":1,"bbox":[604.8,384,624,28.8]}
+{"kind":"shape","id":"sh/wnetkjat","slide":12,"name":"Rectangle 31","bbox":[57.6,419.52,1161.6,38.4]}
+{"kind":"textbox","id":"sh/xonutobe","slide":12,"name":"TextBox 32","text":"弱源（峰值 28 ADU）","textPreview":"弱源（峰值 28 ADU）","textChars":13,"textLines":1,"bbox":[67.2,424.32,268.8,28.8]}
+{"kind":"textbox","id":"sh/mhcbe9sr","slide":12,"name":"TextBox 33","text":"1/1","textPreview":"1/1","textChars":3,"textLines":1,"bbox":[355.2,424.32,105.6,28.8]}
+{"kind":"textbox","id":"sh/nilsnetc","slide":12,"name":"TextBox 34","text":"0/1","textPreview":"0/1","textChars":3,"textLines":1,"bbox":[480,424.32,105.6,28.8]}
+{"kind":"textbox","id":"sh/ojutgjah","slide":12,"name":"TextBox 35","text":"召回与质量门槛发生分离","textPreview":"召回与质量门槛发生分离","textChars":11,"textLines":1,"bbox":[604.8,424.32,624,28.8]}
+{"kind":"shape","id":"sh/9k3apob2","slide":12,"name":"Rectangle 36","bbox":[57.6,459.84,1161.6,38.4]}
+{"kind":"textbox","id":"sh/6dgbqdsv","slide":12,"name":"TextBox 37","text":"双源 3px / 6px","textPreview":"双源 3px / 6px","textChars":12,"textLines":1,"bbox":[67.2,464.64,268.8,28.8]}
+{"kind":"textbox","id":"sh/7epczitg","slide":12,"name":"TextBox 38","text":"1/2, 2/2","textPreview":"1/2, 2/2","textChars":8,"textLines":1,"bbox":[355.2,464.64,105.6,28.8]}
+{"kind":"textbox","id":"sh/r6l8vaxw","slide":12,"name":"TextBox 39","text":"1/2, 2/2","textPreview":"1/2, 2/2","textChars":8,"textLines":1,"bbox":[480,464.64,105.6,28.8]}
+{"kind":"textbox","id":"sh/q5c7m5wb","slide":12,"name":"TextBox 40","text":"3px 合并，6px 可分","textPreview":"3px 合并，6px 可分","textChars":13,"textLines":1,"bbox":[604.8,464.64,624,28.8]}
+{"kind":"shape","id":"sh/d8nqxkf2","slide":12,"name":"Rectangle 41","bbox":[57.6,500.16,1161.6,38.4]}
+{"kind":"textbox","id":"sh/s7epofeh","slide":12,"name":"TextBox 42","text":"单像素尖峰阴性","textPreview":"单像素尖峰阴性","textChars":7,"textLines":1,"bbox":[67.2,504.96,268.8,28.8]}
+{"kind":"textbox","id":"sh/j2lorqxk","slide":12,"name":"TextBox 43","text":"1 泄漏","textPreview":"1 泄漏","textChars":4,"textLines":1,"bbox":[355.2,504.96,105.6,28.8]}
+{"kind":"textbox","id":"sh/i1c7i5wf","slide":12,"name":"TextBox 44","text":"0 泄漏","textPreview":"0 泄漏","textChars":4,"textLines":1,"bbox":[480,504.96,105.6,28.8]}
+{"kind":"textbox","id":"sh/5436t0fq","slide":12,"name":"TextBox 45","text":"进入宽筛但被 PSF 支持拒绝","textPreview":"进入宽筛但被 PSF 支持拒绝","textChars":15,"textLines":1,"bbox":[604.8,504.96,624,28.8]}
+{"kind":"shape","id":"sh/43upkve5","slide":12,"name":"Rectangle 46","bbox":[57.6,540.48,1161.6,38.4]}
+{"kind":"textbox","id":"sh/nyp83ud4","slide":12,"name":"TextBox 47","text":"掩膜/边缘/饱和源","textPreview":"掩膜/边缘/饱和源","textChars":9,"textLines":1,"bbox":[67.2,545.28,268.8,28.8]}
+{"kind":"textbox","id":"sh/2xw7upwj","slide":12,"name":"TextBox 48","text":"各 1","textPreview":"各 1","textChars":3,"textLines":1,"bbox":[355.2,545.28,105.6,28.8]}
+{"kind":"textbox","id":"sh/kjq5oru1","slide":12,"name":"TextBox 49","text":"各 0","textPreview":"各 0","textChars":3,"textLines":1,"bbox":[480,545.28,105.6,28.8]}
+{"kind":"textbox","id":"sh/lkzmhwvm","slide":12,"name":"TextBox 50","text":"保留审计候选，不进质量层","textPreview":"保留审计候选，不进质量层","textChars":12,"textLines":1,"bbox":[604.8,545.28,624,28.8]}
+{"kind":"shape","id":"sh/yh8nmhcv","slide":12,"name":"Rectangle 51","bbox":[57.6,580.8,1161.6,38.4]}
+{"kind":"textbox","id":"sh/zih4fmdg","slide":12,"name":"TextBox 52","text":"长线阴性","textPreview":"长线阴性","textChars":4,"textLines":1,"bbox":[67.2,585.6,268.8,28.8]}
+{"kind":"textbox","id":"sh/87q5srux","slide":12,"name":"TextBox 53","text":"16 泄漏","textPreview":"16 泄漏","textChars":5,"textLines":1,"bbox":[355.2,585.6,105.6,28.8]}
+{"kind":"textbox","id":"sh/98jmlwvi","slide":12,"name":"TextBox 54","text":"0 泄漏","textPreview":"0 泄漏","textChars":4,"textLines":1,"bbox":[480,585.6,105.6,28.8]}
+{"kind":"textbox","id":"sh/ml8nq1c7","slide":12,"name":"TextBox 55","text":"线状结构必须独立审计","textPreview":"线状结构必须独立审计","textChars":10,"textLines":1,"bbox":[604.8,585.6,624,28.8]}
+{"kind":"shape","id":"sh/7mh4j6dc","slide":12,"name":"Rounded Rectangle 56","bbox":[57.6,624,1161.6,52.8]}
+{"kind":"textbox","id":"sh/wba5wbu9","slide":12,"name":"TextBox 57","text":"💡 关键发现：边缘、拥挤和特殊值域以不同方式损失质量层回收，不能用一个全图阈值概括","textPreview":"💡 关键发现：边缘、拥挤和特殊值域以不同方式损失质量层回收，不能用一个全图阈值概括","textChars":42,"textLines":1,"bbox":[86.4,633.6,1104,38.4]}
+{"kind":"textbox","id":"sh/hcjmpgbu","slide":12,"name":"TextBox 58","text":"等强双源控制：3px 间距 56/128 ADU 召回 0.5/0.5；5px、6px 在 128 ADU 下均为 1.0/1.0，三种提案模式结果一致","textPreview":"等强双源控制：3px 间距 56/128 ADU 召回 0.5/0.5；5px、6px 在 128 ADU 下均为 1.0/1.0，三种提案模式结果一致","textChars":76,"textLines":1,"bbox":[86.4,667.2,1104,28.8]}
+{"kind":"textbox","id":"sh/5sfm9g3y","slide":12,"name":"TextBox 59","text":"12/19","textPreview":"12/19","textChars":5,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/8f2psfyx","slide":12,"text":""}
+{"kind":"slide","id":"sl/hgzapcr6","slide":13,"title":"09","textShapes":10}
+{"kind":"shape","id":"sh/q50nydsj","slide":13,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/bq9orito","slide":13,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/o3i5w3ad","slide":13,"name":"TextBox 3","text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/p4r6p8by","slide":13,"name":"TextBox 4","text":"创新分析：合成大图与研究工具集","textPreview":"创新分析：合成大图与研究工具集","textChars":15,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/21gnuts7","slide":13,"name":"TextBox 5","text":"创新赛项 · 创新性 + 科学性","textPreview":"创新赛项 · 创新性 + 科学性","textChars":16,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/32ponyts","slide":13,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/gzy5s3a1","slide":13,"name":"Rounded Rectangle 7","bbox":[57.6,144,556.8,240]}
+{"kind":"textbox","id":"sh/1076lobm","slide":13,"name":"TextBox 8","text":"15帧注册合成大图","textPreview":"15帧注册合成大图","textChars":9,"textLines":1,"bbox":[86.4,153.6,480,33.6]}
+{"kind":"textbox","id":"sh/hcfy9k3u","slide":13,"name":"TextBox 9","text":"▸ 先用稳定星场估计帧间平移，再做统一坐标下的稳健 ADU 融合\n▸ 输出覆盖范围和离散度，保留真实观测值，不用生成式内容填充\n▸ 15 张图可分别查看，也可导出 PNG / NPY / JSON\n▸ 当前是平移注册，用于研究和复核，不宣称完整 WCS 镶嵌","textPreview":"▸ 先用稳定星场估计帧间平移，再做统一坐标下的稳健 ADU 融合 | ▸ 输出覆盖范围和离散度，保留真实观测值，不用生成式内容填充 | ▸ 15 张图可分别查看，也可导出 PNG / NPY / JSON | ▸ 当前是平移注册，用于研究和复核，不宣称完整 WCS 镶嵌","textChars":129,"textLines":4,"bbox":[86.4,201.6,499.2,172.8]}
+{"kind":"shape","id":"sh/gb6x0zm9","slide":13,"name":"Rounded Rectangle 10","bbox":[652.8,144,556.8,240]}
+{"kind":"textbox","id":"sh/vaxg7ulo","slide":13,"name":"TextBox 11","text":"完整证据导出体系","textPreview":"完整证据导出体系","textChars":8,"textLines":1,"bbox":[681.6,153.6,480,33.6]}
+{"kind":"textbox","id":"sh/u9ofyp43","slide":13,"name":"TextBox 12","text":"▸ 15帧关系/轨迹证据导出器 + 线状与点源运动分层证据\n▸ 逐帧时间关系 CSV + 像素配准稳定性报告\n▸ 辅助姿态摘要 + 稳健背景统计 + 运动轨迹证据图\n▸ 遥测轨迹可视化（J2000/WGS84 位置相对首帧投影）","textPreview":"▸ 15帧关系/轨迹证据导出器 + 线状与点源运动分层证据 | ▸ 逐帧时间关系 CSV + 像素配准稳定性报告 | ▸ 辅助姿态摘要 + 稳健背景统计 + 运动轨迹证据图 | ▸ 遥测轨迹可视化（J2000/WGS84 位置相对首帧投影）","textChars":114,"textLines":4,"bbox":[681.6,201.6,499.2,172.8]}
+{"kind":"shape","id":"sh/t8fy5k3i","slide":13,"name":"Rounded Rectangle 13","bbox":[57.6,412.8,1161.6,259.2]}
+{"kind":"textbox","id":"sh/876xwfmx","slide":13,"name":"TextBox 14","text":"研究工具集（可复核审计命令）","textPreview":"研究工具集（可复核审计命令）","textChars":14,"textLines":1,"bbox":[86.4,422.4,480,33.6]}
+{"kind":"textbox","id":"sh/7mdg3als","slide":13,"name":"TextBox 15","text":"rst19-feature-sequence            真实15帧特征持久性审计\nrst19-pair-audit                        固定坐标近邻双源审计\nrst19-forced-stability                分层强制测光稳定性\nrst19-feature-parameter-sensitivity   参数敏感性审计（阈值/SNR扫描）\nrst19-feature-hard-negative       高 SNR 落选候选系统化审计\nrst19-feature-gate-route            质量门路径逐行审计\nrst19-feature-flag-interaction       旗标条件交互审计\nrst19-feature-class-context        类别内经验分位审计\nrst19-feature-gate-margin          质量门越界余量审计\nrst19-temporal-codes                 关注坐标逐帧原始值表","textPreview":"rst19-feature-sequence            真实15帧特征持久性审计 | rst19-pair-audit                        固定坐标近邻双源审计 | rst19-forced-stability             ...","textChars":481,"textLines":10,"bbox":[86.4,470.4,1104,192]}
+{"kind":"textbox","id":"sh/6l4fu547","slide":13,"name":"TextBox 16","text":"13/19","textPreview":"13/19","textChars":5,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/hgzapcr6","slide":13,"text":""}
+{"kind":"slide","id":"sl/6lsnupw7","slide":14,"title":"09","textShapes":8}
+{"kind":"shape","id":"sh/0buh8zy5","slide":14,"name":"矩形 17","bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/xc7eds76","slide":14,"name":"矩形 1","bbox":[0,0,1280,6]}
+{"kind":"shape","id":"sh/wbydknq1","slide":14,"name":"圆角矩形 2","bbox":[58,38,53,53]}
+{"kind":"textbox","id":"sh/jepwf2pc","slide":14,"name":"矩形 3","text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[58,40,53,53]}
+{"kind":"textbox","id":"sh/idgvmx8r","slide":14,"name":"矩形 4","text":"图例与真实结果：从单图到多帧轨迹","textPreview":"图例与真实结果：从单图到多帧轨迹","textChars":16,"textLines":1,"bbox":[130,36,930,54]}
+{"kind":"textbox","id":"sh/5grehs7i","slide":14,"name":"矩形 5","text":"先看原始观测，再看候选标记和多帧运动证据","textPreview":"先看原始观测，再看候选标记和多帧运动证据","textChars":20,"textLines":1,"bbox":[130,84,980,34]}
+{"kind":"shape","id":"sh/kfidonqx","slide":14,"name":"矩形 6","bbox":[58,120,1162,1.5]}
+{"kind":"shape","id":"sh/zi5c3y98","slide":14,"name":"圆角矩形 7","bbox":[58,145,670,510]}
+{"kind":"textbox","id":"sh/ehwvat8n","slide":14,"name":"矩形 8","text":"图一：15帧大图（原始观测）","textPreview":"图一：15帧大图（原始观测）","textChars":14,"textLines":1,"bbox":[82,160,600,32]}
+{"kind":"shape","id":"sh/x4ni9ofy","slide":14,"name":"圆角矩形 10","bbox":[758,145,462,280]}
+{"kind":"textbox","id":"sh/a1wze9g7","slide":14,"name":"矩形 11","text":"逐帧轨迹证据","textPreview":"逐帧轨迹证据","textChars":6,"textLines":1,"bbox":[782,160,400,32]}
+{"kind":"shape","id":"sh/kre1k3y9","slide":14,"name":"圆角矩形 13","bbox":[758,445,462,210]}
+{"kind":"textbox","id":"sh/ls7idofu","slide":14,"name":"矩形 14","text":"这页怎么读","textPreview":"这页怎么读","textChars":5,"textLines":1,"bbox":[782,460,400,30]}
+{"kind":"textbox","id":"sh/y5wjitgj","slide":14,"name":"矩形 15","text":"• 左图：15 帧大图，先观察整体星场和异常亮线的空间分布\n• 右上：同一目标在不同帧中的位置变化\n• 运动方向和速度来自多帧关联，不由单帧亮线直接猜测\n• 合成图用于空间分布和复核，不替代绝对测光或完整 WCS","textPreview":"• 左图：15 帧大图，先观察整体星场和异常亮线的空间分布 | • 右上：同一目标在不同帧中的位置变化 | • 运动方向和速度来自多帧关联，不由单帧亮线直接猜测 | • 合成图用于空间分布和复核，不替代绝对测光或完整 WCS","textChars":106,"textLines":4,"bbox":[782,505,414,130]}
+{"kind":"textbox","id":"sh/z650byxo","slide":14,"name":"矩形 16","text":"14/19","textPreview":"14/19","textChars":5,"textLines":1,"bbox":[1200,677,68,34]}
+{"kind":"image","id":"im/alcvepkf","slide":14,"name":"图片 26","alt":"15帧观测大图原始视图","bbox":[181,202,424,424]}
+{"kind":"image","id":"im/mhgf6t4n","slide":14,"name":"图片 29","bbox":[862.33,202,253.33,190]}
+{"kind":"notes","id":"nt/6lsnupw7","slide":14,"text":""}
+{"kind":"slide","id":"sl/lkog4k","slide":15,"title":"15","textShapes":13}
+{"kind":"shape","id":"sh/w3yp0zq5","slide":15,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/v2p87upk","slide":15,"bbox":[0,0,1280,6]}
+{"kind":"shape","id":"sh/a1g7yp8z","slide":15,"bbox":[58,38,53,53]}
+{"kind":"textbox","id":"sh/9g7q5k7e","slide":15,"text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[58,40,53,53]}
+{"kind":"textbox","id":"sh/ofypwzqt","slide":15,"text":"图例：单图识别、单帧动目标与多帧轨迹","textPreview":"图例：单图识别、单帧动目标与多帧轨迹","textChars":18,"textLines":1,"bbox":[130,36,1000,54]}
+{"kind":"textbox","id":"sh/nep83up8","slide":15,"text":"同一套数据输出四类不同证据，不能把它们混成一个“星点数量”","textPreview":"同一套数据输出四类不同证据，不能把它们混成一个“星点数量”","textChars":29,"textLines":1,"bbox":[130,84,1000,34]}
+{"kind":"shape","id":"sh/mdg7up83","slide":15,"bbox":[58,120,1162,1.5]}
+{"kind":"shape","id":"sh/tcbqho7i","slide":15,"bbox":[58,145,560,235]}
+{"kind":"textbox","id":"sh/sbi98jqd","slide":15,"text":"单图分析：全图叠加","textPreview":"单图分析：全图叠加","textChars":9,"textLines":1,"bbox":[80,159,516,28]}
+{"kind":"textbox","id":"sh/ja10natw","slide":15,"text":"青色点：点源候选\n橙色线/圈：单帧线状候选\n用途：查看一张图里有哪些可疑结构","textPreview":"青色点：点源候选 | 橙色线/圈：单帧线状候选 | 用途：查看一张图里有哪些可疑结构","textChars":38,"textLines":3,"bbox":[340,206,250,152]}
+{"kind":"shape","id":"sh/kba1gfah","slide":15,"bbox":[660,145,560,235]}
+{"kind":"textbox","id":"sh/lcjipkb2","slide":15,"text":"多图运动轨迹：逐帧关联","textPreview":"多图运动轨迹：逐帧关联","textChars":11,"textLines":1,"bbox":[682,159,516,28]}
+{"kind":"textbox","id":"sh/bmh0jqt0","slide":15,"text":"粉色：多帧关联轨迹\n橙色：线状候选\n用途：比较不同目标在多帧中的位置变化","textPreview":"粉色：多帧关联轨迹 | 橙色：线状候选 | 用途：比较不同目标在多帧中的位置变化","textChars":36,"textLines":3,"bbox":[942,206,250,152]}
+{"kind":"shape","id":"sh/wnq1cvul","slide":15,"bbox":[58,405,560,220]}
+{"kind":"textbox","id":"sh/x8zil0b6","slide":15,"text":"单帧动目标：先报候选","textPreview":"单帧动目标：先报候选","textChars":10,"textLines":1,"bbox":[80,419,516,28]}
+{"kind":"textbox","id":"sh/vil0vut4","slide":15,"text":"橙色标记：单帧线状候选\n只能说明形态异常，不能单独证明运动方向","textPreview":"橙色标记：单帧线状候选 | 只能说明形态异常，不能单独证明运动方向","textChars":31,"textLines":2,"bbox":[340,466,250,137]}
+{"kind":"shape","id":"sh/rmdgnm9w","slide":15,"bbox":[660,405,560,220]}
+{"kind":"textbox","id":"sh/ql4fehsb","slide":15,"text":"点状运动：多帧拟合方向","textPreview":"点状运动：多帧拟合方向","textChars":11,"textLines":1,"bbox":[682,419,516,28]}
+{"kind":"textbox","id":"sh/cnmxgra1","slide":15,"text":"黄色折线：点状目标的多帧位置拟合\n输出：位移、图像平面方向和速度","textPreview":"黄色折线：点状目标的多帧位置拟合 | 输出：位移、图像平面方向和速度","textChars":32,"textLines":2,"bbox":[942,466,250,137]}
+{"kind":"shape","id":"sh/zqxgrm9s","slide":15,"bbox":[58,650,1162,35]}
+{"kind":"textbox","id":"sh/epofih87","slide":15,"text":"图例总规则：青色=点源候选；橙色=单帧线状候选；粉色=多帧关联轨迹；黄色=点状运动拟合。","textPreview":"图例总规则：青色=点源候选；橙色=单帧线状候选；粉色=多帧关联轨迹；黄色=点状运动拟合。","textChars":44,"textLines":1,"bbox":[78,657,1120,22]}
+{"kind":"textbox","id":"sh/1sfytwry","slide":15,"text":"15/19","textPreview":"15/19","textChars":5,"textLines":1,"bbox":[1200,677,68,34]}
+{"kind":"image","id":"im/9wnu5kfi","slide":15,"name":"","alt":"单帧全图分析叠加结果","bbox":[80,199,235,160]}
+{"kind":"image","id":"im/ls3u1kzm","slide":15,"name":"","alt":"多目标运动轨迹叠加结果","bbox":[682,199,235,160]}
+{"kind":"image","id":"im/x43ux0za","slide":15,"name":"","alt":"单帧线状动目标候选局部图","bbox":[80,459,235,145]}
+{"kind":"image","id":"im/2lwvi5of","slide":15,"name":"","alt":"点状运动目标轨迹局部图","bbox":[682,459,235,145]}
+{"kind":"notes","id":"nt/lkog4k","slide":15,"text":""}
+{"kind":"slide","id":"sl/vaxsvy10","slide":16,"title":"10","textShapes":25}
+{"kind":"shape","id":"sh/547mhg3m","slide":16,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/k3y5ov21","slide":16,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/76p4jqls","slide":16,"name":"TextBox 3","text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/65gnqlk7","slide":16,"name":"TextBox 4","text":"关键消融实验与核心发现","textPreview":"关键消融实验与核心发现","textChars":11,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/t87ml0ji","slide":16,"name":"TextBox 5","text":"基础赛项 · 创新性","textPreview":"基础赛项 · 创新性","textChars":10,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/s7y5sv2x","slide":16,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/na5476l8","slide":16,"name":"Rounded Rectangle 7","bbox":[57.6,144,374.4,268.8]}
+{"kind":"textbox","id":"sh/m9c3e1kn","slide":16,"name":"TextBox 8","text":"提案模式消融","textPreview":"提案模式消融","textChars":6,"textLines":1,"bbox":[76.8,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/wrm9kvep","slide":16,"name":"TextBox 9","text":"不同提案方式的比较重点不是“谁找得更多”，而是：\n▸ 宽筛是否保留弱源和异常形态\n▸ 细筛是否能排除噪声、负值编码和伪峰\n▸ 近邻源是否需要双源模型复核\n▸ 结论按每帧独立统计，不能把 15 帧星点数量简单相加\n\n能被发现 ≠ 已确认是独立恒星","textPreview":"不同提案方式的比较重点不是“谁找得更多”，而是： | ▸ 宽筛是否保留弱源和异常形态 | ▸ 细筛是否能排除噪声、负值编码和伪峰 | ▸ 近邻源是否需要双源模型复核 | ▸ 结论按每帧独立统计，不能把 15 帧星点数量简单相加 |  | 能被发现 ≠ 已确认是独立恒星","textChars":122,"textLines":7,"bbox":[76.8,201.6,336,192]}
+{"kind":"shape","id":"sh/hsvat0fa","slide":16,"name":"Rounded Rectangle 10","bbox":[456,144,374.4,268.8]}
+{"kind":"textbox","id":"sh/upkrilwj","slide":16,"name":"TextBox 11","text":"min_distance 消融","textPreview":"min_distance 消融","textChars":15,"textLines":1,"bbox":[475.2,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/vqdsrqx4","slide":16,"name":"TextBox 12","text":"4px: 主+副峰均保留\n5px: 仍均保留\n6px: 才只剩主峰\n8px: 更强抑制\n→ NMS 参数不是物理分辨率\n→ 调大只改变候选账本","textPreview":"4px: 主+副峰均保留 | 5px: 仍均保留 | 6px: 才只剩主峰 | 8px: 更强抑制 | → NMS 参数不是物理分辨率 | → 调大只改变候选账本","textChars":71,"textLines":6,"bbox":[475.2,201.6,336,192]}
+{"kind":"shape","id":"sh/4vm9ovel","slide":16,"name":"Rounded Rectangle 13","bbox":[854.4,144,374.4,268.8]}
+{"kind":"textbox","id":"sh/5wvax0f6","slide":16,"name":"TextBox 14","text":"跨帧持续性分析","textPreview":"跨帧持续性分析","textChars":7,"textLines":1,"bbox":[873.6,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/it4rm5wv","slide":16,"name":"TextBox 15","text":"多帧结果可以直接讨论运动证据：\n▸ 是否连续出现\n▸ 是否相对稳定星场发生位移\n▸ 是否能拟合图像平面方向和速度\n\n但“持续出现”仍不等于恒星身份；身份确认需要星表、WCS 或轨道数据支持","textPreview":"多帧结果可以直接讨论运动证据： | ▸ 是否连续出现 | ▸ 是否相对稳定星场发生位移 | ▸ 是否能拟合图像平面方向和速度 |  | 但“持续出现”仍不等于恒星身份；身份确认需要星表、WCS 或轨道数据支持","textChars":94,"textLines":6,"bbox":[873.6,201.6,336,192]}
+{"kind":"textbox","id":"sh/judsvqxg","slide":16,"name":"TextBox 16","text":"核心发现","textPreview":"核心发现","textChars":4,"textLines":1,"bbox":[57.6,441.6,480,33.6]}
+{"kind":"shape","id":"sh/0z29cbyh","slide":16,"name":"Rectangle 17","bbox":[57.6,480,1161.6,1.33]}
+{"kind":"shape","id":"sh/l0bqlgf2","slide":16,"name":"Rounded Rectangle 18","bbox":[57.6,494.4,28.8,24]}
+{"kind":"textbox","id":"sh/1kjyt83e","slide":16,"name":"TextBox 19","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[57.6,494.4,28.8,24]}
+{"kind":"textbox","id":"sh/gjax03m9","slide":16,"name":"TextBox 20","text":"源级 SNR 只表示当前噪声模型下的显著性，不能替代 PSF / 数据范围 / 跨帧 / 星表证据","textPreview":"源级 SNR 只表示当前噪声模型下的显著性，不能替代 PSF / 数据范围 / 跨帧 / 星表证据","textChars":49,"textLines":1,"bbox":[100.8,494.4,1113.6,26.88]}
+{"kind":"shape","id":"sh/fi1grylo","slide":16,"name":"Rounded Rectangle 21","bbox":[57.6,523.2,28.8,24]}
+{"kind":"textbox","id":"sh/ehsfyt43","slide":16,"name":"TextBox 22","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[57.6,523.2,28.8,24]}
+{"kind":"textbox","id":"sh/p8jyx83q","slide":16,"name":"TextBox 23","text":"固定异常像素应进入序列级审计，不能盲目屏蔽所有负值","textPreview":"固定异常像素应进入序列级审计，不能盲目屏蔽所有负值","textChars":25,"textLines":1,"bbox":[100.8,523.2,1113.6,26.88]}
+{"kind":"shape","id":"sh/o7ah4nm5","slide":16,"name":"Rounded Rectangle 24","bbox":[57.6,552,28.8,24]}
+{"kind":"textbox","id":"sh/361gvilk","slide":16,"name":"TextBox 25","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[57.6,552,28.8,24]}
+{"kind":"textbox","id":"sh/25sf2d4z","slide":16,"name":"TextBox 26","text":"真实背景分层注入显示：边缘、拥挤和特殊值域以不同方式损失质量层回收","textPreview":"真实背景分层注入显示：边缘、拥挤和特殊值域以不同方式损失质量层回收","textChars":33,"textLines":1,"bbox":[100.8,552,1113.6,26.88]}
+{"kind":"shape","id":"sh/dc3y1s3m","slide":16,"name":"Rounded Rectangle 27","bbox":[57.6,580.8,28.8,24]}
+{"kind":"textbox","id":"sh/cbuh8nmh","slide":16,"name":"TextBox 28","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[57.6,580.8,28.8,24]}
+{"kind":"textbox","id":"sh/uh4v2pkj","slide":16,"name":"TextBox 29","text":"\"亮\"、\"重复出现\"、\"符合二维点扩散函数\" 是三条不同证据，不能相互替代","textPreview":"\"亮\"、\"重复出现\"、\"符合二维点扩散函数\" 是三条不同证据，不能相互替代","textChars":37,"textLines":1,"bbox":[100.8,580.8,1113.6,26.88]}
+{"kind":"shape","id":"sh/vixcvu14","slide":16,"name":"Rounded Rectangle 30","bbox":[57.6,609.6,28.8,24]}
+{"kind":"textbox","id":"sh/wj6d4z2p","slide":16,"name":"TextBox 31","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[57.6,609.6,28.8,24]}
+{"kind":"textbox","id":"sh/hkfexkja","slide":16,"name":"TextBox 32","text":"高 SNR 不能替代线状结构审计；持续出现不能替代点源形状和值域证据","textPreview":"高 SNR 不能替代线状结构审计；持续出现不能替代点源形状和值域证据","textChars":34,"textLines":1,"bbox":[100.8,609.6,1113.6,26.88]}
+{"kind":"shape","id":"sh/ilov6pkv","slide":16,"name":"Rounded Rectangle 33","bbox":[57.6,638.4,28.8,24]}
+{"kind":"textbox","id":"sh/jmxwzu1g","slide":16,"name":"TextBox 34","text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[57.6,638.4,28.8,24]}
+{"kind":"textbox","id":"sh/4n6d8z21","slide":16,"name":"TextBox 35","text":"局部模板可得率和留出残差比 '相关度变好' 更能揭示当前限制","textPreview":"局部模板可得率和留出残差比 '相关度变好' 更能揭示当前限制","textChars":30,"textLines":1,"bbox":[100.8,638.4,1113.6,26.88]}
+{"kind":"shape","id":"sh/5ofe14j6","slide":16,"name":"Rounded Rectangle 36","bbox":[57.6,667.2,28.8,24]}
+{"kind":"textbox","id":"sh/6p8va9kr","slide":16,"name":"TextBox 37","text":"7","textPreview":"7","textChars":1,"textLines":1,"bbox":[57.6,667.2,28.8,24]}
+{"kind":"textbox","id":"sh/rqhw3e1c","slide":16,"name":"TextBox 38","text":"拥挤源的主要瓶颈是混合/去混叠，不是简单的距离阈值问题","textPreview":"拥挤源的主要瓶颈是混合/去混叠，不是简单的距离阈值问题","textChars":27,"textLines":1,"bbox":[100.8,667.2,1113.6,26.88]}
+{"kind":"textbox","id":"sh/f6dcnetg","slide":16,"name":"TextBox 39","text":"16/19","textPreview":"16/19","textChars":5,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/vaxsvy10","slide":16,"text":""}
+{"kind":"slide","id":"sl/gny5sjyp","slide":17,"title":"11","textShapes":10}
+{"kind":"shape","id":"sh/8z2h8bq1","slide":17,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/9kby1g7m","slide":17,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/ytkf2h8j","slide":17,"name":"TextBox 3","text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/zutgvm94","slide":17,"name":"TextBox 4","text":"工程实现与性能优化","textPreview":"工程实现与性能优化","textChars":9,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"textbox","id":"sh/kv2h4rqp","slide":17,"name":"TextBox 5","text":"创新赛项 · 实用性","textPreview":"创新赛项 · 实用性","textChars":10,"textLines":1,"bbox":[129.6,81.6,960,33.6]}
+{"kind":"shape","id":"sh/lwbyxwra","slide":17,"name":"Rectangle 6","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/ip4zel83","slide":17,"name":"Rounded Rectangle 7","bbox":[57.6,144,374.4,528]}
+{"kind":"textbox","id":"sh/3qdg7qpo","slide":17,"name":"TextBox 8","text":"技术栈","textPreview":"技术栈","textChars":3,"textLines":1,"bbox":[76.8,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/fm1gzq5o","slide":17,"name":"TextBox 9","text":"不同提案方式的比较重点不是“谁找得更多”，而是：\n• 宽筛是否保留弱源和异常形态\n• 细筛是否能排除噪声、负值编码和伪峰\n• 近邻源是否需要双源模型复核\n• 结论按每帧独立统计，不能把 15 帧星点数量简单相加\n\n能被发现 ≠ 已确认是独立恒星","textPreview":"不同提案方式的比较重点不是“谁找得更多”，而是： | • 宽筛是否保留弱源和异常形态 | • 细筛是否能排除噪声、负值编码和伪峰 | • 近邻源是否需要双源模型复核 | • 结论按每帧独立统计，不能把 15 帧星点数量简单相加 |  | 能被发现 ≠ 已确认是独立恒星","textChars":122,"textLines":7,"bbox":[76.8,201.6,336,460.8]}
+{"kind":"shape","id":"sh/e1sf65o3","slide":17,"name":"Rounded Rectangle 10","bbox":[456,144,374.4,528]}
+{"kind":"textbox","id":"sh/1ojy10ne","slide":17,"name":"TextBox 11","text":"性能优化","textPreview":"性能优化","textChars":4,"textLines":1,"bbox":[475.2,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/gnax8v6t","slide":17,"name":"TextBox 12","text":"▸ 序列快速路径：float32 中间阵列，减少内存带宽压力\n▸ 15 帧可并行处理，worker 数量可调\n▸ 当前本机同一组 15 帧测试：108s → 67s → 57s\n▸ 上述时间用于比较优化前后，不代表精度指标；机器、缓存和参数需保持一致\n▸ 配准使用有限工作集提速，但逐帧结果仍单独保存并审计","textPreview":"▸ 序列快速路径：float32 中间阵列，减少内存带宽压力 | ▸ 15 帧可并行处理，worker 数量可调 | ▸ 当前本机同一组 15 帧测试：108s → 67s → 57s | ▸ 上述时间用于比较优化前后，不代表精度指标；机器、缓存和参数需保持一致 | ▸ 配...","textChars":153,"textLines":5,"bbox":[475.2,201.6,336,460.8]}
+{"kind":"shape","id":"sh/nqlg3a5k","slide":17,"name":"Rounded Rectangle 13","bbox":[854.4,144,374.4,528]}
+{"kind":"textbox","id":"sh/2pcfa5oz","slide":17,"name":"TextBox 14","text":"缓存、进度与质量保证","textPreview":"缓存、进度与质量保证","textChars":10,"textLines":1,"bbox":[873.6,153.6,336,33.6]}
+{"kind":"textbox","id":"sh/ps3y5knq","slide":17,"name":"TextBox 15","text":"▸ 代际标记 + 写入锁：任务运行中清理也不会由旧任务重新生成已清除缓存\n▸ 单图/序列缓存版本递增，旧结果不会冒充新口径\n▸ 确定性进度条：底部状态栏 + 参数区进度条 + 右侧证据卡，三处同步\n▸ 帧令牌校验：切帧后丢弃旧任务事件，避免覆盖当前状态\n▸ 所有后台进度通过 Tk 主线程队列回填，避免线程安全问题\n▸ 预检机制：长线预检先于全量星点精测，明显长轨迹立即可见\n▸ 缓存清理使用代际标记，不会误删正在使用的数据","textPreview":"▸ 代际标记 + 写入锁：任务运行中清理也不会由旧任务重新生成已清除缓存 | ▸ 单图/序列缓存版本递增，旧结果不会冒充新口径 | ▸ 确定性进度条：底部状态栏 + 参数区进度条 + 右侧证据卡，三处同步 | ▸ 帧令牌校验：切帧后丢弃旧任务事件，避免覆盖当前状态 | ▸ ...","textChars":212,"textLines":7,"bbox":[873.6,201.6,336,460.8]}
+{"kind":"textbox","id":"sh/oruhcf65","slide":17,"name":"TextBox 16","text":"17/19","textPreview":"17/19","textChars":5,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/gny5sjyp","slide":17,"text":""}
+{"kind":"slide","id":"sl/14bup87q","slide":18,"title":"12","textShapes":22}
+{"kind":"shape","id":"sh/1c7e50ni","slide":18,"name":"Rectangle 1","bbox":[0,0,1279.97,5.76]}
+{"kind":"shape","id":"sh/gbedwfmx","slide":18,"name":"Rounded Rectangle 2","bbox":[57.6,38.4,52.8,52.8]}
+{"kind":"textbox","id":"sh/rm5czq50","slide":18,"name":"TextBox 3","text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[57.6,40.32,52.8,52.8]}
+{"kind":"textbox","id":"sh/6lwvql4v","slide":18,"name":"TextBox 4","text":"总结与核心贡献","textPreview":"总结与核心贡献","textChars":7,"textLines":1,"bbox":[129.6,36.48,960,52.8]}
+{"kind":"shape","id":"sh/t8ne10n6","slide":18,"name":"Rectangle 5","bbox":[57.6,120,1161.6,1.33]}
+{"kind":"shape","id":"sh/snedsvml","slide":18,"name":"Rounded Rectangle 6","bbox":[57.6,144,374.4,220.8]}
+{"kind":"textbox","id":"sh/jilcvq54","slide":18,"name":"TextBox 7","text":"🏗","textPreview":"🏗","textChars":2,"textLines":1,"bbox":[76.8,158.4,48,48]}
+{"kind":"textbox","id":"sh/ihcvml4j","slide":18,"name":"TextBox 8","text":"完整的三阶段流水线","textPreview":"完整的三阶段流水线","textChars":9,"textLines":1,"bbox":[134.4,163.2,278.4,33.6]}
+{"kind":"textbox","id":"sh/4by9or6l","slide":18,"name":"TextBox 9","text":"宽筛—细筛—时序确认\n每层独立证据，不相互替代\n候选 ≠ 真值，分层输出","textPreview":"宽筛—细筛—时序确认 | 每层独立证据，不相互替代 | 候选 ≠ 真值，分层输出","textChars":36,"textLines":3,"bbox":[76.8,211.2,336,134.4]}
+{"kind":"shape","id":"sh/pc7qhwn6","slide":18,"name":"Rounded Rectangle 10","bbox":[456,144,374.4,220.8]}
+{"kind":"textbox","id":"sh/29grm1of","slide":18,"name":"TextBox 11","text":"🔍","textPreview":"🔍","textChars":2,"textLines":1,"bbox":[475.2,158.4,48,100.07]}
+{"kind":"textbox","id":"sh/3ap8fm50","slide":18,"name":"TextBox 12","text":"多尺度候选提案","textPreview":"多尺度候选提案","textChars":7,"textLines":1,"bbox":[532.8,163.2,278.4,33.6]}
+{"kind":"textbox","id":"sh/gnepkr69","slide":18,"name":"TextBox 13","text":"Gaussian + DoG hybrid 并集\n覆盖不同空间尺度\n文献支撑的稳健方法","textPreview":"Gaussian + DoG hybrid 并集 | 覆盖不同空间尺度 | 文献支撑的稳健方法","textChars":43,"textLines":3,"bbox":[475.2,211.2,336,134.4]}
+{"kind":"shape","id":"sh/honqdwnu","slide":18,"name":"Rounded Rectangle 14","bbox":[854.4,144,374.4,220.8]}
+{"kind":"textbox","id":"sh/ulw7ihoj","slide":18,"name":"TextBox 15","text":"代际标记 + 写入锁：运行中清理不会被旧任务重新生成\n单图/序列缓存版本递增，旧结果不会冒充新口径\n确定性进度条：状态栏、参数区和证据卡三处同步\n帧令牌校验：切帧后丢弃旧任务事件，避免覆盖当前状态\n后台进度统一回到 Tk 主线程，避免线程安全问题\n长线预检先于全量星点精测，明显长轨迹可以提前看到\n缓存清理使用代际标记，不误删正在使用的数据","textPreview":"代际标记 + 写入锁：运行中清理不会被旧任务重新生成 | 单图/序列缓存版本递增，旧结果不会冒充新口径 | 确定性进度条：状态栏、参数区和证据卡三处同步 | 帧令牌校验：切帧后丢弃旧任务事件，避免覆盖当前状态 | 后台进度统一回到 Tk 主线程，避免线程安全问题 | 长线预...","textChars":170,"textLines":7,"bbox":[873.6,158.4,48,7267.2]}
+{"kind":"textbox","id":"sh/fm58bm54","slide":18,"name":"TextBox 16","text":"严格的点源质量体系","textPreview":"严格的点源质量体系","textChars":9,"textLines":1,"bbox":[931.2,163.2,278.4,33.6]}
+{"kind":"textbox","id":"sh/0ji9wb6t","slide":18,"name":"TextBox 17","text":"三种 SNR 分离测量\nPSF/BIC 近邻去混叠\n多维门控 + 数据有效性审计","textPreview":"三种 SNR 分离测量 | PSF/BIC 近邻去混叠 | 多维门控 + 数据有效性审计","textChars":40,"textLines":3,"bbox":[873.6,211.2,336,134.4]}
+{"kind":"shape","id":"sh/14rqpgne","slide":18,"name":"Rounded Rectangle 18","bbox":[57.6,393.6,374.4,220.8]}
+{"kind":"textbox","id":"sh/90nq9gfi","slide":18,"name":"TextBox 19","text":"⏱","textPreview":"⏱","textChars":1,"textLines":1,"bbox":[76.8,408,48,48]}
+{"kind":"textbox","id":"sh/8ze9gbyx","slide":18,"name":"TextBox 20","text":"15帧时序确认","textPreview":"15帧时序确认","textChars":7,"textLines":1,"bbox":[134.4,412.8,278.4,33.6]}
+{"kind":"textbox","id":"sh/ny5876xc","slide":18,"name":"TextBox 21","text":"Hungarian 全局一对一关联\n静态/瞬态/运动三层分离\n速度不确定度量化","textPreview":"Hungarian 全局一对一关联 | 静态/瞬态/运动三层分离 | 速度不确定度量化","textChars":39,"textLines":3,"bbox":[76.8,460.8,336,134.4]}
+{"kind":"shape","id":"sh/mxw7e1gr","slide":18,"name":"Rounded Rectangle 22","bbox":[456,393.6,374.4,220.8]}
+{"kind":"textbox","id":"sh/lwnq5gf6","slide":18,"name":"TextBox 23","text":"📊","textPreview":"📊","textChars":2,"textLines":1,"bbox":[475.2,408,48,48]}
+{"kind":"textbox","id":"sh/0vepcbyl","slide":18,"name":"TextBox 24","text":"多维创新分析","textPreview":"多维创新分析","textChars":6,"textLines":1,"bbox":[532.8,412.8,278.4,33.6]}
+{"kind":"textbox","id":"sh/zul836xg","slide":18,"name":"TextBox 25","text":"4个以上创新有效分析数据\n可探测性/光度/持久性/遥测\n全部标注条件性边界","textPreview":"4个以上创新有效分析数据 | 可探测性/光度/持久性/遥测 | 全部标注条件性边界","textChars":37,"textLines":3,"bbox":[475.2,460.8,336,134.4]}
+{"kind":"shape","id":"sh/ytc7a1gv","slide":18,"name":"Rounded Rectangle 26","bbox":[854.4,393.6,374.4,220.8]}
+{"kind":"textbox","id":"sh/d83q1wfa","slide":18,"name":"TextBox 27","text":"🔬","textPreview":"🔬","textChars":2,"textLines":1,"bbox":[873.6,408,48,48]}
+{"kind":"textbox","id":"sh/c7up8ryp","slide":18,"name":"TextBox 28","text":"可复核的证据链","textPreview":"可复核的证据链","textChars":7,"textLines":1,"bbox":[931.2,412.8,278.4,33.6]}
+{"kind":"textbox","id":"sh/2dsn2xwn","slide":18,"name":"TextBox 29","text":"纯 Python 可离线运行\n每一步都有审计轨迹\n10+ 研究工具命令","textPreview":"纯 Python 可离线运行 | 每一步都有审计轨迹 | 10+ 研究工具命令","textChars":35,"textLines":3,"bbox":[873.6,460.8,336,134.4]}
+{"kind":"shape","id":"sh/3e1ob2d8","slide":18,"name":"Rounded Rectangle 30","bbox":[57.6,643.2,1161.6,52.8]}
+{"kind":"textbox","id":"sh/oza547ed","slide":18,"name":"TextBox 31","text":"评分对标：基础 60 分全覆盖 + 创新 30 分 4 项以上 + PPT 5 分架构清晰 + 答辩 5 分充分准备","textPreview":"评分对标：基础 60 分全覆盖 + 创新 30 分 4 项以上 + PPT 5 分架构清晰 + 答辩 5 分充分准备","textChars":58,"textLines":1,"bbox":[86.4,650.88,1104,38.4]}
+{"kind":"textbox","id":"sh/p0j6dcvy","slide":18,"name":"TextBox 32","text":"18/19","textPreview":"18/19","textChars":5,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/14bup87q","slide":18,"text":""}
+{"kind":"slide","id":"sl/y5wne50z","slide":19,"title":"感谢评审","textShapes":7}
+{"kind":"shape","id":"sh/wrelszu9","slide":19,"name":"Rectangle 1","bbox":[0,0,1279.97,7.68]}
+{"kind":"shape","id":"sh/hsn2l4bu","slide":19,"name":"Rectangle 2","bbox":[528,240,220.8,4]}
+{"kind":"textbox","id":"sh/itw3upcf","slide":19,"name":"TextBox 3","text":"感谢评审","textPreview":"感谢评审","textChars":4,"textLines":1,"bbox":[0,268.8,1279.97,76.8]}
+{"kind":"textbox","id":"sh/je5knut0","slide":19,"name":"TextBox 4","text":"基于局部噪声与 PSF 证据链的天基星图识别与多帧目标分析","textPreview":"基于局部噪声与 PSF 证据链的天基星图识别与多帧目标分析","textChars":29,"textLines":1,"bbox":[0,355.2,1279.97,48]}
+{"kind":"shape","id":"sh/4felwzu5","slide":19,"name":"Rectangle 5","bbox":[480,422.4,316.8,2.67]}
+{"kind":"textbox","id":"sh/5gnmp4bq","slide":19,"name":"TextBox 6","text":"项目仓库：rst19-sol (GitHub)","textPreview":"项目仓库：rst19-sol (GitHub)","textChars":23,"textLines":1,"bbox":[0,451.2,1279.97,33.6]}
+{"kind":"textbox","id":"sh/6hw3y9sb","slide":19,"name":"TextBox 7","text":"数据来源：开运一号卫星 · 15帧 4096×4096","textPreview":"数据来源：开运一号卫星 · 15帧 4096×4096","textChars":27,"textLines":1,"bbox":[0,489.6,1279.97,33.6]}
+{"kind":"textbox","id":"sh/rip4retw","slide":19,"name":"TextBox 8","text":"纯 Python · 可离线复核 · 完整证据链","textPreview":"纯 Python · 可离线复核 · 完整证据链","textChars":24,"textLines":1,"bbox":[0,528,1279.97,33.6]}
+{"kind":"textbox","id":"sh/fapkr6pw","slide":19,"name":"TextBox 9","text":"Q & A","textPreview":"Q & A","textChars":5,"textLines":1,"bbox":[0,576,1279.97,57.6]}
+{"kind":"textbox","id":"sh/upg3i18r","slide":19,"name":"TextBox 10","text":"19/19","textPreview":"19/19","textChars":5,"textLines":1,"bbox":[1200,676.8,67.2,33.6]}
+{"kind":"notes","id":"nt/y5wne50z","slide":19,"text":""}

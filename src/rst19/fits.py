@@ -1,8 +1,9 @@
 """当前比赛 FITS 文件的最小、可审计读取器。
 
-项目数据为单个 4096x4096、16 bit 主图像，且图像第一行前 208 字节包含
-比赛方定义的辅助字段。这里保留原始存储值，不自动应用 BSCALE/BZERO，
-避免在尚未确认物理量定义前改变检测输入。
+项目数据通常为单个 4096x4096、16 bit 主图像；部分文件会在图像第一行前
+208 字节放入比赛方定义的辅助字段。这里保留原始存储值，不自动应用
+BSCALE/BZERO，避免在尚未确认物理量定义前改变检测输入。读取时会先对
+辅助字段做最小物理一致性校验，防止把普通图像首行误报成姿态/定位数据。
 """
 
 from __future__ import annotations
@@ -96,6 +97,60 @@ def decode_auxiliary(raw: bytes) -> AuxiliaryData:
     if not all(math.isfinite(value) for value in values):
         raise FitsError("auxiliary data contains NaN or infinity")
     return AuxiliaryData.from_values(values)
+
+
+def _finite_header_float(header: Mapping[str, object], key: str) -> float | None:
+    """读取一个可选的有限 FITS 头部浮点字段。"""
+
+    try:
+        value = float(header.get(key))
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _wrapped_degrees_delta(value: float, reference: float) -> float:
+    """Return the shortest signed difference between two degree angles."""
+
+    return (float(value) - float(reference) + 180.0) % 360.0 - 180.0
+
+
+def _auxiliary_is_plausible(
+    auxiliary: AuxiliaryData,
+    header: Mapping[str, object],
+) -> bool:
+    """判断 208 字节是否像辅助遥测，而不是普通 16 bit 像素。
+
+    ``decode_auxiliary`` 保持为纯格式解码函数，允许调用方审计任意 26 个
+    double；这里的校验只用于 ``read_fits`` 自动识别“是否真的存在辅助块”。
+    约束取自格式说明中明确的角度/四元数含义：方位角、俯仰角、RA、Dec
+    必须在物理范围内，四元数不能接近零或溢出；若 FITS 头同时给出了
+    AZIMUTH/ELEVATIO，则辅助块中的 p_az/p_el 还应与其相符。对四元数只
+    检查合理的尺度范围，不强制它已经归一化，因为下游姿态审计会归一化。
+    """
+
+    values = auxiliary.as_dict()
+    p_az = values["p_az"]
+    p_el = values["p_el"]
+    ra = values["ra"]
+    dec = values["dec"]
+    if not (0.0 <= p_az < 360.0 and -90.0 <= p_el <= 90.0):
+        return False
+    if not (0.0 <= ra < 360.0 and -90.0 <= dec <= 90.0):
+        return False
+
+    quaternion = np.asarray([values[name] for name in ("q1", "q2", "q3", "q4")], dtype=np.float64)
+    quaternion_norm = float(np.linalg.norm(quaternion))
+    if not math.isfinite(quaternion_norm) or not 1.0e-6 <= quaternion_norm <= 1.0e6:
+        return False
+
+    header_azimuth = _finite_header_float(header, "AZIMUTH")
+    header_elevation = _finite_header_float(header, "ELEVATIO")
+    if header_azimuth is not None and abs(_wrapped_degrees_delta(p_az, header_azimuth)) > 0.01:
+        return False
+    if header_elevation is not None and abs(p_el - header_elevation) > 0.01:
+        return False
+    return True
 
 
 def auxiliary_mask(shape: tuple[int, int]) -> np.ndarray:
@@ -239,7 +294,14 @@ def read_fits(path: str | Path, *, apply_scaling: bool = False) -> FitsFrame:
         bzero = float(header.get("BZERO", 0.0))
         data = data.astype(np.float64) * bscale + bzero
 
-    auxiliary = decode_auxiliary(raw[:AUXILIARY_BYTES]) if len(raw) >= AUXILIARY_BYTES else None
+    auxiliary = None
+    if len(raw) >= AUXILIARY_BYTES:
+        try:
+            decoded_auxiliary = decode_auxiliary(raw[:AUXILIARY_BYTES])
+        except FitsError:
+            decoded_auxiliary = None
+        if decoded_auxiliary is not None and _auxiliary_is_plausible(decoded_auxiliary, header):
+            auxiliary = decoded_auxiliary
     return FitsFrame(
         path=file_path,
         header=header,

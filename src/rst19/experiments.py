@@ -25,7 +25,13 @@ from .detection import (
 )
 from .fits import FitsFrame, auxiliary_mask, read_fits
 from .pipeline import analyze_frame
-from .sequence import _estimate_translation, detect_long_trails
+from .sequence import (
+    _estimate_translation,
+    _single_frame_model_is_supported,
+    _single_frame_trail_shape_is_supported,
+    MotionFeatureTrack,
+    detect_long_trails,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +63,36 @@ class InjectionRecoveryRow:
             "quality_recall": self.quality_recall,
             "mean_candidate_count": self.mean_candidate_count,
             "mean_quality_count": self.mean_quality_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ExposureTrailInjection:
+    """一条按曝光时间生成的合成拖影及其真值参数。"""
+
+    center_x: float
+    center_y: float
+    vx_px_per_s: float
+    vy_px_per_s: float
+    exposure_s: float
+    trail_length_px: float
+    angle_deg: float
+    peak_excess_adu: float
+    psf_fwhm_px: float
+    sample_count: int
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "center_x": self.center_x,
+            "center_y": self.center_y,
+            "vx_px_per_s": self.vx_px_per_s,
+            "vy_px_per_s": self.vy_px_per_s,
+            "exposure_s": self.exposure_s,
+            "trail_length_px": self.trail_length_px,
+            "angle_deg": self.angle_deg,
+            "peak_excess_adu": self.peak_excess_adu,
+            "psf_fwhm_px": self.psf_fwhm_px,
+            "sample_count": self.sample_count,
         }
 
 
@@ -1325,6 +1361,9 @@ class SingleFrameTrailAuditRow:
     total_area_pixels: int
     longest_angle_deg: float | None
     longest_bbox: str | None
+    accepted_trail_count: int = 0
+    double_star_count: int = 0
+    model_rejected_count: int = 0
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -1341,6 +1380,9 @@ class SingleFrameTrailAuditRow:
             "total_area_pixels": self.total_area_pixels,
             "longest_angle_deg": self.longest_angle_deg,
             "longest_bbox": self.longest_bbox,
+            "accepted_trail_count": self.accepted_trail_count,
+            "double_star_count": self.double_star_count,
+            "model_rejected_count": self.model_rejected_count,
         }
 
 
@@ -2282,6 +2324,77 @@ def _gaussian_source(image: np.ndarray, x: float, y: float, peak_excess_adu: flo
 
     y_min, y_max, x_min, x_max, kernel = _gaussian_kernel_patch(image.shape, x, y, fwhm)
     image[y_min:y_max, x_min:x_max] += peak_excess_adu * kernel
+
+
+def _inject_exposure_trail(
+    image: np.ndarray,
+    *,
+    center_x: float,
+    center_y: float,
+    vx_px_per_s: float,
+    vy_px_per_s: float,
+    exposure_s: float = 1.5,
+    peak_excess_adu: float,
+    psf_fwhm: float,
+    samples_per_psf: float = 3.0,
+) -> ExposureTrailInjection:
+    """按 1.5 s 曝光内的匀速积分注入一条 PSF 拖影。
+
+    ``vx/vy`` 是图像坐标中的 px/s。采样点在曝光中心两侧对称分布，
+    每个点使用同一 PSF，并按采样数分摊峰值超额；因此返回的
+    ``trail_length_px = |v| * exposure_s`` 与跨帧中心位移可以由同一
+    速度真值计算，适合后续序列召回/断帧实验。图像边界由现有 Gaussian
+    小窗自然裁剪，返回的长度仍是真值长度，不是可见长度。
+    """
+
+    values = np.asarray(image)
+    if values.ndim != 2:
+        raise ValueError(f"expected a 2-D image, got shape {values.shape}")
+    numeric = (center_x, center_y, vx_px_per_s, vy_px_per_s, exposure_s, peak_excess_adu, psf_fwhm, samples_per_psf)
+    if not all(np.isfinite(float(value)) for value in numeric):
+        raise ValueError("exposure trail parameters must be finite")
+    if exposure_s <= 0 or peak_excess_adu <= 0 or psf_fwhm <= 0 or samples_per_psf <= 0:
+        raise ValueError("exposure trail parameters must be positive")
+
+    speed = float(np.hypot(vx_px_per_s, vy_px_per_s))
+    trail_length = speed * float(exposure_s)
+    sigma = float(psf_fwhm) / 2.354820045
+    sample_count = max(3, int(math.ceil(trail_length / max(sigma, np.finfo(np.float64).eps) * float(samples_per_psf))))
+    offsets = np.linspace(-0.5 * float(exposure_s), 0.5 * float(exposure_s), sample_count)
+    per_sample_peak = float(peak_excess_adu) / float(sample_count)
+    kernel_radius = max(4, int(math.ceil(4.0 * sigma)))
+    for offset in offsets:
+        sample_x = float(center_x) + float(vx_px_per_s) * float(offset)
+        sample_y = float(center_y) + float(vy_px_per_s) * float(offset)
+        # 目标中心完全离开视场时，Gaussian 小窗与数组没有交集；跳过
+        # 该采样点，同时保留刚进入/刚离开边缘的部分以实现自然裁剪。
+        if (
+            sample_x < -kernel_radius
+            or sample_x >= values.shape[1] + kernel_radius
+            or sample_y < -kernel_radius
+            or sample_y >= values.shape[0] + kernel_radius
+        ):
+            continue
+        _gaussian_source(
+            values,
+            sample_x,
+            sample_y,
+            per_sample_peak,
+            float(psf_fwhm),
+        )
+    angle_deg = float(np.degrees(np.arctan2(float(vy_px_per_s), float(vx_px_per_s)))) if speed > 0 else 0.0
+    return ExposureTrailInjection(
+        center_x=float(center_x),
+        center_y=float(center_y),
+        vx_px_per_s=float(vx_px_per_s),
+        vy_px_per_s=float(vy_px_per_s),
+        exposure_s=float(exposure_s),
+        trail_length_px=trail_length,
+        angle_deg=angle_deg,
+        peak_excess_adu=float(peak_excess_adu),
+        psf_fwhm_px=float(psf_fwhm),
+        sample_count=sample_count,
+    )
 
 
 def estimate_empirical_psf(
@@ -8717,9 +8830,11 @@ def run_single_frame_trail_audit(
 ) -> tuple[SingleFrameTrailAuditRow, ...]:
     """逐张 FITS 运行单帧长线检测，输出可复核的候选统计。
 
-    该审计刻意不跨帧关联，也不输出 ``moving`` 结论：它回答的是“这张
-    图里是否存在满足几何和显著性门槛的长线候选”。跨帧持续性和速度
-    仍由 ``sequence.py`` 的独立路径判断。
+    该审计刻意不跨帧关联，也不输出 ``moving`` 结论：它先保留满足几何
+    和显著性门槛的提案，再用当前图像内的单星/双星/椭圆星像/有限线段
+    模型做第二次复核。这样“几何上像线”的相邻两颗星会保留在审计计数
+    中，但不会进入 ``accepted_trail_count`` 或最长线统计。跨帧持续性
+    和速度仍由 ``sequence.py`` 的独立路径判断。
     """
 
     frame_paths = tuple(Path(path) for path in paths)
@@ -8756,8 +8871,26 @@ def run_single_frame_trail_audit(
             min_residual_adu=min_residual_adu,
             min_feature_area=min_feature_area,
             min_axis_ratio=min_axis_ratio,
+            fit_line_model=True,
         )
-        points = [point for trail in trails for point in trail.points]
+        def accepted(track: MotionFeatureTrack) -> bool:
+            if not track.points:
+                return False
+            point = track.points[0]
+            # 外部调用方/旧测试可能构造没有模型字段的对象；保留其原有
+            # 几何审计语义。当前真实 detector 开启 fit_line_model 后不会
+            # 走这个兼容分支，因此双星不会因为“缺字段”被放行。
+            if point.single_frame_model is None:
+                return True
+            return (
+                point.single_frame_model in {"line", "long_line_profile"}
+                and _single_frame_model_is_supported(point)
+                and _single_frame_trail_shape_is_supported(point)
+            )
+
+        accepted_trails = tuple(trail for trail in trails if accepted(trail))
+        points = [point for trail in accepted_trails for point in trail.points]
+        all_points = [point for trail in trails for point in trail.points]
         longest = max(points, key=lambda point: point.length_px, default=None)
         rows.append(
             SingleFrameTrailAuditRow(
@@ -8774,6 +8907,12 @@ def run_single_frame_trail_audit(
                 total_area_pixels=sum(point.area_pixels for point in points),
                 longest_angle_deg=float(longest.angle_deg) if longest is not None else None,
                 longest_bbox=",".join(str(value) for value in longest.bbox) if longest is not None else None,
+                accepted_trail_count=len(accepted_trails),
+                double_star_count=sum(
+                    point.single_frame_model == "double"
+                    for point in all_points
+                ),
+                model_rejected_count=len(trails) - len(accepted_trails),
             )
         )
     return tuple(rows)
@@ -8796,9 +8935,12 @@ def write_single_frame_trail_artifacts(
     frame_numbers = [row.frame_number for row in rows]
     _line_chart(
         output / "single_frame_trail_counts.png",
-        "SINGLE-FRAME TRAIL AUDIT · CANDIDATE COUNT",
+        "SINGLE-FRAME TRAIL AUDIT · GEOMETRY VS MODEL",
         frame_numbers,
-        (("long-trail candidates", [row.trail_count for row in rows], "#d79432"),),
+        (
+            ("geometry proposals", [row.trail_count for row in rows], "#b8a27a"),
+            ("accepted line evidence", [row.accepted_trail_count for row in rows], "#4f9b83"),
+        ),
         y_label="candidate count",
         x_label="frame number",
     )

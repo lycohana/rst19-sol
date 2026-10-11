@@ -12,6 +12,7 @@ from rst19.innovation import (
     _difference_rows,
     _fit_constant_velocity,
     _motion_audit_rows,
+    _motion_evidence_link_rows,
     _motion_point_rows,
     _motion_rows,
     _point_motion_rows,
@@ -22,6 +23,7 @@ from rst19.innovation import (
     _telemetry_prediction,
     _vector_metrics,
     build_innovation_report_from_payload,
+    write_innovation_artifacts,
 )
 from rst19.photometric_report import build_photometric_report
 
@@ -162,13 +164,25 @@ def test_motion_point_rows_exposes_one_based_frame_number() -> None:
             {
                 "track_id": 7,
                 "classification": "candidate",
-                "points": [{"frame_index": 0, "x": 12.0, "y": 8.0}],
+                "points": [{
+                    "frame_index": 0,
+                    "x": 12.0,
+                    "y": 8.0,
+                    "line_artifact_overlap_fraction": 0.25,
+                    "line_template_snr": 12.0,
+                    "line_vs_point_delta_bic": 9.0,
+                    "line_vs_double_delta_bic": 11.0,
+                    "single_frame_model": "line",
+                }],
             }
         ]
     )
 
     assert rows[0]["frame_index"] == 0
     assert rows[0]["frame_number"] == 1
+    assert rows[0]["line_artifact_overlap_fraction"] == 0.25
+    assert rows[0]["line_template_snr"] == 12.0
+    assert rows[0]["single_frame_model"] == "line"
 
 
 def test_motion_audit_rows_exposes_one_based_frame_number_and_filter_counts() -> None:
@@ -319,6 +333,90 @@ def _minimal_innovation_payload(**extra: object) -> dict[str, object]:
     }
     payload.update(extra)
     return payload
+
+
+def test_innovation_report_preserves_cross_channel_motion_evidence_dedup() -> None:
+    payload = _minimal_innovation_payload(
+        # 这里验证的是报告的跨通道计数；不需要为测试额外创建 FITS。
+        frames=[],
+        motion_features=[
+            {
+                "track_id": 9,
+                "classification": "moving",
+                "points": [
+                    {"frame_index": 0, "aligned_x": 10.0, "aligned_y": 20.0, "length_px": 8.0, "width_px": 2.0, "residual_snr": 12.0},
+                    {"frame_index": 1, "aligned_x": 12.0, "aligned_y": 20.0, "length_px": 8.0, "width_px": 2.0, "residual_snr": 12.0},
+                    {"frame_index": 2, "aligned_x": 14.0, "aligned_y": 20.0, "length_px": 8.0, "width_px": 2.0, "residual_snr": 12.0},
+                ],
+            }
+        ],
+        tracks=[
+            {
+                "track_id": 4,
+                "classification": "moving",
+                "points": [
+                    {"frame_index": 0, "aligned_x": 10.0, "aligned_y": 20.0, "flux_snr": 10.0, "candidate_snr": 11.0},
+                    {"frame_index": 1, "aligned_x": 12.0, "aligned_y": 20.0, "flux_snr": 10.0, "candidate_snr": 11.0},
+                    {"frame_index": 2, "aligned_x": 14.0, "aligned_y": 20.0, "flux_snr": 10.0, "candidate_snr": 11.0},
+                ],
+            }
+        ],
+        motion_evidence_links=[
+            {
+                "point_track_id": 4,
+                "line_track_id": 9,
+                "overlap_frame_count": 3,
+                "overlap_fraction": 1.0,
+                "median_perpendicular_distance_px": 0.2,
+                "direction_difference_deg": 0.5,
+            }
+        ],
+    )
+
+    links = _motion_evidence_link_rows(payload)
+    report = build_innovation_report_from_payload(payload)
+    motion = report["motion"]
+
+    assert links == [
+        {
+            "point_track_id": 4,
+            "line_track_id": 9,
+            "overlap_frame_count": 3,
+            "overlap_fraction": 1.0,
+            "median_perpendicular_distance_px": 0.2,
+            "direction_difference_deg": 0.5,
+        }
+    ]
+    assert motion["moving_point_count"] == 1
+    assert motion["moving_count"] == 1
+    assert motion["evidence_link_count"] == 1
+    assert motion["evidence_group_count"] == 1
+    assert motion["evidence_links"] == links
+    json.dumps(report, ensure_ascii=False, allow_nan=False)
+
+
+def test_innovation_artifacts_write_cross_channel_motion_link_csv(tmp_path) -> None:
+    report = build_innovation_report_from_payload(
+        _minimal_innovation_payload(
+            motion_evidence_links=[
+                {
+                    "point_track_id": 4,
+                    "line_track_id": 9,
+                    "overlap_frame_count": 3,
+                    "overlap_fraction": 1.0,
+                    "median_perpendicular_distance_px": 0.2,
+                    "direction_difference_deg": 0.5,
+                }
+            ]
+        )
+    )
+
+    output = write_innovation_artifacts(report, tmp_path / "innovation")
+    link_csv = output / "motion_evidence_links.csv"
+
+    assert link_csv.is_file()
+    assert "point_track_id,line_track_id,overlap_frame_count" in link_csv.read_text(encoding="utf-8")
+    assert "4,9,3" in link_csv.read_text(encoding="utf-8")
 
 
 def test_innovation_report_consumes_relative_scale_without_promoting_absolute_magnitude() -> None:

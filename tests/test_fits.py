@@ -48,6 +48,29 @@ def test_read_fits_decodes_shape_and_auxiliary(tmp_path: Path) -> None:
     assert frame.auxiliary.as_dict()["ra"] == 2.0
 
 
+def test_read_fits_does_not_invent_auxiliary_from_a_plain_image_first_row(tmp_path: Path) -> None:
+    header = b"".join(
+        [
+            _card("SIMPLE", "T"),
+            _card("BITPIX", "16"),
+            _card("NAXIS", "2"),
+            _card("NAXIS1", "16"),
+            _card("NAXIS2", "16"),
+            _card("AZIMUTH", "97.04694"),
+            _card("ELEVATIO", "34.10888"),
+            b"END".ljust(80),
+        ]
+    ).ljust(2880, b" ")
+    data = np.zeros((16, 16), dtype=">i2")
+    data[1:, :] = 120
+    path = tmp_path / "plain-image.fits"
+    path.write_bytes(header + data.tobytes())
+
+    frame = read_fits(path)
+
+    assert frame.auxiliary is None
+
+
 def test_decode_auxiliary_rejects_wrong_length() -> None:
     try:
         decode_auxiliary(b"short")

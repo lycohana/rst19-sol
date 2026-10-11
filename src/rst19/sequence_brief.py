@@ -171,8 +171,10 @@ def _target_from_track(track: Any, result: Any, *, kind: str) -> BriefTarget | N
     evidence_level = str(getattr(track, "evidence_level", "quality"))
     if classification == "moving":
         evidence_text = "连续帧位置/形状通过当前 moving 门槛，仍待星表或人工真值确认"
+    elif evidence_level == "single_frame_trail":
+        evidence_text = "单帧曝光线形候选；只能说明本次曝光出现线状形态，不能估计跨帧速度"
     elif len(points) == 1:
-        evidence_text = "只在单帧出现，不能单独估计运行速度，也没有与其它轨迹强行合并"
+        evidence_text = "15 帧线层只保留 1 个时序候选，不能据此称为单帧曝光候选或估计速度"
     else:
         evidence_text = "多帧出现但未达到严格 moving 门槛，保留为待复核候选"
     return BriefTarget(
@@ -272,7 +274,7 @@ def build_sequence_brief(result: Any, mosaic: Any | None = None) -> SequenceBrie
         f"严格静态 {int(getattr(result, 'stable_source_count', 0)):,}、持续候选 {int(getattr(result, 'persistent_source_count', 0)):,} 等是证据层计数，不是物理恒星总数。",
     ]
     if pending_targets:
-        boundaries.append("单帧长线只能说明本帧有形状异常，必须结合其它帧、差分图和原始像素复核。")
+        boundaries.append("单帧长线可作为曝光运动候选，说明形态上可能在曝光内发生位移；但仍需结合其它帧、差分图和原始像素确认真实身份。")
 
     if mosaic is None:
         mosaic_note = "注册合成图尚未生成；生成后只用于查看联合覆盖、重叠和像素稳定性。"
@@ -288,7 +290,7 @@ def build_sequence_brief(result: Any, mosaic: Any | None = None) -> SequenceBrie
         boundaries=tuple(boundaries),
         targets=tuple(targets),
         mosaic_note=mosaic_note,
-        evidence_refs=("innovation_report.json", "motion_evidence.csv", "motion_frame_audit.csv", "registered_mosaic_coverage.npy"),
+        evidence_refs=("innovation_report.json", "motion_evidence.csv", "motion_evidence_links.csv", "motion_frame_audit.csv", "registered_mosaic_coverage.npy"),
         frame_count=len(frames),
         duration_s=duration,
         interval_median_s=interval_median,

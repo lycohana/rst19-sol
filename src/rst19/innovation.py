@@ -795,6 +795,53 @@ def _motion_audit_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _motion_evidence_link_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """规范化点状/线状运动证据的跨通道关联。
+
+    关联不是新的检测器，也不把两条轨迹改写成一个“真值目标”。它只把
+    ``SequenceResult`` 已经算出的共同帧、方向和空间偏差展开成可审计的
+    表格，方便报告和 CSV 解释“为什么去重”。旧序列 JSON 没有该字段时
+    返回空列表，保持向后兼容。
+    """
+
+    raw_links = payload.get("motion_evidence_links", [])
+    if not isinstance(raw_links, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for raw in raw_links:
+        if not isinstance(raw, Mapping):
+            continue
+        try:
+            point_track_id = int(raw["point_track_id"])
+            line_track_id = int(raw["line_track_id"])
+            overlap_frame_count = int(raw["overlap_frame_count"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        overlap_fraction = _as_float(raw.get("overlap_fraction"))
+        perpendicular_distance = _as_float(raw.get("median_perpendicular_distance_px"))
+        direction_difference = _as_float(raw.get("direction_difference_deg"))
+        if (
+            point_track_id < 0
+            or line_track_id < 0
+            or overlap_frame_count < 0
+            or overlap_fraction is None
+            or perpendicular_distance is None
+            or direction_difference is None
+        ):
+            continue
+        rows.append(
+            {
+                "point_track_id": point_track_id,
+                "line_track_id": line_track_id,
+                "overlap_frame_count": overlap_frame_count,
+                "overlap_fraction": overlap_fraction,
+                "median_perpendicular_distance_px": perpendicular_distance,
+                "direction_difference_deg": direction_difference,
+            }
+        )
+    return rows
+
+
 _PHOTOMETRIC_LEVELS = (
     "INSTRUMENTAL_ONLY",
     "RELATIVE_CALIBRATED",
@@ -2142,6 +2189,13 @@ def _build_innovation_report_payload(payload: Mapping[str, Any], json_path: Path
     motion_rows = _motion_rows(payload, frame_rows)
     point_motion_rows = _point_motion_rows(payload, frame_rows)
     motion_audit_rows = _motion_audit_rows(payload)
+    motion_evidence_link_rows = _motion_evidence_link_rows(payload)
+    moving_line_count = sum(row["classification"] == "moving" for row in motion_rows)
+    moving_point_count = len(point_motion_rows)
+    motion_evidence_group_count = max(
+        0,
+        moving_line_count + moving_point_count - len(motion_evidence_link_rows),
+    )
     intervals = [float(row["interval_s"]) for row in frame_rows if row.get("interval_s") is not None and float(row["interval_s"]) > 0]
     timestamps = [_parse_timestamp(row.get("timestamp")) for row in frame_rows]
     elapsed = [row.get("elapsed_s") for row in frame_rows if row.get("elapsed_s") is not None]
@@ -2259,12 +2313,16 @@ def _build_innovation_report_payload(payload: Mapping[str, Any], json_path: Path
         "photometric_evidence": _photometric_evidence_section(payload),
         "motion": {
             "feature_count": len(motion_rows),
-            "moving_count": sum(row["classification"] == "moving" for row in motion_rows),
+            "moving_count": moving_line_count,
             "candidate_count": sum(row["classification"] == "candidate" for row in motion_rows),
+            "moving_point_count": moving_point_count,
+            "evidence_link_count": len(motion_evidence_link_rows),
+            "evidence_group_count": motion_evidence_group_count,
+            "evidence_links": motion_evidence_link_rows,
             "reference_mode": reference_mode,
             "tracks": motion_rows,
             "frame_audits": motion_audit_rows,
-            "note": f"{reference_note} speed_px_per_s 是图像平面速度；三点及以上轨迹附带小样本 OLS 速度、方向和轨迹均值外推的 95% 区间。区间不包含配准系统误差、模型失配或未来单次观测噪声；没有像元尺度/WCS 时不解释为真实天体速度。",
+            "note": f"{reference_note} 点源 moving 与线状 moving 分开检测；evidence_group_count = 点源 moving + 线状 moving − 跨通道重复关联。关联只用于审计去重，不删除原始轨迹，也不等于物理目标真值。speed_px_per_s 是图像平面速度；三点及以上轨迹附带小样本 OLS 速度、方向和轨迹均值外推的 95% 区间。区间不包含配准系统误差、模型失配或未来单次观测噪声；没有像元尺度/WCS 时不解释为真实天体速度。",
         },
         "point_motion": {
             "track_count": len(point_motion_rows),
@@ -2349,6 +2407,16 @@ def _motion_point_rows(tracks: Sequence[Mapping[str, Any]]) -> list[dict[str, An
                     "width_px": _as_float(point.get("width_px")),
                     "angle_deg": _as_float(point.get("angle_deg")),
                     "residual_snr": _as_float(point.get("residual_snr")),
+                    "continuity_ratio": _as_float(point.get("continuity_ratio")),
+                    "profile_fill_ratio": _as_float(point.get("profile_fill_ratio")),
+                    "line_artifact_overlap_fraction": _as_float(point.get("line_artifact_overlap_fraction")),
+                    "line_template_snr": _as_float(point.get("line_template_snr")),
+                    "line_vs_point_delta_bic": _as_float(point.get("line_vs_point_delta_bic")),
+                    "line_vs_double_delta_bic": _as_float(point.get("line_vs_double_delta_bic")),
+                    "line_vs_background_delta_bic": _as_float(point.get("line_vs_background_delta_bic")),
+                    "line_vs_elliptical_delta_bic": _as_float(point.get("line_vs_elliptical_delta_bic")),
+                    "single_frame_model": point.get("single_frame_model"),
+                    "single_frame_model_margin_bic": _as_float(point.get("single_frame_model_margin_bic")),
                     "fit_residual_px": _as_float(point.get("fit_residual_px")),
                     "bbox": ",".join(str(value) for value in bbox) if isinstance(bbox, Sequence) and not isinstance(bbox, (str, bytes)) else None,
                     "touches_edge": bool(point.get("touches_edge", False)),
@@ -2447,6 +2515,14 @@ def _write_motion_cutouts(report: Mapping[str, Any], output: Path) -> None:
                 "width_px": _as_float(point.get("width_px")),
                 "angle_deg": _as_float(point.get("angle_deg")),
                 "residual_snr": _as_float(point.get("residual_snr")),
+                "line_artifact_overlap_fraction": _as_float(point.get("line_artifact_overlap_fraction")),
+                "line_template_snr": _as_float(point.get("line_template_snr")),
+                "line_vs_point_delta_bic": _as_float(point.get("line_vs_point_delta_bic")),
+                "line_vs_double_delta_bic": _as_float(point.get("line_vs_double_delta_bic")),
+                "line_vs_background_delta_bic": _as_float(point.get("line_vs_background_delta_bic")),
+                "line_vs_elliptical_delta_bic": _as_float(point.get("line_vs_elliptical_delta_bic")),
+                "single_frame_model": point.get("single_frame_model"),
+                "single_frame_model_margin_bic": _as_float(point.get("single_frame_model_margin_bic")),
                 "fit_residual_px": _as_float(point.get("fit_residual_px")),
                 "touches_edge": bool(point.get("touches_edge", False)),
                 "crop_left": left,
@@ -2950,6 +3026,8 @@ def write_innovation_artifacts(report: Mapping[str, Any], out_dir: str | Path) -
     motion_tracks = report.get("motion", {}).get("tracks", [])
     _write_csv(output / "motion_evidence.csv", motion_tracks, exclude_keys=("points",))
     _write_csv(output / "motion_points_evidence.csv", _motion_point_rows(motion_tracks))
+    motion_evidence_links = report.get("motion", {}).get("evidence_links", [])
+    _write_csv(output / "motion_evidence_links.csv", motion_evidence_links)
     point_motion_tracks = report.get("point_motion", {}).get("tracks", [])
     _write_csv(output / "point_motion_evidence.csv", point_motion_tracks, exclude_keys=("points",))
     _write_csv(output / "point_motion_points_evidence.csv", _motion_point_rows(point_motion_tracks))

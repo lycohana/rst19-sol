@@ -45,6 +45,7 @@ def _result() -> SequenceResult:
         0.0,
         0.0,
         None,
+        evidence_level="single_frame_trail",
     )
     moving = MotionFeatureTrack(7, "moving", moving_points, 21.5, 10.75, 0.2)
     return SequenceResult(
@@ -68,6 +69,7 @@ def test_sequence_brief_explains_motion_and_scientific_boundaries() -> None:
     assert "图像平面速度" in text
     assert "不等于已经完成星表身份" in text
     assert "未生成" in text
+    assert any("单帧曝光线形候选" in target.evidence_text for target in brief.targets)
     assert brief.targets[0].classification == "moving"
 
 

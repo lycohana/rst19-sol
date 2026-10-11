@@ -1,0 +1,1320 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#1c2a3a" />
+  <link rel="icon" href="data:," />
+  <title>RST19｜星点、星等与运动目标</title>
+  <style>
+    :root {
+      --paper: #f2efe5;
+      --paper-2: #e7e2d5;
+      --paper-3: #d9d3c5;
+      --ink: #172637;
+      --ink-2: #304557;
+      --muted: #68727a;
+      --line: #bdb9ad;
+      --navy: #1c2a3a;
+      --navy-2: #26394d;
+      --amber: #c9792e;
+      --amber-2: #f0b36a;
+      --teal: #2f7772;
+      --teal-2: #76aca3;
+      --red: #a95049;
+      --white: #fbfaf5;
+      --shadow: 0 26px 70px rgba(23, 38, 55, .18);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: #c9c5ba;
+      color: var(--ink);
+      font-family: "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      overflow: hidden;
+    }
+
+    button { font: inherit; }
+
+    .deck-shell {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 3.5rem 2.25rem 4.5rem;
+    }
+
+    .deck {
+      position: relative;
+      width: min(92vw, 1440px);
+      aspect-ratio: 16 / 9;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .deck::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border: 1px solid rgba(23, 38, 55, .12);
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: clamp(2.3rem, 5vw, 5rem) clamp(2.5rem, 6.2vw, 7.2rem) clamp(2.6rem, 5vw, 4.7rem);
+      background: var(--paper);
+      opacity: 0;
+      transform: translateX(2.5rem);
+      pointer-events: none;
+      transition: opacity .32s ease, transform .42s cubic-bezier(.22,.8,.25,1);
+      overflow: hidden;
+    }
+
+    .slide.is-active {
+      opacity: 1;
+      transform: translateX(0);
+      pointer-events: auto;
+      z-index: 5;
+    }
+
+    .slide.is-before { transform: translateX(-2.5rem); }
+
+    .slide.dark {
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .slide.dark .eyebrow,
+    .slide.dark .meta,
+    .slide.dark .subtitle,
+    .slide.dark .source,
+    .slide.dark .muted { color: #b6c0c5; }
+
+    .slide-header {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .eyebrow {
+      margin: 0 0 .9rem;
+      color: var(--teal);
+      font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .page-number {
+      color: var(--muted);
+      font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+      font-size: .72rem;
+      letter-spacing: .1em;
+      white-space: nowrap;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2, h3 { letter-spacing: -.045em; text-wrap: balance; }
+    h2 {
+      max-width: 100%;
+      margin-bottom: .75rem;
+      color: inherit;
+      font-size: clamp(2rem, 3.45vw, 4.1rem);
+      line-height: 1.06;
+      font-weight: 800;
+      line-break: strict;
+    }
+
+    .slide-header > div { min-width: 0; }
+    .slide-header h2 { max-width: 100%; }
+
+    .subtitle {
+      max-width: 800px;
+      margin-bottom: 1.55rem;
+      color: var(--muted);
+      font-size: clamp(.92rem, 1.2vw, 1.33rem);
+      line-height: 1.55;
+      text-wrap: pretty;
+      line-break: strict;
+    }
+
+    .rule {
+      height: 1px;
+      margin: 0 0 1.9rem;
+      background: var(--line);
+    }
+
+    .dark .rule { background: #536474; }
+
+    .source {
+      position: absolute;
+      left: clamp(2.5rem, 6.2vw, 7.2rem);
+      bottom: 1.35rem;
+      margin: 0;
+      color: #81878a;
+      font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+      font-size: .61rem;
+      letter-spacing: .02em;
+    }
+
+    .source a { color: inherit; }
+    .mono { font-family: "IBM Plex Mono", "Cascadia Mono", monospace; letter-spacing: -.03em; }
+    .accent-amber { color: var(--amber); }
+    .accent-teal { color: var(--teal); }
+    .accent-red { color: var(--red); }
+    .dark .accent-amber { color: var(--amber-2); }
+    .dark .accent-teal { color: #8dd0c6; }
+    .dark .accent-red { color: #ef9b91; }
+
+    .cover {
+      display: grid;
+      grid-template-columns: 1.22fr .78fr;
+      align-items: center;
+      gap: 4vw;
+      padding-top: clamp(2rem, 5vw, 4.8rem);
+      padding-bottom: clamp(2rem, 5vw, 4.8rem);
+    }
+
+    .cover::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 11px;
+      background: var(--amber);
+    }
+
+    .cover .eyebrow { color: var(--teal-2); }
+    .cover h1 {
+      margin: 0 0 1.1rem;
+      font-size: clamp(3rem, 7.4vw, 8.3rem);
+      line-height: .93;
+      font-weight: 850;
+      letter-spacing: -.085em;
+    }
+
+    .cover .lead {
+      max-width: 610px;
+      margin: 0;
+      color: var(--amber-2);
+      font-size: clamp(1.25rem, 2.1vw, 2.25rem);
+      line-height: 1.25;
+      font-weight: 750;
+    }
+
+    .cover .cover-note {
+      max-width: 550px;
+      margin: 2rem 0 0;
+      color: #c5ced0;
+      font-size: clamp(.92rem, 1.25vw, 1.35rem);
+      line-height: 1.6;
+    }
+
+    .cover-figure {
+      position: relative;
+      min-height: 340px;
+      display: grid;
+      place-items: center;
+      border-left: 1px solid #536474;
+      border-right: 1px solid #536474;
+      background: #223446;
+    }
+
+    .cover-figure::before,
+    .cover-figure::after {
+      content: "";
+      position: absolute;
+      left: 14%;
+      right: 14%;
+      border-top: 1px solid #536474;
+    }
+
+    .cover-figure::before { top: 18%; }
+    .cover-figure::after { bottom: 18%; }
+
+    .cover-figure svg { width: 90%; height: 78%; overflow: visible; }
+    .cover-figure .big-number {
+      position: absolute;
+      right: 8%;
+      bottom: 7%;
+      color: var(--amber-2);
+      font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+      font-size: clamp(3rem, 6vw, 6rem);
+      font-weight: 800;
+      line-height: .8;
+    }
+
+    .cover-figure .figure-label {
+      position: absolute;
+      left: 8%;
+      top: 8%;
+      color: #b6c0c5;
+      font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+      font-size: .68rem;
+      letter-spacing: .12em;
+    }
+
+    .cover-footer {
+      position: absolute;
+      bottom: 1.35rem;
+      left: clamp(2.5rem, 6.2vw, 7.2rem);
+      right: clamp(2.5rem, 6.2vw, 7.2rem);
+      display: flex;
+      justify-content: space-between;
+      color: #8f9da1;
+      font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+      font-size: .65rem;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(250px, .9fr);
+      gap: clamp(1.4rem, 4.4vw, 5rem);
+      align-items: start;
+    }
+
+    .number-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 2px solid var(--ink);
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 1.7rem;
+    }
+
+    .number-strip > div {
+      min-height: 118px;
+      padding: 1rem 1rem .9rem;
+      border-right: 1px solid var(--line);
+    }
+
+    .number-strip > div:last-child { border-right: 0; }
+    .number-strip strong {
+      display: block;
+      margin-bottom: .35rem;
+      color: var(--ink);
+      font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+      font-size: clamp(1.75rem, 3vw, 3rem);
+      line-height: 1;
+    }
+
+    .number-strip span { color: var(--muted); font-size: .82rem; line-height: 1.35; }
+
+    .plain-list { margin: 0; padding: 0; list-style: none; }
+    .plain-list li {
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      gap: .8rem;
+      padding: .75rem 0;
+      border-bottom: 1px solid var(--line);
+      font-size: clamp(1rem, 1.35vw, 1.4rem);
+      line-height: 1.45;
+    }
+
+    .plain-list li:last-child { border-bottom: 0; }
+    .plain-list b { color: var(--amber); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; }
+
+    .note-block {
+      padding: 1.1rem 1.25rem 1.2rem;
+      border-left: 5px solid var(--amber);
+      background: var(--paper-2);
+    }
+
+    .note-block h3 { margin-bottom: .5rem; font-size: 1.18rem; letter-spacing: -.02em; }
+    .note-block p { margin: 0; color: var(--ink-2); font-size: .95rem; line-height: 1.55; }
+
+    .score-label {
+      margin: 0 0 .7rem;
+      color: var(--muted);
+      font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+      font-size: .7rem;
+      letter-spacing: .1em;
+    }
+
+    .timeline {
+      position: relative;
+      margin: 1rem 0 2.1rem;
+      padding: 2.2rem 1.2rem 0;
+      border-top: 2px solid var(--ink);
+    }
+
+    .timeline-line {
+      position: absolute;
+      left: 1.4rem;
+      right: 1.4rem;
+      top: 2.65rem;
+      height: 2px;
+      background: var(--ink-2);
+    }
+
+    .timeline-points {
+      position: relative;
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+    }
+
+    .frame-point { position: relative; min-width: 3rem; text-align: center; }
+    .frame-point i {
+      position: relative;
+      z-index: 1;
+      display: block;
+      width: 13px;
+      height: 13px;
+      margin: 0 auto .55rem;
+      border-radius: 50%;
+      background: var(--teal);
+      box-shadow: 0 0 0 4px var(--paper);
+    }
+
+    .frame-point.hot i { background: var(--amber); }
+    .frame-point span { color: var(--muted); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .75rem; }
+
+    .data-table { width: 100%; border-collapse: collapse; font-size: .94rem; }
+    .data-table th, .data-table td { padding: .75rem .7rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .data-table th { width: 40%; color: var(--muted); font-weight: 650; }
+    .data-table td { color: var(--ink); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 0;
+      border-top: 2px solid var(--ink);
+      border-bottom: 1px solid var(--line);
+      margin-top: 1.4rem;
+    }
+
+    .flow-item {
+      position: relative;
+      min-height: 150px;
+      padding: 1.05rem .9rem 1rem;
+      border-right: 1px solid var(--line);
+    }
+
+    .flow-item:last-child { border-right: 0; }
+    .flow-item::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -.6rem;
+      z-index: 2;
+      transform: translateY(-50%);
+      color: var(--amber);
+      background: var(--paper);
+      font-size: 1.2rem;
+    }
+
+    .flow-item:last-child::after { display: none; }
+    .flow-item small { color: var(--amber); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .68rem; }
+    .flow-item h3 { margin: .75rem 0 .4rem; font-size: clamp(1rem, 1.4vw, 1.35rem); letter-spacing: -.03em; }
+    .flow-item p { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.45; }
+
+    .equation-box {
+      display: grid;
+      gap: .85rem;
+      margin-top: .9rem;
+      padding: .95rem 1.5rem 1rem;
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .equation-row { display: grid; grid-template-columns: 7rem 1fr; gap: .8rem; align-items: baseline; }
+    .equation-row .symbol { color: var(--amber-2); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: 1.05rem; font-weight: 700; }
+    .equation-row .formula { font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: clamp(.8rem, 1.25vw, 1.25rem); line-height: 1.35; }
+    .equation-row .explain { grid-column: 2; margin-top: -.75rem; color: #b6c0c5; font-size: .78rem; line-height: 1.35; }
+
+    .funnel {
+      display: grid;
+      gap: .9rem;
+      margin-top: .7rem;
+    }
+
+    .funnel-step {
+      display: grid;
+      grid-template-columns: minmax(150px, .8fr) minmax(200px, 1.2fr);
+      min-height: 95px;
+      border-top: 2px solid var(--ink);
+      background: var(--paper-2);
+    }
+
+    .funnel-step:last-child { border-bottom: 1px solid var(--line); }
+    .funnel-step .big { display: grid; align-content: center; padding: .6rem 1rem; color: var(--ink); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: clamp(1.8rem, 3.1vw, 3.2rem); font-weight: 800; line-height: 1; }
+    .funnel-step .desc { display: grid; align-content: center; padding: .6rem 1rem; color: var(--ink-2); font-size: .92rem; line-height: 1.45; }
+    .funnel-step.wide .big { color: var(--amber); }
+    .funnel-step.fine .big { color: var(--teal); }
+
+    .definition-list { margin: 0; }
+    .definition-list div { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+    .definition-list dt { margin-bottom: .35rem; color: var(--amber); font-weight: 800; font-size: 1.15rem; }
+    .definition-list dd { margin: 0; color: var(--ink-2); font-size: .95rem; line-height: 1.55; }
+
+    .magnitude-layout { display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(250px, .94fr); gap: 2.5rem; align-items: start; }
+    .magnitude-step { display: grid; grid-template-columns: 4rem 1fr; gap: .7rem; padding: .78rem 0; border-bottom: 1px solid var(--line); }
+    .magnitude-step .step-no { color: var(--amber); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .85rem; font-weight: 800; }
+    .magnitude-step h3 { margin-bottom: .3rem; font-size: 1.18rem; letter-spacing: -.025em; }
+    .magnitude-step p { margin-bottom: .3rem; color: var(--ink-2); font-size: .84rem; line-height: 1.4; }
+    .magnitude-step code { color: var(--teal); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .83rem; white-space: normal; }
+
+    .status-board { padding: 1.2rem 1.3rem; background: var(--navy); color: var(--white); }
+    .status-board .status-title { margin-bottom: 1rem; color: var(--amber-2); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .72rem; letter-spacing: .1em; }
+    .status-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .85rem 0; border-bottom: 1px solid #536474; }
+    .status-row:last-child { border-bottom: 0; }
+    .status-row span { color: #c2cdd0; font-size: .82rem; }
+    .status-row strong { color: var(--white); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: 1.25rem; }
+    .status-row strong.teal { color: #8dd0c6; }
+    .status-row strong.red { color: #ef9b91; }
+    .status-note { margin: 1rem 0 0; color: #c2cdd0; font-size: .8rem; line-height: 1.5; }
+
+    .four-checks { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+    .check { min-height: 182px; padding: 1.1rem 1rem; border-right: 1px solid var(--line); }
+    .check:last-child { border-right: 0; }
+    .check .check-no { color: var(--amber); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .75rem; }
+    .check h3 { margin: .75rem 0 .45rem; font-size: 1.15rem; letter-spacing: -.02em; }
+    .check p { margin: 0; color: var(--ink-2); font-size: .84rem; line-height: 1.5; }
+
+    .quote-strip { margin-top: 1.4rem; padding: 1rem 1.25rem; border-left: 5px solid var(--red); background: #eadbd3; color: var(--ink); font-size: 1.12rem; line-height: 1.5; }
+    .quote-strip small { display: block; margin-top: .45rem; color: var(--muted); font-size: .75rem; }
+
+    .motion-layout { display: grid; grid-template-columns: 1.14fr .86fr; gap: 2.5rem; align-items: start; }
+    .motion-figure { position: relative; min-height: 300px; border: 1px solid #566676; background: var(--navy); overflow: hidden; }
+    .motion-figure::before,
+    .motion-figure::after { content: ""; position: absolute; background: #536474; }
+    .motion-figure::before { left: 10%; right: 10%; top: 62%; height: 1px; }
+    .motion-figure::after { top: 12%; bottom: 12%; left: 52%; width: 1px; }
+    .motion-figure svg { position: absolute; inset: 8% 7%; width: 86%; height: 78%; }
+    .motion-real-image { position: absolute; inset: 9% 7% 19%; display: block; width: 86%; height: 70%; object-fit: contain; background: #101820; }
+    .motion-real-caption { position: absolute; left: 1rem; right: 1rem; bottom: 3.15rem; margin: 0; color: #c2cdd0; font-size: .7rem; line-height: 1.35; }
+    .motion-caption { position: absolute; left: 1rem; top: 1rem; color: #b6c0c5; font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .7rem; letter-spacing: .1em; }
+    .motion-key { position: absolute; left: 1rem; bottom: 1rem; display: flex; gap: 1rem; color: #c2cdd0; font-size: .75rem; }
+    .motion-key span::before { content: ""; display: inline-block; width: 1.2rem; height: 3px; margin-right: .35rem; vertical-align: middle; background: currentColor; }
+    .motion-key .stable { color: #8dd0c6; }
+    .motion-key .moving { color: var(--amber-2); }
+
+    .result-list { margin: 0; padding: 0; list-style: none; border-top: 2px solid var(--ink); }
+    .result-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--line); }
+    .result-list span { color: var(--muted); font-size: .9rem; }
+    .result-list strong { color: var(--ink); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: 1rem; text-align: right; }
+    .slide.dark .result-list { border-top-color: #8dd0c6; }
+    .slide.dark .result-list span { color: #c2cdd0; }
+    .slide.dark .result-list strong { color: var(--white); }
+
+    .innovation-list { border-top: 2px solid var(--ink); }
+    .innovation-row { display: grid; grid-template-columns: 1.1fr 1.1fr 1.1fr .9fr; gap: 1rem; padding: .85rem .2rem; border-bottom: 1px solid var(--line); align-items: start; }
+    .innovation-row > * { margin: 0; font-size: .82rem; line-height: 1.45; }
+    .innovation-row.head > * { color: var(--muted); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .68rem; letter-spacing: .07em; }
+    .innovation-row h3 { color: var(--ink); font-size: .96rem; letter-spacing: -.02em; }
+    .innovation-row p { color: var(--ink-2); }
+    .innovation-row .limit { color: var(--red); }
+
+    .qa-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 2rem; border-top: 2px solid var(--ink); }
+    .qa { padding: 1rem 0 1.05rem; border-bottom: 1px solid var(--line); }
+    .qa:nth-last-child(-n+2) { border-bottom: 0; }
+    .qa .question { margin-bottom: .45rem; color: var(--amber); font-size: .98rem; font-weight: 800; }
+    .qa .answer { margin: 0; color: var(--ink-2); font-size: .86rem; line-height: 1.55; }
+    .qa .answer b { color: var(--ink); }
+
+    .closing { display: grid; grid-template-columns: 1.08fr .92fr; gap: 4rem; align-items: start; }
+    .closing-quote { margin: 1.3rem 0 0; padding-left: 1.35rem; border-left: 5px solid var(--amber); color: var(--ink); font-size: clamp(1.35rem, 2.3vw, 2.35rem); font-weight: 760; line-height: 1.35; letter-spacing: -.045em; }
+    .closing-quote span { color: var(--teal); }
+    .missing { padding: 1.2rem 1.35rem; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+    .missing h3 { margin-bottom: .85rem; color: var(--amber); font-size: 1.18rem; }
+    .missing ul { margin: 0; padding-left: 1.1rem; color: var(--ink-2); font-size: .93rem; line-height: 1.85; }
+    .closing-bottom { position: absolute; left: clamp(2.5rem, 6.2vw, 7.2rem); right: clamp(2.5rem, 6.2vw, 7.2rem); bottom: 3.35rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 2px solid var(--ink); padding-top: .85rem; }
+    .closing-bottom strong { color: var(--teal); font-size: 1.05rem; }
+    .closing-bottom span { color: var(--muted); font-size: .82rem; }
+
+    .diagram-box {
+      position: relative;
+      min-height: 320px;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      background: var(--paper-2);
+    }
+
+    .diagram-box svg,
+    .method-card svg,
+    .photometry-figure svg,
+    .calibration-figure svg,
+    .set-map svg,
+    .timeline-figure svg { display: block; width: 100%; height: auto; }
+
+    .figure-caption {
+      margin: .65rem 0 0;
+      color: var(--muted);
+      font-size: .74rem;
+      line-height: 1.4;
+    }
+
+    .real-figure {
+      margin: 0;
+      padding: .7rem;
+      border: 1px solid var(--line);
+      background: var(--paper-2);
+    }
+
+    .real-figure img {
+      display: block;
+      width: 100%;
+      height: 155px;
+      object-fit: contain;
+      background: #101820;
+    }
+
+    .real-figure figcaption {
+      margin-top: .55rem;
+      color: var(--ink-2);
+      font-size: .74rem;
+      line-height: 1.4;
+    }
+
+    .real-figure .legend { margin-top: .5rem; }
+    .dark .real-figure { border-color: #536474; background: #26394d; }
+    .dark .real-figure figcaption { color: #c2cdd0; }
+    .dark .real-figure img { height: 205px; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem 1.1rem;
+      margin-top: .7rem;
+      color: var(--muted);
+      font-size: .72rem;
+    }
+
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: .75rem;
+      height: .75rem;
+      margin-right: .35rem;
+      vertical-align: -1px;
+      border-radius: 50%;
+      background: var(--teal);
+    }
+
+    .legend .amber::before { background: var(--amber); }
+    .legend .red::before { background: var(--red); }
+    .legend .ink::before { background: var(--ink); }
+
+    .object-notes { display: grid; gap: .9rem; align-content: start; }
+    .object-note { padding: .9rem 1rem; border-top: 2px solid var(--ink); background: var(--paper-2); }
+    .object-note strong { display: block; margin-bottom: .3rem; color: var(--amber); font-size: 1rem; }
+    .object-note p { margin: 0; color: var(--ink-2); font-size: .86rem; line-height: 1.5; }
+
+    .dataset-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 2px solid var(--ink);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .dataset-card { min-height: 108px; padding: 1rem .9rem .85rem; border-right: 1px solid var(--line); }
+    .dataset-card:last-child { border-right: 0; }
+    .dataset-card strong { display: block; margin-bottom: .45rem; color: var(--amber); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: clamp(1.55rem, 2.6vw, 2.7rem); line-height: 1; }
+    .dataset-card span { display: block; color: var(--ink-2); font-size: .78rem; line-height: 1.45; }
+
+    .frame-strip { margin-top: 1.35rem; padding: 1rem 0 .55rem; border-top: 2px solid var(--ink); }
+    .frame-strip .strip-label { display: flex; justify-content: space-between; margin-bottom: .8rem; color: var(--muted); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .68rem; letter-spacing: .07em; }
+    .frame-strip .frames { position: relative; display: flex; justify-content: space-between; gap: .25rem; }
+    .frame-strip .frames::before { content: ""; position: absolute; left: .55rem; right: .55rem; top: .45rem; height: 2px; background: var(--ink-2); }
+    .frame-chip { position: relative; z-index: 1; display: grid; justify-items: center; gap: .42rem; color: var(--muted); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .62rem; }
+    .frame-chip i { display: block; width: .9rem; height: .9rem; border: 3px solid var(--teal); border-radius: 50%; background: var(--paper); }
+    .frame-chip.hot i { border-color: var(--amber); }
+
+    .method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; }
+    .method-card { min-height: 285px; padding: 1rem 1rem .9rem; border-top: 3px solid var(--amber); background: var(--paper-2); }
+    .method-card:nth-child(2) { border-top-color: var(--teal); }
+    .method-card:nth-child(3) { border-top-color: var(--ink); }
+    .method-card .method-no { color: var(--muted); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .67rem; }
+    .method-card h3 { margin: .55rem 0 .45rem; font-size: 1.08rem; }
+    .method-card p { min-height: 58px; margin: 0 0 .5rem; color: var(--ink-2); font-size: .8rem; line-height: 1.45; }
+    .method-card svg { height: 92px; }
+    .method-foot { margin-top: 1rem; padding: .75rem 1rem; border-left: 4px solid var(--teal); background: #dbe8e3; color: var(--ink-2); font-size: .82rem; line-height: 1.45; }
+
+    .quality-layout { display: grid; grid-template-columns: 1.35fr .65fr; gap: 2.2rem; align-items: start; }
+    .quality-grid { display: grid; grid-template-columns: repeat(2, 1fr); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+    .quality-card { min-height: 135px; padding: .8rem .9rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .quality-card:nth-child(2n) { border-right: 0; }
+    .quality-card:nth-last-child(-n+2) { border-bottom: 0; }
+    .quality-card .quality-no { color: var(--amber); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .68rem; }
+    .quality-card h3 { margin: .55rem 0 .35rem; font-size: 1.05rem; }
+    .quality-card p { margin: 0; color: var(--ink-2); font-size: .8rem; line-height: 1.45; }
+    .evidence-stack { padding: 1rem 1.1rem; border: 1px solid var(--line); background: var(--navy); color: var(--white); }
+    .evidence-stack h3 { margin-bottom: .85rem; color: var(--amber-2); font-size: 1.05rem; }
+    .evidence-stack div { padding: .7rem 0; border-bottom: 1px solid #536474; color: #c2cdd0; font-size: .79rem; line-height: 1.4; }
+    .evidence-stack div:last-child { border-bottom: 0; }
+    .evidence-stack b { color: #8dd0c6; }
+
+    .branch-layout { display: grid; grid-template-columns: 1fr .92fr; gap: 2.3rem; align-items: center; }
+    .branch-diagram { padding: 1.2rem; border: 1px solid var(--line); background: var(--paper-2); }
+    .branch-diagram svg { display: block; width: 100%; height: auto; }
+    .branch-list { margin: 0; padding: 0; list-style: none; border-top: 2px solid var(--ink); }
+    .branch-list li { display: grid; grid-template-columns: 1.15rem 1fr; gap: .7rem; padding: .85rem 0; border-bottom: 1px solid var(--line); color: var(--ink-2); font-size: .86rem; line-height: 1.45; }
+    .branch-list i { width: .75rem; height: .75rem; margin-top: .25rem; border-radius: 50%; background: var(--teal); }
+    .branch-list li:nth-child(2) i { background: var(--amber); }
+    .branch-list li:nth-child(3) i { background: var(--red); }
+
+    .count-layout { display: grid; grid-template-columns: 1.05fr .95fr; gap: 2.4rem; align-items: start; }
+    .count-highlight { padding: 1.1rem 1.2rem; border-top: 3px solid var(--amber); background: var(--paper-2); }
+    .count-highlight .count-number { color: var(--amber); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: clamp(3.3rem, 6vw, 6rem); font-weight: 800; line-height: .9; }
+    .count-highlight p { margin: .7rem 0 0; color: var(--ink-2); font-size: .88rem; line-height: 1.5; }
+    .bar-chart { padding: .9rem 1rem 1rem; border: 1px solid var(--line); background: var(--paper-2); }
+    .bar-chart h3 { margin-bottom: .85rem; font-size: 1rem; }
+    .bar-row { display: grid; grid-template-columns: 7.3rem 1fr 4.3rem; gap: .55rem; align-items: center; margin: .7rem 0; }
+    .bar-row label { color: var(--ink-2); font-size: .72rem; }
+    .bar-track { height: 1.05rem; background: #c9c5ba; }
+    .bar-fill { height: 100%; background: var(--amber); }
+    .bar-fill.teal { background: var(--teal); }
+    .bar-fill.ink { background: var(--ink); }
+    .bar-value { color: var(--ink); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .68rem; text-align: right; }
+    .count-foot { margin-top: 1.1rem; color: var(--muted); font-size: .8rem; line-height: 1.45; }
+
+    .set-layout { display: grid; grid-template-columns: 1.05fr .95fr; gap: 2.4rem; align-items: start; }
+    .set-map { padding: 1.1rem; border: 1px solid var(--line); background: var(--paper-2); }
+    .set-note { margin: 0; padding: 0; list-style: none; border-top: 2px solid var(--ink); }
+    .set-note li { padding: .85rem 0; border-bottom: 1px solid var(--line); color: var(--ink-2); font-size: .86rem; line-height: 1.5; }
+    .set-note strong { color: var(--amber); }
+    .set-warning { margin-top: 1rem; padding: .75rem 1rem; border-left: 4px solid var(--red); background: #eadbd3; color: var(--ink); font-size: .8rem; line-height: 1.45; }
+
+    .photometry-layout { display: grid; grid-template-columns: .95fr 1.05fr; gap: 2.4rem; align-items: start; }
+    .photometry-figure { padding: .8rem; border: 1px solid #566676; background: var(--navy); }
+    .photometry-figure svg { min-height: 280px; }
+    .photometry-figure .figure-caption { color: #c2cdd0; }
+    .term-box { display: grid; gap: .8rem; }
+    .term-card { padding: .9rem 1rem; border-top: 2px solid var(--teal); background: var(--paper-2); }
+    .term-card:nth-child(2) { border-top-color: var(--amber); }
+    .term-card strong { display: block; margin-bottom: .35rem; color: var(--ink); font-size: 1rem; }
+    .term-card strong code { color: var(--teal); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: 1rem; }
+    .term-card p { margin: 0; color: var(--ink-2); font-size: .82rem; line-height: 1.5; }
+    .formula-large { margin-top: .35rem; color: var(--teal); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: clamp(.85rem, 1.3vw, 1.25rem); line-height: 1.35; }
+
+    .instrument-layout { display: grid; grid-template-columns: 1.1fr .9fr; gap: 2.4rem; align-items: center; }
+    .scale-figure { padding: 1rem 1.2rem; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); background: var(--paper-2); }
+    .scale-figure svg { display: block; width: 100%; height: auto; }
+    .scale-figure .figure-caption { margin-top: .85rem; }
+    .instrument-rule { margin-top: 1rem; padding: .95rem 1.1rem; background: var(--navy); color: var(--white); }
+    .instrument-rule code { color: var(--amber-2); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: clamp(1rem, 1.7vw, 1.55rem); }
+    .instrument-rule p { margin: .55rem 0 0; color: #c2cdd0; font-size: .8rem; line-height: 1.45; }
+
+    .calibration-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 2.3rem; align-items: start; }
+    .calibration-flow { display: grid; gap: .65rem; }
+    .calibration-step { position: relative; padding: .85rem 1rem; border-left: 4px solid var(--teal); background: var(--paper-2); }
+    .calibration-step:not(:last-child)::after { content: "↓"; position: absolute; bottom: -.85rem; left: 1rem; z-index: 2; color: var(--amber); background: var(--paper); font-size: 1rem; }
+    .calibration-step h3 { margin-bottom: .25rem; font-size: .98rem; }
+    .calibration-step p { margin: 0; color: var(--ink-2); font-size: .78rem; line-height: 1.4; }
+    .calibration-figure { padding: .9rem; border: 1px solid var(--line); background: var(--paper-2); }
+    .calibration-figure svg { min-height: 245px; }
+    .calibration-foot { margin-top: .6rem; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+
+    .boundary-layout .status-board { padding: .8rem .95rem; }
+    .boundary-layout .status-board .status-title { margin-bottom: .45rem; }
+    .boundary-layout .status-board .status-row { padding: .48rem 0; }
+    .boundary-layout .status-board .status-row strong { font-size: 1.02rem; }
+    .boundary-layout .status-board .status-note { margin-top: .6rem; font-size: .72rem; line-height: 1.35; }
+    .boundary-layout .boundary-formula { padding: .75rem .95rem .5rem; }
+    .boundary-layout .boundary-formula h3 { margin-bottom: .35rem; }
+    .boundary-layout .boundary-formula p { margin-top: .45rem; font-size: .72rem; line-height: 1.35; }
+
+    .boundary-layout { display: grid; grid-template-columns: 1fr .95fr; gap: 2.4rem; align-items: start; }
+    .magnitude-ladder { display: grid; gap: .75rem; }
+    .ladder-row { display: grid; grid-template-columns: 8.5rem 1fr; min-height: 78px; border-left: 5px solid var(--teal); background: var(--paper-2); }
+    .ladder-row:nth-child(2) { border-left-color: var(--amber); }
+    .ladder-row:nth-child(3) { border-left-color: var(--red); }
+    .ladder-row .ladder-term { display: grid; align-content: center; padding: .65rem .75rem; color: var(--ink); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .9rem; font-weight: 800; }
+    .ladder-row .ladder-copy { display: grid; align-content: center; padding: .65rem .9rem .65rem 0; color: var(--ink-2); font-size: .78rem; line-height: 1.4; }
+    .boundary-formula { padding: 1.1rem 1.2rem; border-top: 2px solid var(--ink); background: var(--paper-2); }
+    .boundary-formula h3 { margin-bottom: .55rem; font-size: 1.05rem; }
+    .boundary-formula code { color: var(--teal); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: clamp(.8rem, 1.2vw, 1.1rem); }
+    .boundary-formula p { margin: .65rem 0 0; color: var(--ink-2); font-size: .8rem; line-height: 1.45; }
+
+    .timeline-figure { padding: .9rem 1rem 1rem; border: 1px solid #566676; background: var(--navy); }
+    .timeline-figure svg { min-height: 240px; }
+    .timeline-real-image { display: block; width: 100%; height: 240px; object-fit: contain; background: #101820; }
+    .timeline-figure .figure-caption { color: #c2cdd0; }
+    .motion-explanation { display: grid; gap: .75rem; }
+    .motion-explanation .object-note { background: var(--paper-2); }
+    .motion-explanation .object-note strong { color: var(--teal); }
+    .motion-explanation .object-note:nth-child(2) strong { color: var(--amber); }
+
+    .motion-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.2rem; }
+    .motion-result-card { min-height: 92px; padding: .7rem .75rem; border-top: 3px solid var(--teal); background: #26394d; }
+    .motion-result-card:nth-child(2) { border-top-color: var(--amber-2); }
+    .motion-result-card:nth-child(3) { border-top-color: #ef9b91; }
+    .motion-result-card span { display: block; color: #b6c0c5; font-size: .73rem; line-height: 1.35; }
+    .motion-result-card strong { display: block; margin-top: .35rem; color: var(--white); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: 1.05rem; }
+    .motion-result-card p { margin: .25rem 0 0; color: #c2cdd0; font-size: .65rem; line-height: 1.3; }
+    .motion-layout > div:last-child .result-list li { padding: .65rem 0; }
+    .motion-layout > div:last-child .status-note { margin-top: .65rem; font-size: .72rem; line-height: 1.35; }
+
+    .innovation-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .innovation-layout { display: grid; grid-template-columns: 1.25fr .75fr; gap: 1.4rem; align-items: start; }
+    .innovation-card { min-height: 145px; padding: 1rem 1.1rem; border-top: 3px solid var(--teal); background: var(--paper-2); }
+    .innovation-card:nth-child(2) { border-top-color: var(--amber); }
+    .innovation-card:nth-child(3) { border-top-color: var(--ink); }
+    .innovation-card:nth-child(4) { border-top-color: var(--red); }
+    .innovation-card .innovation-no { color: var(--muted); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .68rem; }
+    .innovation-card h3 { margin: .5rem 0 .35rem; font-size: 1rem; }
+    .innovation-card p { margin: 0; color: var(--ink-2); font-size: .8rem; line-height: 1.45; }
+    .innovation-summary { margin-top: 1rem; color: var(--muted); font-size: .8rem; line-height: 1.45; }
+
+    .answer-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.15rem; }
+    .answer-card { min-height: 235px; padding: 1rem; border-top: 3px solid var(--amber); background: var(--paper-2); }
+    .answer-card:nth-child(2) { border-top-color: var(--teal); }
+    .answer-card:nth-child(3) { border-top-color: var(--ink); }
+    .answer-card h3 { margin: .5rem 0 .65rem; font-size: 1rem; }
+    .answer-card p { margin: 0; color: var(--ink-2); font-size: .8rem; line-height: 1.5; }
+    .answer-card .answer-tag { color: var(--amber); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .68rem; }
+    .answer-note { margin-top: 1rem; padding: .75rem 1rem; border-left: 4px solid var(--teal); background: #dbe8e3; color: var(--ink-2); font-size: .8rem; line-height: 1.45; }
+
+    .final-map { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: .8rem; }
+    .final-map .final-node { position: relative; min-height: 150px; padding: 1rem; border-top: 3px solid var(--amber); background: var(--paper-2); }
+    .final-map .final-node:nth-child(2) { border-top-color: var(--teal); }
+    .final-map .final-node:nth-child(3) { border-top-color: var(--ink); }
+    .final-node .node-no { color: var(--muted); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .67rem; }
+    .final-node h3 { margin: .55rem 0 .35rem; font-size: 1.05rem; }
+    .final-node p { margin: 0; color: var(--ink-2); font-size: .8rem; line-height: 1.45; }
+    .final-node:not(:last-child)::after { content: "→"; position: absolute; top: 45%; right: -.82rem; z-index: 2; color: var(--amber); background: var(--paper); font-size: 1.25rem; }
+
+    .slide[data-title="结论"] .closing { gap: 1.5rem; margin-top: 1rem !important; }
+    .slide[data-title="结论"] .closing-quote { margin-top: .55rem; padding-left: .9rem; font-size: 1.04rem; line-height: 1.38; }
+    .slide[data-title="结论"] .missing { padding: .75rem .9rem; }
+    .slide[data-title="结论"] .missing h3 { margin-bottom: .4rem; font-size: .98rem; }
+    .slide[data-title="结论"] .missing ul { font-size: .75rem; line-height: 1.48; }
+
+    .controls {
+      position: fixed;
+      z-index: 50;
+      left: 50%;
+      bottom: 1rem;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: .85rem;
+      padding: .55rem .7rem;
+      background: rgba(28, 42, 58, .94);
+      color: #e8eee8;
+      box-shadow: 0 8px 24px rgba(23, 38, 55, .18);
+      user-select: none;
+    }
+
+    .controls button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+    .controls button:hover, .controls button:focus-visible { color: var(--amber-2); outline: none; }
+    .controls .nav { width: 2rem; height: 2rem; font-size: 1.15rem; }
+    .counter { min-width: 4.6rem; color: #c2cdd0; font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .72rem; text-align: center; }
+    .dots { display: flex; align-items: center; gap: .35rem; }
+    .dot { width: .42rem; height: .42rem; padding: 0; border-radius: 50%; background: #657481 !important; }
+    .dot.is-active { width: 1rem; border-radius: 1rem; background: var(--amber-2) !important; }
+    .help { color: #9eacb1; font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .62rem; }
+
+    .overview {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      padding: 2.5rem;
+      overflow: auto;
+      background: #c9c5ba;
+    }
+
+    .overview.is-open { display: grid; }
+    .overview-card { position: relative; min-height: 150px; padding: 1rem; border: 1px solid rgba(23, 38, 55, .28); background: var(--paper); cursor: pointer; }
+    .overview-card.is-active { border: 3px solid var(--amber); }
+    .overview-card .ov-no { color: var(--amber); font-family: "IBM Plex Mono", "Cascadia Mono", monospace; font-size: .7rem; }
+    .overview-card h3 { margin: .7rem 0 .35rem; font-size: 1.05rem; }
+    .overview-card p { margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.4; }
+
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+      .deck-shell { min-height: auto; padding: 1rem .7rem 4.5rem; }
+      .deck { width: 100%; aspect-ratio: auto; min-height: 78vh; }
+      .slide { position: relative; min-height: 78vh; padding: 2.1rem 1.35rem 3.2rem; transform: none !important; opacity: 1; display: none; overflow: auto; }
+      .slide.is-active { display: block; }
+      .source, .cover-footer { left: 1.35rem; right: 1.35rem; }
+      h2 { max-width: 100%; font-size: 2.2rem; }
+      .split, .magnitude-layout, .motion-layout, .closing, .cover { grid-template-columns: 1fr; gap: 1.2rem; }
+      .quality-layout, .branch-layout, .count-layout, .set-layout, .photometry-layout, .instrument-layout, .calibration-layout, .boundary-layout { grid-template-columns: 1fr; gap: 1.2rem; }
+      .cover { align-content: start; }
+      .cover-figure { min-height: 250px; }
+      .flow { grid-template-columns: repeat(3, 1fr); }
+      .flow-item:nth-child(3) { border-right: 0; }
+      .flow-item:nth-child(-n+3)::after { display: none; }
+      .four-checks { grid-template-columns: repeat(2, 1fr); }
+      .check:nth-child(2) { border-right: 0; }
+      .check:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .innovation-row { grid-template-columns: 1fr 1fr; gap: .35rem .8rem; }
+      .innovation-row.head { display: none; }
+      .innovation-row > * { font-size: .78rem; }
+      .dataset-grid { grid-template-columns: repeat(2, 1fr); }
+      .dataset-card:nth-child(2) { border-right: 0; }
+      .dataset-card:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .method-grid, .answer-grid, .final-map, .motion-result-grid { grid-template-columns: 1fr; }
+      .innovation-layout { grid-template-columns: 1fr; }
+      .method-card, .answer-card { min-height: auto; }
+      .final-node:not(:last-child)::after { display: none; }
+      .innovation-grid { grid-template-columns: 1fr; }
+      .qa-grid { grid-template-columns: 1fr; }
+      .qa:nth-last-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .qa:last-child { border-bottom: 0; }
+      .closing-bottom { position: static; margin-top: 1.5rem; }
+      .controls { bottom: .65rem; }
+      .help { display: none; }
+    }
+
+    @media print {
+      body { overflow: visible; background: white; }
+      .deck-shell { display: block; padding: 0; }
+      .deck { width: 100vw; box-shadow: none; overflow: visible; }
+      .slide, .slide.is-before, .slide.is-active { position: relative; display: block; opacity: 1; transform: none; page-break-after: always; }
+      .controls, .overview { display: none !important; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck-shell">
+    <section class="deck" id="deck" aria-label="RST19 答辩演示">
+      <article class="slide dark cover is-active" data-title="星点、星等与运动目标">
+        <div>
+          <p class="eyebrow">RST19 · 开运一号 · 答辩演示</p>
+          <h1>星点、<br>星等与<br>运动目标</h1>
+          <p class="lead">先确认它像不像星，再量亮度，最后看它有没有相对运动。</p>
+          <p class="cover-note">这份演示只讲一条顺序：从一张 FITS 里找出可信点源，给它测光并接到星等系统，再用 15 张连续图检查运动。</p>
+        </div>
+        <div class="cover-figure" aria-label="15 帧观测示意图">
+          <span class="figure-label">连续观测 / IMAGE PLANE</span>
+          <svg viewBox="0 0 360 300" role="img" aria-label="共同位移与相对运动示意">
+            <line x1="35" y1="245" x2="315" y2="70" stroke="#f0b36a" stroke-width="4" />
+            <line x1="35" y1="245" x2="315" y2="70" stroke="#fbfaf5" stroke-width="1" stroke-dasharray="5 8" />
+            <line x1="42" y1="254" x2="300" y2="254" stroke="#8dd0c6" stroke-width="3" />
+            <circle cx="35" cy="245" r="10" fill="#223446" stroke="#f0b36a" stroke-width="3" />
+            <circle cx="315" cy="70" r="10" fill="#223446" stroke="#f0b36a" stroke-width="3" />
+            <circle cx="115" cy="205" r="6" fill="#8dd0c6" />
+            <circle cx="172" cy="167" r="5" fill="#fbfaf5" />
+            <circle cx="226" cy="126" r="4" fill="#8dd0c6" />
+            <circle cx="91" cy="254" r="5" fill="#8dd0c6" />
+            <circle cx="185" cy="254" r="5" fill="#8dd0c6" />
+            <circle cx="280" cy="254" r="5" fill="#8dd0c6" />
+          </svg>
+          <span class="big-number">15</span>
+        </div>
+        <div class="cover-footer"><span>Python / 本地 FITS / 研究记录</span><span>2026.09</span></div>
+      </article>
+
+      <article class="slide" data-title="研究对象">
+        <header class="slide-header"><div><p class="eyebrow">01 · 先定义对象</p><h2>一张图里，先分清三个东西</h2><p class="subtitle">亮点首先只是像素信号；经过形状检查，才成为候选点源；接上星表后，才可能知道它对应哪颗天体。</p></div><span class="page-number">02 / 18</span></header>
+        <div class="rule"></div>
+        <div class="split">
+          <div class="diagram-box" aria-label="从像素到星表身份的示意图">
+            <svg viewBox="0 0 760 300" role="img" aria-label="原始像素、候选点源、星表身份三层示意">
+              <rect x="12" y="28" width="190" height="215" fill="#1c2a3a"/>
+              <g fill="#f0b36a">
+                <circle cx="52" cy="74" r="3"/><circle cx="88" cy="130" r="5"/><circle cx="145" cy="82" r="2"/><circle cx="160" cy="176" r="4"/><circle cx="65" cy="202" r="2"/><circle cx="124" cy="214" r="3"/>
+              </g>
+              <g stroke="#536474" stroke-width="1" opacity=".5"><path d="M12 80H202M12 132H202M12 184H202M62 28V243M112 28V243M162 28V243"/></g>
+              <text x="24" y="267" fill="#304557" font-size="16">原始像素 / ADU</text>
+              <path d="M225 135H282" stroke="#c9792e" stroke-width="3"/><path d="M272 127l12 8-12 8" fill="none" stroke="#c9792e" stroke-width="3"/>
+              <rect x="302" y="58" width="175" height="155" fill="#e7e2d5" stroke="#bdb9ad"/>
+              <circle cx="389" cy="133" r="28" fill="none" stroke="#2f7772" stroke-width="3"/><circle cx="389" cy="133" r="6" fill="#c9792e"/>
+              <path d="M348 133h82M389 92v82" stroke="#2f7772" stroke-width="1" stroke-dasharray="4 5"/>
+              <text x="319" y="239" fill="#304557" font-size="16">候选点源 / 形状</text>
+              <path d="M500 135H557" stroke="#c9792e" stroke-width="3"/><path d="M547 127l12 8-12 8" fill="none" stroke="#c9792e" stroke-width="3"/>
+              <rect x="577" y="55" width="168" height="163" fill="#dbe8e3" stroke="#2f7772"/>
+              <text x="593" y="91" fill="#172637" font-size="16">星表身份</text><text x="593" y="121" fill="#304557" font-size="14">位置：RA / Dec</text><text x="593" y="148" fill="#304557" font-size="14">亮度：G 星等</text><text x="593" y="175" fill="#304557" font-size="14">证据：匹配残差</text>
+            </svg>
+            <div class="legend"><span class="ink">原始观测</span><span>质量判断</span><span class="amber">检测响应</span></div>
+            <p class="figure-caption">图例：从左到右，证据逐层增加；右侧的星表身份不是由一个亮点直接读出的。</p>
+          </div>
+          <div class="object-notes">
+            <div class="object-note"><strong>第一层：像素信号</strong><p>相机记录的是 ADU 数值，里面同时有星光、背景、读出噪声和仪器异常。</p></div>
+            <div class="object-note"><strong>第二层：点源候选</strong><p>局部亮、轮廓像点扩散函数，并通过质量规则，才进入可信点源层。</p></div>
+            <div class="object-note"><strong>第三层：目录身份</strong><p>位置和测光与公开星表匹配后，才可以讨论它的表观星等和天体身份。</p></div>
+          </div>
+        </div>
+        <p class="source">本页先固定后面所有数字的对象：像素信号 ≠ 候选点源 ≠ 物理恒星</p>
+      </article>
+
+      <article class="slide" data-title="数据与观测">
+        <header class="slide-header"><div><p class="eyebrow">02 · 数据与观测</p><h2>我们手里的 15 张图是什么</h2><p class="subtitle">先把数据边界说清楚，后面的星点数、星等和运动结果才有可比的基础。</p></div><span class="page-number">03 / 18</span></header>
+        <div class="rule"></div>
+        <div class="dataset-grid">
+          <div class="dataset-card"><strong>15</strong><span>同一次观测的连续帧</span></div>
+          <div class="dataset-card"><strong>4096²</strong><span>每帧主图像像素</span></div>
+          <div class="dataset-card"><strong>16 bit</strong><span>原始像素的存储深度</span></div>
+          <div class="dataset-card"><strong>1500 ms</strong><span>单帧曝光时间</span></div>
+        </div>
+        <div class="frame-strip" aria-label="15帧时间顺序">
+          <div class="strip-label"><span>时间顺序</span><span>相邻帧约 1.5 s</span></div>
+          <div class="frames">
+            <span class="frame-chip"><i></i>F01</span><span class="frame-chip"><i></i>F02</span><span class="frame-chip"><i></i>F03</span><span class="frame-chip"><i></i>F04</span><span class="frame-chip"><i></i>F05</span><span class="frame-chip"><i></i>F06</span><span class="frame-chip"><i></i>F07</span><span class="frame-chip"><i></i>F08</span><span class="frame-chip hot"><i></i>F09</span><span class="frame-chip hot"><i></i>F10</span><span class="frame-chip hot"><i></i>F11</span><span class="frame-chip hot"><i></i>F12</span><span class="frame-chip hot"><i></i>F13</span><span class="frame-chip hot"><i></i>F14</span><span class="frame-chip hot"><i></i>F15</span>
+          </div>
+        </div>
+        <div class="split" style="margin-top:1rem;gap:1rem;">
+          <div class="note-block"><h3>相机与视场</h3><p>标称响应范围 450–750 nm，视场约 9.78° × 9.78°。这决定了后面不能不加说明地把 Gaia G 当作相机的原生 V 星等。</p></div>
+          <div class="note-block" style="border-left-color:var(--teal);"><h3>FITS 里的辅助信息</h3><p>文件还带有观测时间、指向和姿态等辅助字段；它们有助于找星表和做配准，但目前还不是完整 WCS。</p></div>
+        </div>
+        <p class="source">数据来源：开运一号天基图像；具体字段见 doc/01-数据解析/ 和格式说明</p>
+      </article>
+
+      <article class="slide" data-title="宽筛选方法">
+        <header class="slide-header"><div><p class="eyebrow">03 · 星点识别 / 宽筛</p><h2>先宽筛：三种方法各自找什么</h2><p class="subtitle">宽筛的任务是尽量不漏掉可能的点源，不负责直接宣布“这就是一颗星”。</p></div><span class="page-number">04 / 18</span></header>
+        <div class="rule"></div>
+        <div class="method-grid">
+          <div class="method-card"><span class="method-no">01 / 基础入口</span><h3>高斯平滑（Gaussian）</h3><p>用接近星像大小的平滑核压低像素级起伏，再寻找局部峰值。</p><svg viewBox="0 0 260 92" role="img" aria-label="高斯平滑示意"><path d="M6 65L20 42 34 60 48 33 62 57 76 45 90 61 104 28 118 58 132 48 146 60 160 42 174 55 188 34 202 59 216 47 230 55 254 40" fill="none" stroke="#68727a" stroke-width="2"/><path d="M6 59C36 52 48 55 68 49S102 43 126 49s38-11 59-4 38-7 69-7" fill="none" stroke="#c9792e" stroke-width="3"/><circle cx="104" cy="43" r="4" fill="#c9792e"/></svg><div class="legend"><span class="ink">原始起伏</span><span class="amber">平滑响应</span></div></div>
+          <div class="method-card"><span class="method-no">02 / 尺度补充</span><h3>双尺度高斯差分（DoG）</h3><p>用大、小两个平滑尺度相减，减弱缓慢背景，突出特定大小的结构。</p><svg viewBox="0 0 260 92" role="img" aria-label="双尺度高斯差分示意"><path d="M8 62C45 58 60 18 96 27s42 45 78 35 45-48 78-28" fill="none" stroke="#68727a" stroke-width="2"/><path d="M8 68C46 63 63 38 96 43s44 28 78 22 47-32 78-20" fill="none" stroke="#2f7772" stroke-width="3"/><path d="M8 56C48 52 60 6 96 15s42 56 78 40 45-63 78-36" fill="none" stroke="#c9792e" stroke-width="2" stroke-dasharray="5 4"/><circle cx="96" cy="15" r="4" fill="#c9792e"/></svg><div class="legend"><span class="amber">小尺度响应</span><span>大尺度背景</span></div></div>
+          <div class="method-card"><span class="method-no">03 / 弱源实验</span><h3>星形小波变换（Starlet）</h3><p>把图像拆成多个尺度，检查弱亮斑在哪一层有稳定响应；当前只作实验对照。</p><svg viewBox="0 0 260 92" role="img" aria-label="星形小波多尺度示意"><g stroke="#bdb9ad" stroke-width="2"><line x1="15" y1="20" x2="238" y2="20"/><line x1="15" y1="46" x2="238" y2="46"/><line x1="15" y1="72" x2="238" y2="72"/></g><g fill="#2f7772"><circle cx="76" cy="20" r="6"/><circle cx="132" cy="46" r="10"/><circle cx="178" cy="72" r="15"/></g><g fill="#304557" font-size="12"><text x="12" y="14">细尺度</text><text x="12" y="40">中尺度</text><text x="12" y="66">大尺度</text></g></svg><div class="legend"><span>尺度分层</span><span class="amber">亮斑响应</span></div></div>
+        </div>
+        <div class="method-foot"><strong>统一规则：</strong>三种方法的结果取并集只用于扩大候选池；同一位置要合并，最后必须回到原始 FITS 做测光、轮廓和异常值检查。</div>
+        <p class="source">术语对应：Gaussian＝高斯平滑；DoG＝双尺度高斯差分；Starlet＝星形小波变换</p>
+      </article>
+
+      <article class="slide" data-title="细筛选证据">
+        <header class="slide-header"><div><p class="eyebrow">04 · 星点识别 / 细筛</p><h2>再细筛：一颗候选要过四道检查</h2><p class="subtitle">信噪比只说明亮得突出；点源身份还要靠轮廓、原始值和位置证据共同支持。</p></div><span class="page-number">05 / 18</span></header>
+        <div class="rule"></div>
+        <div class="quality-layout">
+          <div class="quality-grid">
+            <div class="quality-card"><span class="quality-no">01 / 显著性</span><h3>局部信噪比（SNR）</h3><p>比较源信号和附近背景噪声，回答“这个亮斑有多突出”。</p></div>
+            <div class="quality-card"><span class="quality-no">02 / 轮廓</span><h3>点扩散函数（PSF）</h3><p>检查二维亮斑是否像一个成像点源，而不是单像素尖峰或细线。</p></div>
+            <div class="quality-card"><span class="quality-no">03 / 宽度</span><h3>半高全宽（FWHM）与椭圆率</h3><p>看亮斑的宽度和圆整程度，识别拖尾、混叠和形状异常。</p></div>
+            <div class="quality-card"><span class="quality-no">04 / 原始值</span><h3>ADU、边缘与掩膜</h3><p>回看原始像素，检查饱和、重复码、坏像素、孔径污染和线状结构。</p></div>
+          </div>
+          <figure class="real-figure"><img src="assets/real-source-cutout.png" alt="真实 FITS 局部星场和候选标记" /><figcaption>真实局部数据：候选 ID 20794，图中圆环和方框是程序叠加。它用于展示实际星场和噪声背景，不单独等于恒星真值。</figcaption><div class="legend"><span>真实局部图</span><span class="amber">程序叠加</span></div></figure>
+        </div>
+        <div class="quote-strip">SNR 不是“恒星概率”。程序把每一条未通过的原因留下来，后面才能解释为什么一个很亮的点仍然没有进入可信点源层。</div>
+        <p class="source">当前默认质量层：局部背景、通量 SNR、PSF 支持、形态、掩膜、饱和、线状与异常值审计</p>
+      </article>
+
+      <article class="slide" data-title="识别流程">
+        <header class="slide-header"><div><p class="eyebrow">05 · 星点识别 / 输出</p><h2>从原始 FITS 到一颗可计数的点源</h2><p class="subtitle">程序不是只输出一个总数，而是让每个候选都经过同一条可以回查的路径。</p></div><span class="page-number">06 / 18</span></header>
+        <div class="rule"></div>
+        <div class="branch-layout">
+          <div class="branch-diagram" aria-label="识别流程分支图">
+            <svg viewBox="0 0 600 350" role="img" aria-label="从原始FITS到候选、质量通过和落选记录的流程">
+              <rect x="205" y="12" width="190" height="52" rx="4" fill="#1c2a3a"/><text x="300" y="44" text-anchor="middle" fill="#fbfaf5" font-size="17">原始 FITS / ADU</text>
+              <path d="M300 64v34" stroke="#c9792e" stroke-width="3"/><path d="M292 88l8 12 8-12" fill="none" stroke="#c9792e" stroke-width="3"/>
+              <rect x="155" y="100" width="290" height="58" rx="4" fill="#e7e2d5" stroke="#c9792e" stroke-width="2"/><text x="300" y="126" text-anchor="middle" fill="#172637" font-size="17">局部背景 + 多方法宽筛</text><text x="300" y="147" text-anchor="middle" fill="#68727a" font-size="13">先找“值得检查”的响应</text>
+              <path d="M300 158v42M300 200H145M300 200H455" fill="none" stroke="#c9792e" stroke-width="3"/><path d="M137 192l-10 8 10 8M447 192l10 8-10 8" fill="none" stroke="#c9792e" stroke-width="3"/>
+              <rect x="25" y="218" width="240" height="82" rx="4" fill="#dbe8e3" stroke="#2f7772" stroke-width="2"/><text x="145" y="246" text-anchor="middle" fill="#172637" font-size="17">质量通过</text><text x="145" y="271" text-anchor="middle" fill="#304557" font-size="13">进入可信点源计数</text><text x="145" y="289" text-anchor="middle" fill="#68727a" font-size="12">但仍不是官方逐星真值</text>
+              <rect x="335" y="218" width="240" height="82" rx="4" fill="#eadbd3" stroke="#a95049" stroke-width="2"/><text x="455" y="246" text-anchor="middle" fill="#172637" font-size="17">落选 / 待复核</text><text x="455" y="271" text-anchor="middle" fill="#304557" font-size="13">保留原始值和旗标</text><text x="455" y="289" text-anchor="middle" fill="#68727a" font-size="12">不是直接删除</text>
+            </svg>
+            <div class="legend"><span>质量通过</span><span class="amber">检测路径</span><span class="red">落选但保留记录</span></div>
+          </div>
+          <ul class="branch-list"><li><i></i><span><strong>读入：</strong>保留 FITS 头、原始 ADU 和格式说明中的无效区域。</span></li><li><i></i><span><strong>检测：</strong>多方法只负责提候选，同一位置去重但不丢掉来源。</span></li><li><i></i><span><strong>复核：</strong>回到原图测净通量、信噪比、轮廓、边缘和异常值。</span></li><li><i></i><span><strong>输出：</strong>候选、质量通过和落选源分层保存，后续可按原因回查。</span></li></ul>
+        </div>
+        <p class="source">关键原则：候选响应是“值得检查”，质量通过才是当前算法口径下的可信点源</p>
+      </article>
+
+      <article class="slide" data-title="识别结果">
+        <header class="slide-header"><div><p class="eyebrow">06 · 星点识别 / 结果</p><h2>当前首帧，宽筛和质量筛分别是多少</h2><p class="subtitle">两个数字回答两个不同问题：前者尽量不漏，后者才是当前质量定义下的点源结果。</p></div><span class="page-number">07 / 18</span></header>
+        <div class="rule"></div>
+        <div class="count-layout">
+          <div>
+            <div class="count-highlight"><div class="count-number">84,594</div><p><strong>宽筛候选。</strong>多种方法合并近邻响应后的候选池；目标是保召回，其中还可能有噪声峰、线段、混叠和坏像素响应。</p></div>
+            <div class="count-highlight" style="margin-top:1rem;border-top-color:var(--teal);"><div class="count-number" style="color:var(--teal);">29,260</div><p><strong>质量通过。</strong>净通量为正，并通过当前通量 SNR、形状、PSF 支持、边缘、掩膜、饱和和异常值检查。</p></div>
+          </div>
+          <div class="bar-chart"><h3>同一量尺下的数量对照</h3><div class="bar-row"><label>宽筛候选</label><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span class="bar-value">84,594</span></div><div class="bar-row"><label>质量通过</label><div class="bar-track"><div class="bar-fill teal" style="width:34.6%"></div></div><span class="bar-value">29,260</span></div><div class="bar-row"><label>Gaia 位置匹配</label><div class="bar-track"><div class="bar-fill ink" style="width:18.8%"></div></div><span class="bar-value">15,901</span></div><p class="count-foot">约 34.6% 的宽筛候选进入质量层。Gaia 匹配是身份核验层，不能把三行数字相加，也不能把外部“约一万八”当成本图真值。</p><div class="legend"><span class="amber">宽筛候选</span><span>质量通过</span><span class="ink">星表位置匹配</span></div></div>
+        </div>
+        <p class="source">当前默认：混合宽筛 / FWHM 2 px / 最小间距 4 px / 通量 SNR 5</p>
+      </article>
+
+      <article class="slide" data-title="结果口径">
+        <header class="slide-header"><div><p class="eyebrow">07 · 星点识别 / 口径</p><h2>候选、质量源、星表匹配不是一回事</h2><p class="subtitle">数字越往后，证据越强；但每一层都不能冒充下一层。</p></div><span class="page-number">08 / 18</span></header>
+        <div class="rule"></div>
+        <div class="set-layout">
+          <div class="set-map" aria-label="四层证据关系示意图">
+            <svg viewBox="0 0 660 310" role="img" aria-label="四层证据关系">
+              <path d="M78 156H580" stroke="#bdb9ad" stroke-width="2" stroke-dasharray="6 6"/>
+              <circle cx="90" cy="156" r="54" fill="#eadbd3" stroke="#a95049" stroke-width="2"/><text x="90" y="150" text-anchor="middle" fill="#172637" font-size="16">候选峰</text><text x="90" y="174" text-anchor="middle" fill="#68727a" font-size="12">局部响应</text>
+              <circle cx="265" cy="156" r="54" fill="#e7e2d5" stroke="#c9792e" stroke-width="2"/><text x="265" y="150" text-anchor="middle" fill="#172637" font-size="16">质量源</text><text x="265" y="174" text-anchor="middle" fill="#68727a" font-size="12">规则通过</text>
+              <circle cx="440" cy="156" r="54" fill="#dbe8e3" stroke="#2f7772" stroke-width="2"/><text x="440" y="150" text-anchor="middle" fill="#172637" font-size="16">星表匹配</text><text x="440" y="174" text-anchor="middle" fill="#68727a" font-size="12">位置一致</text>
+              <circle cx="585" cy="156" r="42" fill="#1c2a3a" stroke="#8dd0c6" stroke-width="2"/><text x="585" y="151" text-anchor="middle" fill="#fbfaf5" font-size="14">物理身份</text><text x="585" y="172" text-anchor="middle" fill="#b6c0c5" font-size="11">仍需核验</text>
+              <g fill="#c9792e"><path d="M152 149l22 7-22 7"/><path d="M327 149l22 7-22 7"/></g><path d="M497 156h42" stroke="#2f7772" stroke-width="3"/><path d="M531 148l11 8-11 8" fill="none" stroke="#2f7772" stroke-width="3"/>
+              <text x="330" y="260" text-anchor="middle" fill="#68727a" font-size="14">证据从“发现”逐步走向“身份”</text>
+            </svg>
+            <div class="legend"><span class="red">宽筛响应</span><span class="amber">质量判断</span><span>星表证据</span><span class="ink">物理真值待核验</span></div>
+          </div>
+          <ul class="set-note"><li><strong>候选峰：</strong>程序认为这里有局部响应，只说明值得检查。</li><li><strong>质量源：</strong>当前规则下更像点源，可以进入星点计数和测光。</li><li><strong>星表匹配：</strong>位置与公开星表相符，才有资格讨论目录星等。</li><li><strong>物理恒星：</strong>还需要星表唯一匹配、注入实验或人工真值闭环，不能只凭一个框确认。</li></ul>
+        </div>
+        <div class="set-warning">因此，外部的“18,000 多颗”只能作为待解释的对照数字。没有同一数据和同一计数定义，就不能把它写成程序应当达到的答案。</div>
+        <p class="source">答辩时先说清统计层级，再说数值；不要只报一个看似精确的总数</p>
+      </article>
+
+      <article class="slide" data-title="净通量测量">
+        <header class="slide-header"><div><p class="eyebrow">08 · 星等 / 第一步</p><h2>先把一颗星的信号量出来</h2><p class="subtitle">星等不是从截图上的亮度直接读出，而是从扣除局部背景后的净通量开始。</p></div><span class="page-number">09 / 18</span></header>
+        <div class="rule"></div>
+        <div class="photometry-layout">
+          <div class="photometry-figure" aria-label="孔径测光示意图">
+            <svg viewBox="0 0 500 310" role="img" aria-label="孔径和背景环测光示意">
+              <rect x="18" y="18" width="464" height="274" fill="#101820"/>
+              <g fill="#c2cdd0" opacity=".65"><circle cx="75" cy="75" r="2"/><circle cx="120" cy="220" r="2"/><circle cx="404" cy="73" r="2"/><circle cx="430" cy="214" r="2"/><circle cx="271" cy="248" r="2"/><circle cx="350" cy="140" r="2"/></g>
+              <circle cx="255" cy="150" r="27" fill="rgba(47,119,114,.25)" stroke="#8dd0c6" stroke-width="3"/><circle cx="255" cy="150" r="58" fill="none" stroke="#f0b36a" stroke-width="3" stroke-dasharray="7 6"/><circle cx="255" cy="150" r="9" fill="#fbfaf5"/><circle cx="255" cy="150" r="20" fill="none" stroke="#fbfaf5" stroke-width="1" opacity=".65"/>
+              <path d="M284 126L360 88" stroke="#8dd0c6" stroke-width="2"/><text x="365" y="84" fill="#8dd0c6" font-size="15">孔径内</text><text x="365" y="105" fill="#c2cdd0" font-size="13">源 + 背景</text>
+              <path d="M300 191L380 226" stroke="#f0b36a" stroke-width="2"/><text x="385" y="225" fill="#f0b36a" font-size="15">背景环</text><text x="385" y="246" fill="#c2cdd0" font-size="13">估计局部背景</text>
+              <text x="32" y="276" fill="#b6c0c5" font-size="13">示意：测光窗口，不是实际比例</text>
+            </svg>
+            <div class="legend"><span>源的净信号</span><span class="amber">背景估计区域</span></div>
+            <p class="figure-caption">孔径内像素求和，再减去等面积背景；背景环不能被邻近亮星或坏像素污染。</p>
+          </div>
+          <div class="term-box">
+            <div class="term-card"><strong>净通量 <code>F_net</code></strong><p>孔径内所有像素的信号总和，扣掉局部背景后，才是暂时归属于目标源的信号。</p><div class="formula-large">F_net = Σ(孔径内像素 − 局部背景)</div></div>
+            <div class="term-card"><strong>单位时间净通量 <code>F_rate</code></strong><p><code>F_rate</code> 就是每秒收到多少净信号，用来消除不同曝光时间的影响。</p><div class="formula-large">F_rate = F_net / 曝光时间 = F_net / 1.5 s</div></div>
+            <div class="term-card"><strong>为什么要先做这一步</strong><p>如果把背景、邻星或噪声一起加进去，后面的星等会跟着偏亮，且无法解释偏差来自哪里。</p></div>
+          </div>
+        </div>
+        <p class="source">F_rate：单位时间内的净通量；单位仍是当前图像的 ADU/s，不是物理能量单位</p>
+      </article>
+
+      <article class="slide" data-title="仪器星等">
+        <header class="slide-header"><div><p class="eyebrow">09 · 星等 / 第二步</p><h2>仪器星等（m_inst）</h2><p class="subtitle">它把相机测到的单位时间通量压缩成对数数值，适合比较亮暗，但还不是标准星等。</p></div><span class="page-number">10 / 18</span></header>
+        <div class="rule"></div>
+        <div class="instrument-layout">
+          <div>
+            <div class="scale-figure" aria-label="仪器星等对数刻度示意图">
+              <svg viewBox="0 0 620 230" role="img" aria-label="通量和仪器星等的对数关系">
+                <line x1="65" y1="172" x2="565" y2="172" stroke="#172637" stroke-width="2"/><path d="M565 172l-12-7v14z" fill="#172637"/>
+                <g stroke="#bdb9ad" stroke-width="1"><line x1="95" y1="160" x2="95" y2="184"/><line x1="220" y1="160" x2="220" y2="184"/><line x1="345" y1="160" x2="345" y2="184"/><line x1="470" y1="160" x2="470" y2="184"/></g>
+                <g fill="#68727a" font-size="13"><text x="76" y="205">100 ADU/s</text><text x="197" y="205">300</text><text x="329" y="205">1000</text><text x="448" y="205">3000</text></g>
+                <path d="M95 62C176 78 214 94 270 111s115 23 200 34" fill="none" stroke="#2f7772" stroke-width="4"/><circle cx="120" cy="68" r="7" fill="#c9792e"/><circle cx="438" cy="142" r="7" fill="#c9792e"/><text x="95" y="42" fill="#c9792e" font-size="15">通量更低</text><text x="434" y="162" fill="#c9792e" font-size="15">通量更高</text>
+                <text x="300" y="24" text-anchor="middle" fill="#304557" font-size="15">通量变大，m_inst 变得更小</text>
+              </svg>
+              <p class="figure-caption">这里的“星等”是对数刻度：数值越小，代表测得的通量越大。</p>
+            </div>
+            <div class="instrument-rule"><code>m_inst = −2.5 log10(F_rate)</code><p>这里的零点暂时取作计算方便的内部基准，没有接到标准星。</p></div>
+          </div>
+          <div class="term-box">
+            <div class="term-card"><strong>仪器星等 <code>m_inst</code></strong><p>“仪器”两个字很重要：它是当前相机和当前处理流程的内部读数，只适合在同一口径下排序。</p></div>
+            <div class="term-card"><strong>为什么会出现负数</strong><p>因为零点还没有校准到天文学标准系统。负数不等于星体异常，只表示当前通量相对于内部零点较大。</p></div>
+            <div class="term-card"><strong>它目前不能说明什么</strong><p>不能直接把 <code>m_inst</code> 叫作 V 星等、G 星等或绝对星等；还缺零点、颜色项和相机响应标定。</p></div>
+          </div>
+        </div>
+        <p class="source">本页只讨论图像内的亮暗排序，不把仪器星等冒充标准光度系统</p>
+      </article>
+
+      <article class="slide" data-title="Gaia G 定标">
+        <header class="slide-header"><div><p class="eyebrow">10 · 星等 / 第三步</p><h2>用 Gaia G，把相机读数接到公开星表</h2><p class="subtitle">先用位置确认“可能是同一颗星”，再用多颗参考星拟合零点和颜色修正。</p></div><span class="page-number">11 / 18</span></header>
+        <div class="rule"></div>
+        <div class="calibration-layout">
+          <div>
+            <div class="calibration-flow">
+              <div class="calibration-step"><h3>1 · 图像测量</h3><p>得到每个质量源的 <code>m_inst</code>、位置和测光误差。</p></div>
+              <div class="calibration-step"><h3>2 · 位置匹配</h3><p>用 WCS/指向约束在 Gaia 目录中寻找对应的天空位置。</p></div>
+              <div class="calibration-step"><h3>3 · 多星拟合</h3><p>用参考星估计 <code>ZP</code>（零点）和 <code>C(BP−RP)</code>（颜色修正项）。</p></div>
+              <div class="calibration-step"><h3>4 · 输出表观星等</h3><p>只对通过质量和标定检查的匹配源写入 <code>m_cal(G)</code>。</p></div>
+            </div>
+            <div class="calibration-foot"><strong>Gaia G：</strong>盖亚卫星公开星表中的 G 宽波段表观星等；它描述“从地球看起来多亮”，不是恒星放到 10 pc 后的本征亮度。</div>
+          </div>
+          <div class="calibration-figure" aria-label="光度零点拟合示意图">
+            <svg viewBox="0 0 560 300" role="img" aria-label="仪器星等和Gaia G星等的零点拟合">
+              <rect x="62" y="22" width="450" height="226" fill="#fbfaf5" stroke="#bdb9ad"/>
+              <line x1="95" y1="220" x2="480" y2="45" stroke="#2f7772" stroke-width="3"/><g fill="#c9792e"><circle cx="118" cy="207" r="5"/><circle cx="160" cy="182" r="5"/><circle cx="204" cy="178" r="5"/><circle cx="246" cy="145" r="5"/><circle cx="285" cy="142" r="5"/><circle cx="329" cy="112" r="5"/><circle cx="370" cy="102" r="5"/><circle cx="418" cy="72" r="5"/><circle cx="454" cy="64" r="5"/></g>
+              <g fill="#68727a" font-size="13"><text x="245" y="278" text-anchor="middle">相机仪器星等 m_inst</text><text x="18" y="140" transform="rotate(-90 18 140)">Gaia G 星等</text><text x="325" y="51" fill="#2f7772">拟合关系</text></g>
+              <path d="M113 211l-8-4M113 211l3-9M454 64l8 4M454 64l-3 9" stroke="#a95049" stroke-width="2"/>
+            </svg>
+            <div class="legend"><span class="amber">参与拟合的参考星</span><span>拟合零点与颜色关系</span></div>
+            <p class="figure-caption">示意图：参考星不要求只用一颗，而是看多颗星能否形成稳定关系并通过残差检查。</p>
+          </div>
+        </div>
+        <p class="source">Gaia G 是公开目录的宽波段表观星等；相机 450–750 nm 响应与 Gaia G 并非天然完全相同</p>
+      </article>
+
+      <article class="slide" data-title="当前星等结果">
+        <header class="slide-header"><div><p class="eyebrow">11 · 星等 / 当前边界</p><h2>现在能报告到哪一种星等</h2><p class="subtitle">先分清仪器刻度、标定后的表观星等和严格的绝对星等，三者不能混写。</p></div><span class="page-number">12 / 18</span></header>
+        <div class="rule"></div>
+        <div class="boundary-layout">
+          <div class="magnitude-ladder">
+            <div class="ladder-row"><div class="ladder-term">m_inst</div><div class="ladder-copy"><strong>仪器星等</strong>：已经可以从净通量计算，只用于当前图像内的亮暗排序。</div></div>
+            <div class="ladder-row"><div class="ladder-term">m_cal(G)</div><div class="ladder-copy"><strong>Gaia G 表观星等</strong>：位置匹配、参考星和光度拟合通过后，可以给出标定子集的目录口径亮度。</div></div>
+            <div class="ladder-row"><div class="ladder-term">M_G</div><div class="ladder-copy"><strong>绝对星等</strong>：假设恒星位于 10 pc（秒差距）处时的本征亮度；还需要距离和同波段消光。</div></div>
+          </div>
+          <div>
+            <div class="status-board"><p class="status-title">当前首帧的标定记录</p><div class="status-row"><span>位置匹配到 Gaia 的源</span><strong>15,901</strong></div><div class="status-row"><span>用于拟合零点的参考星</span><strong>11,721</strong></div><div class="status-row"><span>得到正式 m_cal(G) 的源</span><strong class="teal">15,234</strong></div><div class="status-row"><span>已标定子集中的最暗值</span><strong class="teal">≈ 13.99</strong></div><p class="status-note">11,721 颗用于求零点；15,234 个匹配源使用这个零点得到标定结果。13.99 只代表已标定子集，不是全图最暗极限。</p></div>
+            <div class="boundary-formula" style="margin-top:1rem;"><h3>绝对星等还差哪一步</h3><code>M_G = m_cal(G) − 5 log10(d / 10 pc) − A_G</code><p><code>d</code> 是可靠距离，<code>A_G</code> 是同一 G 波段的消光。缺任何一项，都不把表观星等硬改成绝对星等。</p></div>
+          </div>
+        </div>
+        <p class="source">当前可以诚实报告：仪器星等；以及已标定子集中的 Gaia G 表观星等；严格 M_G 暂不作全场结论</p>
+      </article>
+
+      <article class="slide" data-title="运动关系">
+        <header class="slide-header"><div><p class="eyebrow">12 · 运动 / 判断方法</p><h2>15 张图为什么能判断相对运动</h2><p class="subtitle">同一颗恒星和相机一起移动；真正的运动目标，在扣掉共同位移后还会留下自己的轨迹。</p></div><span class="page-number">13 / 18</span></header>
+        <div class="rule"></div>
+        <div class="split">
+          <div class="timeline-figure" aria-label="15帧配准与相对运动示意图">
+            <img class="timeline-real-image" src="assets/real-registered-difference.png" alt="真实 15 帧注册差分图" />
+            <div class="legend"><span>稳定星场：注册后位置基本不变</span><span class="amber">运动候选：留下相对轨迹</span></div>
+            <p class="figure-caption">真实注册差分图：把共同星场压到一起后，残差中的连续结构更容易被发现。图像中的橙色细线是实际数据产物，不等于已经完成目标身份确认。</p>
+          </div>
+          <div class="motion-explanation"><div class="object-note"><strong>第一步：估计共同位移</strong><p>用高质量静态源做互相最近匹配，估计相邻图像整体移动了多少。</p></div><div class="object-note"><strong>第二步：建立 15 帧轨迹</strong><p>在配准坐标和探测器坐标同时跟踪候选，记录出现帧数、位置和拟合残差。</p></div><div class="object-note"><strong>第三步：区分点轨迹和线状结构</strong><p>点源运动和连续亮线走不同的审计路径，不能看到一条线就把整条线拆成很多星。</p></div></div>
+        </div>
+        <p class="source">当前没有完整像元角尺度，因此运动结果先用图像像素和帧时间表达，不直接报轨道速度</p>
+      </article>
+
+      <article class="slide dark" data-title="运动结果">
+        <header class="slide-header"><div><p class="eyebrow">13 · 运动 / 当前结果</p><h2>当前结果：点状运动未过门，线状结构另行记录</h2><p class="subtitle">运动判据必须建立在配准之后；亮度高、出现在一帧，都不能单独证明它在运动。</p></div><span class="page-number">14 / 18</span></header>
+        <div class="rule"></div>
+        <div class="motion-layout">
+          <div class="motion-figure" aria-label="稳定星场和运动线状候选">
+            <span class="motion-caption">真实数据局部图 / F09–F15</span>
+            <img class="motion-real-image" src="assets/real-motion-contact-sheet.png" alt="真实 15 帧运动候选局部图" />
+            <p class="motion-real-caption">真实数据局部图：F09–F15 的连续线状候选</p>
+            <div class="motion-key"><span class="stable">稳定星场</span><span class="moving">线状候选</span></div>
+          </div>
+          <div><ul class="result-list"><li><span>点源运动候选</span><strong>0</strong></li><li><span>连续线状候选</span><strong class="accent-amber">F09–F15</strong></li><li><span>图像位移</span><strong>≈ 340.689 px</strong></li><li><span>时间拟合 RMS</span><strong>≈ 2.213 px</strong></li></ul><div class="motion-result-grid"><div class="motion-result-card"><span>点源门槛</span><strong>≥12 / 15 帧</strong><p>出现数和位移都要通过</p></div><div class="motion-result-card"><span>位移门槛</span><strong>≥ 2 px</strong><p>超过配准残差尺度</p></div><div class="motion-result-card"><span>当前报告</span><strong>图像坐标</strong><p>还不是轨道参数</p></div></div><p class="status-note">线状结构和点源轨迹分开统计；当前只能说发现连续线状候选，不能仅凭这条线给出物理目标身份。</p></div>
+        </div>
+        <p class="source">运动结果来源：15 帧配准与轨迹审计；点源 moving 与独立线状分支不混算</p>
+      </article>
+
+      <article class="slide" data-title="创新输出">
+        <header class="slide-header"><div><p class="eyebrow">14 · 研究延伸</p><h2>从一次识别，还能留下四类数据</h2><p class="subtitle">创新不一定是再加一个炫目的模型，也可以是把观测结果变成可复核、可比较的量。</p></div><span class="page-number">15 / 18</span></header>
+        <div class="rule"></div>
+        <div class="innovation-layout">
+          <div class="innovation-grid">
+            <div class="innovation-card"><span class="innovation-no">01 / 几何</span><h3>轨迹方向与像素速度</h3><p>对 15 帧配准后的点或线做拟合，记录位移、方向和拟合残差；缺少像元角尺度时不换算轨道速度。</p></div>
+            <div class="innovation-card"><span class="innovation-no">02 / 时间</span><h3>出现帧数与出现时刻</h3><p>区分稳定星场、瞬态响应和间歇候选，并把“出现了几帧”与“是不是同一机制”分开。</p></div>
+            <div class="innovation-card"><span class="innovation-no">03 / 光度</span><h3>相对亮度变化</h3><p>用逐帧净通量做归一化比较，记录目标变亮或变暗；没有系统响应时不称为绝对通量。</p></div>
+            <div class="innovation-card"><span class="innovation-no">04 / 可靠性</span><h3>注入回收与漏检风险</h3><p>在真实背景中放入已知亮度的模拟源，分背景、拥挤和边缘报告回收率，而不是只给一个全场准确率。</p></div>
+          </div>
+          <figure class="real-figure"><img src="assets/real-injection-recovery.png" alt="真实背景注入回收率实验图" /><figcaption>真实背景注入实验输出：橙色是宽筛候选回收，青绿色是质量层回收。图中英文坐标是原始机器产物，正式含义以左侧中文为准。</figcaption><div class="legend"><span class="amber">候选回收</span><span>质量回收</span></div></figure>
+        </div>
+        <div class="innovation-summary">这四类输出分别回答：它往哪儿走？出现多久？亮度怎么变？哪些条件下容易漏？它们比“再报一个总数”更容易形成可验证的创新分析。</div>
+        <p class="source">创新指标不是替代星点真值，而是把现有观测证据继续量化</p>
+      </article>
+
+      <article class="slide" data-title="识别答辩">
+        <header class="slide-header"><div><p class="eyebrow">15 · 答辩准备 / 识别</p><h2>识别部分，评委可能这样问</h2><p class="subtitle">回答顺序固定：先说数字属于哪一层，再说它怎么得到，最后说它还不能证明什么。</p></div><span class="page-number">16 / 18</span></header>
+        <div class="rule"></div>
+        <div class="answer-grid">
+          <div class="answer-card"><span class="answer-tag">问题 01</span><h3>外部结果约 18,000，为什么不同？</h3><p>先检查是不是同一文件、同一预处理、同一阈值、同一去重和同一计数定义。缺少这些条件，18,000 只能作为对照，不能当程序目标。</p></div>
+          <div class="answer-card"><span class="answer-tag">问题 02</span><h3>SNR≥5 能证明是真星吗？</h3><p>不能。SNR 只说明亮斑比附近背景突出；还要看点扩散函数、宽度、原始 ADU、边缘、饱和、掩膜和 15 帧行为。</p></div>
+          <div class="answer-card"><span class="answer-tag">问题 03</span><h3>多种算法都找到了，能算多票通过吗？</h3><p>不能。它们使用同一张原图，不是独立投票。多算法交集只提高复核优先级，最终仍由统一细筛和星表/注入证据决定。</p></div>
+        </div>
+        <div class="answer-note">一句话：宽筛为了不漏，细筛为了不乱；两者的数字必须分开说。</div>
+        <p class="source">答辩准备：不要把“算法命中”“质量通过”和“恒星真值”用同一个词带过</p>
+      </article>
+
+      <article class="slide" data-title="星等答辩">
+        <header class="slide-header"><div><p class="eyebrow">16 · 答辩准备 / 星等</p><h2>星等部分，先把四个名字说成人话</h2><p class="subtitle">这些符号第一次出现时就解释对象、单位和边界，后面再使用缩写。</p></div><span class="page-number">17 / 18</span></header>
+        <div class="rule"></div>
+        <div class="answer-grid">
+          <div class="answer-card"><span class="answer-tag">F_rate</span><h3>“每秒收到的净信号量”</h3><p><code>F_rate</code> 是扣掉局部背景后的净通量除以曝光时间，单位是 ADU/s。它是相机读数，不是已经换算好的物理能量。</p></div>
+          <div class="answer-card"><span class="answer-tag">m_inst</span><h3>“仪器自己的亮度刻度”</h3><p><code>m_inst</code> 是 <code>F_rate</code> 的对数表示，只能在当前相机和当前流程内比较。没有标准零点，所以可能是负数。</p></div>
+          <div class="answer-card"><span class="answer-tag">Gaia G / m_cal(G)</span><h3>“公开星表的 G 波段表观亮度”</h3><p>Gaia G 是盖亚卫星星表的宽波段表观星等；<code>m_cal(G)</code> 是相机读数经过位置匹配、多星零点和颜色项标定后的结果。</p></div>
+        </div>
+        <div class="answer-note"><strong>绝对星等 M_G：</strong>把恒星假设放到 10 pc 后的本征亮度，还必须有可靠距离和同一波段的消光；不能从一张截图直接读出。</div>
+        <p class="source">最重要的区分：m_inst 是内部刻度，m_cal(G) 是表观星等，M_G 才是绝对星等</p>
+      </article>
+
+      <article class="slide" data-title="结论">
+        <header class="slide-header"><div><p class="eyebrow">17 · 收束</p><h2>把研究讲成三句话</h2><p class="subtitle">先识别，再测光定标，最后做跨帧运动分析；每一步都有自己的证据和不能越过的边界。</p></div><span class="page-number">18 / 18</span></header>
+        <div class="rule"></div>
+        <div class="final-map">
+          <div class="final-node"><span class="node-no">01 / 识别</span><h3>先找可信点源</h3><p>宽筛保召回，细筛看 SNR、轮廓、原始 ADU 和位置；候选数不等于恒星数。</p></div>
+          <div class="final-node"><span class="node-no">02 / 星等</span><h3>从净通量到 Gaia G</h3><p>先算 F_rate，再得到 m_inst；完成参考星标定后才写 m_cal(G)，绝对星等另需距离和消光。</p></div>
+          <div class="final-node"><span class="node-no">03 / 运动</span><h3>扣掉共同位移</h3><p>15 帧配准后，稳定星场应留下；相对轨迹和连续线状结构分开审计。</p></div>
+        </div>
+        <div class="closing" style="margin-top:1.5rem;">
+          <div><p class="score-label">答辩时的 30 秒说法</p><p class="closing-quote">我们先从原始 FITS 中找出局部响应，再用背景、信噪比、点扩散函数和原始 ADU 筛出可信点源。星等从净通量开始，接上 Gaia G 参考星后才能得到标定的表观星等。最后用 15 张连续图扣掉共同位移，判断剩下的结构是不是在运动。</p></div>
+          <div class="missing"><h3>还要补什么，结果才会更硬</h3><ul><li>相机完整响应曲线或同设备标准星</li><li>完整 WCS、像元角尺度和畸变参数</li><li>增益、读出噪声和真实饱和线</li><li>官方逐星真值或更多已知亮度注入源</li></ul></div>
+        </div>
+        <div class="closing-bottom"><strong>先说清楚数字是什么，再说它有多大。</strong><span>这样研究结论才经得起追问。</span></div>
+        <p class="source">RST19-SOL · 星点识别、星等测量与运动分析</p>
+      </article>
+    </section>
+  </main>
+
+  <nav class="controls" aria-label="幻灯片控制">
+    <button class="nav" id="prev" type="button" aria-label="上一页">←</button>
+    <span class="counter" id="counter">01 / 18</span>
+    <div class="dots" id="dots" aria-label="选择幻灯片"></div>
+    <button class="nav" id="next" type="button" aria-label="下一页">→</button>
+    <button class="nav" id="overview-toggle" type="button" aria-label="打开总览">⌘</button>
+    <span class="help">← → / Space 翻页 · F 全屏 · O 总览</span>
+  </nav>
+
+  <section class="overview" id="overview" aria-label="幻灯片总览"></section>
+
+  <script>
+    (() => {
+      const slides = [...document.querySelectorAll('.slide')];
+      const dots = document.querySelector('#dots');
+      const counter = document.querySelector('#counter');
+      const overview = document.querySelector('#overview');
+      let current = 0;
+      let touchStartX = null;
+
+      const pad = (value) => String(value + 1).padStart(2, '0');
+
+      slides.forEach((slide, index) => {
+        const dot = document.createElement('button');
+        dot.className = 'dot';
+        dot.type = 'button';
+        dot.title = `${pad(index)} ${slide.dataset.title}`;
+        dot.setAttribute('aria-label', `第 ${index + 1} 页：${slide.dataset.title}`);
+        dot.addEventListener('click', () => go(index));
+        dots.appendChild(dot);
+
+        const card = document.createElement('button');
+        card.className = 'overview-card';
+        card.type = 'button';
+        card.innerHTML = `<span class="ov-no">${pad(index)} / ${String(slides.length).padStart(2, '0')}</span><h3>${slide.dataset.title}</h3><p>${slide.querySelector('.subtitle, .lead')?.textContent || ''}</p>`;
+        card.addEventListener('click', () => { go(index); overview.classList.remove('is-open'); });
+        overview.appendChild(card);
+      });
+
+      function go(next) {
+        current = (next + slides.length) % slides.length;
+        slides.forEach((slide, index) => {
+          slide.classList.toggle('is-active', index === current);
+          slide.classList.toggle('is-before', index < current);
+        });
+        [...dots.children].forEach((dot, index) => dot.classList.toggle('is-active', index === current));
+        [...overview.children].forEach((card, index) => card.classList.toggle('is-active', index === current));
+        counter.textContent = `${pad(current)} / ${String(slides.length).padStart(2, '0')}`;
+        document.title = `RST19｜${slides[current].dataset.title}`;
+      }
+
+      function next() { go(current + 1); }
+      function previous() { go(current - 1); }
+
+      document.querySelector('#next').addEventListener('click', next);
+      document.querySelector('#prev').addEventListener('click', previous);
+      document.querySelector('#overview-toggle').addEventListener('click', () => overview.classList.toggle('is-open'));
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') { event.preventDefault(); next(); }
+        if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); previous(); }
+        if (event.key === 'Home') { event.preventDefault(); go(0); }
+        if (event.key === 'End') { event.preventDefault(); go(slides.length - 1); }
+        if (event.key.toLowerCase() === 'o') { overview.classList.toggle('is-open'); }
+        if (event.key === 'Escape') { overview.classList.remove('is-open'); }
+        if (event.key.toLowerCase() === 'f') {
+          if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+          else document.exitFullscreen?.();
+        }
+      });
+
+      document.addEventListener('touchstart', (event) => { touchStartX = event.changedTouches[0].clientX; }, { passive: true });
+      document.addEventListener('touchend', (event) => {
+        if (touchStartX === null) return;
+        const dx = event.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) > 50) (dx < 0 ? next : previous)();
+        touchStartX = null;
+      }, { passive: true });
+
+      go(0);
+    })();
+  </script>
+</body>
+</html>

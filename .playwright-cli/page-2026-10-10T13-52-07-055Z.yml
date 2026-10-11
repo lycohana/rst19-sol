@@ -1,0 +1,877 @@
+- generic [active] [ref=e1]:
+  - link "跳到正文" [ref=e2] [cursor=pointer]:
+    - /url: "#overview"
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: RST19 · 论文伴读文档 · 无需天文学基础
+      - heading "一张星空照片， 到底能告诉我们什么？" [level=1] [ref=e6]: 一张星空照片，到底能告诉我们什么？
+      - paragraph [ref=e7]: 把《天基星图的分层源检测、测光与多帧运动分析方法》拆成 13 个小问题。你不需要先学会公式：先理解“为什么要做这一步”，再看程序做了什么、结果能说明什么。
+      - generic [ref=e8]: 原论文作者：李钧耀 · 广东科技学院 | 解读依据：17 页论文及现存证据摘要
+      - generic [ref=e9]:
+        - link "从头学：先建立全局印象" [ref=e10] [cursor=pointer]:
+          - /url: "#overview"
+        - link "先看懂论文的结果" [ref=e11] [cursor=pointer]:
+          - /url: "#results"
+        - link "查一个陌生术语" [ref=e12] [cursor=pointer]:
+          - /url: "#glossary"
+      - generic [ref=e13]:
+        - generic [ref=e14]: 13 个步骤，每次读一项
+        - generic [ref=e15]: 6 个互动，动手建立直觉
+        - generic [ref=e16]: 单文件离线，无需安装软件
+  - generic [ref=e17]:
+    - complementary "学习目录" [ref=e18]:
+      - heading "按这个顺序读" [level=2] [ref=e19]
+      - navigation [ref=e20]:
+        - link "01 先弄懂整篇论文" [ref=e21] [cursor=pointer]:
+          - /url: "#overview"
+        - link "02 照片其实是数字表" [ref=e22] [cursor=pointer]:
+          - /url: "#pixels"
+        - link "03 先分清背景与噪声" [ref=e23] [cursor=pointer]:
+          - /url: "#noise"
+        - link "04 用光斑模板找候选" [ref=e24] [cursor=pointer]:
+          - /url: "#template"
+        - link "05 亮还不够：检查质量" [ref=e25] [cursor=pointer]:
+          - /url: "#quality"
+        - link "06 两个框不一定是两颗星" [ref=e26] [cursor=pointer]:
+          - /url: "#blend"
+        - link "07 亮度与星等怎么读" [ref=e27] [cursor=pointer]:
+          - /url: "#brightness"
+        - link "08 先把15张图对齐" [ref=e28] [cursor=pointer]:
+          - /url: "#alignment"
+        - link "09 怎样判断运动轨迹" [ref=e29] [cursor=pointer]:
+          - /url: "#motion"
+        - link "10 合成图能帮什么忙" [ref=e30] [cursor=pointer]:
+          - /url: "#fusion"
+        - link "11 怎么检验找得好不好" [ref=e31] [cursor=pointer]:
+          - /url: "#validation"
+        - link "12 一项项读懂结果数字" [ref=e32] [cursor=pointer]:
+          - /url: "#results"
+        - link "13 用自己的话复述论文" [ref=e33] [cursor=pointer]:
+          - /url: "#conclusion"
+        - link "术语翻译词典" [ref=e34] [cursor=pointer]:
+          - /url: "#glossary"
+        - link "重读论文的路线" [ref=e35] [cursor=pointer]:
+          - /url: "#readingmap"
+      - generic [ref=e36]:
+        - text: 已理解 0 / 13 项
+        - paragraph [ref=e38]: 读完一项，点“这一项我理解了”。进度尽可能保存在本浏览器。
+        - button "重置学习标记" [ref=e39] [cursor=pointer]
+    - main [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]: 第 01 项 / 13 · 先看全局
+        - heading "这篇论文想解决什么问题？" [level=2] [ref=e43]
+        - paragraph [ref=e44]: 给电脑 15 张卫星拍到的星空图，让它找出值得研究的亮点、比较亮度，再寻找在图片中移动的结构。
+        - generic [ref=e45]:
+          - generic [ref=e46]: 生活类比
+          - paragraph [ref=e47]: 假设你连续拍了 15 张夜间广场照片。照片里有固定路灯、走动的人、反光、相机抖动和噪点。你想知道：哪些亮点值得数？哪个物体较暗？谁真的在走动？星图分析面临的困难很相似。
+        - generic [ref=e48]:
+          - generic [ref=e49]:
+            - heading "问题一：哪里有值得检查的亮点？" [level=3] [ref=e50]
+            - paragraph [ref=e51]: 先尽量找全，再判断这些亮点的形状、像素和测量是否可靠。
+          - generic [ref=e52]:
+            - heading "问题二：亮度怎样比较？" [level=3] [ref=e53]
+            - paragraph [ref=e54]: 不能只看最亮的一个像素，要把一个光斑的光加起来，并减掉背景。
+          - generic [ref=e55]:
+            - heading "问题三：哪些结构在移动？" [level=3] [ref=e56]
+            - paragraph [ref=e57]: 先排除相机抖动造成的全图移动，再检查物体自身是否有规律地改变位置。
+          - generic [ref=e58]:
+            - heading "问题四：怎样证明方法有用？" [level=3] [ref=e59]
+            - paragraph [ref=e60]: 放入位置已知的模拟光斑，看程序能找回多少；同时检查误差与适用范围。
+        - heading "全文最重要的一条线" [level=3] [ref=e61]
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - generic [ref=e64]: 发现
+            - text: 像个亮点，先留下
+          - generic [ref=e65]:
+            - generic [ref=e66]: 测量
+            - text: 满足当前质量条件
+          - generic [ref=e67]:
+            - generic [ref=e68]: 核验
+            - text: 比较多帧和局部证据
+          - generic [ref=e69]:
+            - generic [ref=e70]: 确认身份
+            - text: 需要可靠坐标、目录或真值
+        - paragraph [ref=e71]:
+          - strong [ref=e72]: 前三步做得不错，也不代表第四步已经完成。
+          - text: 论文反复区分这些层级，是为了避免把电脑的中间结果说成已经证明的天文事实。
+        - generic [ref=e73]:
+          - strong [ref=e74]: 这一项只记住：
+          - text: 论文研究的是一套“发现—测量—核验”的流程；它还没有给每个亮点办好天体“身份证”。
+        - generic [ref=e75]: 回到论文：引言、图 1“统一分析流程”、结论。
+        - button "这一项我理解了" [ref=e76] [cursor=pointer]
+      - generic [ref=e77]:
+        - generic [ref=e78]: 第 02 项 / 13 · 图像是什么
+        - heading "星空图片，其实是一张数字表" [level=2] [ref=e79]
+        - paragraph [ref=e80]: 每个小格是一个像素。格子里的数字表示相机记录到的信号，而不是“这里有一颗星”。
+        - paragraph [ref=e81]:
+          - text: 这批图片每张是
+          - strong [ref=e82]: 4096 × 4096
+          - text: 个像素，也就是约 1678 万个小格。一颗星的光往往分散在几个或更多相邻像素里。所以，像素数和星星数量完全是两件事。
+        - generic [ref=e83]:
+          - generic [ref=e84]: 生活类比
+          - paragraph [ref=e85]: 一张体育场座位图有一万个格子，但一个人可能站在过道，几个座位也可能被同一张毯子覆盖。看到“一个格子亮了”，不能直接认定“这里恰好是一个人”。
+        - generic [ref=e86]:
+          - generic [ref=e87]:
+            - heading "FITS：科学照片的文件袋" [level=3] [ref=e88]
+            - paragraph [ref=e89]: 它保存数字图像，也保存拍摄时间、尺寸、曝光等说明。你可把它理解成“照片＋拍摄记录”。
+          - generic [ref=e90]:
+            - heading "ADU：相机的数字读数" [level=3] [ref=e91]
+            - paragraph [ref=e92]: 像温度计上的原始刻度。它不是标准星等，也不能在未校准时直接当作收到的光子数量。
+        - paragraph [ref=e93]:
+          - text: 论文的数据是 15 张连续观测，曝光都是
+          - strong [ref=e94]: 1.5 秒
+          - text: 。第一张到最后一张的曝光中心相隔
+          - strong [ref=e95]: 21.014 秒
+          - text: 。相邻拍摄时间并不完全相等，因此计算速度时必须用实际时间。
+        - generic [ref=e96]: 文件里还夹带了一小段辅助记录，位置在首行前 208 字节。程序必须把它当作记录而不是星光；否则有可能“从说明文字中识别出星星”。
+        - heading "“文件核对”在证明什么？" [level=3] [ref=e97]
+        - paragraph [ref=e98]:
+          - text: 论文用 SHA-256 给原文件算“数字指纹”，核对缓存是否引用同一份图片。它可以防止用错数据，
+          - strong [ref=e99]: 不能证明算法找对了星星
+          - text: 。就像确认两份试卷完全相同，不等于确认试卷答案正确。
+        - generic [ref=e100]:
+          - strong [ref=e101]: 这一项只记住：
+          - text: 相机给我们的是数字和拍摄记录；天体解释需要后续分析。
+        - generic [ref=e102]: 回到论文：第 2 节“数据、观测条件与实验口径”、表 1。
+        - button "这一项我理解了" [ref=e103] [cursor=pointer]
+      - generic [ref=e104]:
+        - generic [ref=e105]: 第 03 项 / 13 · 为什么不能只找亮的
+        - heading "亮一点，可能是星光，也可能只是背景波动" [level=2] [ref=e106]
+        - paragraph [ref=e107]: 程序要先知道“这一小块地方平常有多亮、波动有多大”，才知道某个亮点是否值得检查。
+        - generic [ref=e108]:
+          - generic [ref=e109]: 生活类比
+          - paragraph [ref=e110]: 在安静图书馆里，一个人说话很容易听见；在食堂里，同样的音量可能淹没在背景声中。星光相当于你想听的人，背景和噪声相当于环境声。
+        - list [ref=e111]:
+          - listitem [ref=e112]:
+            - strong [ref=e113]: 背景：
+            - text: 这一片区域通常有的基础信号，就像环境里持续存在的嗡嗡声。
+          - listitem [ref=e114]:
+            - strong [ref=e115]: 噪声：
+            - text: 读数的起伏，就像环境声忽大忽小。
+          - listitem [ref=e116]:
+            - strong [ref=e117]: 信号：
+            - text: 我们想研究的额外光斑或结构。
+        - paragraph [ref=e118]: 不同区域可能有不同背景，所以论文把图片分成小块，在附近估计背景。它采用中位数等稳健方法，减少几个特别亮或特别异常的像素对估计的影响。
+        - group [ref=e119]:
+          - generic "为什么这里要用中位数，而不是只用平均数？" [ref=e120] [cursor=pointer]
+        - heading "SNR：一个信号相对噪声有多明显" [level=3] [ref=e121]
+        - paragraph [ref=e122]: SNR 是“信噪比”。可以先理解成“额外信号有多大，和周围波动相比有多突出”。同样的信号，噪声越大，越难相信它真的突出。论文中有不同测量方式的 SNR，不能随意互换。
+        - generic [ref=e123]:
+          - generic [ref=e124]:
+            - text: 把门槛抬高，会发生什么？
+            - generic [ref=e125]: 教学模拟，不是真实统计
+          - paragraph [ref=e126]: 下面 12 个响应只有一个“突出程度”。这个简化模型先不考虑形状和坏像素；留下的响应仍只是候选。
+          - generic [ref=e127]:
+            - text: 候选门槛：
+            - status [ref=e128]: "4"
+          - slider "候选门槛：" [ref=e129] [cursor=pointer]: "4"
+          - generic [ref=e130]:
+            - generic [ref=e131]:
+              - generic [ref=e132]: ✦
+              - text: 响应 11.3
+            - generic [ref=e133]:
+              - generic [ref=e134]: ✦
+              - text: 响应 21.8
+            - generic [ref=e135]:
+              - generic [ref=e136]: ✦
+              - text: 响应 32.4
+            - generic [ref=e137]:
+              - generic [ref=e138]: ✦
+              - text: 响应 43.1
+            - generic [ref=e139]:
+              - generic [ref=e140]: ✦
+              - text: 响应 53.6
+            - generic [ref=e141]:
+              - generic [ref=e142]: ✦
+              - text: 响应 64.2
+            - generic [ref=e143]:
+              - generic [ref=e144]: ✦
+              - text: 响应 74.8
+            - generic [ref=e145]:
+              - generic [ref=e146]: ✦
+              - text: 响应 85.3
+            - generic [ref=e147]:
+              - generic [ref=e148]: ✦
+              - text: 响应 96.1
+            - generic [ref=e149]:
+              - generic [ref=e150]: ✦
+              - text: 响应 106.8
+            - generic [ref=e151]:
+              - generic [ref=e152]: ✦
+              - text: 响应 117.4
+            - generic [ref=e153]:
+              - generic [ref=e154]: ✦
+              - text: 响应 129.2
+          - generic [ref=e155]: 12 个教学响应中，7 个超过当前门槛。这里只筛突出程度，没有判断其中多少是真星。
+        - paragraph [ref=e156]: 门槛高一点，留下的响应更少，但也可能丢掉较暗的真实源；门槛低一点，能保留更多弱响应，也会增加需要检查的东西。
+        - generic [ref=e157]:
+          - strong [ref=e158]: “5σ”或“SNR≥5”不是“99.999…% 是恒星”。
+          - text: 全图有大量位置被反复搜索，像素也可能互相相关，还可能出现固定结构或异常编码。论文把这些数值用作工程筛选线，没有把它们当作恒星概率。
+        - generic [ref=e159]:
+          - strong [ref=e160]: 这一项只记住：
+          - text: 是否突出，要相对附近噪声判断；突出也只是进入候选名单的理由。
+        - generic [ref=e161]: 回到论文：3.2“局部背景、掩膜与噪声估计”；3.3 的候选门槛。
+        - button "这一项我理解了" [ref=e162] [cursor=pointer]
+      - generic [ref=e163]:
+        - generic [ref=e164]: 第 04 项 / 13 · 电脑怎样找亮点
+        - heading "拿一个“光斑模具”，在图片上到处试" [level=2] [ref=e165]
+        - paragraph [ref=e166]: 电脑寻找的不是一个特别亮的格子，而是“这一小片像不像一个光斑”。
+        - generic [ref=e167]:
+          - generic [ref=e168]: 生活类比
+          - paragraph [ref=e169]: 你想从一堆纸片中找圆形，就拿圆形模具逐个比。匹配滤波做的事情相似：把“预期光斑的形状”在图上滑动，找出响应比较强的位置。
+        - generic [ref=e170]:
+          - generic [ref=e171]:
+            - heading "PSF：一个点在相机里长什么样" [level=3] [ref=e172]
+            - paragraph [ref=e173]: 远处的星接近一个点，但光学和像素采样让它成了小光斑。PSF 就是这种光斑形状的描述。
+          - generic [ref=e174]:
+            - heading "Gaussian：一种平滑的钟形模具" [level=3] [ref=e175]
+            - paragraph [ref=e176]: 中心较亮，越往外越弱。它是方便的近似；真实光斑不一定完美符合这个形状。
+        - img "点被相机记录成中心亮、外圈较弱的光斑" [ref=e177]:
+          - generic [ref=e180]: 理想的一个点
+          - generic [ref=e183]: 相机记录的小光斑
+        - paragraph [ref=e184]:
+          - text: 论文不只用一个尺度的模具，还使用
+          - strong [ref=e185]: DoG（高斯差分）
+          - text: ：把不同模糊程度的图片相减，让某些尺寸的结构更容易显出来。不同提案器给出的候选先合并，之后统一回原图检查。
+        - heading "“宽筛”为什么故意保留很多东西？" [level=3] [ref=e186]
+        - paragraph [ref=e187]:
+          - text: 第一轮宁可多留一些值得查的响应，不在这一轮仓促断定身份。你可以把它想成招聘的初筛：先收候选简历，再核实资格。论文首帧留下了
+          - strong [ref=e188]: 84,594 个候选
+          - text: ，这不是已经确认 84,594 颗星。
+        - paragraph [ref=e189]:
+          - strong [ref=e190]: NMS（非极大值抑制）
+          - text: 是防止一个响应附近重复报很多峰的规则。这里的最小峰距是 4 像素。它是电脑找峰的间距规则，不是望远镜能分清两颗星的最终极限。
+        - generic [ref=e191]:
+          - strong [ref=e192]: 这一项只记住：
+          - text: 模板负责“像不像”，宽筛负责“先别漏掉”；真实身份还没有决定。
+        - generic [ref=e193]: 回到论文：3.3“匹配滤波与多尺度候选提案”；4.2 提案计数。
+        - button "这一项我理解了" [ref=e194] [cursor=pointer]
+      - generic [ref=e195]:
+        - generic [ref=e196]: 第 05 项 / 13 · 为什么会有落选源
+        - heading "一个响应很亮，为什么还不让它进质量名单？" [level=2] [ref=e197]
+        - paragraph [ref=e198]: 因为“看得见”与“可以可靠地测量成一个独立点源”是两件事。
+        - generic [ref=e199]:
+          - generic [ref=e200]: 生活类比
+          - paragraph [ref=e201]: 有人说话很大声，你确实听见了。但录音可能是爆音、几个人同时说话，或者麦克风故障。音量大，不能自动替代清晰度、设备正常和说话者独立性。
+        - paragraph [ref=e202]: 论文的质量层检查四个方向：信号够不够明显；像素读数与测量区域是否有效；有没有正常的二维光斑支持；附近的光能否分成独立源。
+        - generic [ref=e203]:
+          - generic [ref=e204]:
+            - text: 试着给四种响应做“体检”
+            - generic [ref=e205]: 教学模拟
+          - generic [ref=e206]: 选择一个案例
+          - combobox "选择一个案例" [ref=e207] [cursor=pointer]:
+            - option "正常的紧凑光斑" [selected]
+            - option "非常亮的单像素尖刺"
+            - option "两个挤在一起的响应"
+            - option "又亮又长的线"
+          - list [ref=e208]:
+            - listitem [ref=e209]: ✓ 通过：信号相对噪声足够突出
+            - listitem [ref=e210]: ✓ 通过：像素与测量区域有效
+            - listitem [ref=e211]: ✓ 通过：符合当前点源的二维光斑支持
+            - listitem [ref=e212]: ✓ 通过：近邻响应具有独立测量条件
+          - generic [ref=e213]: 这份教学体检全通过，可以进入质量集合，但身份还没有确认。
+        - heading "“二维支持”是什么意思？" [level=3] [ref=e214]
+        - paragraph [ref=e215]:
+          - text: 一个正常光斑的光通常会落在相邻像素上。如果几乎只有一个格子特别亮，周围没有足够支持，就值得怀疑它是否符合当前点源模型。论文检查峰附近 3×3 的小区域。
+          - strong [ref=e216]: 单像素很亮也不能绕过这项检查。
+        - heading "为什么要分成八类，而不是统一叫“假星”？" [level=3] [ref=e217]
+        - paragraph [ref=e218]: 落选原因不同，下一步也不同：暗响应要检查噪声；边缘源要检查孔径；拥挤源要联合拟合；长线要走运动分支；异常码要查设备语义。程序只给首要原因分组，同时保留其他标记。
+        - generic [ref=e219]:
+          - strong [ref=e220]: 这一项只记住：
+          - text: “质量通过”表示满足这套算法的条件；“质量未通过”也不等于已经证明完全没有天体信号。
+        - generic [ref=e221]:
+          - paragraph [ref=e222]: 小检查：SNR 非常高的亮线，能直接当作一颗可信恒星吗？
+          - generic [ref=e223]:
+            - button "能，足够亮就说明是真的" [ref=e224] [cursor=pointer]
+            - button "不能，还要检查形状与来源" [ref=e225] [cursor=pointer]
+        - generic [ref=e226]: 回到论文：3.4“原图质量层与近邻去混叠”；表 3、图 2。
+        - button "这一项我理解了" [ref=e227] [cursor=pointer]
+      - generic [ref=e228]:
+        - generic [ref=e229]: 第 06 项 / 13 · 学会看混叠
+        - heading "画了两个框，就一定有两颗星吗？" [level=2] [ref=e230]
+        - paragraph [ref=e231]: 两个检测峰，可能是两个独立源，也可能是同一混合结构被算法分成了两个响应。
+        - generic [ref=e232]:
+          - generic [ref=e233]: 生活类比
+          - paragraph [ref=e234]: 两盏灯挨得很近时，你可能只看到一个模糊亮团；一个亮团中间有阴影时，也可能看起来像两个小亮区。“看到几个峰”与“实际有几个独立灯源”并不总相同。
+        - paragraph [ref=e235]:
+          - text: 论文研究了源编号 82931／82934。编号只是电脑名单里的序号，不是天体名称。它们的整数峰间距约
+          - strong [ref=e236]: 4.123 像素
+          - text: ，刚好超过 4 像素的留峰规则；但测量后的质心间距约
+          - strong [ref=e237]: 2.738 像素
+          - text: ，两个测光区域明显重叠。
+        - heading "“共享孔径”带来的问题" [level=3] [ref=e238]
+        - paragraph [ref=e239]: 孔径就是用来加总光的区域。两个圆重叠后，第二个响应会“借到”第一个亮团的光，于是它的测得通量也可能很高。高通量并不自动证明第二个源独立。
+        - figure "原始 FITS 与缓存诊断图 左边圆圈是测光区域；中间标出需要核查的特殊读数；右边是一行像素的读数变化。先看圆圈相互重叠，再理解数字。" [ref=e240]:
+          - img "论文的双响应诊断图：质心孔径重叠、重复码与异常负值、原始横截面" [ref=e241]
+          - generic [ref=e242]:
+            - generic [ref=e243]: 原始 FITS 与缓存诊断图
+            - text: 左边圆圈是测光区域；中间标出需要核查的特殊读数；右边是一行像素的读数变化。先看圆圈相互重叠，再理解数字。
+        - heading "联合 PSF 与 BIC：多放一盏“模型灯”，是否值得？" [level=3] [ref=e244]
+        - paragraph [ref=e245]: 电脑可以用“一盏模糊灯”或“两盏模糊灯”解释同一块图片。两个灯的模型更灵活，通常能拟合得更好，所以不能只比“谁更贴图”。BIC 会给复杂模型加一个代价：如果多放一个源没有足够改善，就不支持升级解释。
+        - generic [ref=e246]: BIC 支持某个模型，也不等于确认真实第二颗星。你用的灯形、背景、位置范围和异常像素处理都会影响结果。这个案例没有得到稳定的第二源确认，因此论文没有把它计成两颗已确认恒星。
+        - generic [ref=e247]:
+          - strong [ref=e248]: 这一项只记住：
+          - text: 程序的“两个峰”，必须经过独立性检查，才有资格讨论“两个源”。
+        - generic [ref=e249]: 回到论文：3.4 的单／双 PSF；4.3“近邻双响应的原始像素诊断”、图 3。
+        - button "这一项我理解了" [ref=e250] [cursor=pointer]
+      - generic [ref=e251]:
+        - generic [ref=e252]: 第 07 项 / 13 · 测光
+        - heading "为什么不能拿最亮的像素比较星星？" [level=2] [ref=e253]
+        - paragraph [ref=e254]: 光可能散在不同大小的光斑里。要比较亮度，应测量整个区域的净信号，并考虑曝光时间。
+        - generic [ref=e255]:
+          - generic [ref=e256]: 生活类比
+          - paragraph [ref=e257]: 比较两杯水，不能只看杯底某一点有多深。杯子形状不同，水也可能分布不同。测光就是尽量把“这一源的水量”合起来，并扣掉原本就有的背景。
+        - generic [ref=e258]:
+          - text: 净通量 ≈ 测光区域内读数的总和 − 同一区域应有的背景
+          - generic [ref=e259]: 这是口头版。真实实现还要检查有效像素、附近背景、误差和共享光。
+        - paragraph [ref=e260]:
+          - text: 曝光越久，通常积累的信号越多，所以论文还除以曝光秒数，得到每秒读数。接着将它换成
+          - strong [ref=e261]: 仪器星等
+          - text: ：一个对数刻度。最反直觉的一点是——
+          - strong [ref=e262]: 星等数字越大，通常越暗。
+        - generic [ref=e263]:
+          - generic [ref=e264]:
+            - text: 亮度加倍，星等怎样变？
+            - generic [ref=e265]: 教学计算，零点未标定
+          - generic [ref=e266]:
+            - text: 每秒净读数：
+            - status [ref=e267]: "200"
+            - text: ADU/s（以 100 ADU/s 为比较基准）
+          - slider "每秒净读数： ADU/s（以 100 ADU/s 为比较基准）" [ref=e268] [cursor=pointer]: "200"
+          - generic [ref=e269]: 当前是基准亮度的 2.00 倍，相对星等差是 -0.753。更亮，星等数字反而变小。
+          - paragraph [ref=e270]: 演示公式：相对星等差 = −2.5 × log₁₀（当前通量率 ÷ 基准通量率）。这里只解释刻度，不把相机读数换成标准星等。
+        - generic [ref=e271]:
+          - generic [ref=e272]:
+            - heading "仪器星等：这把尺子的读数" [level=3] [ref=e273]
+            - paragraph [ref=e274]: 在同一方法下比较相机测得信号。零点可以是任意的，所以负数不是“已经测成标准系统里的超级亮星”。
+          - generic [ref=e275]:
+            - heading "标准星等：与别人统一尺子" [level=3] [ref=e276]
+            - paragraph [ref=e277]: 需要参考星、测光零点、波段响应和颜色转换。不同仪器直接测出的数字不能随意混比。
+        - paragraph [ref=e278]:
+          - text: 再往后还有
+          - strong [ref=e279]: 绝对星等
+          - text: ：将天体假想放在标准距离处的亮度刻度。它需要可靠距离和同一波段的消光信息，不能从一张照片的 ADU 直接得到。
+        - heading "这篇论文真的测到了什么？" [level=3] [ref=e280]
+        - paragraph [ref=e281]:
+          - text: 在当前质量名单中，源 80357 的净通量为 222 ADU，曝光 1.5 秒，通量率为 148 ADU/s，仪器星等约 −5.4257，条件化误差约 0.2132 mag。这个数是当前质量源里的最暗仪器候选，
+          - strong [ref=e282]: 没有完成标准星等标定
+          - text: 。
+        - generic [ref=e283]: “名单中最暗”不等于“天空中最暗”，更不等于相机的极限灵敏度。名单已经经过门槛筛选，更暗的源可能没有被发现；边缘、背景和孔径也影响排序。
+        - generic [ref=e284]:
+          - strong [ref=e285]: 这一项只记住：
+          - text: 先合光、减背景、除时间，再谈星等。仪器刻度要经过校准，才能与标准系统比较。
+        - generic [ref=e286]: 回到论文：3.5“孔径测光、仪器星等与标定接口”；4.7“最暗质量候选”。
+        - button "这一项我理解了" [ref=e287] [cursor=pointer]
+      - generic [ref=e288]:
+        - generic [ref=e289]: 第 08 项 / 13 · 配准
+        - heading "图片上的星全在动，可能只是相机动了" [level=2] [ref=e290]
+        - paragraph [ref=e291]: 比较两张照片前，要先将固定星场对齐，才容易看出某个目标自己的运动。
+        - generic [ref=e292]:
+          - generic [ref=e293]: 生活类比
+          - paragraph [ref=e294]: 你举着手机拍广场，手向右晃一下。所有路灯在屏幕上都移了位置，但路灯没有走。只有扣掉“手机带来的共同位移”，才有资格判断某个人是否真的在移动。
+        - paragraph [ref=e295]:
+          - strong [ref=e296]: 配准
+          - text: 就是把多张图放到共同坐标里。平移是左右上下挪动；仿射修正还允许少量旋转、缩放或剪切，像把纸稍微转动或拉伸，以补偿更复杂的全图变化。
+        - generic [ref=e297]:
+          - generic [ref=e298]:
+            - text: 先扣掉共同位移，再看谁还在变
+            - generic [ref=e299]: 教学模拟
+          - generic [ref=e300]:
+            - checkbox "对第二张图做平移对齐" [ref=e301] [cursor=pointer]
+            - text: 对第二张图做平移对齐
+          - img "两帧中的固定星点和运动目标，切换对齐后固定点重合" [ref=e302]:
+            - generic [ref=e314]: 示意图：坐标与位移均为教学设置
+          - generic [ref=e315]: 第二帧的所有点都被共同挪动了，橙色还叠加自己的运动。暂时看不出哪一部分来自相机。
+          - paragraph [ref=e316]: 圆点是第一张图；空心圈是第二张图。蓝色代表固定星场，橙色代表模拟运动目标。对齐后，橙色仍留下自己的位移。
+        - heading "配准残差是什么？" [level=3] [ref=e317]
+        - paragraph [ref=e318]: 对齐后，固定控制点仍可能没有完全重合。剩下的小偏差叫残差。如果一个目标的位移只有这么一点，可能只是对齐误差，不能急着报成运动。
+        - paragraph [ref=e319]:
+          - text: 论文当前缓存的累计平移最大约 0.1772 像素，使用的配准模型还包含稳健仿射残差修正。
+          - strong [ref=e320]: 小平移不等于所有误差都已消失。
+          - text: 后续分类仍需看残差、轨迹和原图。
+        - generic [ref=e321]:
+          - strong [ref=e322]: 这一项只记住：
+          - text: 共同移动先扣掉；剩余位移还得与误差比较。
+        - generic [ref=e323]: 回到论文：3.6“配准、点状关联与运动误差控制”；4.5、图 5。
+        - button "这一项我理解了" [ref=e324] [cursor=pointer]
+      - generic [ref=e325]:
+        - generic [ref=e326]: 第 09 项 / 13 · 时间序列
+        - heading "亮点走动和一条长线，应该用同一套方法吗？" [level=2] [ref=e327]
+        - paragraph [ref=e328]: 慢一点的目标看起来像小点，快一点的目标可能在一次曝光中画出短线。论文把它们分开处理。
+        - generic [ref=e329]:
+          - generic [ref=e330]: 生活类比
+          - paragraph [ref=e331]: 夜里拍一辆车：快门很短时，车灯像两个点；快门较长时，车灯变成光轨。你不能因为“不是圆点”，就把所有光轨都当成无用噪声。
+        - generic [ref=e332]:
+          - generic [ref=e333]:
+            - heading "点状通道" [level=3] [ref=e334]
+            - paragraph [ref=e335]: 把相邻帧里的点一对一关联，看它是否在对齐后持续、规律地移动。一个点不能同时被两个轨迹抢走。
+          - generic [ref=e336]:
+            - heading "线状通道" [level=3] [ref=e337]
+            - paragraph [ref=e338]: 检查细长形状、方向、线长、连续支持，以及多帧中心是否沿合理路径变化。
+        - heading "曝光运动学：两种“走了多远”互相核对" [level=3] [ref=e339]
+        - generic [ref=e340]:
+          - text: 一次曝光里的线长 ≈ 图片里的速度 × 曝光时间
+          - generic [ref=e341]: 这是近似匀速情况下的检查。模糊、边缘截断、长度测量方式都可能改变它。
+        - paragraph [ref=e342]: 例如一个教学目标以 10 像素/秒移动，曝光 1.5 秒，理想线长约 15 像素。再看连续照片里的中心位移，量级应当大致匹配。论文的 R 指标就在比较这两种速度估计。
+        - paragraph [ref=e343]:
+          - strong [ref=e344]: R 接近 1，不是天体身份证。
+          - text: 有些仪器线或固定结构也能给出相符的几何。还要查原图、形态、连续性和异常结构重叠。
+        - figure "真实图像裁剪 上面一行展示短线附近的响应，下面一行是较长的线状结构。十字为缓存中心；每格用了自己的显示拉伸，所以不能按画面白不白直接比较亮度。" [ref=e345]:
+          - img "两个缓存轨迹在四个观测时刻的真实FITS局部裁剪" [ref=e346]
+          - generic [ref=e347]:
+            - generic [ref=e348]: 真实图像裁剪
+            - text: 上面一行展示短线附近的响应，下面一行是较长的线状结构。十字为缓存中心；每格用了自己的显示拉伸，所以不能按画面白不白直接比较亮度。
+        - heading "“预测恢复”为什么要另行标记？" [level=3] [ref=e349]
+        - paragraph [ref=e350]: 如果电脑已经知道一条大概路径，可以在下一帧预测附近再找。这像沿着脚印寻找下一步，通常有帮助，但不是完全不知道位置时的独立发现。论文 L1 的 15 个点中有 5 个预测窗口恢复点，必须保留这个来源。
+        - generic [ref=e351]: 当前缓存有 4 条线状 moving，其中 L4 有“与线状伪影重叠后复核”的标记。论文保留它的算法分类，同时要求优先检查仪器冲突，没有宣称四条都已确认成真实天体。
+        - generic [ref=e352]:
+          - paragraph [ref=e353]: 小检查：连续图片里某个位置总有亮点，就能证明它是恒星吗？
+          - generic [ref=e354]:
+            - button "能，多出现几次就是真星" [ref=e355] [cursor=pointer]
+            - button "不能，固定坏点也可能反复出现" [ref=e356] [cursor=pointer]
+        - generic [ref=e357]:
+          - strong [ref=e358]: 这一项只记住：
+          - text: 轨迹要看时间、形状、残差和来源；电脑给了 moving 标签，不等于物理身份已确认。
+        - generic [ref=e359]: 回到论文：3.7“线状通道与有限曝光运动学”；4.6、表 6、图 6—7。
+        - button "这一项我理解了" [ref=e360] [cursor=pointer]
+      - generic [ref=e361]:
+        - generic [ref=e362]: 第 10 项 / 13 · 多帧融合
+        - heading "把15张图合起来，不是凭空造出更多星星" [level=2] [ref=e363]
+        - paragraph [ref=e364]: 对齐后的多张图可以帮助观察稳定结构和像素变化，但合成结果需要附带“每处用了几张图”的说明。
+        - generic [ref=e365]:
+          - generic [ref=e366]: 生活类比
+          - paragraph [ref=e367]: 同一份笔记由 15 个人抄写。有的字偶尔抄错，你可以参考多数人；某个角落只有一个人写过，就不能说它也有 15 份支持。
+        - paragraph [ref=e368]: 论文用稳健融合：先看多帧读数的中间水平，再排除部分异常读数，最后合成。它同时保存三个东西：
+        - generic [ref=e369]:
+          - generic [ref=e370]:
+            - heading "ADU 合成图" [level=3] [ref=e371]
+            - paragraph [ref=e372]: 融合后的数字图像；显示时会拉伸灰度，便于人眼观察。
+          - generic [ref=e373]:
+            - heading "Coverage 覆盖图" [level=3] [ref=e374]
+            - paragraph [ref=e375]: 这个位置有几帧有效输入。次数多不等于有更多独立天体。
+          - generic [ref=e376]:
+            - heading "Scatter 离散度图" [level=3] [ref=e377]
+            - paragraph [ref=e378]: 各帧读数相互差得多不多。较大差异值得回原图检查。
+          - generic [ref=e379]:
+            - heading "原始逐帧测量" [level=3] [ref=e380]
+            - paragraph [ref=e381]: 运动、通量、形状仍需看原图，不能全被合成显示图替代。
+        - figure "现存合成数组 左：图像长什么样；中：每处有多少帧覆盖；右：多帧读数是否一致。三幅图在回答三个不同问题。" [ref=e382]:
+          - img "论文的合成ADU、有效覆盖帧数和帧间离散度三幅图" [ref=e383]
+          - generic [ref=e384]:
+            - generic [ref=e385]: 现存合成数组
+            - text: 左：图像长什么样；中：每处有多少帧覆盖；右：多帧读数是否一致。三幅图在回答三个不同问题。
+        - paragraph [ref=e386]:
+          - text: 当前画布由 4096×4096 变成 4098×4098，但有效覆盖面积没有显著增加。只是对齐与画布边界处理多出了边框，
+          - strong [ref=e387]: 不能把它宣传成视场扩展，也不能说因此多发现了恒星
+          - text: 。
+        - generic [ref=e388]:
+          - strong [ref=e389]: 这一项只记住：
+          - text: 合成图帮助看清和检查，但必须同时看覆盖和变化，不能靠“图更亮”直接得出新天体结论。
+        - generic [ref=e390]: 回到论文：3.8“稳健图像融合与覆盖记录”；4.8、表 7、图 8。
+        - button "这一项我理解了" [ref=e391] [cursor=pointer]
+      - generic [ref=e392]:
+        - generic [ref=e393]: 第 11 项 / 13 · 已知答案的练习
+        - heading "不知道真实星星有几颗，怎么检验方法？" [level=2] [ref=e394]
+        - paragraph [ref=e395]: 先放入一些位置和亮度已知的模拟源，再看看电脑能找回多少。
+        - generic [ref=e396]:
+          - generic [ref=e397]: 生活类比
+          - paragraph [ref=e398]: 你不知道海滩上原来有多少贝壳，但可以自己在指定位置放 24 个，检查搜索方法能找回多少。这检验的是“这些贝壳在这些条件下的回收”，不是海滩上原有贝壳总数。
+        - paragraph [ref=e399]:
+          - text: 论文已有实验记录在
+          - strong [ref=e400]: 真实图片背景
+          - text: 里注入模拟 PSF 光斑，选择低纹理、高背景和边缘三个条件。每个条件／强度共 24 个无歧义注入位置，分为 3 个布局。候选层与质量层分别统计。
+        - generic [ref=e401]:
+          - generic [ref=e402]:
+            - text: 同样的24个源，发现与通过质量会差多少？
+            - generic [ref=e403]: 历史实验记录，可交互转录
+          - generic [ref=e404]: 背景条件
+          - combobox "背景条件" [ref=e405] [cursor=pointer]:
+            - option "低纹理背景" [selected]
+            - option "高背景"
+            - option "图像边缘"
+          - generic [ref=e406]: 名义注入峰值
+          - combobox "名义注入峰值" [ref=e407] [cursor=pointer]:
+            - option "24 ADU"
+            - option "56 ADU"
+            - option "128 ADU" [selected]
+          - generic [ref=e408]:
+            - generic [ref=e409]:
+              - heading "候选层：有没有提出响应？" [level=3] [ref=e410]
+              - generic [ref=e436]:
+                - text: 24 / 24
+                - generic [ref=e437]: 回收率 100.0%
+            - generic [ref=e438]:
+              - heading "质量层：有没有满足测量条件？" [level=3] [ref=e439]
+              - generic [ref=e465]:
+                - text: 16 / 24
+                - generic [ref=e466]: 回收率 66.7%
+          - generic [ref=e467]: 低纹理条件下，24 个注入源被提出为候选，16 个满足质量规则。两层之差说明，发现能力与质量门控造成的损失应分别报告。
+          - paragraph [ref=e468]: 每个圆点代表一个已知注入源，彩色表示命中，灰色表示未命中。数字来自论文表 4，而不是本网页新做的实验。
+        - paragraph [ref=e469]:
+          - text: 最高档 128 ADU 时，低纹理与高背景都是候选 24/24、质量 16/24；边缘是候选 24/24、质量 0/24。意思是：
+          - strong [ref=e470]: 边缘源可以被发现，却可能无法满足当前测量质量门
+          - text: 。也可能真实源因为门控落选，所以“拒绝”不能直接翻译成“假的”。
+        - heading "Recall、Precision、FDR：三个不同的问题" [level=3] [ref=e471]
+        - table [ref=e473]:
+          - rowgroup [ref=e474]:
+            - row [ref=e475]:
+              - columnheader "指标" [ref=e476]
+              - columnheader "普通话" [ref=e477]
+              - columnheader "需要什么答案" [ref=e478]
+          - rowgroup [ref=e479]:
+            - row [ref=e480]:
+              - cell "回收率／召回率" [ref=e481]
+              - cell "已知应该找到的东西，找回了多少？" [ref=e482]
+              - cell "知道真正存在或注入的目标" [ref=e483]
+            - row [ref=e484]:
+              - cell "Precision（查准率）" [ref=e485]
+              - cell "程序报出来的东西，有多少是对的？" [ref=e486]
+              - cell "能给程序的输出核实真假" [ref=e487]
+            - row [ref=e488]:
+              - cell "FDR（误发现率）" [ref=e489]
+              - cell "统计地控制或评估发现中错误部分的比例" [ref=e490]
+              - cell "明确统计设计、假设或已知真值；不能由 SNR 直接推出" [ref=e491]
+        - heading "24/24，为什么仍要画误差条？" [level=3] [ref=e492]
+        - paragraph [ref=e493]: 做了一次满分练习，不证明下一次永远满分。有限位置只能提供有限信息。论文画 Wilson 区间，用来展示命中计数的小样本不确定性。
+        - generic [ref=e494]:
+          - generic [ref=e495]:
+            - text: 读懂计数区间
+            - generic [ref=e496]: 使用论文分母24
+          - generic [ref=e497]:
+            - text: 24 个源中命中：
+            - status [ref=e498]: "24"
+            - text: 个
+          - slider "24 个源中命中： 个" [ref=e499] [cursor=pointer]: "24"
+          - generic [ref=e500]: 命中比例 100.0%；Wilson 95% 描述性区间约 86.2%—100.0%。24次全部命中，区间下端仍约86.2%，不能说以后必定100%成功。
+          - paragraph [ref=e501]: 这是在二项计数假设下计算的描述性区间。共享背景、PSF 不准确和布局相关性带来的系统误差没有被这条区间完整覆盖，也不是某个源成为恒星的概率。
+        - generic [ref=e502]:
+          - strong [ref=e503]: 这部分证据的实际状态：
+          - text: 原始注入机读输出目前缺失，论文引用的是已有实验文档，本网页同样只转录这些记录并计算区间。不能说这轮写作或网页重新运行了注入实验。
+        - generic [ref=e504]:
+          - strong [ref=e505]: 这一项只记住：
+          - text: 先用已知答案检验一部分能力，再说明条件和误差；不能把有限注入练习当作全图真值证明。
+        - generic [ref=e506]: 回到论文：3.9“真实背景注入与条件化验证”；4.4、表 4、附录 B.1。
+        - button "这一项我理解了" [ref=e507] [cursor=pointer]
+      - generic [ref=e508]:
+        - generic [ref=e509]: 第 12 项 / 13 · 论文结果翻译
+        - heading "这些数字各自在数什么？" [level=2] [ref=e510]
+        - paragraph [ref=e511]: 先问“统计的是哪一层、哪一次实验”，再读数字，最容易避免误解。
+        - table [ref=e513]:
+          - rowgroup [ref=e514]:
+            - row [ref=e515]:
+              - columnheader "论文结果" [ref=e516]
+              - columnheader "它的普通话含义" [ref=e517]
+              - columnheader "不能顺手推成什么" [ref=e518]
+          - rowgroup [ref=e519]:
+            - row [ref=e520]:
+              - cell [ref=e521]:
+                - strong [ref=e522]: 84,594
+                - text: 个首帧候选
+              - cell "电脑在精细单帧路径提出了这么多待检查响应" [ref=e523]
+              - cell "不是84,594颗已确认恒星" [ref=e524]
+            - row [ref=e525]:
+              - cell [ref=e526]:
+                - strong [ref=e527]: 29,260
+                - text: 个质量通过源
+              - cell "其中这么多满足当前检测质量规则" [ref=e528]
+              - cell "不是29,260颗物理恒星的最终真值" [ref=e529]
+            - row [ref=e530]:
+              - cell [ref=e531]:
+                - strong [ref=e532]: 3,000
+                - text: 每帧序列工作集
+              - cell "快速序列路径对排名靠前的这些源进行源级测量与关联" [ref=e533]
+              - cell "不是这一帧只有3,000颗星" [ref=e534]
+            - row [ref=e535]:
+              - cell [ref=e536]:
+                - strong [ref=e537]: 2,334
+                - text: 严格静态质量轨迹
+              - cell "现存序列缓存里符合严格静态分类的质量轨迹" [ref=e538]
+              - cell "不代表其他响应都不真实" [ref=e539]
+            - row [ref=e540]:
+              - cell [ref=e541]:
+                - strong [ref=e542]: "0"
+                - text: 条点状 moving
+              - cell "当前参数下，点状通道没有轨迹通过运动条件" [ref=e543]
+              - cell "不等于图里不存在任何运动目标" [ref=e544]
+            - row [ref=e545]:
+              - cell [ref=e546]:
+                - strong [ref=e547]: "4"
+                - text: 条线状 moving
+              - cell "当前线状通道有4条轨迹通过其运动门控" [ref=e548]
+              - cell "不是已经确认4个真实天体身份" [ref=e549]
+            - row [ref=e550]:
+              - cell [ref=e551]:
+                - strong [ref=e552]: 24/24 与 0/24
+              - cell "某个注入条件中，候选全部命中但质量全部落选" [ref=e553]
+              - cell "不能合并成一个“准确率100%”" [ref=e554]
+            - row [ref=e555]:
+              - cell [ref=e556]:
+                - strong [ref=e557]: −5.4257
+                - text: 仪器星等
+              - cell "当前质量名单最暗仪器候选的相机刻度" [ref=e558]
+              - cell "不是已经标定的标准或绝对星等" [ref=e559]
+            - row [ref=e560]:
+              - cell [ref=e561]:
+                - strong [ref=e562]: 4098×4098
+                - text: 合成画布
+              - cell "对齐融合的输出数字表略大于原始画布" [ref=e563]
+              - cell "不等于有效视场或恒星数量显著增加" [ref=e564]
+        - heading "为什么29,260不能和3,000直接比较？" [level=3] [ref=e565]
+        - paragraph [ref=e566]: 29,260 来自单帧全量精细检测，3,000 是另一条快速序列路径的测量上限。背景处理、精度和工作集都不同。像“全校筛查人数”和“抽样追踪人数”不能当成同一件事。
+        - heading "八类候选的数字，用途是安排复核" [level=3] [ref=e567]
+        - paragraph [ref=e568]:
+          - text: 紧凑质量 26,483；尖峰／支持不足 23,824；弱通量／背景 21,250；边缘／掩膜 11,971；拥挤 905；线状 96；范围异常 44；形状异常 21。它们合计是 84,594，但每一类是首要规则原因，
+          - strong [ref=e569]: 不是八种已经确定的天体类型
+          - text: 。
+        - group [ref=e570]:
+          - generic "论文里的static、persistent、transient是什么意思？" [ref=e571] [cursor=pointer]
+        - generic [ref=e572]:
+          - paragraph [ref=e573]: 小检查：看到“质量通过29,260”，最稳妥的复述是什么？
+          - generic [ref=e574]:
+            - button "29,260个源满足当前质量规则" [ref=e575] [cursor=pointer]
+            - button "已经证明图里有29,260颗恒星" [ref=e576] [cursor=pointer]
+        - generic [ref=e577]:
+          - strong [ref=e578]: 这一项只记住：
+          - text: 数字前的定义比数字本身更重要。读到“多少个”时，先把“什么东西”补全。
+        - generic [ref=e579]: 回到论文：第 4 节全部结果；表 2—7。
+        - button "这一项我理解了" [ref=e580] [cursor=pointer]
+      - generic [ref=e581]:
+        - generic [ref=e582]: 第 13 项 / 13 · 从理解到复述
+        - heading "读完之后，你可以这样介绍这篇论文" [level=2] [ref=e583]
+        - paragraph [ref=e584]: “我们让电脑先找出星空图片里的候选响应，再检查像素、光斑和混叠，测量相对亮度，把连续图片对齐后分析点与线的运动，并用已知模拟源检查不同条件下的回收表现。”
+        - heading "如果只有一分钟" [level=3] [ref=e585]
+        - list [ref=e586]:
+          - listitem [ref=e587]:
+            - strong [ref=e588]: 输入：
+            - text: 15 张卫星连续拍摄的数字星图。
+          - listitem [ref=e589]:
+            - strong [ref=e590]: 方法：
+            - text: 先多找候选，再用原图检查质量；测光与运动分别使用适合的方法。
+          - listitem [ref=e591]:
+            - strong [ref=e592]: 证据：
+            - text: 记录候选数、质量数、轨迹来源、已知注入回收和融合覆盖。
+          - listitem [ref=e593]:
+            - strong [ref=e594]: 边界：
+            - text: 还缺可靠全场天球坐标、相机光度标定和独立真实答案，因此不声称最终恒星总数、标准星等或目标身份已经确认。
+        - heading "论文为什么花这么多篇幅讲“不能证明”？" [level=3] [ref=e595]
+        - paragraph [ref=e596]: 因为科学工作要分清：测到了什么、方法假设什么、哪些解释还没有排除。研究的价值可以是把过程做得清楚可审计，而不是一定给出一个绝对正确的星数。说明边界，能让后续验证更有针对性。
+        - generic [ref=e597]:
+          - generic [ref=e598]:
+            - heading "已经能做" [level=3] [ref=e599]
+            - paragraph [ref=e600]: 核对原文件与缓存；检查候选和质量统计；展示原图结构；核对当前轨迹来源；保留融合的覆盖与离散度。
+          - generic [ref=e601]:
+            - heading "还需要补" [level=3] [ref=e602]
+            - paragraph [ref=e603]: WCS和目录身份；真实设备标定；完整注入输出或重跑；能逐帧对上的运动目标真值。
+        - heading "“星表”和WCS分别在补什么？" [level=3] [ref=e604]
+        - paragraph [ref=e605]:
+          - strong [ref=e606]: 星表
+          - text: 像天体通讯录，给出天空位置和一些标准测量；
+          - strong [ref=e607]: WCS
+          - text: 像把地图叠到照片上的坐标转换，告诉我们照片里某个像素对应天空哪里。有目录但没把照片对上地图，仍不能直接给每个光斑分配身份。即使有一次匹配，也要看唯一性和残差。
+        - paragraph [ref=e608]: 另一个16帧图片包与定位记录的目标编号、时间并不匹配。就像甲同学的答卷不能拿乙同学另一场考试的答案评分，所以这两包不能直接计算定位准确率。
+        - generic [ref=e609]:
+          - paragraph [ref=e610]: 最后一道：怎样评价“线状moving=4”？
+          - generic [ref=e611]:
+            - button "论文已经确认4颗卫星" [ref=e612] [cursor=pointer]
+            - button "当前算法有4条过门轨迹，仍需身份与冲突复核" [ref=e613] [cursor=pointer]
+        - generic [ref=e614]:
+          - strong [ref=e615]: 毕业标准：
+          - text: 你能解释“为什么找亮点之后，还需要质量检查、配准和验证”，就已经抓住了这篇论文的主线。
+        - generic [ref=e616]: 回到论文：第 5 节“讨论与方法局限”、第 6 节“结论”、附录。
+        - button "这一项我理解了" [ref=e617] [cursor=pointer]
+      - generic [ref=e618]:
+        - generic [ref=e619]: 随查随用 · 不必全部背下来
+        - heading "陌生术语，翻译成普通话" [level=2] [ref=e620]
+        - text: 输入中文、英文或缩写
+        - searchbox "输入中文、英文或缩写" [ref=e621]
+        - paragraph [ref=e622]: 共 36 个词条，遇到再查即可
+        - generic [ref=e623]:
+          - generic [ref=e624]:
+            - heading "像素 / Pixel / px" [level=3] [ref=e625]
+            - paragraph [ref=e626]: 数字图像里的一个小格。一个源可覆盖多个格，像素不是恒星。
+          - generic [ref=e627]:
+            - heading "FITS" [level=3] [ref=e628]
+            - paragraph [ref=e629]: 保存科学图像数字与拍摄信息的文件格式。
+          - generic [ref=e630]:
+            - heading "ADU" [level=3] [ref=e631]
+            - paragraph [ref=e632]: 相机输出的数字读数单位。需要标定才能与光子或标准亮度联系。
+          - generic [ref=e633]:
+            - heading "背景 / Background" [level=3] [ref=e634]
+            - paragraph [ref=e635]: 一片区域通常已有的基础信号，需要从源的测量里扣除。
+          - generic [ref=e636]:
+            - heading "噪声 / Noise" [level=3] [ref=e637]
+            - paragraph [ref=e638]: 读数中不希望出现、或无法由目标模型解释的波动；未必完全随机。
+          - generic [ref=e639]:
+            - heading "SNR / 信噪比" [level=3] [ref=e640]
+            - paragraph [ref=e641]: 某种信号测量相对其噪声或误差有多突出。不是天体身份概率。
+          - generic [ref=e642]:
+            - heading "σ / Sigma" [level=3] [ref=e643]
+            - paragraph [ref=e644]: 常用来表示波动尺度或标准差；具体意义要看估计方法与噪声假设。
+          - generic [ref=e645]:
+            - heading "中位数 / MAD" [level=3] [ref=e646]
+            - paragraph [ref=e647]: 用中间水平与典型偏差描述数据，减少少数极端值的影响。
+          - generic [ref=e648]:
+            - heading "PSF / 点扩散函数" [level=3] [ref=e649]
+            - paragraph [ref=e650]: 一个理想点经过相机后形成的光斑形状。
+          - generic [ref=e651]:
+            - heading "Gaussian / 高斯" [level=3] [ref=e652]
+            - paragraph [ref=e653]: 一种中心高、周围渐弱的平滑钟形函数，可近似光斑。
+          - generic [ref=e654]:
+            - heading "DoG / 高斯差分" [level=3] [ref=e655]
+            - paragraph [ref=e656]: 不同模糊程度的图相减，突出某些尺度的结构，用来补充候选。
+          - generic [ref=e657]:
+            - heading "FWHM / 半高全宽" [level=3] [ref=e658]
+            - paragraph [ref=e659]: 光斑在高度达到一半的位置两边相隔多宽，用来描述模糊尺寸。
+          - generic [ref=e660]:
+            - heading "匹配滤波 / Matched filter" [level=3] [ref=e661]
+            - paragraph [ref=e662]: 拿预期信号形状与图像局部比较，形成候选响应。
+          - generic [ref=e663]:
+            - heading "NMS / 非极大值抑制" [level=3] [ref=e664]
+            - paragraph [ref=e665]: 限制相近位置重复报峰的规则。不是物理上分辨两颗星的最终保证。
+          - generic [ref=e666]:
+            - heading "质心 / Centroid" [level=3] [ref=e667]
+            - paragraph [ref=e668]: 根据局部光分布估计的中心，可落在小数像素位置。
+          - generic [ref=e669]:
+            - heading "孔径 / Aperture" [level=3] [ref=e670]
+            - paragraph [ref=e671]: 围住源、加总其读数的测量区域，常用圆形。
+          - generic [ref=e672]:
+            - heading "通量 / Flux" [level=3] [ref=e673]
+            - paragraph [ref=e674]: 在定义的区域中汇总并扣除背景的信号量；具体单位依仪器而定。
+          - generic [ref=e675]:
+            - heading "去混叠 / Deblending" [level=3] [ref=e676]
+            - paragraph [ref=e677]: 判断重叠光里是否有多个可独立测量的源，避免共享光重复计数。
+          - generic [ref=e678]:
+            - heading "BIC / 模型比较" [level=3] [ref=e679]
+            - paragraph [ref=e680]: 比较拟合效果，也给复杂模型加代价。支持一个模型不等于确认物理身份。
+          - generic [ref=e681]:
+            - heading "仪器星等 / m_inst" [level=3] [ref=e682]
+            - paragraph [ref=e683]: 相机信号的对数刻度，零点尚未对齐标准测光系统。
+          - generic [ref=e684]:
+            - heading "测光零点 / Zero point" [level=3] [ref=e685]
+            - paragraph [ref=e686]: 把仪器刻度对齐参考刻度时需要的基准修正。
+          - generic [ref=e687]:
+            - heading "表观星等 / m" [level=3] [ref=e688]
+            - paragraph [ref=e689]: 从观察者位置看到的亮度刻度，数字越大通常越暗。
+          - generic [ref=e690]:
+            - heading "绝对星等 / M" [level=3] [ref=e691]
+            - paragraph [ref=e692]: 把天体假想放到标准距离时的星等，需要距离和相应消光信息。
+          - generic [ref=e693]:
+            - heading "配准 / Registration" [level=3] [ref=e694]
+            - paragraph [ref=e695]: 把多张图放到共同坐标中，减少相机或全图变化的影响。
+          - generic [ref=e696]:
+            - heading "仿射 / Affine" [level=3] [ref=e697]
+            - paragraph [ref=e698]: 允许平移、旋转、缩放、剪切的一类坐标变化；不是完整WCS的替代。
+          - generic [ref=e699]:
+            - heading "残差 / Residual / RMS" [level=3] [ref=e700]
+            - paragraph [ref=e701]: 观测与模型之间剩下的差别；RMS 是概括这些差别大小的一种方式。
+          - generic [ref=e702]:
+            - heading "OLS / 最小二乘" [level=3] [ref=e703]
+            - paragraph [ref=e704]: 找一条线，让测量点到模型的平方偏差总体尽可能小。
+          - generic [ref=e705]:
+            - heading "Coverage / 覆盖" [level=3] [ref=e706]
+            - paragraph [ref=e707]: 一个输出位置有多少帧有效输入支持，不表示有多少个源。
+          - generic [ref=e708]:
+            - heading "Scatter / 离散度" [level=3] [ref=e709]
+            - paragraph [ref=e710]: 多个观测读数彼此有多不一致，用于发现需要检查的区域。
+          - generic [ref=e711]:
+            - heading "注入回收 / Injection recovery" [level=3] [ref=e712]
+            - paragraph [ref=e713]: 放入已知模拟源再检查能找回多少，结果受背景、强度与布局限制。
+          - generic [ref=e714]:
+            - heading "Wilson 区间" [level=3] [ref=e715]
+            - paragraph [ref=e716]: 用命中数和总数计算的小样本比例区间，不覆盖全部设备和布局系统误差。
+          - generic [ref=e717]:
+            - heading "星表 / Catalog / Gaia" [level=3] [ref=e718]
+            - paragraph [ref=e719]: 天体位置与测量的目录；要通过可靠坐标关系与图像匹配。
+          - generic [ref=e720]:
+            - heading "WCS / 世界坐标系统" [level=3] [ref=e721]
+            - paragraph [ref=e722]: 图像像素到天空位置的映射，需要解算和残差验证。
+          - generic [ref=e723]:
+            - heading "真值 / Ground truth" [level=3] [ref=e724]
+            - paragraph [ref=e725]: 来自可靠标注或独立来源的正确答案，才能评价真正找对了多少。
+          - generic [ref=e726]:
+            - heading "候选 / Candidate" [level=3] [ref=e727]
+            - paragraph [ref=e728]: 值得进一步检查的响应；还没有确认是真实天体。
+          - generic [ref=e729]:
+            - heading "工作集 / Workset" [level=3] [ref=e730]
+            - paragraph [ref=e731]: 为了控制计算量，选出来进行某阶段处理的子集，不是全图总数。
+      - generic [ref=e732]:
+        - generic [ref=e733]: 重读原论文时使用
+        - heading "原论文的各部分，分别回答什么？" [level=2] [ref=e734]
+        - table [ref=e736]:
+          - rowgroup [ref=e737]:
+            - row [ref=e738]:
+              - columnheader "原论文位置" [ref=e739]
+              - columnheader "带着这个问题读" [ref=e740]
+              - columnheader "先回看本页" [ref=e741]
+          - rowgroup [ref=e742]:
+            - row [ref=e743]:
+              - cell "摘要、引言" [ref=e744]
+              - cell "想解决什么，为什么简单数亮点不够？" [ref=e745]
+              - cell [ref=e746]:
+                - link "第1项" [ref=e747] [cursor=pointer]:
+                  - /url: "#overview"
+            - row [ref=e748]:
+              - cell "数据与实验口径" [ref=e749]
+              - cell "用的是哪批图？哪些数属于不同路径？" [ref=e750]
+              - cell [ref=e751]:
+                - link "第2项" [ref=e752] [cursor=pointer]:
+                  - /url: "#pixels"
+                - text: 、
+                - link "第12项" [ref=e753] [cursor=pointer]:
+                  - /url: "#results"
+            - row [ref=e754]:
+              - cell "背景、滤波与提案" [ref=e755]
+              - cell "怎样从数字图里提出值得查的位置？" [ref=e756]
+              - cell [ref=e757]:
+                - link "第3项" [ref=e758] [cursor=pointer]:
+                  - /url: "#noise"
+                - text: 、
+                - link "第4项" [ref=e759] [cursor=pointer]:
+                  - /url: "#template"
+            - row [ref=e760]:
+              - cell "质量、PSF与去混叠" [ref=e761]
+              - cell "亮但不可靠的东西怎么处理？" [ref=e762]
+              - cell [ref=e763]:
+                - link "第5项" [ref=e764] [cursor=pointer]:
+                  - /url: "#quality"
+                - text: 、
+                - link "第6项" [ref=e765] [cursor=pointer]:
+                  - /url: "#blend"
+            - row [ref=e766]:
+              - cell "孔径测光与标定" [ref=e767]
+              - cell "怎样测亮度，为什么仪器星等不等于标准星等？" [ref=e768]
+              - cell [ref=e769]:
+                - link "第7项" [ref=e770] [cursor=pointer]:
+                  - /url: "#brightness"
+            - row [ref=e771]:
+              - cell "配准与线状运动" [ref=e772]
+              - cell "怎样排除相机变化、关联轨迹与检查线形？" [ref=e773]
+              - cell [ref=e774]:
+                - link "第8项" [ref=e775] [cursor=pointer]:
+                  - /url: "#alignment"
+                - text: 、
+                - link "第9项" [ref=e776] [cursor=pointer]:
+                  - /url: "#motion"
+            - row [ref=e777]:
+              - cell "融合与注入验证" [ref=e778]
+              - cell "合成图帮助什么？已知答案练习说明什么？" [ref=e779]
+              - cell [ref=e780]:
+                - link "第10项" [ref=e781] [cursor=pointer]:
+                  - /url: "#fusion"
+                - text: 、
+                - link "第11项" [ref=e782] [cursor=pointer]:
+                  - /url: "#validation"
+            - row [ref=e783]:
+              - cell "讨论、结论、附录" [ref=e784]
+              - cell "证据还缺什么，怎样复核来源与误差？" [ref=e785]
+              - cell [ref=e786]:
+                - link "第13项" [ref=e787] [cursor=pointer]:
+                  - /url: "#conclusion"
+        - generic [ref=e788]:
+          - strong [ref=e789]: 依据与状态：
+          - text: 本文对应《天基星图的分层源检测、测光与多帧运动分析方法》现行17页版本，以及论文工程中的 evidence.json。单帧缓存版本21，序列缓存版本71。真实图均从论文已生成图件内嵌，网页没有重跑检测或修改原始数据。生活类比、简化互动和解释为教学辅助；历史注入明确按文档记录展示。编写日期：2026-10-10。
+        - generic [ref=e790]:
+          - button "打印／保存这份解读" [ref=e791] [cursor=pointer]
+          - link "在原项目目录中打开完整论文 PDF" [ref=e792] [cursor=pointer]:
+            - /url: ../output/pdf/rst19-starfield-paper.pdf
+      - generic [ref=e793]: 不必一次记住所有术语。先用自己的话说清“每一步为什么存在”，再回去读公式。这份解读是一份独立新增的学习文档，原论文和既有研究教程保持原样。

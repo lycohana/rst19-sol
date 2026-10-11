@@ -55,7 +55,61 @@ CACHE_VERSION = 21
 # 创新证据，必须失效后重新计算，避免 GUI 显示不完整的相对标尺。
 # 本轮（39）把整组 FITS 内容/目录清单和序列科学上下文纳入身份，并要求
 # 保存的输入清单与当前文件一致，避免旧目录内容在同一 key 下静默复用。
-SEQUENCE_CACHE_VERSION = 39
+# 本轮（40）加入平移后的稳健全局仿射残差校正和数据驱动的运动下限；
+# 旧缓存中的 2--13 px 配准残差可能仍被写成 moving，必须重新计算。
+# 本轮（41）给线状候选加入原始 ADU 连续支撑度；旧序列结果没有该证据，
+# 不能继续伪装成已经完成新口径的分析。
+# 本轮（42）再加入沿线剖面的相对填充度，并要求跨帧 moving 同时满足
+# 连续性与剖面填充；旧结果可能把相邻点源拟合成紫色运动线，必须失效。
+# 本轮（44）加入静态椭圆星像竞争模型的线形差值；旧单帧模型证据不完整，
+# 必须重新计算，避免圆形 PSF 失配被显示成强线。
+# 本轮（45）保存点状运动轨迹与线状运动证据之间的跨通道关联；旧缓存
+# 没有去重审计，不能继续让界面把同一目标显示成两条独立运动证据。
+# 本轮（46）把每个时序线候选重新放回当前帧原始 ADU，补做有限线段与
+# 单星/双星/静态椭圆模型竞争；旧缓存没有这组负例证据，不能继续让界面
+# 把相邻双星或旧的时间差分残差画成运动线。
+# 本轮（47）把长序列线状 moving 的帧覆盖门设为至少一半；3--7 帧的
+# 共线结果仍保留为 candidate，避免旧缓存继续把短时偶合显示成 moving。
+# 本轮（48）把显式 DATE-OBS/EXPOSURE 的线长-帧间位移一致性写入线状
+# 轨迹；旧缓存没有这组 1.5 s 有限曝光证据，必须重新计算。
+# 本轮（49）允许在线状提案中跨过最多两帧残差漏检，并要求重连边通过
+# 1.5 s 曝光速度门；旧结果会把同一路径的短线片段拆成独立候选。
+# 本轮（50）在线状候选的跨帧关联中加入方向与平移端点的软评分；旧
+# 缓存仍是仅按中心距离关联的结果，不能继续冒充当前几何口径。
+# 本轮（51）把关联方法名写入结果元数据，确保 UI/导出报告不会继续
+# 显示旧的“仅中心距离 + 曝光门”口径。
+# 本轮（52）在完整曝光元数据可用时，把线段沿轴正/反两个预期中心也
+# 纳入软评分；旧缓存没有这层曝光位置证据。
+# 本轮（53）把线段轴与跨帧位移方向加入最终 moving 确认门；旧结果
+# 不能继续按“线状 + 位移”口径直接显示为已确认运动目标。
+# 本轮（54）要求 confirmed moving 至少包含一段连续的覆盖帧，避免把
+# 两段互不相连的短线拼成一条轨迹；边缘进出仍保留一帧覆盖放宽。
+# 本轮（55）把已知 LINE_ARTIFACT 高重叠从“仅审计字段”接入 moving
+# 最终门；旧缓存不能继续把固定线状伪影显示成已确认运动目标。
+# 本轮（58）在完整 DATE-OBS + 1.5 s EXPOSURE 元数据下，把序列线状
+# 候选的前端长度下限收窄到曝光感知的 6--8 px 区间；后端模型/跨帧
+# moving 门不变，旧缓存必须重算以确保候选召回口径一致。
+# 本轮（59）把该曝光感知下限贯通到原图补检和多尺度模板库，并为线状
+# 伪影区域保留独立的小预算宽筛；旧缓存的候选入口不同，必须重算。
+# 本轮（60）把线状候选未升级的最终门写入 rejection_reasons，并保存
+# 几何阶段的逐项淘汰计数；旧缓存没有这些解释证据，必须重算。
+# 本轮（61）在跨帧局部关联后加入严格的单帧短线回接；旧缓存没有这层
+# 碎片化轨迹召回，必须重算以保持运动证据一致。
+# 本轮（62）修正短线回接后轨迹点的时间顺序，避免拟合使用错误的首尾帧。
+# 本轮（63）允许两个强连续段带最多两个严格预测的端点 singleton 进入
+# 内部缺帧桥接；第三个强连续段仍拒绝。
+# 本轮（64）在明确 1.5 s 曝光时降低短线 proposal 的面积下限；这只影响
+# 候选召回，后续原图模型、双星负例和轨迹级确认门保持不变。
+# 本轮（65）把通过原图线模型的短线 singleton 统一送入已有回接器，长线
+# singleton 仍保留给独立的共线救援分支。
+# 本轮（66）在两段强短线之间增加预测中心小窗口的原图复检，补点单独
+# 标记为 recovered_by_predicted_roi，不把轨迹外推当作观测。
+# 本轮（67）对末端仅在连续强观测不少于 4 帧且通过完整线模型时允许
+# 单侧局部补检；没有证据仍保持 extrapolated，不伪造观测。
+# 本轮（70）把 1.5 s 面积召回门真正接入 15 帧主线，并记录每帧实际
+# short_min_pixels；同时去掉重复的原图模型复核，并记录线状候选实际
+# 关联半径，缓存必须重新生成。
+SEQUENCE_CACHE_VERSION = 71
 # 其中 ``.npz`` 是注册 15 帧大图的数组缓存；它和检测/序列 JSON 一样
 # 属于可随时删除的派生数据，绝不能与原始 FITS 混为一谈。
 CACHE_SUFFIXES = {".gz", ".json", ".tmp", ".npz"}
@@ -986,6 +1040,7 @@ def _sequence_result_from_dict(payload: Mapping[str, Any]) -> Any:
         FrameSequenceSummary,
         MotionFeaturePoint,
         MotionFeatureTrack,
+        MotionEvidenceLink,
         MotionFrameAudit,
         SequenceResult,
         SourceTrack,
@@ -1052,6 +1107,20 @@ def _sequence_result_from_dict(payload: Mapping[str, Any]) -> Any:
                 angle_deg=float(point["angle_deg"]),
                 bbox=tuple(int(value) for value in point["bbox"]),
                 touches_edge=bool(point["touches_edge"]),
+                continuity_ratio=_float_or_none(point.get("continuity_ratio")),
+                profile_fill_ratio=_float_or_none(point.get("profile_fill_ratio")),
+                line_artifact_overlap_fraction=_float_or_none(point.get("line_artifact_overlap_fraction")),
+                line_template_snr=_float_or_none(point.get("line_template_snr")),
+                line_vs_point_delta_bic=_float_or_none(point.get("line_vs_point_delta_bic")),
+                line_vs_double_delta_bic=_float_or_none(point.get("line_vs_double_delta_bic")),
+                line_vs_background_delta_bic=_float_or_none(point.get("line_vs_background_delta_bic")),
+                line_vs_elliptical_delta_bic=_float_or_none(point.get("line_vs_elliptical_delta_bic")),
+                single_frame_model=(
+                    str(point["single_frame_model"])
+                    if point.get("single_frame_model") is not None
+                    else None
+                ),
+                single_frame_model_margin_bic=_float_or_none(point.get("single_frame_model_margin_bic")),
             )
             for point in track.get("points", [])
         )
@@ -1063,6 +1132,18 @@ def _sequence_result_from_dict(payload: Mapping[str, Any]) -> Any:
                 displacement_px=float(track["displacement_px"]),
                 speed_px_per_frame=float(track["speed_px_per_frame"]),
                 fit_rms_px=_float_or_none(track.get("fit_rms_px")),
+                evidence_level=str(track.get("evidence_level", "center_motion")),
+                geometry_rms_px=_float_or_none(track.get("geometry_rms_px")),
+                exposure_velocity_ratio=_float_or_none(track.get("exposure_velocity_ratio")),
+                exposure_velocity_log_mad=_float_or_none(track.get("exposure_velocity_log_mad")),
+                exposure_consistency_fraction=_float_or_none(
+                    track.get("exposure_consistency_fraction")
+                ),
+                rejection_reasons=tuple(
+                    str(reason)
+                    for reason in track.get("rejection_reasons", [])
+                    if reason is not None
+                ),
             )
         )
     motion_frame_audits = tuple(
@@ -1078,8 +1159,25 @@ def _sequence_result_from_dict(payload: Mapping[str, Any]) -> Any:
             edge_rejected_count=int(audit["edge_rejected_count"]),
             feature_count=int(audit["feature_count"]),
             max_feature_residual_snr=_float_or_none(audit.get("max_feature_residual_snr")),
+            short_area_rejected_count=int(audit.get("short_area_rejected_count", 0)),
+            length_rejected_count=int(audit.get("length_rejected_count", 0)),
+            axis_ratio_rejected_count=int(audit.get("axis_ratio_rejected_count", 0)),
+            large_area_rejected_count=int(audit.get("large_area_rejected_count", 0)),
+            short_min_pixels=int(audit.get("short_min_pixels", 20)),
         )
         for audit in payload.get("motion_frame_audits", [])
+    )
+    motion_evidence_links = tuple(
+        MotionEvidenceLink(
+            point_track_id=int(link["point_track_id"]),
+            line_track_id=int(link["line_track_id"]),
+            overlap_frame_count=int(link["overlap_frame_count"]),
+            overlap_fraction=float(link["overlap_fraction"]),
+            median_perpendicular_distance_px=float(link["median_perpendicular_distance_px"]),
+            direction_difference_deg=float(link["direction_difference_deg"]),
+        )
+        for link in payload.get("motion_evidence_links", [])
+        if isinstance(link, Mapping)
     )
     fixed_sentinel_payload = payload.get("fixed_sentinel_audit")
     fixed_sentinel_audit = None
@@ -1216,7 +1314,9 @@ def _sequence_result_from_dict(payload: Mapping[str, Any]) -> Any:
         min_presence=int(payload["min_presence"]),
         motion_min_displacement_px=float(payload["motion_min_displacement_px"]),
         max_motion_fit_rms_px=float(payload["max_motion_fit_rms_px"]),
+        motion_line_link_radius_px=float(payload.get("motion_line_link_radius_px", 96.0)),
         motion_features=tuple(motion_features),
+        motion_evidence_links=motion_evidence_links,
         motion_residual_threshold_adu=float(payload.get("motion_residual_threshold_adu", 100.0)),
         motion_reference_mode=str(payload.get("motion_reference_mode", "per_frame_background")),
         motion_frame_audits=motion_frame_audits,
@@ -1254,11 +1354,22 @@ def _sequence_result_from_dict(payload: Mapping[str, Any]) -> Any:
         fixed_sentinel_audit=fixed_sentinel_audit,
         fixed_sentinel_impact_audit=fixed_sentinel_impact_audit,
         relative_photometry=relative_result,
-        track_association_method=str(payload.get("track_association_method", "local_component_hungarian")),
+        track_association_method=str(
+            payload.get(
+                "track_association_method",
+                "local_component_hungarian+exposure_velocity_gate+line_geometry_soft_cost+motion_axis_gate+contiguous_run_gate",
+            )
+        ),
         detector_parameters=tuple(
             (str(key), value)
             for key, value in dict(payload.get("detector_parameters", {})).items()
             if isinstance(key, str) and (value is None or isinstance(value, (bool, int, float, str)))
+        ),
+        registration_model=str(payload.get("registration_model", "translation")),
+        registration_affine_frame_count=int(payload.get("registration_affine_frame_count", 0)),
+        registration_residual_median_px=_float_or_none(payload.get("registration_residual_median_px")),
+        effective_motion_min_displacement_px=_float_or_none(
+            payload.get("effective_motion_min_displacement_px")
         ),
     )
 

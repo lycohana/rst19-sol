@@ -24,7 +24,7 @@ from rst19.models import FitsFrame
 from rst19.photometry import AbsoluteMagnitudeEstimate, FaintestSource, PhotometricCalibration, SourcePhotometry
 from rst19.pipeline import FrameAnalysis
 from rst19.relative_photometry import RelativePhotometryResult
-from rst19.sequence import FixedSentinelAudit, FixedSentinelImpactAudit, FixedSentinelSourceImpact, FrameSequenceSummary, MotionFeaturePoint, MotionFeatureTrack, MotionFrameAudit, SequenceResult, SourceTrack, TrackPoint
+from rst19.sequence import FixedSentinelAudit, FixedSentinelImpactAudit, FixedSentinelSourceImpact, FrameSequenceSummary, MotionEvidenceLink, MotionFeaturePoint, MotionFeatureTrack, MotionFrameAudit, SequenceResult, SourceTrack, TrackPoint
 
 
 def _analysis(frame: FitsFrame) -> FrameAnalysis:
@@ -510,15 +510,24 @@ def test_sequence_cache_round_trip_and_parameter_key(tmp_path: Path) -> None:
         min_presence=2,
         motion_min_displacement_px=2.0,
         max_motion_fit_rms_px=0.75,
+        motion_line_link_radius_px=64.0,
         motion_features=(
             MotionFeatureTrack(
                 9,
-                "candidate",
+                "moving",
                 (MotionFeaturePoint(0, 30.0, 40.0, 30.0, 40.0, 20.0, 50, 40.0, 3.0, 10.0, (10, 20, 50, 60), False),),
                 0.0,
                 0.0,
                 None,
+                "center_motion",
+                None,
+                0.998,
+                0.016,
+                1.0,
             ),
+        ),
+        motion_evidence_links=(
+            MotionEvidenceLink(4, 9, 2, 1.0, 0.25, 0.5),
         ),
         motion_residual_threshold_adu=100.0,
         motion_reference_mode="temporal_median_small_shift",
@@ -606,10 +615,17 @@ def test_sequence_cache_round_trip_and_parameter_key(tmp_path: Path) -> None:
     assert restored.frames[1].timestamp == "2026-01-01T00:00:01"
     assert restored.tracks[0].points[1].aligned_y == 20.8
     assert restored.motion_features[0].points[0].bbox == (10, 20, 50, 60)
+    assert restored.motion_features[0].exposure_velocity_ratio == 0.998
+    assert restored.motion_features[0].exposure_velocity_log_mad == 0.016
+    assert restored.motion_features[0].exposure_consistency_fraction == 1.0
+    assert restored.motion_evidence_links[0].point_track_id == 4
+    assert restored.motion_evidence_links[0].line_track_id == 9
+    assert restored.motion_evidence_group_count == 1
     assert restored.motion_reference_mode == "temporal_median_small_shift"
     assert restored.motion_frame_audits[0].geometry_pass_count == 2
     assert restored.motion_frame_audits[0].max_feature_residual_snr == 42.0
     assert restored.source_working_limit == 6000
+    assert restored.motion_line_link_radius_px == 64.0
     assert restored.calculation_dtype == "float32"
     assert restored.background_model_mode == "shared_sequence_pilot"
     assert restored.persistent_min_presence == 1

@@ -82,6 +82,7 @@ from .mosaic import (
     write_mosaic_artifacts,
 )
 from .sequence import (
+    DEFAULT_FAST_POINT_CANDIDATE_WORKING_LIMIT,
     DEFAULT_FAST_POINT_FIT_RMS_PX,
     DEFAULT_FAST_POINT_GATE_PX,
     DEFAULT_FAST_POINT_MAX_STEP_PX,
@@ -92,6 +93,14 @@ from .sequence import (
     MotionFeaturePoint,
     MotionFeatureTrack,
     MotionFrameAudit,
+    SINGLE_FRAME_ARTIFACT_REVIEW_OVERLAP_FRACTION,
+    SINGLE_FRAME_MODEL_MAX_LENGTH_PX,
+    _single_frame_model_is_supported,
+    _single_frame_model_is_review_candidate,
+    _single_frame_trail_shape_is_supported,
+    _single_frame_trail_shape_reason,
+    _motion_feature_shape_is_supported,
+    _motion_feature_track_shape_is_supported,
     SequenceResult,
     SourceTrack,
     TrackPoint,
@@ -139,6 +148,57 @@ WHITE = "#f2f5ff"
 MONO = "Consolas"
 SANS = "Segoe UI"
 MAX_PREVIEW_ZOOM = 15.0
+
+MOTION_REJECTION_REASON_LABELS = {
+    "SINGLE_FRAME_ONLY": "只有一张图的证据",
+    "NO_CROSS_FRAME_ASSOCIATION": "没有形成跨帧关联",
+    "NO_GEOMETRIC_POINT": "没有留下有效几何点",
+    "INSUFFICIENT_FRAME_PRESENCE": "出现帧数不足",
+    "EDGE_TRUNCATION_INSUFFICIENT_COVERAGE": "贴边但覆盖帧数仍不足",
+    "INSUFFICIENT_DISPLACEMENT": "帧间位移不足",
+    "NO_MOTION_FIT": "无法拟合稳定运动",
+    "MOTION_FIT_RMS_TOO_HIGH": "运动拟合残差过大",
+    "FRAME_SHAPE_INCONSISTENT": "逐帧线形不一致",
+    "COMPACT_DOUBLE_MODEL_PRESENT": "部分帧更像双星",
+    "COMPACT_POINT_MODEL_PRESENT": "部分帧更像单星",
+    "COMPACT_ELLIPTICAL_MODEL_PRESENT": "部分帧更像静态椭圆星像",
+    "RAW_LINE_MODEL_MAJORITY_NOT_MET": "原图线模型未达到多数帧门槛",
+    "MOTION_AXIS_MISMATCH": "线轴与帧间位移方向不一致",
+    "FRAME_GAP_OR_NONCONTIGUOUS": "观测帧存在未解释的缺口",
+    "EXPOSURE_SPEED_INCONSISTENT": "曝光内速度与帧间速度不一致",
+    "LINE_ARTIFACT_OVERLAP": "与固定线状伪影重叠过高",
+    "CONFIRMATION_GATES_NOT_SATISFIED": "最终确认门未全部满足",
+}
+
+
+def _motion_rejection_reason_text(track: MotionFeatureTrack) -> str:
+    """Format structured motion-candidate reasons for the Tk hover line."""
+
+    reasons = tuple(getattr(track, "rejection_reasons", ()) or ())
+    if not reasons:
+        return ""
+    labels = tuple(MOTION_REJECTION_REASON_LABELS.get(reason, reason) for reason in reasons)
+    return "  · 未升级原因：" + "；".join(labels)
+
+
+def _image_direction_text(angle_deg: float | None) -> str:
+    """把图像坐标系角度翻译成用户能直接读懂的方向。"""
+
+    if angle_deg is None or not np.isfinite(float(angle_deg)):
+        return "方向不可估"
+    angle = float(angle_deg) % 360.0
+    labels = (
+        "向右",
+        "右下",
+        "向下",
+        "左下",
+        "向左",
+        "左上",
+        "向上",
+        "右上",
+    )
+    label = labels[int(np.floor((angle + 22.5) / 45.0)) % len(labels)]
+    return f"{label}（{angle:.1f}°）"
 # 当前真实 FITS 抽测后的 GUI 默认分析口径。这里集中保存“默认值”，
 # 让单帧检测、15 帧序列的缓存键和实际调用不会再次发生参数漂移。
 GUI_DEFAULT_THRESHOLD_SIGMA = 4.0
@@ -152,8 +212,17 @@ GUI_DEFAULT_TEMPORAL_CANDIDATE_MIN_SNR = 7.5
 GUI_DEFAULT_TEMPORAL_REFERENCE_MIN_SNR = 15.0
 GUI_DEFAULT_TEMPORAL_MULTISCALE = False
 GUI_DEFAULT_TEMPORAL_MIN_PSF_CORRELATION = 0.8
+# 15 帧运动层的线状提案默认开启；它只属于序列工作区，不能被单帧
+# 结果复用或偷偷带入单帧绘制。
+GUI_DEFAULT_MOTION_MULTISCALE_LINE_PROPOSALS = True
 GUI_DEFAULT_LOCAL_DEBLEND = False
 GUI_DEFAULT_SEQUENCE_FULL = False
+# GUI 默认只把高 SNR 源送入 15 帧点轨迹关联。候选总数仍完整显示，
+# 需要极限暗星/全量稳定场时可勾选“15 帧全量关联（慢）”。
+GUI_DEFAULT_SEQUENCE_WORKING_LIMIT = 3000
+# 高速点源关联只需要高响应候选来找常速度种子；线状运动仍走独立的
+# 原图残差路线。全量模式才恢复 20,000 个点源候选。
+GUI_DEFAULT_FAST_POINT_CANDIDATE_LIMIT = 6000
 # 自动板解 + 测光可以复用当前帧的检测结果，但只能在真正参与检测的
 # 参数完全一致时复用。这里不把零点等测光展示参数混入指纹：它们不会
 # 改变候选峰、源级测量或背景模型；相反，下面每一项都会改变检测结果。
@@ -1267,6 +1336,21 @@ def moving_points_for_frame(
     )
 
 
+def _single_frame_exposure_rate_text(point: MotionFeaturePoint, exposure_s: float | None) -> str:
+    """Return a cautious line-length/exposure hint for the single-frame UI."""
+
+    try:
+        duration = float(exposure_s)
+        length = float(point.length_px)
+    except (TypeError, ValueError):
+        return "曝光内几何速率 —"
+    if not np.isfinite(duration) or duration <= 0.0 or not np.isfinite(length) or length <= 0.0:
+        return "曝光内几何速率 —"
+    rate = length / duration
+    qualifier = "可见线长下限" if point.touches_edge else "线长估计"
+    return f"{qualifier}/{duration:.3f}s ≈ {rate:.1f}px/s"
+
+
 def stable_points_for_frame(
     result: SequenceResult | None,
     frame_index: int,
@@ -1295,12 +1379,16 @@ def trusted_points_for_frame(
     result: SequenceResult | None,
     frame_index: int,
 ) -> tuple[tuple[SourceTrack, TrackPoint], ...]:
-    """Return per-frame quality-passed sources from a sequence result.
+    """Return per-frame non-moving, quality-passed sources from a sequence result.
 
     A ``SequenceResult`` intentionally drops the heavy frame-level
     ``Detection`` objects after tracking.  The quality-passed ``TrackPoint``
     flag is the compact provenance retained for restoring the trusted-source
     layer in the GUI; consensus and stack-faint supplements remain excluded.
+    A track already classified as ``moving`` is deliberately excluded too:
+    passing the single-frame point-source gate does not turn a moving target
+    into a stable star. Its evidence remains available through the motion
+    layer.
     """
 
     if result is None:
@@ -1308,7 +1396,7 @@ def trusted_points_for_frame(
     return tuple(
         (track, point)
         for track in result.tracks
-        if track.evidence_level == "quality"
+        if track.evidence_level == "quality" and track.classification != "moving"
         for point in track.points
         if point.frame_index == frame_index and point.quality_passed
     )
@@ -1365,11 +1453,12 @@ def sequence_frame_index_for_frame(
         if any(resolved(candidate) == selected_path for candidate in candidates):
             return int(frame.frame_index)
 
-    # Results created directly by the current GUI have the same ordering even
-    # when an older/relative path cannot be resolved from the current cwd.
-    for index, path in enumerate(frame_paths):
-        if resolved(path) == selected_path and index < len(result.frames):
-            return int(result.frames[index].frame_index)
+    # Do not infer a frame from list position here.  A cached result can be
+    # incomplete, reordered, or produced from a different directory; a
+    # positional match would silently display F01's evidence on another FITS.
+    # The GUI owns the narrowly-scoped same-length fallback in
+    # ``_sequence_frame_index`` where it can verify the loaded queue as a
+    # whole.  This helper itself must remain path-exact.
     return None
 
 
@@ -1387,6 +1476,153 @@ def motion_features_for_frame(
         if track.classification in {"moving", "candidate"}
         for point in track.points
         if point.frame_index == frame_index
+    )
+
+
+def _format_observed_frame_ranges(points: Sequence[Any]) -> str:
+    """Format the actual observed frames without hiding gaps.
+
+    A track may legitimately reconnect across one or two missing frames after
+    the exposure-velocity and constant-speed gates pass.  Showing only the
+    first and last frame would make ``F05--F14`` look continuous, so every
+    contiguous run is kept in the display text (for example,
+    ``F05--F08、F11--F14``).
+    """
+
+    frame_numbers = sorted(
+        {
+            int(getattr(point, "frame_index", -1)) + 1
+            for point in points
+            if int(getattr(point, "frame_index", -1)) >= 0
+        }
+    )
+    if not frame_numbers:
+        return "—"
+    ranges: list[str] = []
+    start = previous = frame_numbers[0]
+    for frame_number in frame_numbers[1:]:
+        if frame_number == previous + 1:
+            previous = frame_number
+            continue
+        ranges.append(
+            f"F{start:02d}"
+            if start == previous
+            else f"F{start:02d}–F{previous:02d}"
+        )
+        start = previous = frame_number
+    ranges.append(
+        f"F{start:02d}"
+        if start == previous
+        else f"F{start:02d}–F{previous:02d}"
+    )
+    return "、".join(ranges)
+
+
+def _contiguous_motion_point_runs(
+    points: Sequence[TrackPoint | MotionFeaturePoint],
+) -> tuple[tuple[TrackPoint | MotionFeaturePoint, ...], ...]:
+    """Split a history into frame-contiguous runs before drawing it.
+
+    The association layer may bridge a short missing interval so a real faint
+    target is not lost.  That bridge is an inference, not an observed line in
+    the missing frames, so the renderer must never draw a segment across it.
+    """
+
+    ordered = tuple(sorted(points, key=lambda point: int(point.frame_index)))
+    if not ordered:
+        return ()
+    runs: list[list[TrackPoint | MotionFeaturePoint]] = [[ordered[0]]]
+    for point in ordered[1:]:
+        if int(point.frame_index) == int(runs[-1][-1].frame_index) + 1:
+            runs[-1].append(point)
+        else:
+            runs.append([point])
+    return tuple(tuple(run) for run in runs)
+
+
+def _single_frame_overlay_model_is_allowed(
+    track: MotionFeatureTrack,
+    point: MotionFeaturePoint,
+    *,
+    include_weak: bool = False,
+) -> bool:
+    """Return whether a single-frame line may enter the motion overlay.
+
+    The single-frame detector writes a local competing-model result.  A point
+    or double-star winner is useful audit information, but it is not a line
+    and must never be drawn as one.  A barely-tied line fit can enter the
+    explicit review layer as a dashed candidate when ``include_weak`` is true;
+    it still has to be the local model winner with complete weak-evidence
+    comparisons (``Delta-BIC >= 2``).  A compact source whose line and ellipse
+    are effectively tied stays in the audit table instead of acquiring a
+    short decorative line from PCA noise.
+    """
+
+    if track.evidence_level != "single_frame_trail":
+        return False
+    model = point.single_frame_model
+    if model not in {"line", "long_line_profile"}:
+        return False
+    return _single_frame_model_is_supported(point) or (
+        include_weak and _single_frame_model_is_review_candidate(point)
+    )
+
+
+def _single_frame_line_model_is_supported_for_display(point: MotionFeaturePoint) -> bool:
+    """Require statistical line evidence before drawing a solid single-frame line.
+
+    A geometry proposal may still be shown as a dashed, explicitly uncertain
+    candidate. A solid line, however, must also have the local model winner and
+    its Delta-BIC/SNR gates. The model is mandatory for current single-frame
+    display; this helper is called only after the track-level provenance gate.
+    """
+
+    return _single_frame_model_is_supported(point)
+
+
+def _motion_overlay_candidate_is_allowed(
+    track: MotionFeatureTrack,
+    point: MotionFeaturePoint,
+) -> bool:
+    """Keep detector-fixed line artifacts out of the motion canvas.
+
+    A high overlap with the detector's linear-artifact mask is still retained
+    in the audit tables and in the raw candidate counts.  A singleton with
+    only ``candidate`` evidence is normally not useful on the canvas: a fixed
+    instrument line is then the most likely explanation.  The exception is a
+    ``long_line_profile`` result, which is kept as an explicit ``ARTIFACT?``
+    review line so a very long exposure structure is not silently lost.  A
+    multi-frame candidate with a measured displacement is kept as an orange
+    ``TRAIL?`` instead, so an object such as the F09--F15 long line can remain
+    visible without being called confirmed moving.  A track that has already
+    reached ``moving`` is not suppressed here; it still needs the independent
+    cross-frame gates and can legitimately cross an artifact.
+    """
+
+    if track.classification != "candidate":
+        return True
+    overlap = point.line_artifact_overlap_fraction
+    if overlap is None or float(overlap) < SINGLE_FRAME_ARTIFACT_REVIEW_OVERLAP_FRACTION:
+        return True
+    # The full-length profile branch is the only current-frame evidence that
+    # can cover hundreds of pixels.  Hiding it merely because the generic
+    # artifact mask also found that same bright line makes the audit
+    # irreproducible from the image.  Keep it visible as a dashed artifact
+    # review line; its classification remains candidate and its hover text
+    # retains the overlap warning.
+    if (
+        point.single_frame_model == "long_line_profile"
+        and float(point.length_px) > float(SINGLE_FRAME_MODEL_MAX_LENGTH_PX)
+    ):
+        return True
+    # Keep a genuine multi-frame geometric candidate visible for audit, but
+    # hide a one-frame detector line.  This is deliberately a display rule;
+    # it does not upgrade the candidate's classification or weaken the
+    # algorithmic moving gate.
+    return bool(
+        track.presence >= 3
+        and float(track.displacement_px) >= 20.0
+        and track.fit_rms_px is not None
     )
 
 
@@ -1425,6 +1661,7 @@ class StarfieldApp(tk.Tk):
         # 默认单帧流程会自动尝试 Gaia 测光；失败时保留检测结果并把原因
         # 写入主界面，而不是静默回退成看起来像“没做任何事”。
         self.single_auto_error: str | None = None
+        self.single_trail_error: str | None = None
         self.catalog_window: tk.Toplevel | None = None
         self.sequence_result: SequenceResult | None = None
         self.sequence_brief: SequenceBrief | None = None
@@ -1454,6 +1691,7 @@ class StarfieldApp(tk.Tk):
         self.preview_variants: dict[str, Image.Image] = {}
         self.preview_photo: ImageTk.PhotoImage | None = None
         self.preview_shape: tuple[int, int] | None = None
+        self.preview_frame_path: Path | None = None
         self.preview_scale_x = 1.0
         self.preview_scale_y = 1.0
         self.preview_zoom = 1.0
@@ -1480,6 +1718,12 @@ class StarfieldApp(tk.Tk):
         self.active_job_token: int | None = None
         self.active_job_generation: int | None = None
         self.active_job_kind: str | None = None
+        # 15 帧结果与预览是两个异步事件；只有本轮 sequence 结果明确
+        # 标记了“等待当前帧预览”时，预览事件才可以提交 100%。否则切帧
+        # 或旧结果重绘不能伪造一次新的序列完成。
+        self.sequence_result_token: int | None = None
+        self.sequence_result_generation: int | None = None
+        self.sequence_preview_pending = False
         self._closing = False
         self.cache_generation = 0
         self.cache_lock = threading.Lock()
@@ -2564,6 +2808,19 @@ class StarfieldApp(tk.Tk):
         if task_mode_var is not None:
             task_mode_var.set(mode)
 
+        # 悬浮对象带有来源语义：sequence 中的是跨帧轨迹，single 中的是
+        # 当前 FITS 的本地线形。切换工作区时必须清空，不能让旧对象在
+        # 下一次重绘时被重新解释成另一种证据。
+        for hover_name in (
+            "hover_motion_track",
+            "hover_trusted_track",
+            "hover_source",
+            "hover_source_id",
+            "hover_catalog_match",
+        ):
+            if hover_name in self.__dict__:
+                setattr(self, hover_name, None)
+
         single_active = mode == "single"
         single_button = self.__dict__.get("single_mode_button")
         sequence_button = self.__dict__.get("sequence_mode_button")
@@ -2585,18 +2842,24 @@ class StarfieldApp(tk.Tk):
         if single_active:
             eyebrow = "SINGLE FRAME OBSERVATION"
             title = "单帧识别 · 证据分析"
-            subtitle = "当前只回答一张图：星点、最暗可信候选和质量原因；不把 m_inst 当成 M_V。"
-            hint = "当前只解释一张图；跨帧结论请切换到 15 帧分析"
+            subtitle = "当前只回答一张图：星点、曝光内线形和最暗可信候选；不调用 15 帧配准或轨迹关联。"
+            hint = "单帧独立路线：只看当前曝光内线形；方向、速度和 moving 结论请切换到 15 帧分析"
+            brief_section = "SINGLE-FRAME NOTE"
+            evidence_section = "SINGLE-FRAME EVIDENCE"
         else:
             eyebrow = "SEQUENCE ANALYSIS / 15 FRAMES"
             title = "15 帧分析 · 运动与合成简报"
             subtitle = "当前回答连续 15 帧：稳定星场、运动候选、运行方向和注册合成的意义。"
             hint = "当前解释跨帧证据；单张星点详情请切换回单帧识别"
+            brief_section = "15-FRAME BRIEF"
+            evidence_section = "15-FRAME EVIDENCE"
         for name, value in (
             ("header_mode_label", eyebrow),
             ("header_title_label", title),
             ("header_subtitle_label", subtitle),
             ("task_mode_hint_label", hint),
+            ("sequence_brief_section_label", brief_section),
+            ("evidence_section_label", evidence_section),
         ):
             widget = self.__dict__.get(name)
             if widget is not None:
@@ -2604,6 +2867,16 @@ class StarfieldApp(tk.Tk):
         header_mode_label = self.__dict__.get("header_mode_label")
         if header_mode_label is not None:
             header_mode_label.config(fg=AMBER if single_active else SKY)
+        # 稳定星场和叠加暗星必须有 15 帧注册/叠加结果。单帧工作区不只
+        # 是“没有结果”，而是从交互层就不允许选择这两个多帧证据层，避免
+        # 用户误以为单帧分析偷偷跑了序列路线。
+        overlay_mode_buttons = self.__dict__.get("overlay_mode_buttons", {})
+        for multi_frame_mode in ("stable", "stack-faint"):
+            button = overlay_mode_buttons.get(multi_frame_mode)
+            if button is not None:
+                button.config(state="disabled" if single_active else "normal")
+        if single_active and self.overlay_mode_var.get() in {"stable", "stack-faint"}:
+            self.overlay_mode_var.set("quality")
         brief_label = self.__dict__.get("sequence_brief_label")
         if brief_label is not None:
             if single_active:
@@ -2612,6 +2885,12 @@ class StarfieldApp(tk.Tk):
                 brief_label.config(text=self.sequence_brief.text())
             else:
                 brief_label.config(text="尚未完成序列分析\n点击“15 帧动目标”后生成通俗简报")
+        evidence_label = self.__dict__.get("sequence_evidence_label")
+        if evidence_label is not None:
+            if single_active and self.__dict__.get("analysis") is None:
+                evidence_label.config(text="尚未完成单帧分析\n点击“一键分析单张”后显示本帧星点和曝光线形证据")
+            elif not single_active and self.__dict__.get("sequence_result") is None:
+                evidence_label.config(text="尚未完成序列分析\n点击“15 帧动目标”后显示时间、配准和轨迹摘要")
 
         # 15 帧进度、账本和动作按钮只在序列工作区出现，避免把两种
         # 证据层混在同一张“当前结果”里。按钮仍由 _set_job_controls
@@ -2630,6 +2909,9 @@ class StarfieldApp(tk.Tk):
 
         if hasattr(self, "overlay_hint_var"):
             self._update_overlay_hint()
+            # 结果对象可以暂存在内存中，供用户切回原工作区继续查看；但
+            # 工作区切换必须立即改变可见证据，不能等下一次分析才刷新。
+            self._on_overlay_mode_changed()
 
     def _build_controls_starfield(self) -> None:
         """只把复现关键参数常驻，复杂调参进入高级区。"""
@@ -3263,8 +3545,9 @@ class StarfieldApp(tk.Tk):
         mode_box = tk.Frame(viewer_header, bg=PAPER_LIGHT)
         mode_box.pack(side="right", anchor="s")
         self.overlay_mode_var = tk.StringVar(value="quality")
-        # 可信源是主证据层；运动轨迹作为可叠加层，不再抢占整张图的显示权。
-        # 默认打开叠加，单帧长线/15 帧运动证据出现时可以直接对照星点。
+        # 非运动可信源是主证据层；运动轨迹作为可叠加层，不再抢占整张图
+        # 的显示权。已被序列判定为 moving 的点源只在运动层出现，避免
+        # 同一个运动目标同时看起来像“已确认恒星”。
         self.motion_overlay_var = tk.BooleanVar(value=True)
         self._mono_label(mode_box, "PRIMARY LAYER · COMPOSITE", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(anchor="e")
         choice_row = tk.Frame(mode_box, bg=PAPER_LIGHT)
@@ -3277,8 +3560,9 @@ class StarfieldApp(tk.Tk):
             ("motion", "运动候选", MOTION_TRAIL),
             ("catalog", "星表匹配", TEMPORAL_STAR_POINT),
         )
+        self.overlay_mode_buttons: dict[str, tk.Radiobutton] = {}
         for value, label, color in choices:
-            tk.Radiobutton(
+            mode_button = tk.Radiobutton(
                 choice_row,
                 text=label,
                 variable=self.overlay_mode_var,
@@ -3292,7 +3576,9 @@ class StarfieldApp(tk.Tk):
                 relief="flat",
                 bd=0,
                 font=(SANS, 8),
-            ).pack(side="left", padx=(7, 0))
+            )
+            mode_button.pack(side="left", padx=(7, 0))
+            self.overlay_mode_buttons[value] = mode_button
         composite_row = tk.Frame(mode_box, bg=PAPER_LIGHT)
         composite_row.pack(anchor="e", pady=(3, 0))
         self._mono_label(composite_row, "叠加", color=INK_SOFT, size=7, bg=PAPER_LIGHT).pack(side="left", padx=(0, 3))
@@ -3617,6 +3903,9 @@ class StarfieldApp(tk.Tk):
             menu.grab_release()
 
     def _load_frames(self) -> None:
+        # 数据目录是证据结果的归属边界；换目录后不能把上一目录的轨迹
+        # 叠加到新图上。初始化时这里也会被调用一次。
+        self.sequence_result = None
         self.frames = sorted(self.data_dir.glob("*.fits"))
         self._reset_sequence_ledger(len(self.frames))
         self.frame_list.delete(0, tk.END)
@@ -3634,6 +3923,8 @@ class StarfieldApp(tk.Tk):
             self.status_var.set(f"数据目录为空 · {self.data_dir}")
 
     def _on_frame_selected(self, _event: tk.Event) -> None:
+        if self.busy:
+            return
         selection = self.frame_list.curselection()
         if not selection:
             return
@@ -3641,6 +3932,15 @@ class StarfieldApp(tk.Tk):
 
     def _select_frame(self, frame_path: Path) -> None:
         """切帧时先使旧结果失效，再异步载入新帧的无标注预览。"""
+
+        # A sequence result is a transaction over the complete frame queue.
+        # Letting a list click increment ``frame_token`` halfway through the
+        # transaction makes the worker finish successfully but causes the GUI
+        # to discard its result as stale.  The list is also disabled below;
+        # this guard covers programmatic selection and keyboard events.
+        if self.busy:
+            self.status_var.set("15 帧任务运行中 · 完成后可切换当前帧")
+            return
 
         self.frame_token += 1
         token = self.frame_token
@@ -3659,6 +3959,7 @@ class StarfieldApp(tk.Tk):
         self.preview = None
         self.preview_variants = {}
         self.preview_shape = None
+        self.preview_frame_path = None
         self.source_grid = {}
         self.hover_source_id = None
         self.hover_source = None
@@ -3671,18 +3972,17 @@ class StarfieldApp(tk.Tk):
         # 新帧尚未完成单帧检测时，不能沿用上一帧可能选中的“全部候选”
         # 图层；否则用户会看到密集的审计候选，并误以为降噪/质量筛选失效。
         # 如果已有 15 帧结果，则保留运动/稳定图层，让序列证据仍能跨帧查看。
-        if self.sequence_result is None:
+        if not self._sequence_workspace_active():
             self.overlay_mode_var.set("quality")
             self._update_overlay_hint()
         self._reset_result_widgets()
         self._set_job_controls()
         self._set_progress(0.0, "就绪")
-        if not self.busy and self.sequence_result is None:
+        if not self.busy and not self._sequence_workspace_active():
             self._set_sequence_progress(0.0, f"{len(self.frames)} 帧待运行")
         self.canvas.delete("all")
         self.hover_info_var.set("正在载入当前帧预览 · 尚未运行检测")
         self.status_var.set(f"已切换 {frame_path.name} · 正在载入预览")
-
         def worker() -> None:
             try:
                 frame = read_fits(frame_path)
@@ -3811,6 +4111,17 @@ class StarfieldApp(tk.Tk):
     def _set_job_controls(self) -> None:
         """根据当前后台任务状态同步按钮，避免切帧把旧任务误报成空闲。"""
 
+        # 分析期间锁住工作区切换。单帧和 15 帧的证据层、结果容器不同，
+        # 如果用户在后台任务尚未结束时切换工作区，旧任务的预览事件可能
+        # 被新工作区消费，表现为“结果算出来了但没有线”或旧摘要回填。
+        mode_state = "disabled" if self.busy else "normal"
+        for mode_button in (
+            self.__dict__.get("single_mode_button"),
+            self.__dict__.get("sequence_mode_button"),
+        ):
+            if mode_button is not None:
+                mode_button.config(state=mode_state)
+
         photometry_button = self.__dict__.get("photometry_button")
         if photometry_button is not None:
             photometry_button.config(state="disabled" if self.busy or self.selected_frame is None else "normal")
@@ -3818,9 +4129,19 @@ class StarfieldApp(tk.Tk):
         motion_button = self.__dict__.get("motion_button")
         cache_button = self.__dict__.get("cache_button")
         evidence_button = self.__dict__.get("evidence_button")
+        # 15 帧按钮只能在明确进入序列工作区后启用。单帧分析完成后，
+        # 即使内存里还保留旧的 sequence_result，也不能把它暴露成当前结果。
+        sequence_available = self._sequence_workspace_active() and self.sequence_result is not None
         if self.busy:
+            frame_list = self.__dict__.get("frame_list")
+            if frame_list is not None:
+                frame_list.config(state="disabled")
             if run_button is not None:
-                run_button.config(state="disabled", text="正在分析单张…")
+                run_text = {
+                    "sequence": "单帧分析（15帧运行中）",
+                    "mosaic": "单帧分析（合成中）",
+                }.get(self.active_job_kind, "正在分析单张…")
+                run_button.config(state="disabled", text=run_text)
             busy_text = "15 帧分析中…" if self.active_job_kind == "sequence" else "正在分析…"
             if motion_button is not None:
                 motion_button.config(state="disabled", text=busy_text)
@@ -3835,6 +4156,9 @@ class StarfieldApp(tk.Tk):
             if evidence_button is not None:
                 evidence_button.config(state="disabled")
         else:
+            frame_list = self.__dict__.get("frame_list")
+            if frame_list is not None:
+                frame_list.config(state="normal")
             if run_button is not None:
                 run_button.config(state="normal", text="✦  一键分析单张（含 Gaia 测光）")
             if motion_button is not None:
@@ -3842,13 +4166,13 @@ class StarfieldApp(tk.Tk):
             mosaic_button = self.__dict__.get("mosaic_button")
             if mosaic_button is not None:
                 mosaic_button.config(
-                    state="normal" if self.sequence_result is not None else "disabled",
+                    state="normal" if sequence_available else "disabled",
                     text="打开合成大图" if self.mosaic_result is not None else "15 帧合成大图",
                 )
             if cache_button is not None:
                 cache_button.config(state="normal")
             if evidence_button is not None:
-                evidence_button.config(state="normal" if self.sequence_result is not None else "disabled")
+                evidence_button.config(state="normal" if sequence_available else "disabled")
         if "manual_apply_button" in self.__dict__:
             self.manual_apply_button.config(state="disabled" if self.busy or self.selected_frame is None else "normal")
             self.manual_feedback_button.config(
@@ -3972,9 +4296,54 @@ class StarfieldApp(tk.Tk):
     def _sequence_frame_index(self) -> int | None:
         """Return the selected frame's index in the loaded sequence result."""
 
-        if self.sequence_result is None:
-            return self._selected_frame_index()
-        return sequence_frame_index_for_frame(self.sequence_result, self.selected_frame, self.frames)
+        if not self._sequence_workspace_active():
+            return None
+        result = self.__dict__.get("sequence_result")
+        if result is None:
+            return None
+        mapped_index = sequence_frame_index_for_frame(result, self.selected_frame, self.frames)
+        if mapped_index is not None:
+            return mapped_index
+        # 缓存或外部生成的结果可能只是在路径写法上不同。只有两边帧数
+        # 完全一致时才允许按当前队列位置回退，不能把不完整结果静默映射到 F01。
+        selected_index = self._selected_frame_index()
+        positional_queue_is_verified = False
+        if len(result.frames) == len(self.frames):
+            positional_queue_is_verified = all(
+                int(frame.frame_index) == index
+                and Path(frame.path).name == Path(path).name
+                for index, (frame, path) in enumerate(zip(result.frames, self.frames, strict=False))
+            )
+        if (
+            selected_index is not None
+            and positional_queue_is_verified
+            and 0 <= selected_index < len(result.frames)
+        ):
+            return selected_index
+        return None
+
+    def _sequence_workspace_active(self) -> bool:
+        """Return whether the UI is currently allowed to consume 15-frame evidence.
+
+        ``sequence_result`` is intentionally retained when the user switches to
+        the single-frame workspace, so returning to the sequence view is cheap.
+        Retaining it is not permission to draw it in the single-frame view.
+        """
+
+        return self.__dict__.get("task_mode", "single") == "sequence"
+
+    def _motion_evidence_result(self) -> SequenceResult | None:
+        """Return 15-frame evidence only while the 15-frame workspace is active."""
+
+        if not self._sequence_workspace_active():
+            return None
+        return self.__dict__.get("sequence_result")
+
+    def _motion_evidence_frame_index(self) -> int | None:
+        result = self._motion_evidence_result()
+        if result is None:
+            return None
+        return self._sequence_frame_index()
 
     def _on_preview_mode_changed(self) -> None:
         """切换观察层；不重新检测，也不改变原始 ADU 或缓存结果。"""
@@ -3997,6 +4366,8 @@ class StarfieldApp(tk.Tk):
         self,
         shape: tuple[int, int],
         previews: dict[str, Image.Image],
+        *,
+        frame_path: Path | str | None = None,
     ) -> None:
         """Commit an asynchronously rendered preview to the main-thread UI.
 
@@ -4007,6 +4378,8 @@ class StarfieldApp(tk.Tk):
         """
 
         self.preview_shape = shape
+        selected_frame = self.__dict__.get("selected_frame")
+        self.preview_frame_path = Path(frame_path) if frame_path is not None else selected_frame
         self.preview_variants = dict(previews)
         selected_mode = self.preview_mode_var.get()
         self.preview = self.preview_variants.get(selected_mode) or self.preview_variants.get(
@@ -4020,7 +4393,27 @@ class StarfieldApp(tk.Tk):
         self.status_var.set(f"预览已载入 · {mode_label} · 检测使用原始 FITS ADU")
         self._set_job_controls()
         self._update_overlay_hint()
-        self._draw_preview()
+        # ``None`` keeps compatibility with lightweight test doubles/older
+        # integrations; the real renderer returns False only when it could not
+        # draw because the preview or canvas is unavailable.
+        preview_drawn = self._draw_preview() is not False
+        # 序列结果可能先于异步预览到达；只有图像真的画出来后，才发布
+        # 100% 终态。预览事件晚到时会再次进入这里并完成提交。
+        sequence_preview_pending = bool(self.__dict__.get("sequence_preview_pending", False))
+        sequence_result_token = self.__dict__.get("sequence_result_token")
+        sequence_result_generation = self.__dict__.get("sequence_result_generation")
+        can_commit_sequence_preview = bool(
+            sequence_preview_pending
+            and preview_drawn
+            and self._sequence_workspace_active()
+            and self.sequence_result is not None
+            and sequence_result_token == getattr(self, "frame_token", None)
+            and sequence_result_generation == getattr(self, "cache_generation", None)
+        )
+        if can_commit_sequence_preview:
+            self.sequence_preview_pending = False
+            self._set_sequence_progress(100.0, f"{len(self.sequence_result.frames)} 帧完成 · 图像已显示")
+            self._set_progress(100.0, "完成")
 
     def _motion_overlay_enabled(self) -> bool:
         """Return whether the motion evidence should be composited over the primary layer."""
@@ -4041,14 +4434,23 @@ class StarfieldApp(tk.Tk):
         if mode == "quality":
             overlay_text = " + 运动轨迹叠加" if motion_overlay else ""
             self.status_var.set(f"可信源主层{overlay_text} · 质量通过的星点优先显示")
-        elif mode == "motion" and self.sequence_result is None and not self.long_trails:
-            self.status_var.set("尚未完成 15 帧动目标分析 · 请先点击“分析 15 帧动目标”")
-        elif mode == "stable" and self.sequence_result is None:
+        elif (
+            mode == "motion"
+            and self._motion_evidence_result() is None
+            and not self.long_trails
+            and not self._sequence_workspace_active()
+        ):
+            if self.active_job_kind == "single":
+                self.status_var.set("单帧曝光线形正在计算 · 完成后显示橙色曝光拖影")
+            else:
+                self.status_var.set("当前没有单帧曝光线形 · 先分析单张，或运行 15 帧确认")
+        elif mode == "stable" and self._motion_evidence_result() is None:
             self.status_var.set("尚未完成 15 帧分析 · 稳定星场需要跨帧持续性证据")
         elif mode == "stable":
             frame_index = self._sequence_frame_index()
+            sequence_result = self._motion_evidence_result()
             visible_count = (
-                len(stable_points_for_frame(self.sequence_result, frame_index))
+                len(stable_points_for_frame(sequence_result, frame_index))
                 if frame_index is not None
                 else 0
             )
@@ -4058,12 +4460,13 @@ class StarfieldApp(tk.Tk):
                 "绿色=严格静态，青色=滤波共识，紫色=时间中值补检"
             )
         elif mode == "stack-faint":
-            if self.sequence_result is None:
+            sequence_result = self._motion_evidence_result()
+            if sequence_result is None:
                 self.status_var.set("尚未完成 15 帧分析 · 叠加暗星层需要跨帧降噪参考图")
             else:
                 frame_index = self._sequence_frame_index()
                 visible_count = (
-                    len(stack_faint_points_for_frame(self.sequence_result, frame_index))
+                    len(stack_faint_points_for_frame(sequence_result, frame_index))
                     if frame_index is not None
                     else 0
                 )
@@ -4073,10 +4476,18 @@ class StarfieldApp(tk.Tk):
                     "绿灰=叠加恢复的暗星，经逐帧强制测光确认，非官方逐星真值"
                 )
         elif mode == "motion":
-            if self.sequence_result is None:
-                self.status_var.set("单帧长轨迹层 · 当前橙线只是形状候选，需跨帧才能确认运动目标")
+            sequence_result = self._motion_evidence_result()
+            if self._sequence_workspace_active() and sequence_result is None:
+                self.status_var.set("尚未完成 15 帧分析 · 当前不会把单帧长线当作跨帧目标")
+            elif self._sequence_workspace_active():
+                self.status_var.set("运动候选层 · 金橙=高速点源轨迹 · 洋红=跨帧线状目标 · 细橙虚线=待复核")
+            elif self.long_trails:
+                self.status_var.set(
+                    "单帧曝光线形层 · 橙实线=有限曝光线形通过 · 橙虚线=待复核 · "
+                    "ARTIFACT?=超长线/伪影冲突"
+                )
             else:
-                self.status_var.set("运动候选层 · 金橙=高速点源轨迹 · 洋红=线状目标 · 橙=待复核线")
+                self.status_var.set("单帧曝光线形层 · 只使用当前图像 · 橙实线=有限曝光线形通过")
         elif mode == "catalog":
             if self.catalog_match_result is None:
                 self.status_var.set("尚未完成星表核验 · 请打开“星表核验”输入目录和光轴先验")
@@ -4093,12 +4504,35 @@ class StarfieldApp(tk.Tk):
         display_mode = getattr(self, "preview_mode_var", None)
         display_value = display_mode.get() if display_mode is not None else PREVIEW_MODE_ENHANCED
         display_note = f"图像：{PREVIEW_MODE_LABELS.get(display_value, '增强显示')}"
+        single_frame = not self._sequence_workspace_active()
+        if single_frame:
+            quality_motion_note = (
+                " · 橙线 = 当前曝光内线形候选"
+                if self._motion_overlay_enabled()
+                else " · 可在运动候选层查看当前曝光内线形"
+            )
+            motion_note = (
+                " · 滚轮缩放≤15× · 只使用当前这一张图 · "
+                "橙实线 = 有限曝光线形模型支持 · 橙虚线 = 形态待复核 · "
+                "ARTIFACT? = 超长线/伪影冲突"
+            )
+        else:
+            quality_motion_note = (
+                " · 橙线 = 单帧曝光线形 / 洋红线 = 跨帧运动"
+                if self._motion_overlay_enabled()
+                else " · 可勾选叠加单帧/跨帧运动证据"
+            )
+            motion_note = (
+                " · 滚轮缩放≤15× · 金橙实线 = 高速点源 moving · "
+                "洋红线 = 跨帧线状 moving · 橙线 = 单帧曝光运动候选 · "
+                "青绿虚线 = 末帧 +5 帧图像平面外推"
+            )
         hints = {
-            "quality": f"{display_note} · 滚轮缩放≤15× · 高亮青点 = Gaussian质量源 · 亮黄点 = 补充算法质量源 · 绿色环 = 最暗可信源{(' · 洋红线 = 运动轨迹叠加' if self._motion_overlay_enabled() else ' · 可勾选叠加运动轨迹')}",
+            "quality": f"{display_note} · 滚轮缩放≤15× · 高亮青点 = 未判定为运动的点源 · 亮黄点 = 补充算法质量源 · 绿色环 = 最暗可信源{quality_motion_note}",
             "candidates": f"{display_note} · 滚轮缩放≤15× · 青点 = Gaussian质量源 · 黄点 = 补充算法质量源 · 紫红点 = 被剔除候选（悬停查看原因）",
             "stable": f"{display_note} · 亮青绿点 = 严格静态源 · 亮蓝点 = 持续源候选 · 该层是序列工作集，不等于全图恒星总数",
             "stack-faint": f"{display_note} · 绿灰点 = 叠加参考图恢复的暗星 · 经逐帧强制测光确认 · 低置信待复核，非官方逐星真值",
-            "motion": f"{display_note} · 滚轮缩放≤15× · 金橙实线 = 高速点源 moving · 洋红线 = 线状 moving · 青绿虚线 = 末帧 +5 帧图像平面外推 · 橙线 = 单帧/待复核",
+            "motion": f"{display_note}{motion_note}",
             "catalog": f"{display_note} · 滚轮缩放≤15× · 高亮青点 = 图像检测位置 · 绿色环 = 星表预测位置 · 仅用于身份核验",
         }
         self.overlay_hint_var.set(hints.get(self.overlay_mode_var.get(), hints["quality"]))
@@ -4194,7 +4628,14 @@ class StarfieldApp(tk.Tk):
         self.catalog_auto_result = None
         self.catalog_frame_path = None
         self.single_auto_error = None
+        self.single_trail_error = None
         self.hover_catalog_match = None
+        # 单帧任务开始时立即丢弃旧序列上下文。否则长线预检已经返回时，
+        # 绘图入口仍可能优先读取上一轮 15 帧的 motion_features，导致刚
+        # 找到的单帧运动候选暂时不显示。
+        self.sequence_result = None
+        self.mosaic_result = None
+        self.long_trails = ()
         self.sequence_brief = None
         if self.__dict__.get("sequence_brief_label") is not None:
             self.sequence_brief_label.config(text="当前为单帧任务\n切换到“15 帧分析”后生成跨帧简报")
@@ -4207,7 +4648,11 @@ class StarfieldApp(tk.Tk):
         self._set_sequence_progress(2.0, "单图 · 准备")
         self._reset_sequence_ledger(len(self.frames), state="pending")
         self._render_running_progress(2.0, "单图 · 准备")
-        self.status_var.set(f"正在分析 {self.selected_frame.name} · 全量检测模式" if max_sources is None else f"正在分析 {self.selected_frame.name} · 返回上限 {max_sources}")
+        self.status_var.set(
+            f"正在分析 {self.selected_frame.name} · 单帧独立路线 · 全量检测模式"
+            if max_sources is None
+            else f"正在分析 {self.selected_frame.name} · 单帧独立路线 · 返回上限 {max_sources}"
+        )
         frame_path = self.selected_frame
         token = self.frame_token
         cache_generation = self.cache_generation
@@ -4239,6 +4684,7 @@ class StarfieldApp(tk.Tk):
                         (8.0 + 6.0 * float(value) / 100.0, f"单帧长线 · {label}"),
                     )
 
+                trail_error: str | None = None
                 try:
                     long_trails = detect_single_frame_long_trails(
                         frame,
@@ -4247,15 +4693,21 @@ class StarfieldApp(tk.Tk):
                     )
                 except Exception as exc:  # noqa: BLE001 - supplementary preview must not block star measurement
                     long_trails = ()
+                    trail_error = f"{type(exc).__name__}: {exc}"
                     self._queue_task_result(
                         "analysis-progress",
                         token,
                         cache_generation,
                         (14.0, f"单帧长线预检跳过 · {type(exc).__name__}"),
                     )
-                # 这是单帧形状候选，不是已经确认的 moving 目标；UI 用橙色
-                # 显示，并在最终分析结果到达时用同一结果替换。
-                self._queue_task_result("trail-preview", token, cache_generation, long_trails)
+                # 这是单帧曝光运动候选，不是已经确认的 moving 目标；UI 用
+                # 橙色显示，并在最终分析结果到达时用同一结果替换。
+                self._queue_task_result(
+                    "trail-preview",
+                    token,
+                    cache_generation,
+                    (long_trails, trail_error),
+                )
 
                 def progress(value: float, label: str) -> None:
                     self._queue_task_result(
@@ -4643,6 +5095,11 @@ class StarfieldApp(tk.Tk):
             messagebox.showerror("参数错误", "15帧参考 SNR 应在 0 至 15σ 之间")
             return
         sequence_full = bool(self.sequence_full_var.get())
+        fast_point_candidate_limit = (
+            DEFAULT_FAST_POINT_CANDIDATE_WORKING_LIMIT
+            if sequence_full
+            else GUI_DEFAULT_FAST_POINT_CANDIDATE_LIMIT
+        )
         stack_faint_recovery = bool(self.stack_faint_recovery_var.get())
         stack_reference_mode = temporal_proposal_mode if temporal_proposal_mode in {"median", "coadd"} else "median"
         self.catalog_analysis = None
@@ -4654,6 +5111,9 @@ class StarfieldApp(tk.Tk):
         self.hover_catalog_match = None
         # 旧序列结果在新一轮计算期间不能继续伪装成当前结果；完成后再写回。
         self.sequence_result = None
+        self.sequence_result_token = None
+        self.sequence_result_generation = None
+        self.sequence_preview_pending = False
         self.sequence_brief = None
         self.mosaic_result = None
         if self.mosaic_window is not None:
@@ -4670,12 +5130,13 @@ class StarfieldApp(tk.Tk):
             "min_distance": min_distance,
             "aperture_radius": 4,
             "max_sources": None if sequence_full else max_sources,
-            "sequence_max_sources": None if sequence_full else (DEFAULT_SEQUENCE_SOURCE_WORKING_LIMIT if max_sources is None else max_sources),
+            "sequence_max_sources": None if sequence_full else (GUI_DEFAULT_SEQUENCE_WORKING_LIMIT if max_sources is None else max_sources),
             "candidate_consensus_min_snr": GUI_DEFAULT_CANDIDATE_CONSENSUS_MIN_SNR,
             "temporal_candidate_min_snr": GUI_DEFAULT_TEMPORAL_CANDIDATE_MIN_SNR,
             "temporal_reference_min_snr": temporal_reference_min_snr,
             "temporal_multiscale": GUI_DEFAULT_TEMPORAL_MULTISCALE,
             "temporal_min_psf_correlation": GUI_DEFAULT_TEMPORAL_MIN_PSF_CORRELATION,
+            "motion_multiscale_line_proposals": GUI_DEFAULT_MOTION_MULTISCALE_LINE_PROPOSALS,
             "temporal_proposal_mode": temporal_proposal_mode,
             "stack_faint_recovery": stack_faint_recovery,
             "stack_reference_mode": stack_reference_mode,
@@ -4707,6 +5168,9 @@ class StarfieldApp(tk.Tk):
             "min_presence": None,
             "persistent_min_presence": None,
             "motion_min_displacement_px": 2.0,
+            # 线状曝光候选使用独立的关联半径；点源 4 px 最近邻门不能
+            # 直接拿来解释 1.5 s 拖影的帧间位移。
+            "motion_line_link_radius_px": max(48.0, 32.0 * psf_fwhm),
             "registration_radius_px": 8.0,
             "max_motion_fit_rms_px": 0.75,
             "fast_point_motion": True,
@@ -4714,6 +5178,7 @@ class StarfieldApp(tk.Tk):
             "fast_point_max_step_px": DEFAULT_FAST_POINT_MAX_STEP_PX,
             "fast_point_gate_px": DEFAULT_FAST_POINT_GATE_PX,
             "fast_point_max_fit_rms_px": DEFAULT_FAST_POINT_FIT_RMS_PX,
+            "fast_point_candidate_limit": fast_point_candidate_limit,
         }
         self.busy = True
         self.active_job_kind = "sequence"
@@ -4724,7 +5189,7 @@ class StarfieldApp(tk.Tk):
         self._set_sequence_progress(2.0, f"准备 · 0/{len(frame_paths)}")
         self._reset_sequence_ledger(len(frame_paths), state="pending")
         self._render_running_progress(2.0, f"准备 · 0/{len(frame_paths)}")
-        working_limit = None if sequence_full else (DEFAULT_SEQUENCE_SOURCE_WORKING_LIMIT if max_sources is None else max_sources)
+        working_limit = None if sequence_full else (GUI_DEFAULT_SEQUENCE_WORKING_LIMIT if max_sources is None else max_sources)
         working_text = "全量源" if working_limit is None else f"≤{working_limit:,} 源"
         self.status_var.set(
             f"正在分析 {len(frame_paths)} 帧 · {DEFAULT_SEQUENCE_WORKERS} 个并行 worker · "
@@ -4741,7 +5206,7 @@ class StarfieldApp(tk.Tk):
                 )
                 key = sequence_cache_key(frame_paths, parameters=sequence_parameters)
                 with self.cache_lock:
-                    result = load_sequence_result(self.cache_dir, key)
+                    result = load_sequence_result(self.cache_dir, key, paths=frame_paths)
                 cache_hit = result is not None
                 if result is None:
                     frame_progress_values = [0.0] * len(frame_paths)
@@ -4763,8 +5228,13 @@ class StarfieldApp(tk.Tk):
                             value = 66.0 if index <= 0 else 68.0
                             label = "相对测光" if index <= 0 else "相对测光完成"
                         elif stage == "fast-point-motion":
-                            value = 70.0 if index <= 0 else 72.0
-                            label = "高速点源关联" if index <= 0 else "高速点源关联完成"
+                            bounded_index = max(0, min(total, int(index)))
+                            value = 70.0 + 2.0 * bounded_index / max(1, total)
+                            label = (
+                                "高速点源关联"
+                                if bounded_index <= 0
+                                else f"高速点源关联 · {bounded_index}/{total}"
+                            )
                         elif stage == "sentinel-audit":
                             value, label = 62.0, "固定值异常码审计"
                         elif stage == "consensus":
@@ -4773,13 +5243,23 @@ class StarfieldApp(tk.Tk):
                             value = 74.0 if index <= 0 else 76.0
                             label = "构建多帧稳健叠加提案" if index <= 0 else "多帧稳健叠加提案完成"
                         elif stage == "stack-faint":
-                            value = 78.0 if index <= 0 else 80.0
-                            label = "叠加参考图暗星恢复" if index <= 0 else "叠加参考图暗星恢复完成"
+                            bounded_index = max(0, min(total, int(index)))
+                            value = 78.0 + 2.0 * bounded_index / max(1, total)
+                            label = (
+                                "叠加参考图暗星恢复"
+                                if bounded_index <= 0
+                                else f"叠加参考图暗星恢复 · {bounded_index}/{total}"
+                            )
                         elif stage == "motion-detail":
                             value = 84.0 + 14.0 * max(0, min(100, index)) / max(1, total)
                             label = f"线状筛选 · {index}%"
                         elif stage == "motion":
                             value, label = 98.0, "线状筛选"
+                        elif stage == "complete":
+                            # 算法线程发出的 complete 只表示计算结束，
+                            # SequenceResult 还没回到主线程；100% 必须由
+                            # sequence 结果事件在卡片、表格和图像刷新后发布。
+                            value, label = 99.0, "正在封装序列结果"
                         else:
                             value, label = 100.0, "完成"
                         self._queue_task_result("analysis-progress", token, cache_generation, (value, label))
@@ -4813,6 +5293,7 @@ class StarfieldApp(tk.Tk):
                         temporal_reference_min_snr=temporal_reference_min_snr,
                         temporal_multiscale=GUI_DEFAULT_TEMPORAL_MULTISCALE,
                         temporal_min_psf_correlation=GUI_DEFAULT_TEMPORAL_MIN_PSF_CORRELATION,
+                        motion_multiscale_line_proposals=GUI_DEFAULT_MOTION_MULTISCALE_LINE_PROPOSALS,
                         temporal_proposal_mode=temporal_proposal_mode,
                         stack_faint_recovery=stack_faint_recovery,
                         stack_reference_mode=stack_reference_mode,
@@ -4830,22 +5311,60 @@ class StarfieldApp(tk.Tk):
                         fast_point_max_step_px=DEFAULT_FAST_POINT_MAX_STEP_PX,
                         fast_point_gate_px=DEFAULT_FAST_POINT_GATE_PX,
                         fast_point_max_fit_rms_px=DEFAULT_FAST_POINT_FIT_RMS_PX,
+                        fast_point_candidate_limit=fast_point_candidate_limit,
+                        motion_line_link_radius_px=max(48.0, 32.0 * psf_fwhm),
                         progress=progress,
                         detail_progress=detail_progress,
                     )
-                    try:
-                        with self.cache_lock:
-                            if token != self.frame_token or cache_generation != self.cache_generation:
-                                cache_state = "已跳过过期序列缓存写入"
-                            else:
-                                save_sequence_result(self.cache_dir, key, result)
-                                cache_state = "已写入序列缓存"
-                    except OSError as exc:
-                        cache_state = f"序列缓存写入失败：{exc}"
+                    # 结果先回主线程，证据页和图像不再等待 200 MB 级序列
+                    # JSON 的压缩写盘。缓存只是派生数据；即使写盘失败，
+                    # 内存中的检测结果也应该照常显示。
+                    cache_state = "结果已完成 · 缓存后台保存中"
+                    self._queue_task_result(
+                        "sequence",
+                        token,
+                        cache_generation,
+                        (result, cache_state, cache_hit),
+                    )
+
+                    def save_sequence_in_background() -> None:
+                        try:
+                            with self.cache_lock:
+                                if token != self.frame_token or cache_generation != self.cache_generation:
+                                    final_cache_state = "已跳过过期序列缓存写入"
+                                else:
+                                    save_sequence_result(self.cache_dir, key, result)
+                                    final_cache_state = "序列缓存已保存"
+                        except OSError as exc:
+                            final_cache_state = f"序列缓存保存失败：{exc}"
+                        self._queue_task_result(
+                            "sequence-cache-state",
+                            token,
+                            cache_generation,
+                            final_cache_state,
+                        )
+
+                    threading.Thread(
+                        target=save_sequence_in_background,
+                        name="rst19-sequence-cache-save",
+                        daemon=True,
+                    ).start()
+                    return
                 else:
                     cache_state = "序列缓存命中"
-                    self._queue_task_result("analysis-progress", token, cache_generation, (100.0, "缓存命中"))
-                self._queue_task_result("analysis-progress", token, cache_generation, (100.0, "完成"))
+                    # 缓存命中只代表后台已经读到结果，不能在真正的 ``sequence``
+                    # 事件写回主线程前把界面标成 100%。否则用户会看到“15 帧
+                    # 完成”，但右侧证据、源表和叠加图仍是空的。终态统一由
+                    # ``_poll_result`` 消费 sequence 事件后发布。
+                    self._queue_task_result(
+                        "analysis-progress",
+                        token,
+                        cache_generation,
+                        (98.0, "缓存已读取 · 正在载入结果"),
+                    )
+                # 这里故意不再提前发送 100%。“完成”必须和 result 一起进入
+                # 主线程，保证进度条、15 帧账本、证据卡片和图像叠加不会出现
+                # 100% 但没有结果的中间状态。
                 self._queue_task_result("sequence", token, cache_generation, (result, cache_state, cache_hit))
             except Exception as exc:  # noqa: BLE001 - worker must return a user-facing error
                 self._queue_task_result("sequence-error", token, cache_generation, exc)
@@ -4926,8 +5445,9 @@ class StarfieldApp(tk.Tk):
                         cache_state = f"大图缓存写入失败：{exc}"
                 else:
                     cache_state = "大图缓存命中"
-                    self._queue_task_result("mosaic-progress", token, cache_generation, (100.0, "大图缓存命中"))
-                self._queue_task_result("mosaic-progress", token, cache_generation, (100.0, "合成大图完成"))
+                    self._queue_task_result("mosaic-progress", token, cache_generation, (99.0, "正在载入大图缓存"))
+                # 100% 由 mosaic 结果事件在结果写回并打开预览后发布，
+                # 不在后台线程提前宣布完成。
                 self._queue_task_result("mosaic", token, cache_generation, (result, cache_state, cache_hit))
             except Exception as exc:  # noqa: BLE001 - worker must return a user-facing error
                 self._queue_task_result("mosaic-error", token, cache_generation, exc)
@@ -4990,6 +5510,13 @@ class StarfieldApp(tk.Tk):
                 self._render_running_progress(float(value), str(progress_text))
             self.after(60, self._poll_result)
             return
+        if kind == "sequence-cache-state":
+            if token == self.frame_token and self.sequence_result is not None:
+                self.status_var.set(
+                    f"{payload} · {len(self.sequence_result.frames)} 帧结果已在界面显示"
+                )
+            self.after(100, self._poll_result)
+            return
         if kind == "mosaic-progress":
             if token == self.frame_token and self.active_job_kind == "mosaic":
                 value, progress_text = payload
@@ -5012,18 +5539,62 @@ class StarfieldApp(tk.Tk):
             self.after(100, self._poll_result)
             return
         if kind == "trail-preview":
-            # 单帧长线与全量星点检测并行推进。只有当前帧、当前单图任务
-            # 的候选才能写入预览，切帧或启动 15 帧任务后丢弃旧事件。
+            # 单帧长线预检与全量星点检测并行推进。预检结果仍然要经过
+            # 局部单星/双星/椭圆/线段模型复核；只有模型允许的线形才进入
+            # 橙色复合层。它仍然只是 candidate，不能在这里升级成 moving。
             if token == self.frame_token and self.active_job_kind == "single":
-                self.long_trails = tuple(payload)
+                trail_error: str | None = None
+                if (
+                    isinstance(payload, tuple)
+                    and len(payload) == 2
+                    and isinstance(payload[0], (tuple, list))
+                    and (payload[1] is None or isinstance(payload[1], str))
+                ):
+                    raw_trails, trail_error = payload
+                    self.long_trails = tuple(raw_trails)
+                else:
+                    # 兼容旧缓存/测试发来的纯候选元组。
+                    self.long_trails = tuple(payload)
+                self.single_trail_error = trail_error
                 if self.long_trails:
-                    # 长线只是叠加证据，不能把可信源主层替换掉。
+                    overlay_trails = tuple(
+                        trail
+                        for trail in self.long_trails
+                        if trail.points
+                        and _single_frame_overlay_model_is_allowed(trail, trail.points[0])
+                        and _motion_overlay_candidate_is_allowed(trail, trail.points[0])
+                    )
+                    visible_count = sum(
+                        _single_frame_line_model_is_supported_for_display(point)
+                        and _single_frame_trail_shape_is_supported(point)
+                        for trail in overlay_trails
+                        for point in trail.points
+                    )
+                    model_rejected_count = len(self.long_trails) - len(overlay_trails)
                     self.overlay_mode_var.set("quality")
                     self._update_overlay_hint()
+                    if overlay_trails:
+                        overlay_text = (
+                            "橙线已叠加在可信源上"
+                            if self._motion_overlay_enabled()
+                            else "橙线候选已生成 · 当前未叠加（勾选“运动轨迹”查看）"
+                        )
+                    else:
+                        overlay_text = "几何提案暂未进入橙线层 · 模型复核未通过"
                     self.status_var.set(
-                        f"已先发现 {len(self.long_trails):,} 条单帧长线候选 · 已叠加在可信源上 · 星点精测继续进行"
+                        f"已先发现 {len(self.long_trails):,} 条单帧曝光线形候选 · "
+                        f"双星/点源/固定伪影审计排除 {model_rejected_count:,} 条 · "
+                        f"其中 {visible_count:,} 条连续线形叠加 · "
+                        f"{overlay_text} · 低填充候选留在审计 · 星点精测继续进行"
                     )
                     self._draw_preview()
+                elif trail_error:
+                    self.status_var.set(
+                        "单帧长线预检失败 · 不能据此判断本帧没有运动候选 · "
+                        f"{trail_error}"
+                    )
+                else:
+                    self.status_var.set("单帧长线预检完成 · 暂未发现满足几何门槛的曝光运动候选")
             self.after(60, self._poll_result)
             return
         if kind == "injection-progress":
@@ -5414,11 +5985,37 @@ class StarfieldApp(tk.Tk):
             self.after(100, self._poll_result)
             return
         if kind == "preview":
-            if self.analysis is None:
-                _frame_path, shape, previews = payload
-                self._apply_preview_result(shape, previews)
+            _frame_path, shape, previews = payload
+            selected_frame = self.selected_frame
+            try:
+                same_frame = (
+                    selected_frame is None
+                    or Path(_frame_path).resolve() == Path(selected_frame).resolve()
+                )
+            except OSError:
+                same_frame = str(_frame_path) == str(selected_frame)
+            if same_frame:
+                # 是否存在上一轮单帧 analysis 不能决定预览是否有效；
+                # 当前 token 已经完成了切帧校验，按路径接收当前帧预览。
+                self._apply_preview_result(shape, previews, frame_path=_frame_path)
         elif kind == "preview-error":
             self.status_var.set(f"预览载入失败 · {payload}")
+            if self.sequence_preview_pending and self.sequence_result is not None:
+                # 算法结果已经在内存中，只有当前帧的可视化失败；不要让
+                # 序列任务永久停在 99%。证据页仍然有效，用户切换帧时
+                # 会再次触发预览载入。
+                self.sequence_preview_pending = False
+                self._set_sequence_progress(100.0, "15 帧结果完成 · 当前帧图像载入失败")
+                self._set_progress(100.0, "结果完成 · 图像载入失败")
+                self.status_var.set(
+                    "15 帧结果已完成，但当前帧图像载入失败 · 可切换帧重试"
+                )
+                self.sequence_evidence_label.config(
+                    text=(
+                        "15 帧分析已完成，证据页已经载入；当前帧图像显示失败。\n"
+                        f"{payload}\n请切换帧后重试图像载入。"
+                    )
+                )
             messagebox.showerror("预览载入失败", str(payload))
         elif kind == "analysis-error":
             self.active_job_token = None
@@ -5470,6 +6067,9 @@ class StarfieldApp(tk.Tk):
             self.preview = self.preview_variants.get(self.preview_mode_var.get()) or self.preview_variants.get(PREVIEW_MODE_ENHANCED)
             # 单帧分析是新的证据上下文，不能继续显示上一次 15 帧分析的轨迹。
             self.sequence_result = None
+            self.sequence_result_token = None
+            self.sequence_result_generation = None
+            self.sequence_preview_pending = False
             self.sequence_brief = None
             self.mosaic_result = None
             if self.mosaic_window is not None:
@@ -5484,25 +6084,74 @@ class StarfieldApp(tk.Tk):
             self.preview_pan_y = 0.0
             self._prepare_source_grid()
             detection = self.analysis.detection
+            # 右侧摘要必须和默认复合图层使用同一套“显示候选”口径。
+            # ``visible_long_trails`` 只代表形态门通过的实线；单帧复合层
+            # 还会显示局部模型为 line/not_fit 的虚线复核候选。此前摘要
+            # 只统计实线，用户会看到多条线却被文字误导成“只找到一条”。
+            overlay_long_trails = tuple(
+                trail
+                for trail in self.long_trails
+                if trail.points
+                and _single_frame_overlay_model_is_allowed(trail, trail.points[0])
+                and _motion_overlay_candidate_is_allowed(trail, trail.points[0])
+            )
+            visible_long_trails = tuple(
+                trail
+                for trail in overlay_long_trails
+                if trail.points
+                and _single_frame_line_model_is_supported_for_display(trail.points[0])
+                and _single_frame_trail_shape_is_supported(trail.points[0])
+            )
             single_frame_lines = [
-                "当前为单帧分析",
-                "单帧长线只能作为候选；需要 15 帧序列才能确认 moving",
+                "当前为单帧独立分析（不使用 15 帧配准、关联或速度拟合）",
+                f"本帧叠加 {len(overlay_long_trails):,} 条线形候选 · 实线 {len(visible_long_trails):,} 条 · 虚线待复核 {len(overlay_long_trails) - len(visible_long_trails):,} 条 · 原始候选 {len(self.long_trails):,} 条",
+                "橙实线 = 形态复核较强；橙虚线 = 线形待复核；孤立亮点不作为单帧线形叠加",
+                "单帧只能说明曝光内出现线形，15 帧分析再确认目标、方向和速度",
             ]
+            single_trail_error = self.__dict__.get("single_trail_error")
+            if single_trail_error:
+                single_frame_lines.insert(
+                    1,
+                    "单帧长线预检失败：以下数量不能证明本帧没有运动候选 · "
+                    f"{single_trail_error}",
+                )
             for trail in sorted(
-                (item for item in self.long_trails if item.points),
+                overlay_long_trails,
                 key=lambda item: item.points[0].length_px,
                 reverse=True,
             )[:3]:
                 point = trail.points[0]
+                shape_reason = _single_frame_trail_shape_reason(point)
+                state_text = "实线" if trail in visible_long_trails else "虚线待复核"
                 edge_text = "触边" if point.touches_edge else "未触边"
-                single_frame_lines.append(
-                    f"TRAIL? {trail.track_id:04d} · 长 {point.length_px:.1f}px · 宽 {point.width_px:.1f}px · "
-                    f"方向 {point.angle_deg:.1f}° · residual SNR {point.residual_snr:.1f} · {edge_text}"
+                continuity_text = (
+                    f"连续支撑 {point.continuity_ratio:.0%}"
+                    if point.continuity_ratio is not None
+                    else "连续支撑 —"
                 )
-            if len(self.long_trails) > 3:
-                single_frame_lines.append(f"其余 {len(self.long_trails) - 3} 条候选见运动层悬停信息")
+                profile_fill_text = (
+                    f"中段填充 {point.profile_fill_ratio:.0%}"
+                    if point.profile_fill_ratio is not None
+                    else "中段填充 —"
+                )
+                single_frame_lines.append(
+                    f"单帧曝光线形 {trail.track_id:04d} · {state_text} · 长 {point.length_px:.1f}px · 宽 {point.width_px:.1f}px · "
+                    f"方向 {point.angle_deg:.1f}° · residual SNR {point.residual_snr:.1f} · "
+                    f"{continuity_text} · {profile_fill_text} · {edge_text} · "
+                    f"{_single_frame_exposure_rate_text(point, self.exposure_s)}"
+                    + (f" · {shape_reason}" if shape_reason and trail not in visible_long_trails else "")
+                )
+            if len(overlay_long_trails) > 3:
+                single_frame_lines.append(f"其余 {len(overlay_long_trails) - 3} 条单帧线形候选见运动层悬停信息")
+            if len(self.long_trails) > len(overlay_long_trails):
+                single_frame_lines.append(f"另有 {len(self.long_trails) - len(overlay_long_trails)} 条被点源/双星/椭圆/背景模型解释的几何候选未叠加")
             self.sequence_evidence_label.config(text="\n".join(single_frame_lines))
-            trail_text = f" · 单帧长线候选 {len(self.long_trails):,}" if self.long_trails else " · 未发现满足几何门槛的单帧长线"
+            if single_trail_error:
+                trail_text = f" · 单帧长线预检失败：{single_trail_error}"
+            elif self.long_trails:
+                trail_text = f" · 单帧线形叠加 {len(overlay_long_trails):,}/{len(self.long_trails):,}（实线 {len(visible_long_trails):,}）"
+            else:
+                trail_text = " · 未发现连续线形运动候选"
             if auto_result is not None and auto_result.calibrated:
                 calibration_text = (
                     f" · Gaia 测光完成 · 匹配 {auto_result.analysis.matching.matched_count if auto_result.analysis.matching is not None else 0:,}"
@@ -5531,6 +6180,9 @@ class StarfieldApp(tk.Tk):
             self._set_progress(0.0, "失败")
             self._set_sequence_progress(0.0, f"{len(self.frames)} 帧失败 · 可重试")
             self._mark_sequence_ledger("error")
+            self.sequence_result_token = None
+            self.sequence_result_generation = None
+            self.sequence_preview_pending = False
             self.sequence_brief = None
             if self.__dict__.get("sequence_brief_label") is not None:
                 self.sequence_brief_label.config(text=f"15 帧分析失败\n{payload}")
@@ -5556,14 +6208,55 @@ class StarfieldApp(tk.Tk):
             self.active_job_generation = None
             self.busy = False
             self.active_job_kind = None
-            self._set_job_controls()
-            self._set_progress(100.0, "完成")
             result, cache_state, _cache_hit = payload
+            result_frames = tuple(getattr(result, "frames", ()) or ())
+            loaded_frames = tuple(self.__dict__.get("frames", ()))
+            if not result_frames or (loaded_frames and len(result_frames) != len(loaded_frames)):
+                # 空结果或帧数不一致的缓存不能进入“完成”状态；否则右侧
+                # 仍会显示尚未运行、表格为空，但底部已经显示 100%。
+                self.sequence_result = None
+                self.sequence_result_token = None
+                self.sequence_result_generation = None
+                self.sequence_preview_pending = False
+                self.sequence_brief = None
+                self._set_job_controls()
+                self._set_progress(0.0, "结果不完整")
+                self._set_sequence_progress(0.0, "15 帧结果不完整 · 可重试")
+                self._mark_sequence_ledger("error")
+                message = (
+                    "15 帧计算已返回，但结果不完整："
+                    f"收到 {len(result_frames)} 帧，当前队列 {len(loaded_frames)} 帧。"
+                )
+                if self.__dict__.get("sequence_brief_label") is not None:
+                    self.sequence_brief_label.config(text=message)
+                self.sequence_evidence_label.config(text=f"{message}\n请重新运行 15 帧分析。")
+                self.status_var.set(message)
+                self.after(100, self._poll_result)
+                return
+            # 序列结果只保留轻量轨迹/逐帧摘要，不把上一轮单帧 Detection
+            # 继续当作当前结果。否则主界面的源表、最暗星卡片和悬停信息
+            # 会把单帧证据误显示在 15 帧工作区里。
+            self.analysis = None
+            self.source_photometry_by_id = {}
+            self.catalog_analysis = None
+            self.catalog_match_result = None
+            self.catalog_wcs = None
+            self.catalog_calibration = None
+            self.catalog_auto_result = None
+            self.catalog_frame_path = None
             self.sequence_result = result
+            self.sequence_result_token = token
+            # 三元组旧事件没有 cache generation；它已经通过
+            # ``_event_is_current`` 的 token 检查，因此按当前代际归一化，
+            # 不能让延迟到达的预览永远卡在 99%。
+            self.sequence_result_generation = (
+                event_generation
+                if event_generation is not None
+                else self.__dict__.get("cache_generation", 0)
+            )
+            self.sequence_preview_pending = False
             self.sequence_brief = None
             self.mosaic_result = None
-            self._set_sequence_progress(100.0, f"{len(result.frames)} 帧完成 · {len(result.frames)}/{len(result.frames)}")
-            self._mark_sequence_ledger("completed")
             self.long_trails = ()
             self._set_job_controls()
             # 序列完成后仍以当前帧可信源作为主层；稳定星场和运动证据
@@ -5573,24 +6266,72 @@ class StarfieldApp(tk.Tk):
             display_layer = "可信源主层 + 运动轨迹叠加" if self._motion_overlay_enabled() else "可信源主层"
             moving_features = sum(track.classification == "moving" for track in result.motion_features)
             feature_candidates = sum(track.classification == "candidate" for track in result.motion_features)
+            motion_link_count = int(getattr(result, "motion_evidence_link_count", 0))
+            motion_group_count = int(
+                getattr(
+                    result,
+                    "motion_evidence_group_count",
+                    result.moving_track_count + moving_features,
+                )
+            )
+            effective_motion_gate = getattr(result, "effective_motion_min_displacement_px", None)
+            motion_gate_text = (
+                f"运动门槛 {float(effective_motion_gate):.2f}px"
+                if effective_motion_gate is not None
+                else f"运动门槛 {result.motion_min_displacement_px:.2f}px"
+            )
+            registration_text = (
+                f"配准 {getattr(result, 'registration_model', 'translation')}"
+                f"/{int(getattr(result, 'registration_affine_frame_count', 0))} 帧"
+            )
             self.status_var.set(
                 f"{cache_state} · {len(result.frames)} 帧分析完成 · 严格静态 {result.stable_source_count:,} · "
                 f"持续候选 {result.persistent_source_count:,} · "
                 f"叠加暗星 {result.stack_faint_count:,} · "
                 f"点轨迹 {result.moving_track_count:,}（高速点 {result.fast_point_motion_count:,}） · "
                 f"线状目标 {moving_features:,} · "
+                f"运动证据组 {motion_group_count:,}（点/线重复 {motion_link_count:,}） · "
                 f"待复核线 {feature_candidates:,} · 当前显示{display_layer} · "
-                f"配准工作集 {'≤' + format(result.source_working_limit, ',') if result.source_working_limit is not None else '全量'}"
+                f"配准工作集 {'≤' + format(result.source_working_limit, ',') if result.source_working_limit is not None else '全量'} · "
+                f"{registration_text} · {motion_gate_text}"
             )
-            self._render_sequence_evidence(result)
-            self._draw_preview()
+            try:
+                self._render_sequence_evidence(result)
+                preview_drawn = self._draw_preview() is not False
+            except Exception as exc:  # noqa: BLE001 - keep the result poll alive
+                # 结果已经写入内存，但证据卡/预览回填失败时，绝不能发布
+                # “完成”。保留结果方便用户重试切帧或重新绘制，并把真正
+                # 的失败点写进状态栏，而不是让轮询线程静默退出。
+                self.sequence_preview_pending = False
+                error_text = f"{type(exc).__name__}: {exc}"
+                self._set_sequence_progress(0.0, "结果已计算 · 界面回填失败 · 可重试")
+                self._set_progress(0.0, "界面回填失败")
+                self._mark_sequence_ledger("error")
+                self.status_var.set(f"{cache_state} · 15 帧结果已计算，但界面回填失败：{error_text}")
+                self.sequence_evidence_label.config(
+                    text=f"15 帧计算已完成，但结果显示失败\n{error_text}\n请切换帧后重试或重新运行 15 帧分析。"
+                )
+                self.after(100, self._poll_result)
+                return
+            # “完成”只在 result 已写入、卡片/表格/叠加图都完成刷新后发布。
+            # 如果预览事件晚到，先停在 99%，由 _apply_preview_result 继续提交。
+            if preview_drawn:
+                self._set_sequence_progress(100.0, f"{len(result.frames)} 帧完成 · {len(result.frames)}/{len(result.frames)}")
+            else:
+                self.sequence_preview_pending = True
+                self._set_sequence_progress(99.0, f"{len(result.frames)} 帧完成 · 正在载入当前帧图像")
+                self.status_var.set(
+                    f"{cache_state} · {len(result.frames)} 帧结果已完成 · 当前帧预览尚未载入"
+                )
+            self._mark_sequence_ledger("completed")
+            self._set_job_controls()
+            self._set_progress(100.0 if preview_drawn else 99.0, "完成" if preview_drawn else "正在载入图像")
         elif kind == "mosaic":
             self.active_job_token = None
             self.active_job_generation = None
             self.busy = False
             self.active_job_kind = None
             self._set_job_controls()
-            self._set_progress(100.0, "合成大图完成")
             result, cache_state, _cache_hit = payload
             self.mosaic_result = result
             if self.sequence_result is not None:
@@ -5601,6 +6342,8 @@ class StarfieldApp(tk.Tk):
                 f"覆盖 {result.covered_pixel_count:,} px · 重叠 {result.overlap_pixel_count:,} px"
             )
             self._show_mosaic_window(result, cache_state=cache_state)
+            self._set_sequence_progress(100.0, f"合成大图完成 · {result.output_shape[1]}×{result.output_shape[0]} px")
+            self._set_progress(100.0, "合成大图完成")
         self.after(100, self._poll_result)
 
     def _reset_result_widgets(self) -> None:
@@ -5618,18 +6361,34 @@ class StarfieldApp(tk.Tk):
                 "严格 M 还需要可靠距离/视差和同波段消光。"
             )
         )
-        if self.sequence_result is None:
-            self.sequence_brief = None
-            if self.__dict__.get("sequence_brief_label") is not None:
-                self.sequence_brief_label.config(text="尚未完成序列分析\n切换到“15 帧分析”后生成跨帧简报")
-            self.sequence_evidence_label.config(text="尚未完成序列分析\n点击“15 帧动目标”后显示时间、配准和轨迹摘要")
-        else:
-            self._render_sequence_evidence(self.sequence_result)
+        # 先清理旧的当前帧表格，再渲染序列结果。旧顺序会在
+        # ``_render_sequence_evidence`` 填完表格后再次删除，表现为“15 帧
+        # 已完成但 0 rows”。
         self.table_count_label.config(text="0 rows")
         self.hover_info_var.set("将鼠标移到候选点查看坐标、通量、误差、SNR、三层星等和落选原因")
         self.source_photometry_by_id = {}
         for item in self.source_tree.get_children():
             self.source_tree.delete(item)
+
+        if not self._sequence_workspace_active() or self.sequence_result is None:
+            self.sequence_brief = None
+            if self.__dict__.get("sequence_brief_label") is not None:
+                self.sequence_brief_label.config(
+                    text=(
+                        "当前为单帧任务\n切换到“15 帧分析”后生成跨帧简报"
+                        if not self._sequence_workspace_active()
+                        else "尚未完成序列分析\n切换到“15 帧分析”后生成跨帧简报"
+                    )
+                )
+            self.sequence_evidence_label.config(
+                text=(
+                    "当前为单帧任务\n序列简报已隐藏；点击“一键分析单张”刷新本帧证据"
+                    if not self._sequence_workspace_active()
+                    else "尚未完成序列分析\n点击“15 帧动目标”后显示时间、配准和轨迹摘要"
+                )
+            )
+        else:
+            self._render_sequence_evidence(self.sequence_result)
 
     def _prepare_source_grid(self) -> None:
         self.source_grid = {}
@@ -5640,6 +6399,123 @@ class StarfieldApp(tk.Tk):
             cells = {(int(x // 32), int(y // 32)) for x, y in positions}
             for cell in cells:
                 self.source_grid.setdefault(cell, []).append(source)
+
+    def _render_sequence_frame_result(self, result: SequenceResult) -> None:
+        """把序列的轻量逐帧结果回填到主界面。
+
+        ``analyze_sequence`` 为了控制 4096×4096、15 帧数据的内存占用，
+        完成后会释放每帧完整的 ``Detection``。这里不能重新把轨迹冒充
+        成单帧测光表，而是把可证明的计数、跨帧源位置和 SNR 显示出来，
+        对序列结果中没有保存的 peak/magnitude 明确标成“序列层未保留”。
+        这样 15 帧完成后主卡片、源表和图像叠加使用同一份结果上下文。
+        """
+
+        if not result.frames:
+            return
+        try:
+            frame_index = self._sequence_frame_index()
+        except (AttributeError, TypeError, ValueError):
+            frame_index = None
+        if frame_index is None or not 0 <= frame_index < len(result.frames):
+            # Never show another frame's statistics as if they belonged to
+            # the selected FITS.  This is especially important after loading
+            # an old/incomplete cache whose paths cannot be resolved.
+            metric_values = self.__dict__.get("metric_values", {})
+            for name in ("candidate", "returned", "background", "noise", "faintest"):
+                metric = metric_values.get(name)
+                if metric is not None:
+                    metric.config(text="—")
+            detail = self.__dict__.get("faintest_detail")
+            if detail is not None:
+                detail.config(text="当前帧不在这份 15 帧结果中")
+            note = self.__dict__.get("faintest_note")
+            if note is not None:
+                note.config(text="已阻止把其他帧的统计和轨迹显示到当前图像；请重新运行 15 帧分析。")
+            table_count = self.__dict__.get("table_count_label")
+            if table_count is not None:
+                table_count.config(text="0 / 0 跨帧可信源")
+            source_tree = self.__dict__.get("source_tree")
+            if source_tree is not None:
+                for item in source_tree.get_children():
+                    source_tree.delete(item)
+            return
+        frame = result.frames[frame_index]
+
+        metric_values = self.__dict__.get("metric_values", {})
+        metric = metric_values.get("candidate")
+        if metric is not None:
+            metric.config(text=f"{frame.candidate_count:,}")
+        metric = metric_values.get("returned")
+        if metric is not None:
+            metric.config(text=f"{frame.returned_count:,}")
+        for name in ("background", "noise"):
+            metric = metric_values.get(name)
+            if metric is not None:
+                metric.config(text="—")
+
+        title = self.__dict__.get("faintest_metric_title")
+        if title is not None:
+            title.config(text="当前帧可信星点")
+        # ``frame.quality_count`` 是逐帧点源质量门的原始计数，其中可能
+        # 包含后来被跨帧关联判定为 moving 的亮斑。主界面的“可信星点”
+        # 必须与图层和源表使用同一口径，因此这里使用排除 moving 后的
+        # 当前帧 TrackPoint 数量；原始 quality_count 仍保留在序列证据表中。
+        trusted = trusted_points_for_frame(result, frame.frame_index)
+        trusted_count = len(trusted)
+        faintest_value = metric_values.get("faintest")
+        if faintest_value is not None:
+            faintest_value.config(text=f"{trusted_count:,}")
+        detail = self.__dict__.get("faintest_detail")
+        if detail is not None:
+            detail.config(
+                text=(
+                    f"15 帧分析已完成 · 当前 F{frame.frame_index + 1:02d}\n"
+                    f"跨帧可信星点 {trusted_count:,}（已排除运动轨迹点）"
+                )
+            )
+        physical = self.__dict__.get("faintest_physical_label")
+        if physical is not None:
+            physical.config(text="序列层未保留单帧 m_inst / m_cal / M")
+        note = self.__dict__.get("faintest_note")
+        if note is not None:
+            note.config(
+                text=(
+                    "这里显示的是当前帧在 15 帧关联后仍被保留、且尚未判定为运动的可信星点数；"
+                    "15 帧结果不重新计算单帧峰值和星等。需要查看当前帧的"
+                    "m_inst、Gaia 测光或落选原因，请切换到“单帧识别”并运行单帧分析。"
+                )
+            )
+
+        table_count = self.__dict__.get("table_count_label")
+        if table_count is not None:
+            table_count.config(text=f"{min(40, len(trusted)):,} / {len(trusted):,} 跨帧可信源")
+        source_tree = self.__dict__.get("source_tree")
+        if source_tree is None:
+            return
+        for item in source_tree.get_children():
+            source_tree.delete(item)
+        # TrackPoint 没有 peak/通量/magnitude 字段；只填入它确实保存的
+        # detection_id、位置和 SNR，避免把缺失值误标成真实星等。
+        ranked = sorted(
+            trusted,
+            key=lambda item: float(item[1].flux_snr) if item[1].flux_snr is not None else -np.inf,
+            reverse=True,
+        )[:40]
+        for _track, point in ranked:
+            snr = f"{point.flux_snr:.1f}" if point.flux_snr is not None else "—"
+            source_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    f"{point.detection_id:04d}",
+                    f"{point.x:.1f} / {point.y:.1f}",
+                    "序列层未保留",
+                    snr,
+                    "序列层未保留",
+                    "—",
+                    "—",
+                ),
+            )
 
     def _render_analysis(self) -> None:
         assert self.analysis is not None
@@ -5895,6 +6771,7 @@ class StarfieldApp(tk.Tk):
                 self.sequence_brief_label.config(text=self.sequence_brief.text())
             self.sequence_evidence_label.config(text="序列结果为空")
             return
+        self._render_sequence_frame_result(result)
         self.sequence_brief = build_sequence_brief(result, self.__dict__.get("mosaic_result"))
         if self.__dict__.get("sequence_brief_label") is not None:
             self.sequence_brief_label.config(text=self.sequence_brief.text())
@@ -5919,6 +6796,14 @@ class StarfieldApp(tk.Tk):
         shift_norm = float(np.hypot(final_shift[0], final_shift[1]))
         moving_features = [track for track in result.motion_features if track.classification == "moving"]
         moving_point_tracks = [track for track in result.tracks if track.classification == "moving"]
+        motion_link_count = int(getattr(result, "motion_evidence_link_count", 0))
+        motion_group_count = int(
+            getattr(
+                result,
+                "motion_evidence_group_count",
+                len(moving_point_tracks) + len(moving_features),
+            )
+        )
         first_frame = frames[0]
         size_text = f"{first_frame.width_px}×{first_frame.height_px}" if first_frame.width_px and first_frame.height_px else "同尺寸"
         exposure_text = f"{first_frame.exposure_ms:g} ms" if first_frame.exposure_ms is not None else "曝光未知"
@@ -5930,11 +6815,19 @@ class StarfieldApp(tk.Tk):
         for track in result.motion_features:
             if not track.points:
                 continue
-            first_index = track.points[0].frame_index + 1
-            last_index = track.points[-1].frame_index + 1
-            frame_range = f"F{first_index:02d}" if first_index == last_index else f"F{first_index:02d}–F{last_index:02d}"
+            frame_range = _format_observed_frame_ranges(track.points)
             state = "moving" if track.classification == "moving" else "candidate"
-            feature_groups.append(f"{frame_range} {state}")
+            recovered_points = tuple(
+                point
+                for point in track.points
+                if getattr(point, "observation_source", "detected") == "recovered_by_predicted_roi"
+            )
+            recovered_text = (
+                f" · 局部补检 {_format_observed_frame_ranges(recovered_points)}"
+                if recovered_points
+                else ""
+            )
+            feature_groups.append(f"{frame_range} {state}{recovered_text}")
         group_text = "；".join(feature_groups[:3]) if feature_groups else "无"
         if len(feature_groups) > 3:
             group_text += f"；另 {len(feature_groups) - 3} 组"
@@ -5972,19 +6865,34 @@ class StarfieldApp(tk.Tk):
                 " · 宽筛峰证据不可用"
             )
         compact = bool(self.__dict__.get("content_compact", False))
+        registration_model = str(getattr(result, "registration_model", "translation"))
+        affine_frame_count = int(getattr(result, "registration_affine_frame_count", 0))
+        effective_motion_gate = getattr(result, "effective_motion_min_displacement_px", None)
+        registration_summary = (
+            f"配准 {registration_model} · 仿射校正 {affine_frame_count} 帧 · "
+            f"运动有效下限 {float(effective_motion_gate):.2f}px"
+            if effective_motion_gate is not None
+            else f"配准 {registration_model} · 仿射校正 {affine_frame_count} 帧"
+        )
         if compact:
             # 720p 高度下右栏只承担“现在算到哪、主要目标是什么”的职责；
             # 完整逐帧审计仍在“15 帧证据”窗口中，避免文字被裁切后误以为没有结果。
             lines = [
                 f"{len(frames)} 帧 · {size_text} · {duration_text} · Δt {interval_text}",
                 f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集前 {result.source_working_limit:,}" if result.source_working_limit is not None else f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集全量",
-                f"配准 {shift_norm:.2f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · 点源 moving {len(moving_point_tracks):,}",
+                f"配准 {shift_norm:.2f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · "
+                f"补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · 点源 moving {len(moving_point_tracks):,} · "
+                f"运动证据组 {motion_group_count:,}（点/线重复 {motion_link_count:,}）",
+                registration_summary,
             ]
         else:
             lines = [
                 f"{len(frames)} 帧 · {size_text} · {duration_text} · Δt {interval_text} · 曝光 {exposure_text}",
                 f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集前 {result.source_working_limit:,}" if result.source_working_limit is not None else f"候选 {candidate_range}/帧 · 质量 {quality_range}/帧 · 工作集全量",
-                f"配准末端 {shift_norm:.3f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · 补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · 点源 moving {len(moving_point_tracks):,} · 线状 {group_text}",
+                f"配准末端 {shift_norm:.3f}px · {posture_text} · 严格静态 {result.stable_source_count:,} · 持续候选 {result.persistent_source_count:,} · 叠加暗星 {result.stack_faint_count:,} · "
+                f"补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · 点源 moving {len(moving_point_tracks):,} · "
+                f"线状 {group_text} · 运动证据组 {motion_group_count:,}（点/线重复 {motion_link_count:,}）",
+                registration_summary,
             ]
         if fixed_audit_text:
             lines.append(fixed_audit_text)
@@ -6037,9 +6945,19 @@ class StarfieldApp(tk.Tk):
                 if kinematics["predicted_x_px"] is not None and kinematics["predicted_y_px"] is not None:
                     forecast_text = f"  ·  外推 X {float(kinematics['predicted_x_px']):.1f}/Y {float(kinematics['predicted_y_px']):.1f}"
             lines.append(f"主轨迹 F{point.frame_index + 1:02d}–F{last.frame_index + 1:02d} · {speed_text} · 方向 {direction_text}{forecast_text}")
+            recovered_points = tuple(
+                item
+                for item in track.points
+                if getattr(item, "observation_source", "detected") == "recovered_by_predicted_roi"
+            )
+            if recovered_points:
+                lines.append(
+                    f"主轨迹局部补检：{_format_observed_frame_ranges(recovered_points)} · "
+                    "这些帧来自预测中心原图复核，不是轨迹外推"
+                )
             lines.append("图像平面 px/s · 无 WCS/像元尺度时不换算真实速度")
         else:
-            lines.append("尚无跨帧 moving · 单帧长线只能作为 candidate 复核")
+            lines.append("尚无跨帧 moving · 单帧线仍保留为曝光运动候选，不能仅凭一帧确认真实目标")
         self.sequence_evidence_label.config(text="\n".join(lines))
 
     def _show_catalog_match(self) -> None:
@@ -6091,7 +7009,7 @@ class StarfieldApp(tk.Tk):
         if self.analysis is not None and self.analysis.frame.auxiliary is not None:
             center_ra = f"{self.analysis.frame.auxiliary.ra_deg:.8f}"
             center_dec = f"{self.analysis.frame.auxiliary.dec_deg:.8f}"
-        elif self.sequence_result is not None:
+        elif self._sequence_workspace_active() and self.sequence_result is not None:
             selected_index = self._selected_frame_index()
             if selected_index is not None and selected_index < len(self.sequence_result.frames):
                 auxiliary = self.sequence_result.frames[selected_index].auxiliary_dict
@@ -7535,17 +8453,26 @@ class StarfieldApp(tk.Tk):
             (float(np.hypot(shift[0], shift[1])) for shift in result.cumulative_shifts),
             default=0.0,
         )
+        moving_features = [track for track in result.motion_features if track.classification == "moving"]
+        motion_link_count = int(getattr(result, "motion_evidence_link_count", 0))
+        motion_group_count = int(
+            getattr(
+                result,
+                "motion_evidence_group_count",
+                result.moving_track_count + len(moving_features),
+            )
+        )
         feature_groups: list[str] = []
         for track in result.motion_features:
             if not track.points:
                 continue
-            first_frame = track.points[0].frame_index + 1
-            last_frame = track.points[-1].frame_index + 1
-            if first_frame == last_frame:
-                feature_groups.append(f"第 {first_frame} 帧单帧候选")
+            frame_text = _format_observed_frame_ranges(track.points)
+            if len({point.frame_index for point in track.points}) == 1:
+                first_frame = track.points[0].frame_index + 1
+                feature_groups.append(f"第 {first_frame} 帧单帧曝光线形候选")
             else:
                 state = "连续 moving 候选" if track.classification == "moving" else "连续候选"
-                feature_groups.append(f"第 {first_frame}–{last_frame} 帧{state}")
+                feature_groups.append(f"{frame_text} {state}")
         relation_box = tk.Frame(window, bg=PAPER_LIGHT, highlightbackground=PAPER_LINE, highlightthickness=1)
         relation_box.pack(fill="x", padx=24, pady=(0, 13))
         exposure_text = "—"
@@ -7562,7 +8489,10 @@ class StarfieldApp(tk.Tk):
             f"叠加暗星 {result.stack_faint_count:,} · "
             f"补检 {result.candidate_consensus_count:,}（中值 {result.temporal_reference_count:,}） · "
             f"点源 moving {result.moving_track_count:,}（高速点 {result.fast_point_motion_count:,}） · "
-            f"点源工作集 {'≤' + format(result.source_working_limit, ',') if result.source_working_limit is not None else '全量'}"
+            f"线状 moving {len(moving_features):,} · 运动证据组 {motion_group_count:,}（点/线重复 {motion_link_count:,}） · "
+            f"点源工作集 {'≤' + format(result.source_working_limit, ',') if result.source_working_limit is not None else '全量'} · "
+            f"线状关联半径 {float(getattr(result, 'motion_line_link_radius_px', 96.0)):.1f}px · "
+            f"运动有效下限 {float(getattr(result, 'effective_motion_min_displacement_px', result.motion_min_displacement_px) or result.motion_min_displacement_px):.2f}px"
         )
         self._mono_label(relation_box, relation_line, color=INK, size=8, bg=PAPER_LIGHT, anchor="w").pack(
             fill="x", padx=12, pady=(9, 3)
@@ -7600,7 +8530,7 @@ class StarfieldApp(tk.Tk):
         group_text = "；".join(feature_groups) if feature_groups else "当前没有线状候选轨迹"
         self._label(
             relation_box,
-            f"线状证据分组：{group_text}。两组不同时间/位置的线不会自动合并；候选峰数量也不会跨帧相加为恒星总数。",
+            f"线状证据分组：{group_text}。只有通过曝光速度、形态和常速度检查的缺帧片段才会合并；候选峰数量也不会跨帧相加为恒星总数。",
             color=INK_SOFT,
             size=8,
             bg=PAPER_LIGHT,
@@ -7611,6 +8541,7 @@ class StarfieldApp(tk.Tk):
 
         notebook = ttk.Notebook(window)
         notebook.pack(fill="both", expand=True, padx=24, pady=(0, 24))
+        overview_tab = tk.Frame(notebook, bg=PAPER_LIGHT)
         frame_tab = tk.Frame(notebook, bg=PAPER_LIGHT)
         motion_tab = tk.Frame(notebook, bg=PAPER_LIGHT)
         motion_audit_tab = tk.Frame(notebook, bg=PAPER_LIGHT)
@@ -7622,6 +8553,7 @@ class StarfieldApp(tk.Tk):
         injection_tab = tk.Frame(notebook, bg=PAPER_LIGHT)
         sweep_tab = tk.Frame(notebook, bg=PAPER_LIGHT)
         trail_audit_tab = tk.Frame(notebook, bg=PAPER_LIGHT)
+        notebook.add(overview_tab, text="总览")
         notebook.add(frame_tab, text="逐帧表")
         notebook.add(motion_tab, text="线状轨迹")
         notebook.add(motion_audit_tab, text="线状诊断")
@@ -7632,18 +8564,20 @@ class StarfieldApp(tk.Tk):
         notebook.add(visual_tab, text="图证")
         notebook.add(injection_tab, text="星点实验")
         notebook.add(sweep_tab, text="阈值扫描")
-        notebook.add(trail_audit_tab, text="单图长线")
+        notebook.add(trail_audit_tab, text="15帧逐帧长线")
+
+        self._build_sequence_overview_tab(overview_tab, result)
 
         frame_columns = ("frame", "time", "dt", "candidate", "quality", "shift", "attitude")
         frame_tree = ttk.Treeview(frame_tab, columns=frame_columns, show="headings")
         frame_specs = (
-            ("frame", "FRAME", 70),
-            ("time", "DATE-OBS", 190),
-            ("dt", "Δt / s", 80),
-            ("candidate", "CANDIDATE", 100),
-            ("quality", "QUALITY / WORKSET" if result.source_working_limit is not None else "QUALITY", 135),
-            ("shift", "SHIFT / px", 100),
-            ("attitude", "ROLL / PITCH / YAW", 250),
+            ("frame", "帧号", 70),
+            ("time", "观测时间（UTC）", 190),
+            ("dt", "帧间隔（秒）", 100),
+            ("candidate", "候选峰数量", 110),
+            ("quality", "可信星点（工作集）" if result.source_working_limit is not None else "可信星点", 155),
+            ("shift", "相对位移（像素）", 125),
+            ("attitude", "姿态角：横滚 / 俯仰 / 偏航", 280),
         )
         for column, title, width in frame_specs:
             frame_tree.heading(column, text=title)
@@ -7665,27 +8599,52 @@ class StarfieldApp(tk.Tk):
         motion_columns = ("id", "state", "frames", "duration", "speed", "direction", "length", "snr", "rms", "forecast")
         motion_tree = ttk.Treeview(motion_tab, columns=motion_columns, show="headings")
         motion_specs = (
-            ("id", "ID", 70),
-            ("state", "STATE", 100),
-            ("frames", "FRAMES", 90),
-            ("duration", "DURATION / s", 100),
-            ("speed", "SPEED / px/s [95%]", 150),
-            ("direction", "DIRECTION / ° [95%]", 145),
-            ("length", "LENGTH / px", 100),
-            ("snr", "RESIDUAL SNR", 110),
-            ("rms", "FIT RMS / px", 100),
-            ("forecast", "FORECAST X / Y [95%]", 190),
+            ("id", "目标编号", 80),
+            ("state", "判定", 100),
+            ("frames", "出现帧", 110),
+            ("duration", "观测时长 / 秒", 110),
+            ("speed", "速度 / 像素/秒（95%）", 170),
+            ("direction", "方向（图像坐标）", 180),
+            ("length", "线长 / 像素", 100),
+            ("snr", "残差信噪比", 110),
+            ("rms", "拟合误差 / 像素", 110),
+            ("forecast", "短期位置外推", 190),
         )
         for column, title, width in motion_specs:
             motion_tree.heading(column, text=title)
             motion_tree.column(column, width=width, anchor="w", stretch=column == "forecast")
+        self._label(
+            motion_tab,
+            "点击一条线状轨迹可跳到它第一次出现的帧；FRAMES 按实际观测帧列出，内部缺帧不会被当作已观测。",
+            color=INK_SOFT,
+            size=9,
+            bg=PAPER_LIGHT,
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", padx=14, pady=(14, 0))
         motion_scroll = ttk.Scrollbar(motion_tab, orient="vertical", command=motion_tree.yview)
         motion_tree.configure(yscrollcommand=motion_scroll.set)
-        motion_tree.pack(side="left", fill="both", expand=True, padx=(14, 0), pady=14)
-        motion_scroll.pack(side="right", fill="y", padx=(0, 14), pady=14)
+        motion_tree.pack(side="left", fill="both", expand=True, padx=(14, 0), pady=(8, 14))
+        motion_scroll.pack(side="right", fill="y", padx=(0, 14), pady=(8, 14))
+        motion_tree_frame_by_item: dict[str, int] = {}
+
+        def jump_to_motion_track(_event: tk.Event) -> None:
+            selection = motion_tree.selection()
+            if not selection:
+                return
+            target_index = motion_tree_frame_by_item.get(selection[0])
+            if target_index is None or not (0 <= target_index < len(self.frames)):
+                return
+            self.frame_list.selection_clear(0, tk.END)
+            self.frame_list.selection_set(target_index)
+            self.frame_list.activate(target_index)
+            self.frame_list.see(target_index)
+            self._select_frame(self.frames[target_index])
+
+        motion_tree.bind("<<TreeviewSelect>>", jump_to_motion_track)
         for track in result.motion_features:
             points = track.points
-            frame_text = f"{points[0].frame_index + 1}–{points[-1].frame_index + 1}" if points else "—"
+            frame_text = _format_observed_frame_ranges(points)
             duration = ((datetimes[points[-1].frame_index] - datetimes[points[0].frame_index]).total_seconds() if points and datetimes[points[-1].frame_index] is not None and datetimes[points[0].frame_index] is not None else None)
             kinematics = self._track_kinematics(result, track)
             speed = float(kinematics["speed_px_per_s"]) if kinematics is not None else None
@@ -7693,17 +8652,17 @@ class StarfieldApp(tk.Tk):
             speed_text = f"{speed:.2f}" if speed is not None else "—"
             if kinematics is not None and kinematics["speed_ci95_low_px_per_s"] is not None and kinematics["speed_ci95_high_px_per_s"] is not None:
                 speed_text = f"{speed_text} [{float(kinematics['speed_ci95_low_px_per_s']):.2f},{float(kinematics['speed_ci95_high_px_per_s']):.2f}]"
-            direction_text = f"{direction:.1f}" if direction is not None else "—"
+            direction_text = _image_direction_text(direction) if direction is not None else "方向不可估"
             if kinematics is not None and kinematics["direction_ci95_half_width_deg"] is not None:
-                direction_text += f" ±{float(kinematics['direction_ci95_half_width_deg']):.1f}"
+                direction_text += f" ±{float(kinematics['direction_ci95_half_width_deg']):.1f}°"
             forecast = "—"
             if kinematics is not None and kinematics["predicted_x_px"] is not None and kinematics["predicted_y_px"] is not None:
                 forecast = f"{float(kinematics['predicted_x_px']):.1f} / {float(kinematics['predicted_y_px']):.1f}"
                 if kinematics["predicted_x_ci95_half_width_px"] is not None and kinematics["predicted_y_ci95_half_width_px"] is not None:
                     forecast += f" ±{float(kinematics['predicted_x_ci95_half_width_px']):.1f}/{float(kinematics['predicted_y_ci95_half_width_px']):.1f}"
-            motion_tree.insert("", tk.END, values=(
+            item_id = motion_tree.insert("", tk.END, values=(
                 f"{track.track_id:04d}",
-                track.classification,
+                "运动候选" if track.classification == "moving" else "待复核候选",
                 frame_text,
                 f"{duration:.3f}" if duration is not None else "—",
                 speed_text,
@@ -7713,6 +8672,10 @@ class StarfieldApp(tk.Tk):
                 f"{track.fit_rms_px:.2f}" if track.fit_rms_px is not None else "—",
                 forecast,
             ))
+            if points:
+                motion_tree_frame_by_item[item_id] = min(
+                    int(point.frame_index) for point in points
+                )
 
         self._build_telemetry_table(telemetry_tab, result)
         self._build_telemetry_position_tab(telemetry_position_tab, result)
@@ -7727,6 +8690,162 @@ class StarfieldApp(tk.Tk):
         chart_canvas.pack(fill="both", expand=True, padx=14, pady=14)
         chart_canvas.bind("<Configure>", lambda _event: self._draw_evidence_charts(chart_canvas, result))
         self._draw_evidence_charts(chart_canvas, result)
+
+    def _build_sequence_overview_tab(self, parent: tk.Misc, result: SequenceResult) -> None:
+        """用一页通俗摘要回答“有没有目标、往哪走、证据多强”。"""
+
+        header = tk.Frame(parent, bg=PAPER_LIGHT)
+        header.pack(fill="x", padx=18, pady=(16, 8))
+        self._label(
+            header,
+            "先看总览：这 15 帧里找到了什么？",
+            color=INK,
+            size=14,
+            bold=True,
+            bg=PAPER_LIGHT,
+            anchor="w",
+        ).pack(anchor="w")
+        self._label(
+            header,
+            "方向按图像坐标计算：右方是 0°，下方是 +90°。它表示图片里的运动方向，不是卫星轨道方位角。",
+            color=INK_SOFT,
+            size=9,
+            bg=PAPER_LIGHT,
+            anchor="w",
+            justify="left",
+        ).pack(anchor="w", pady=(4, 0))
+
+        moving_lines = [track for track in result.motion_features if track.classification == "moving"]
+        metric_frame = tk.Frame(parent, bg=PAPER_LIGHT)
+        metric_frame.pack(fill="x", padx=18, pady=(0, 12))
+        metrics = (
+            ("运动证据组", f"{result.motion_evidence_group_count:,}", "点状和线状证据去重后的数量", MOTION_TRAIL),
+            ("线状运动候选", f"{len(moving_lines):,}", "多帧中出现线形并通过运动检查", AMBER),
+            ("点状运动候选", f"{result.moving_track_count:,}", "以点状峰关联得到的运动轨迹", SKY),
+            ("严格稳定星场", f"{result.stable_source_count:,}", "用于配准的静态参考，不是目标", MINT),
+        )
+        for index, (title, value, note, color) in enumerate(metrics):
+            card = tk.Frame(metric_frame, bg=PAPER, highlightbackground=PAPER_LINE, highlightthickness=1)
+            card.grid(row=0, column=index, sticky="nsew", padx=(0 if index == 0 else 7, 0))
+            metric_frame.grid_columnconfigure(index, weight=1)
+            self._mono_label(card, title, color=color, size=8, bg=PAPER).pack(anchor="w", padx=10, pady=(9, 2))
+            self._label(card, value, color=INK, size=17, bold=True, bg=PAPER, anchor="w").pack(anchor="w", padx=10)
+            self._label(card, note, color=INK_SOFT, size=8, bg=PAPER, anchor="w", justify="left").pack(
+                anchor="w", padx=10, pady=(1, 9)
+            )
+
+        section = tk.Frame(parent, bg=PAPER_LIGHT)
+        section.pack(fill="both", expand=True, padx=18, pady=(0, 16))
+        self._label(
+            section,
+            "运动目标方向",
+            color=INK,
+            size=11,
+            bold=True,
+            bg=PAPER_LIGHT,
+            anchor="w",
+        ).pack(anchor="w", pady=(0, 4))
+        self._label(
+            section,
+            "角度旁边的文字就是方向；例如“右下（42°）”比单看 42° 更直观。速度单位是像素/秒，位移是从第一次到最后一次出现的像素距离。需要看每一帧位置时，再打开“线状轨迹”或“图证”。",
+            color=INK_SOFT,
+            size=9,
+            bg=PAPER_LIGHT,
+            anchor="w",
+            justify="left",
+        ).pack(anchor="w", pady=(0, 8))
+
+        columns = ("target", "channel", "state", "frames", "direction", "speed", "evidence")
+        tree = ttk.Treeview(section, columns=columns, show="headings", height=10)
+        specs = (
+            ("target", "目标", 100),
+            ("channel", "检测通道", 110),
+            ("state", "判定", 110),
+            ("frames", "出现帧", 130),
+            ("direction", "运动方向（图像坐标）", 190),
+            ("speed", "速度 / 位移", 170),
+            ("evidence", "证据说明", 260),
+        )
+        for column, title, width in specs:
+            tree.heading(column, text=title)
+            tree.column(column, width=width, anchor="w", stretch=column in {"direction", "evidence"})
+        scroll = ttk.Scrollbar(section, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+
+        motion_rows: list[tuple[str, str, MotionFeatureTrack | Any]] = []
+        motion_rows.extend(
+            (f"点状 {track.track_id:04d}", "点状峰关联", track)
+            for track in result.tracks
+            if track.classification == "moving"
+        )
+        motion_rows.extend(
+            (f"线状 {track.track_id:04d}", "曝光线形", track)
+            for track in moving_lines
+        )
+        if not motion_rows:
+            tree.insert("", tk.END, values=("—", "—", "未确认", "—", "—", "—", "当前没有通过跨帧运动门的目标"))
+            return
+        for target, channel, track in motion_rows:
+            points = tuple(track.points)
+            kinematics = self._track_kinematics(result, track) if isinstance(track, MotionFeatureTrack) else None
+            if kinematics is not None:
+                angle = float(kinematics["direction_deg_image"])
+                direction = _image_direction_text(angle)
+                speed = f"{float(kinematics['speed_px_per_s']):.2f} px/s · {track.displacement_px:.1f} px"
+            elif len(points) >= 2:
+                angle = float(
+                    np.degrees(
+                        np.arctan2(
+                            points[-1].aligned_y - points[0].aligned_y,
+                            points[-1].aligned_x - points[0].aligned_x,
+                        )
+                    )
+                )
+                direction = _image_direction_text(angle)
+                duration_s = None
+                first_index = int(points[0].frame_index)
+                last_index = int(points[-1].frame_index)
+                if (
+                    0 <= first_index < len(result.frames)
+                    and 0 <= last_index < len(result.frames)
+                    and result.frames[first_index].timestamp
+                    and result.frames[last_index].timestamp
+                ):
+                    try:
+                        first_time = datetime.fromisoformat(str(result.frames[first_index].timestamp).replace("Z", "+00:00"))
+                        last_time = datetime.fromisoformat(str(result.frames[last_index].timestamp).replace("Z", "+00:00"))
+                        duration_s = (last_time - first_time).total_seconds()
+                    except (TypeError, ValueError):
+                        duration_s = None
+                speed_text = (
+                    f"{track.displacement_px / duration_s:.2f} px/s · {track.displacement_px:.1f} px"
+                    if duration_s is not None and duration_s > 0
+                    else f"— · {track.displacement_px:.1f} px"
+                )
+                speed = speed_text
+            else:
+                direction = "方向不可估"
+                speed = "—"
+            evidence = "多帧连续线形 + 原图模型"
+            if channel.startswith("点状"):
+                evidence = "点源跨帧关联 + 原图通量/PSF"
+            if getattr(track, "evidence_level", "") == "fast_point_motion":
+                evidence = "高速点源补充关联 + 原图复核"
+            tree.insert(
+                "",
+                tk.END,
+                values=(
+                    target,
+                    channel,
+                    "运动候选",
+                    _format_observed_frame_ranges(points),
+                    direction,
+                    speed,
+                    evidence,
+                ),
+            )
 
     def _build_motion_audit_tab(self, parent: tk.Misc, result: SequenceResult) -> None:
         """显示线状残差从连通域到最终候选的逐帧筛选证据。"""
@@ -7743,7 +8862,7 @@ class StarfieldApp(tk.Tk):
         ).pack(side="left", fill="x", expand=True)
         self._mono_label(
             header,
-            "COMPONENT → AREA → GEOMETRY → EDGE → LINE",
+            "连通域 → 面积 → 几何 → 触边 → 输出线形",
             color=AMBER,
             size=8,
             bg=PAPER_LIGHT,
@@ -7788,6 +8907,7 @@ class StarfieldApp(tk.Tk):
             "valid",
             "support",
             "components",
+            "short_gate",
             "area",
             "geometry",
             "edge",
@@ -7796,17 +8916,18 @@ class StarfieldApp(tk.Tk):
         )
         tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=8)
         specs = (
-            ("frame", "FRAME", 62),
-            ("threshold", "THRESH / ADU", 100),
-            ("noise", "DIFF σ / ADU", 100),
-            ("valid", "VALID PX", 88),
-            ("support", "SUPPORT PX", 98),
-            ("components", "COMPONENTS", 100),
-            ("area", "AREA PASS", 88),
-            ("geometry", "GEOMETRY PASS", 112),
-            ("edge", "EDGE REJECT", 100),
-            ("lines", "EMITTED LINES", 108),
-            ("snr", "MAX RES SNR", 108),
+            ("frame", "帧号", 62),
+            ("threshold", "残差阈值 / ADU", 115),
+            ("noise", "差分噪声 σ / ADU", 125),
+            ("valid", "有效像素", 88),
+            ("support", "超阈值像素", 105),
+            ("components", "连通域", 85),
+            ("short_gate", "短线面积门 / 像素", 135),
+            ("area", "面积通过", 88),
+            ("geometry", "几何通过", 95),
+            ("edge", "触边剔除", 90),
+            ("lines", "输出线形", 95),
+            ("snr", "最大残差 SNR", 115),
         )
         for column, title, width in specs:
             tree.heading(column, text=title)
@@ -7834,6 +8955,7 @@ class StarfieldApp(tk.Tk):
                     f"{audit.valid_pixel_count:,}",
                     f"{audit.support_pixel_count:,}",
                     f"{audit.component_count:,}",
+                    audit.short_min_pixels,
                     audit.area_pass_count,
                     audit.geometry_pass_count,
                     audit.edge_rejected_count,
@@ -7867,8 +8989,8 @@ class StarfieldApp(tk.Tk):
             ),
         )
         max_log_count = math.log1p(max_count)
-        canvas.create_text(left, 10, text="LOG1P(COUNT)", anchor="w", fill=INK_SOFT, font=(MONO, 8))
-        canvas.create_text(right, height - 14, text="FRAME", anchor="e", fill=INK_SOFT, font=(MONO, 8))
+        canvas.create_text(left, 10, text="数量（对数刻度）", anchor="w", fill=INK_SOFT, font=(MONO, 8))
+        canvas.create_text(right, height - 14, text="帧号", anchor="e", fill=INK_SOFT, font=(MONO, 8))
         for tick in range(0, 4):
             fraction = tick / 3.0
             y = bottom - fraction * (bottom - top)
@@ -7878,10 +9000,10 @@ class StarfieldApp(tk.Tk):
         canvas.create_line(left, top, left, bottom, fill=INK_SOFT, width=1)
         canvas.create_line(left, bottom, right, bottom, fill=INK_SOFT, width=1)
         series = (
-            ("components", lambda audit: audit.component_count, AMBER),
-            ("area pass", lambda audit: audit.area_pass_count, AMBER_LIGHT),
-            ("geometry pass", lambda audit: audit.geometry_pass_count, SKY),
-            ("emitted lines", lambda audit: audit.feature_count, MOTION_TRAIL),
+            ("连通域", lambda audit: audit.component_count, AMBER),
+            ("面积通过", lambda audit: audit.area_pass_count, AMBER_LIGHT),
+            ("几何通过", lambda audit: audit.geometry_pass_count, SKY),
+            ("输出线形", lambda audit: audit.feature_count, MOTION_TRAIL),
         )
         for series_index, (name, getter, color) in enumerate(series):
             points = []
@@ -7922,6 +9044,15 @@ class StarfieldApp(tk.Tk):
         max_shift = max(
             (float(np.hypot(shift[0], shift[1])) for shift in result.cumulative_shifts),
             default=0.0,
+        )
+        motion_features = [track for track in result.motion_features if track.classification == "moving"]
+        motion_link_count = int(getattr(result, "motion_evidence_link_count", 0))
+        motion_group_count = int(
+            getattr(
+                result,
+                "motion_evidence_group_count",
+                result.moving_track_count + len(motion_features),
+            )
         )
         exposure_values = [frame.exposure_ms for frame in result.frames if frame.exposure_ms is not None]
         rows: list[tuple[str, str, str, str]] = [
@@ -7977,20 +9108,36 @@ class StarfieldApp(tk.Tk):
                 }.get(result.background_model_mode, result.background_model_mode),
                 "同尺寸连续帧复用局部背景；尺寸不一致时安全回退，不广播错误模型",
             ),
+            (
+                "计算口径",
+                "运动判定配准",
+                f"{getattr(result, 'registration_model', 'translation')} · 仿射校正 {int(getattr(result, 'registration_affine_frame_count', 0))} 帧",
+                (
+                    f"用户下限 {result.motion_min_displacement_px:.2f}px；实际有效下限 "
+                    f"{float(getattr(result, 'effective_motion_min_displacement_px', result.motion_min_displacement_px) or result.motion_min_displacement_px):.2f}px，"
+                    "由配准后稳定多数的 robust MAD 估计，用于排除系统残差伪运动"
+                ),
+            ),
+            (
+                "运动证据",
+                "线状候选关联半径",
+                f"{float(getattr(result, 'motion_line_link_radius_px', 96.0)):.1f} px",
+                "与点源 4 px 最近邻门分开；用于连接曝光内短拖影的跨帧线形候选",
+            ),
             ("固定星场", "严格静态点轨迹", f"{result.stable_source_count:,}", "至少约 80% 帧出现且未呈现运动的点轨迹"),
             ("固定星场", "持续点源候选", f"{result.persistent_source_count:,}", "至少约 50% 帧出现、无显著位移；不是恒星真值"),
             ("运动证据", "点源 moving 轨迹", f"{result.moving_track_count:,}", "包含普通关联与高速点源补充关联；不等于物理真值"),
             ("运动证据", "高速点源补充轨迹", f"{result.fast_point_motion_count:,}", "宽筛候选 + 原图 flux SNR/PSF 复核；独立于固定星场 4 px 最近邻"),
-            ("运动证据", "线状证据组", f"{len(result.motion_features):,}", "单帧候选与跨帧候选分开统计"),
+            ("运动证据", "线状证据组", f"{len(result.motion_features):,}", "单帧曝光候选与跨帧候选分开统计"),
+            ("运动证据", "点/线重复关联", f"{motion_link_count:,}", "两种检测通道沿共同帧路径指向同一证据；不删除原始轨迹"),
+            ("运动证据", "去重后证据组", f"{motion_group_count:,}", "点源 moving + 线状 moving − 重复关联；不是物理目标真值"),
         ]
         for track in result.motion_features:
             points = track.points
             if not points:
                 continue
-            first_frame = points[0].frame_index + 1
-            last_frame = points[-1].frame_index + 1
-            frame_text = f"F{first_frame:02d}" if first_frame == last_frame else f"F{first_frame:02d}–F{last_frame:02d}"
-            state = "moving 候选" if track.classification == "moving" else "单帧/待复核候选"
+            frame_text = _format_observed_frame_ranges(points)
+            state = "moving 候选" if track.classification == "moving" else "单帧曝光线形候选"
             rows.append((f"线状 {track.track_id:04d}", "状态 / 帧范围", f"{state} · {frame_text}", "必须结合原图、差分和人工复核"))
             snrs = [float(point.residual_snr) for point in points]
             if len(points) >= 2 and intervals:
@@ -8160,7 +9307,7 @@ class StarfieldApp(tk.Tk):
         header.pack(fill="x", padx=14, pady=(14, 7))
         note = self._label(
             header,
-            "逐帧独立运行长线几何筛选；这里只回答“本帧有无长线候选”，不直接给出 moving 结论",
+            "这里会逐张读取 15 个 FITS，独立运行当前帧长线筛选；不做帧间关联，也不直接给出 moving 结论",
             color=INK_SOFT,
             size=9,
             bg=PAPER_LIGHT,
@@ -8172,7 +9319,7 @@ class StarfieldApp(tk.Tk):
         status.pack(side="right", padx=(8, 0))
         run_button = tk.Button(
             header,
-            text="运行单图审计",
+            text="运行15帧逐帧审计",
             bg=AMBER,
             fg=NAVY_DARK,
             activebackground=AMBER_LIGHT,
@@ -8201,7 +9348,7 @@ class StarfieldApp(tk.Tk):
 
         parameter_note = self._mono_label(
             parent,
-            "检测口径：当前阈值 / 最小间距 / PSF FWHM / 通量 SNR / PSF支持≥3/9 · 线状门槛：残差 ≥15σ 且 ≥100 ADU、面积 ≥40 px、轴比 ≥4",
+            "检测口径：当前阈值 / 最小间距 / PSF FWHM / 通量 SNR / PSF支持≥3/9 · 线状门槛：残差 ≥15σ 且 ≥100 ADU、面积 ≥40 px、轴比 ≥4 · 几何提案再做单星/双星/椭圆/线段模型复核",
             color=INK_SOFT,
             size=8,
             bg=PAPER_LIGHT,
@@ -8235,6 +9382,9 @@ class StarfieldApp(tk.Tk):
             "candidate",
             "quality",
             "trails",
+            "accepted",
+            "double",
+            "rejected",
             "length",
             "width",
             "snr",
@@ -8248,7 +9398,10 @@ class StarfieldApp(tk.Tk):
             ("time", "DATE-OBS", 178),
             ("candidate", "CANDIDATE", 92),
             ("quality", "QUALITY", 82),
-            ("trails", "TRAILS", 65),
+            ("trails", "GEOM", 60),
+            ("accepted", "LINE OK", 70),
+            ("double", "DOUBLE", 70),
+            ("rejected", "MODEL REJ", 82),
             ("length", "MAX LEN / px", 96),
             ("width", "WIDTH / px", 86),
             ("snr", "RES SNR", 86),
@@ -8307,7 +9460,7 @@ class StarfieldApp(tk.Tk):
             for item in tree.get_children():
                 tree.delete(item)
             for row in rows:
-                row_tags = ("edge",) if row.edge_trail_count else (("trail",) if row.trail_count else ())
+                row_tags = ("edge",) if row.edge_trail_count else (("trail",) if row.accepted_trail_count else ())
                 tree.insert(
                     "",
                     tk.END,
@@ -8318,6 +9471,9 @@ class StarfieldApp(tk.Tk):
                         f"{row.candidate_count:,}",
                         f"{row.quality_count:,}",
                         row.trail_count,
+                        row.accepted_trail_count,
+                        row.double_star_count,
+                        row.model_rejected_count,
                         f"{row.max_length_px:.1f}" if row.max_length_px is not None else "—",
                         f"{row.max_width_px:.1f}" if row.max_width_px is not None else "—",
                         f"{row.max_residual_snr:.1f}" if row.max_residual_snr is not None else "—",
@@ -8326,13 +9482,17 @@ class StarfieldApp(tk.Tk):
                         row.longest_bbox or "—",
                     ),
                 )
-            hit_frames = [row.frame_number for row in rows if row.trail_count > 0]
+            hit_frames = [row.frame_number for row in rows if row.accepted_trail_count > 0]
             groups = "、".join(str(frame) for frame in hit_frames) if hit_frames else "无"
-            total_trails = sum(row.trail_count for row in rows)
+            total_geometry = sum(row.trail_count for row in rows)
+            total_accepted = sum(row.accepted_trail_count for row in rows)
+            total_double = sum(row.double_star_count for row in rows)
+            total_rejected = sum(row.model_rejected_count for row in rows)
             summary.config(
                 text=(
-                    f"完成 {len(rows)} 帧 · 独立长线候选 {total_trails} 条 · 命中帧：{groups}。"
-                    " 命中帧仍是形状候选；只有结合连续帧、配准坐标和拟合残差后，才进入 moving 复核。"
+                    f"完成 {len(rows)} 帧 · 几何提案 {total_geometry} 条 · 模型支持线 {total_accepted} 条 · "
+                    f"其中双星解释 {total_double} 条、模型排除 {total_rejected} 条 · 命中帧：{groups}。"
+                    " 模型支持仍只是单帧曝光内线形；只有结合连续帧、配准坐标和拟合残差后，才进入 moving 复核。"
                 )
             )
             set_chart(count_label, output / "single_frame_trail_counts.png", "没有候选数量曲线")
@@ -9386,9 +10546,9 @@ class StarfieldApp(tk.Tk):
             canvas.create_line(right - 130, legend_y + 5, right - 112, legend_y + 5, fill=color, width=2)
             canvas.create_text(right - 106, legend_y, text=label, anchor="nw", fill=color, font=(MONO, 8))
 
-    def _draw_preview(self) -> None:
+    def _draw_preview(self) -> bool:
         if self.preview is None or not self.canvas.winfo_exists():
-            return
+            return False
         canvas_width = max(100, self.canvas.winfo_width())
         canvas_height = max(100, self.canvas.winfo_height())
         base_width, base_height = self.preview.size
@@ -9411,7 +10571,11 @@ class StarfieldApp(tk.Tk):
             self.preview_scale_x = base_width / original_width
             self.preview_scale_y = base_height / original_height
             mode = self.overlay_mode_var.get()
-            if self.analysis is not None and mode in {"quality", "candidates"}:
+            if (
+                not self._sequence_workspace_active()
+                and self.analysis is not None
+                and mode in {"quality", "candidates"}
+            ):
                 sources = self.analysis.detection.quality_sources if mode == "quality" else self.analysis.detection.sources
                 # 视场总览时一个传感器像素通常不到 1 px；每个候选画 3×3
                 # 方框会把 2--3 万个源铺成一层橙色噪点。缩小时只画 1 px
@@ -9457,10 +10621,12 @@ class StarfieldApp(tk.Tk):
 
             # 序列分析会释放每帧完整 Detection，只保留轨迹中的质量通过标记。
             # 因此序列完成后从轻量 TrackPoint 恢复“可信源”主层，避免切回
-            # quality 后出现空图；候选共识/叠加暗星仍不会混进可信源。
-            if self.analysis is None and mode == "quality" and self.sequence_result is not None:
+            # quality 后出现空图；已判定为 moving 的点源不能再混进稳定星点层，
+            # 它们只从运动层显示。
+            sequence_result = self._motion_evidence_result()
+            if self._sequence_workspace_active() and mode == "quality" and sequence_result is not None:
                 frame_index = self._sequence_frame_index()
-                trusted_points = trusted_points_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
+                trusted_points = trusted_points_for_frame(sequence_result, frame_index) if frame_index is not None else ()
                 marker_radius = max(1, min(3, int(round(max(1.0, scale) * 0.65))))
                 for _track, point in trusted_points:
                     point_x = point.x * self.preview_scale_x
@@ -9496,9 +10662,9 @@ class StarfieldApp(tk.Tk):
                         )
                         draw.point((center_x, center_y), fill=STAR_POINT)
 
-            if mode == "stable" and self.sequence_result is not None:
+            if mode == "stable" and sequence_result is not None:
                 frame_index = self._sequence_frame_index()
-                stable_points = stable_points_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
+                stable_points = stable_points_for_frame(sequence_result, frame_index) if frame_index is not None else ()
                 # 视场总览时仍保证至少一个实心像素；否则 1.0× 适配显示
                 # 中，稳定点只剩一个极细的空心轮廓，肉眼很容易认为没有结果。
                 marker_radius = max(1, min(4, int(round(max(1.0, scale) * 0.8))))
@@ -9540,9 +10706,9 @@ class StarfieldApp(tk.Tk):
                     )
                     draw.point((center_x, center_y), fill=marker_color)
 
-            if mode == "stack-faint" and self.sequence_result is not None:
+            if mode == "stack-faint" and sequence_result is not None:
                 frame_index = self._sequence_frame_index()
-                faint_points = stack_faint_points_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
+                faint_points = stack_faint_points_for_frame(sequence_result, frame_index) if frame_index is not None else ()
                 marker_radius = max(1, min(4, int(round(max(1.0, scale) * 0.8))))
                 for _track, point in faint_points:
                     point_x = point.x * self.preview_scale_x
@@ -9576,11 +10742,16 @@ class StarfieldApp(tk.Tk):
                     )
                     draw.point((center_x, center_y), fill=STACK_FAINT_POINT)
 
-            # 运动证据默认叠加在可信源主层上；选择“运动候选”时即使用户
+            # 运动证据默认叠加在非运动可信源主层上；选择“运动候选”时即使用户
             # 关闭复合开关也仍然只显示运动层，保持原有的专门审计视图。
             if mode == "motion" or self._motion_overlay_enabled():
-                frame_index = self._sequence_frame_index()
-                motion_points = moving_points_for_frame(self.sequence_result, frame_index) if frame_index is not None else ()
+                motion_result = self._motion_evidence_result()
+                frame_index = self._motion_evidence_frame_index()
+                # 单帧没有序列帧索引；它的线形候选属于当前帧本地证据，
+                # 用局部索引 0 绘制，不得借用 15 帧的索引或轨迹。
+                if frame_index is None and motion_result is None and self.long_trails:
+                    frame_index = 0
+                motion_points = moving_points_for_frame(motion_result, frame_index) if frame_index is not None else ()
                 for track, point in motion_points:
                     point_x = point.x * self.preview_scale_x
                     point_y = point.y * self.preview_scale_y
@@ -9597,27 +10768,155 @@ class StarfieldApp(tk.Tk):
                     draw.ellipse((x - 6, y - 6, x + 6, y + 6), outline=point_color, width=2)
                     draw.point((x, y), fill=point_color)
                     label = "POINT MOV" if track.evidence_level == "fast_point_motion" else "MOV"
-                    self._draw_image_label(draw, f"{label} {track.track_id:04d}", x, y, image.size)
+                    self._draw_image_label(
+                        draw,
+                        f"{label} T{track.track_id:04d}/F{point.frame_index + 1:02d} ID{point.detection_id:05d}",
+                        x,
+                        y,
+                        image.size,
+                    )
                 self._draw_motion_trajectory_overlay(draw, frame_index, left, top, scale, image.size)
-                feature_points = self._motion_feature_points(frame_index) if frame_index is not None else ()
+                feature_points = (
+                    self._motion_feature_points(
+                        frame_index,
+                        # 15 帧复合层也保留通过 review gate 的单帧线索，
+                        # 以虚线区分；只有切到“运动候选”层时才放宽到
+                        # 更弱的跨帧候选形态。
+                        include_weak=(mode == "motion" or self._motion_overlay_enabled()),
+                    )
+                    if frame_index is not None
+                    else ()
+                )
+                if not self._sequence_workspace_active() and mode != "motion":
+                    # 可信源复合图只保留强模型线；弱模型线在显式“运动候选”
+                    # 层才以虚线显示，避免亮星边缘被误读为曝光拖影。
+                    feature_points = tuple(
+                        (track, point)
+                        for track, point in feature_points
+                        if _single_frame_overlay_model_is_allowed(
+                            track,
+                            point,
+                            include_weak=False,
+                        )
+                    )
                 for track, point in feature_points:
                     point_x = point.x * self.preview_scale_x
                     point_y = point.y * self.preview_scale_y
-                    if not (left <= point_x < right and top <= point_y < bottom):
-                        continue
                     x = (point_x - left) * scale
                     y = (point_y - top) * scale
-                    half_length = 0.5 * point.length_px * scale
+                    # ``x/y`` 已经先换算到预览图坐标；线段长度也必须只
+                    # 做一次同样的原图→预览图缩放。旧代码在这里又乘了
+                    # ``preview_scale_x/y``，把 8--20 px 短线再缩小一遍，
+                    # 结果主长线尚能看见，短线几乎全部消失。
                     angle = np.deg2rad(point.angle_deg)
-                    dx = np.cos(angle) * half_length * self.preview_scale_x
-                    dy = np.sin(angle) * half_length * self.preview_scale_y
-                    color = MOTION_TRAIL if track.classification == "moving" else MOTION_CANDIDATE
-                    line_width = max(2, int(round(point.width_px * scale)))
-                    if track.classification == "moving":
-                        draw.line((x - dx, y - dy, x + dx, y + dy), fill=NAVY_DARK, width=line_width + 4)
-                    draw.line((x - dx, y - dy, x + dx, y + dy), fill=color, width=line_width)
+                    half_length_x = 0.5 * point.length_px * self.preview_scale_x * scale
+                    half_length_y = 0.5 * point.length_px * self.preview_scale_y * scale
+                    dx = np.cos(angle) * half_length_x
+                    dy = np.sin(angle) * half_length_y
+                    line_width = max(
+                        2,
+                        int(
+                            round(
+                                point.width_px
+                                * max(self.preview_scale_x, self.preview_scale_y)
+                                * scale
+                            )
+                        ),
+                    )
+                    # 视场总览时，真实 8--20 px 线段在 1024 px 预览中只有
+                    # 2--5 px，用户无法从星点层中定位它。这里仅放大“屏幕
+                    # 上的指示线”，不改 point.length_px、不改坐标和任何
+                    # 检测/测光数值；滚轮放大到足够倍率后自动回到原比例。
+                    if not self._sequence_workspace_active() and scale < 2.5:
+                        screen_half_length = float(np.hypot(dx, dy))
+                        minimum_half_length = max(6.0, 3.0 * float(line_width))
+                        if 0.0 < screen_half_length < minimum_half_length:
+                            display_factor = minimum_half_length / screen_half_length
+                            dx *= display_factor
+                            dy *= display_factor
+                    # 不能只看线段中心：15×缩放后，中心可能已经在视口外，
+                    # 但线段端部仍然进入视口。PIL 会自动裁掉画布外部分，
+                    # 这里只在整条线与视口不相交时跳过。
+                    if (
+                        x + abs(dx) < 0.0
+                        or x - abs(dx) >= (right - left) * scale
+                        or y + abs(dy) < 0.0
+                        or y - abs(dy) >= (bottom - top) * scale
+                    ):
+                        continue
+                    artifact_review = (
+                        point.single_frame_model == "long_line_profile"
+                        and float(point.length_px) > float(SINGLE_FRAME_MODEL_MAX_LENGTH_PX)
+                        and point.line_artifact_overlap_fraction is not None
+                        and float(point.line_artifact_overlap_fraction)
+                        >= SINGLE_FRAME_ARTIFACT_REVIEW_OVERLAP_FRACTION
+                    )
+                    strong_shape = (
+                        _motion_feature_shape_is_supported(point)
+                        if self._sequence_workspace_active()
+                        else (
+                            _single_frame_line_model_is_supported_for_display(point)
+                            and _single_frame_trail_shape_is_supported(point)
+                        )
+                    ) and not artifact_review
+                    # ``long_trails`` 是单帧路线的本地结果；即使旧缓存或
+                    # 测试对象残留了 ``classification='moving'``，也不能
+                    # 因对象字段把单帧证据伪装成跨帧洋红轨迹。只有 15 帧
+                    # 工作区才允许使用 moving 的颜色和语义。
+                    sequence_evidence = self._sequence_workspace_active()
+                    color = (
+                        MOTION_TRAIL
+                        if sequence_evidence and track.classification == "moving"
+                        else MOTION_CANDIDATE
+                    )
+                    if not strong_shape:
+                        # 几何上已经发现、但连续性/中段填充不足的对象只在
+                        # 显式“运动候选”视图显示为细线，避免弱候选污染可信源
+                        # 主层，同时避免“候选存在但图上完全没有”的误解。
+                        line_width = max(1, line_width - 1)
+                        # 单帧候选同样加深色外描边；否则橙色线落在亮星或灰噪声
+                        # 上时会被吞掉，用户只能看到圆环却看不到真正的线段。
+                    # 中心圆环是定位标记，不能盖住 8--20 px 的短线。旧顺序
+                    # 先画线再画圆，短线的大部分会被半径 6 px 的圆环遮掉，
+                    # 总览中就只剩一个圆；先画圆再画线，让线段完整可见。
                     draw.ellipse((x - 6, y - 6, x + 6, y + 6), outline=color, width=2)
-                    label = f"TRAIL {track.track_id:04d}" if track.classification == "moving" else f"TRAIL? {track.track_id:04d}"
+                    if strong_shape:
+                        draw.line((x - dx, y - dy, x + dx, y + dy), fill=NAVY_DARK, width=line_width + 4)
+                        draw.line((x - dx, y - dy, x + dx, y + dy), fill=color, width=line_width)
+                    else:
+                        self._draw_dashed_line(
+                            draw,
+                            (x - dx, y - dy, x + dx, y + dy),
+                            outline=NAVY_DARK,
+                            width=line_width + 3,
+                            dash_length=max(3.0, 5.0 * scale),
+                        )
+                        self._draw_dashed_line(
+                            draw,
+                            (x - dx, y - dy, x + dx, y + dy),
+                            outline=color,
+                            width=line_width,
+                            dash_length=max(3.0, 5.0 * scale),
+                        )
+                    if not sequence_evidence:
+                        # 单帧不输出 moving/trajectory 结论；这里的 EXP
+                        # TRAIL 只表示本次 1.5 s 曝光内看到了线形结构。
+                        if artifact_review:
+                            label = f"ARTIFACT? {track.track_id:04d}"
+                        else:
+                            label = (
+                                f"EXP TRAIL {track.track_id:04d}"
+                                if strong_shape
+                                else f"EXP TRAIL? {track.track_id:04d}"
+                            )
+                    elif track.classification == "moving":
+                        label = (
+                            f"TRAIL* {track.track_id:04d}"
+                            if "edge_truncated" in track.evidence_level
+                            else f"TRAIL {track.track_id:04d}"
+                        )
+                    else:
+                        label = f"TRAIL? {track.track_id:04d}"
                     self._draw_image_label(draw, label, x, y, image.size)
 
             if mode == "catalog" and self.catalog_match_result is not None:
@@ -9653,7 +10952,12 @@ class StarfieldApp(tk.Tk):
                     draw.ellipse((x - 8, y - 8, x + 8, y + 8), outline=MINT, width=2)
                     self._draw_image_label(draw, f"FNT {faintest.detection_id:04d} · m_inst {faintest.instrumental_magnitude:.2f}", x, y, image.size)
 
-            if self.analysis is not None and mode in {"quality", "candidates"} and self.hover_source is not None:
+            if (
+                not self._sequence_workspace_active()
+                and self.analysis is not None
+                and mode in {"quality", "candidates"}
+                and self.hover_source is not None
+            ):
                 source = self.hover_source
                 point_x, point_y = source_peak_position(source)
                 point_x *= self.preview_scale_x
@@ -9661,7 +10965,9 @@ class StarfieldApp(tk.Tk):
                 if left <= point_x < right and top <= point_y < bottom:
                     x = (point_x - left) * scale
                     y = (point_y - top) * scale
-                    draw.ellipse((x - 9, y - 9, x + 9, y + 9), outline="#f3dfac", width=2)
+                    # 质量源使用青色高亮；米黄色保留给运动/稳定层悬停，
+                    # 避免用户把“源质量通过”的圆环看成运动标记。
+                    draw.ellipse((x - 9, y - 9, x + 9, y + 9), outline=STAR_POINT, width=2)
                     magnitude = instrumental_magnitude(source.flux, exposure_s=self.exposure_s)
                     magnitude_text = f"{magnitude:.2f}" if magnitude is not None else "—"
                     self._draw_image_label(
@@ -9671,17 +10977,41 @@ class StarfieldApp(tk.Tk):
                         y,
                         image.size,
                     )
-            if mode == "quality" and self.hover_trusted_track is not None:
+            if self._sequence_workspace_active() and mode == "quality" and self.hover_trusted_track is not None:
                 _track, trusted_point = self.hover_trusted_track
                 point_x = trusted_point.x * self.preview_scale_x
                 point_y = trusted_point.y * self.preview_scale_y
                 if left <= point_x < right and top <= point_y < bottom:
                     x = (point_x - left) * scale
                     y = (point_y - top) * scale
-                    draw.ellipse((x - 10, y - 10, x + 10, y + 10), outline=AMBER_LIGHT, width=2)
+                    # 可信星源的悬停环使用青色；琥珀色只留给运动层，
+                    # 避免用户把“星点来源说明”误看成运动标记。
+                    draw.ellipse((x - 10, y - 10, x + 10, y + 10), outline=STAR_POINT, width=2)
                     snr_text = f"{trusted_point.flux_snr:.1f}" if trusted_point.flux_snr is not None else "-"
-                    self._draw_image_label(draw, f"SRC {_track.track_id:04d} · FSNR {snr_text}", x, y, image.size)
-            if (mode in {"motion", "stable", "stack-faint"} or self._motion_overlay_enabled()) and self.hover_motion_track is not None:
+                    self._draw_image_label(
+                        draw,
+                        f"STAR SRC T{_track.track_id:04d}/F{trusted_point.frame_index + 1:02d} ID{trusted_point.detection_id:05d} · FSNR {snr_text}",
+                        x,
+                        y,
+                        image.size,
+                    )
+            hover_motion_is_current = False
+            if self.hover_motion_track is not None:
+                if self._sequence_workspace_active():
+                    hover_motion_is_current = self._motion_evidence_result() is not None
+                else:
+                    try:
+                        hovered_track = self.hover_motion_track[0]
+                        hover_motion_is_current = any(
+                            hovered_track is track
+                            for track in self.long_trails
+                        )
+                    except (IndexError, TypeError):
+                        hover_motion_is_current = False
+            if (
+                (mode in {"motion", "stable", "stack-faint"} or self._motion_overlay_enabled())
+                and hover_motion_is_current
+            ):
                 track, point = self.hover_motion_track
                 point_x = point.x * self.preview_scale_x
                 point_y = point.y * self.preview_scale_y
@@ -9690,7 +11020,23 @@ class StarfieldApp(tk.Tk):
                     y = (point_y - top) * scale
                     draw.ellipse((x - 10, y - 10, x + 10, y + 10), outline="#f3dfac", width=2)
                     if isinstance(point, MotionFeaturePoint):
-                        self._draw_image_label(draw, f"TRAIL {track.track_id:04d} · {point.residual_snr:.1f}σ", x, y, image.size)
+                        if self._sequence_workspace_active():
+                            shape_text = (
+                                "形态通过"
+                                if _motion_feature_shape_is_supported(point)
+                                else "待复核"
+                            )
+                            source_text = (
+                                "局部补检"
+                                if getattr(point, "observation_source", "detected")
+                                == "recovered_by_predicted_roi"
+                                else "原图检测"
+                            )
+                            label = f"TRAIL {track.track_id:04d} · {point.residual_snr:.1f}σ · {shape_text} · {source_text}"
+                        else:
+                            shape_text = _single_frame_trail_shape_reason(point) or "形态通过"
+                            label = f"EXP TRAIL {track.track_id:04d} · {point.residual_snr:.1f}σ · {shape_text}"
+                        self._draw_image_label(draw, label, x, y, image.size)
                     elif mode == "stack-faint":
                         self._draw_image_label(
                             draw,
@@ -9729,6 +11075,7 @@ class StarfieldApp(tk.Tk):
         self.preview_photo = ImageTk.PhotoImage(image)
         self.canvas.delete("all")
         self.canvas.create_image(screen_x, screen_y, image=self.preview_photo, anchor="nw")
+        return True
 
     def _draw_motion_trajectory_overlay(
         self,
@@ -9741,66 +11088,105 @@ class StarfieldApp(tk.Tk):
     ) -> None:
         """绘制已观测路径和末帧五帧外推，不把外推线当成检测结果。"""
 
-        if self.sequence_result is None or frame_index is None:
+        result = self._motion_evidence_result()
+        if result is None or frame_index is None:
             return
-        if frame_index >= len(self.sequence_result.cumulative_shifts):
+        if frame_index >= len(result.cumulative_shifts):
             return
         scale_x = self.preview_scale_x
         scale_y = self.preview_scale_y
 
-        def to_image(x: float, y: float, source_frame_index: int) -> tuple[float, float]:
-            if source_frame_index >= len(self.sequence_result.cumulative_shifts):
+        # ``aligned_x/y`` are in one common registered coordinate system.
+        # Every historical point therefore has to be projected with the
+        # selected frame's shift when it is drawn on the selected raw image.
+        # Using each point's own shift draws each point in its source frame
+        # instead, which visibly breaks a straight path when registration
+        # drift is present.
+        current_shift_x, current_shift_y = result.cumulative_shifts[frame_index]
+
+        def to_image(x: float, y: float, _source_frame_index: int) -> tuple[float, float]:
+            if frame_index >= len(result.cumulative_shifts):
                 return (-1.0, -1.0)
-            shift_x, shift_y = self.sequence_result.cumulative_shifts[source_frame_index]
-            raw_x = (x + shift_x) * scale_x
-            raw_y = (y + shift_y) * scale_y
+            raw_x = (x + current_shift_x) * scale_x
+            raw_y = (y + current_shift_y) * scale_y
             return (raw_x - left) * scale, (raw_y - top) * scale
 
         # 点状 moving 轨迹与线状 streak 是两类证据。点目标每帧只占一个
         # 小 PSF，之前这里只画当前帧圆圈，没有把历史点连起来，所以用户
         # 看到的是“已标记但没有线”。现在用常速度关联得到的观测点画实线；
         # 金橙色专门表示高速点源，洋红色仍保留给线状候选。
-        for track in self.sequence_result.tracks:
+        for track in result.tracks:
             if track.classification != "moving" or len(track.points) < 2:
                 continue
-            observed = [
-                to_image(point.aligned_x, point.aligned_y, point.frame_index)
-                for point in track.points
-            ]
             point_color = (
                 POINT_MOTION
                 if track.evidence_level == "fast_point_motion"
                 else SKY_LIGHT
             )
             line_width = max(2, min(6, int(round(2.0 * scale))))
-            draw.line(observed, fill=NAVY_DARK, width=line_width + 4, joint="curve")
-            draw.line(observed, fill=point_color, width=line_width, joint="curve")
             radius = max(2, min(5, int(round(2.5 * scale))))
-            for point_x, point_y in observed:
-                draw.ellipse(
-                    (point_x - radius, point_y - radius, point_x + radius, point_y + radius),
-                    fill=point_color,
-                    outline=NAVY_DARK,
-                    width=1,
-                )
-        for track in self.sequence_result.motion_features:
-            if track.classification != "moving" or len(track.points) < 2:
+            for run in _contiguous_motion_point_runs(track.points):
+                observed = [
+                    to_image(point.aligned_x, point.aligned_y, point.frame_index)
+                    for point in run
+                ]
+                if len(observed) >= 2:
+                    draw.line(observed, fill=NAVY_DARK, width=line_width + 4, joint="curve")
+                    draw.line(observed, fill=point_color, width=line_width, joint="curve")
+                for point_x, point_y in observed:
+                    draw.ellipse(
+                        (point_x - radius, point_y - radius, point_x + radius, point_y + radius),
+                        fill=point_color,
+                        outline=NAVY_DARK,
+                        width=1,
+                    )
+        for track in result.motion_features:
+            if (
+                track.classification not in {"moving", "candidate"}
+                or len(track.points) < 2
+                or not _motion_feature_track_shape_is_supported(track.points)
+            ):
                 continue
-            # 每个观测点必须使用自己所在帧的 shift；不能把当前查看帧的
-            # shift 套到整条历史轨迹上，否则较大视场抖动时路径会被错误扭移。
-            observed = [
-                to_image(point.aligned_x, point.aligned_y, point.frame_index)
-                for point in track.points
-            ]
-            draw.line(observed, fill=NAVY_DARK, width=5, joint="curve")
-            draw.line(observed, fill=SKY_LIGHT, width=2, joint="curve")
-            for point in track.points:
-                point_x, point_y = to_image(point.aligned_x, point.aligned_y, point.frame_index)
-                draw.ellipse((point_x - 3, point_y - 3, point_x + 3, point_y + 3), fill=MOTION_TRAIL, outline=NAVY_DARK)
+            # 所有点先在注册坐标系内连成路径，再整体投影到当前原始帧；
+            # 不能混用各自源帧的 shift，否则较大视场抖动会把直线扭散。
+            line_color = MOTION_TRAIL if track.classification == "moving" else MOTION_CANDIDATE
+            for run in _contiguous_motion_point_runs(track.points):
+                observed = [
+                    to_image(point.aligned_x, point.aligned_y, point.frame_index)
+                    for point in run
+                ]
+                if len(observed) >= 2:
+                    if track.classification == "moving":
+                        draw.line(observed, fill=NAVY_DARK, width=5, joint="curve")
+                        draw.line(observed, fill=line_color, width=2, joint="curve")
+                    else:
+                        for start, end in zip(observed, observed[1:]):
+                            self._draw_dashed_line(
+                                draw,
+                                (start[0], start[1], end[0], end[1]),
+                                outline=NAVY_DARK,
+                                width=5,
+                                dash_length=max(3.0, 5.0 * scale),
+                            )
+                            self._draw_dashed_line(
+                                draw,
+                                (start[0], start[1], end[0], end[1]),
+                                outline=line_color,
+                                width=2,
+                                dash_length=max(3.0, 5.0 * scale),
+                            )
+                for point_x, point_y in observed:
+                    draw.ellipse(
+                        (point_x - 3, point_y - 3, point_x + 3, point_y + 3),
+                        fill=line_color,
+                        outline=NAVY_DARK,
+                    )
             last = track.points[-1]
+            if track.classification != "moving":
+                continue
             if frame_index != last.frame_index:
                 continue
-            kinematics = self._track_kinematics(self.sequence_result, track)
+            kinematics = self._track_kinematics(result, track)
             if kinematics is None or kinematics["predicted_x_px"] is None or kinematics["predicted_y_px"] is None:
                 continue
             forecast_end = to_image(
@@ -9836,22 +11222,102 @@ class StarfieldApp(tk.Tk):
                 )
             self._draw_image_label(draw, f"FORECAST +5F · {track.track_id:04d}", forecast_end[0], forecast_end[1], image_size)
 
-    def _motion_feature_points(self, frame_index: int) -> tuple[tuple[MotionFeatureTrack, MotionFeaturePoint], ...]:
+    def _motion_feature_points(
+        self,
+        frame_index: int,
+        *,
+        include_weak: bool = False,
+    ) -> tuple[tuple[MotionFeatureTrack, MotionFeaturePoint], ...]:
         """返回序列线状证据，或当前单帧的长线候选。"""
 
-        if self.sequence_result is not None:
-            return motion_features_for_frame(self.sequence_result, frame_index)
-        # 单帧候选的局部 frame_index 固定为 0；它代表当前正在查看的帧，
-        # 而不是数据目录中的第 1 帧。因此切到第 N 帧后仍应显示当前分析结果。
-        return tuple(
-            (track, point)
-            for track in self.long_trails
-            for point in track.points
-            if point.frame_index == 0
-        )
+        def visible(track: MotionFeatureTrack, point: MotionFeaturePoint) -> bool:
+            # 绘制层不再为旧对象保留“缺证据也显示”的兼容口子。否则
+            # 旧缓存/手工构造对象会绕过检测分类层，重新变成紫色误标。
+            # 跨帧候选仍必须通过连续形态门；独立的 single_frame_trail
+            # 允许在复合层以虚线显示 review 结果，即使它只有单帧形态
+            # 证据。它的分类仍是 candidate，不会被当成 moving。
+            if not _motion_feature_shape_is_supported(point) and not (
+                include_weak and track.evidence_level == "single_frame_trail"
+            ):
+                return False
+            # 序列线状候选也必须有当前原图上的有限线段模型支持。否则
+            # 时间差分/配准残差中的两个紧邻点源仍可能在“运动候选”视图
+            # 被当成线；旧序列缓存缺少该字段时宁可要求重跑，也不把它
+            # 伪装成新的运动证据。
+            if not self._sequence_workspace_active():
+                return False
+            return _single_frame_line_model_is_supported_for_display(point)
+
+        # 单帧工作区只允许读取当前帧的 ``long_trails``；不要让上一轮
+        # 序列结果抢走绘制入口。反过来，15 帧工作区也不能把单帧预检
+        # 冒充成跨帧线状目标。
+        if not self._sequence_workspace_active():
+            return tuple(
+                (track, point)
+                for track in self.long_trails
+                for point in track.points
+                if point.frame_index == 0
+                # 单帧的弱候选层仍然要有“线”这一层模型证据。若局部
+                # 竞争模型已经更像单星、双星、静态椭圆星像或背景起伏，
+                # 就不能因为它通过了几何宽筛而把它画成运动候选。超出
+                # 局部模型适用长度之外的 ``long_line_profile``/``not_fit``
+                # 仍可保留为虚线几何候选，否则 F01 这类数百像素长线会被
+                # 错误地完全隐藏。真正的 ``single_frame_trail`` 结果若没有
+                # 模型字段则由 track 级闸门拒绝；只有旧的轻量测试对象保留
+                # ``None`` 兼容显示。
+                and _single_frame_overlay_model_is_allowed(
+                    track,
+                    point,
+                    include_weak=include_weak,
+                )
+                and _motion_overlay_candidate_is_allowed(track, point)
+                and (
+                    include_weak
+                    or (
+                        _single_frame_line_model_is_supported_for_display(point)
+                        and _single_frame_trail_shape_is_supported(point)
+                    )
+                    or (
+                        point.single_frame_model == "long_line_profile"
+                        and float(point.length_px) > float(SINGLE_FRAME_MODEL_MAX_LENGTH_PX)
+                        and point.line_artifact_overlap_fraction is not None
+                        and float(point.line_artifact_overlap_fraction)
+                        >= SINGLE_FRAME_ARTIFACT_REVIEW_OVERLAP_FRACTION
+                    )
+                )
+            )
+        # 15 帧工作区只使用当前序列结果；没有序列结果时保持空，不回退
+        # 到单帧的 ``long_trails``。
+        motion_result = self._motion_evidence_result()
+        if motion_result is not None:
+            return tuple(
+                (track, point)
+                for track, point in motion_features_for_frame(motion_result, frame_index)
+                # ``include_weak`` 只放宽连续度/填充度，不放宽原图模型
+                # 闸门；双星、点源和旧缓存不能因切到“运动候选”而复活。
+                if (
+                    _single_frame_line_model_is_supported_for_display(point)
+                    or (include_weak and _single_frame_model_is_review_candidate(point))
+                    or (
+                        point.single_frame_model == "long_line_profile"
+                        and float(point.length_px) > float(SINGLE_FRAME_MODEL_MAX_LENGTH_PX)
+                        and point.line_artifact_overlap_fraction is not None
+                        and float(point.line_artifact_overlap_fraction)
+                        >= SINGLE_FRAME_ARTIFACT_REVIEW_OVERLAP_FRACTION
+                    )
+                )
+                and _motion_overlay_candidate_is_allowed(track, point)
+                and (include_weak or visible(track, point))
+            )
+        return ()
 
     def _source_overlay_label(self, source: Any, *, magnitude_text: str | None = None) -> str:
-        """生成图内短标签；使用 ASCII，避免没有中文字体时出现方框。"""
+        """生成图内短标签；使用 ASCII，避免没有中文字体时出现方框。
+
+        这里明确写 ``STAR SRC`` 和 ``QUALITY``。这个标签来自星点质量层，
+        不是单帧曝光线形或 15 帧运动结论；旧的 ``ID ... | PASS`` 很容易
+        被误读成运动目标已经通过。
+        """
 
         signal_snr = getattr(source, "flux_snr", None)
         if signal_snr is None:
@@ -9862,8 +11328,57 @@ class StarfieldApp(tk.Tk):
             magnitude_text = f"{magnitude:.2f}" if magnitude is not None else "-"
         parameters = self.analysis.detection.parameters if self.analysis is not None else None
         reason = source_quality_reason(source, parameters, compact=True)
-        decision = reason if reason.startswith("PASS") else f"REJECT/{reason}"
-        return f"ID {source.detection_id:04d} | FSNR {snr_text} | m_inst {magnitude_text} | {decision}"
+        decision = "PASS" if reason.startswith("PASS") else f"REJECT/{reason}"
+        frame_prefix = ""
+        selected_frame = self.__dict__.get("selected_frame")
+        frames = self.__dict__.get("frames", ())
+        if selected_frame is not None:
+            try:
+                frame_position = tuple(frames).index(selected_frame)
+            except (ValueError, TypeError):
+                frame_position = None
+            if frame_position is not None:
+                frame_prefix = f"F{frame_position + 1:02d} | "
+        return f"{frame_prefix}STAR SRC ID {source.detection_id:04d} | FSNR {snr_text} | m_inst {magnitude_text} | QUALITY {decision}"
+
+    @staticmethod
+    def _draw_dashed_line(
+        draw: ImageDraw.ImageDraw,
+        coords: tuple[float, float, float, float],
+        *,
+        outline: str,
+        width: int,
+        dash_length: float,
+    ) -> None:
+        """Draw a lightweight dashed segment without introducing a canvas item."""
+
+        x0, y0, x1, y1 = (float(value) for value in coords)
+        dx = x1 - x0
+        dy = y1 - y0
+        length = float(np.hypot(dx, dy))
+        if length <= 0.0:
+            draw.point((x0, y0), fill=outline)
+            return
+        step = max(2.0, float(dash_length))
+        unit_x = dx / length
+        unit_y = dy / length
+        start = 0.0
+        while start < length:
+            end = min(length, start + step)
+            # 每个周期前半段画线，后半段留空；这样弱候选与强线在图上
+            # 不会混成同一种证据，同时不需要给每条线创建 Tk 对象。
+            dash_end = min(end, start + 0.58 * step)
+            draw.line(
+                (
+                    x0 + unit_x * start,
+                    y0 + unit_y * start,
+                    x0 + unit_x * dash_end,
+                    y0 + unit_y * dash_end,
+                ),
+                fill=outline,
+                width=max(1, int(width)),
+            )
+            start += step
 
     def _draw_image_label(self, draw: ImageDraw.ImageDraw, text: str, x: float, y: float, image_size: tuple[int, int]) -> None:
         # 12px 在 1× 预览中仍可读，放大后不会因为默认位图字体过小而
@@ -9921,7 +11436,14 @@ class StarfieldApp(tk.Tk):
         self._draw_preview()
 
     def _find_source_at(self, event: tk.Event) -> Any | None:
-        if self.analysis is None or self.preview is None or self.preview_shape is None:
+        # 15 帧工作区即使内存里还保留上一次单帧 analysis，也不能从
+        # source_grid 命中旧的单帧星点；序列质量层只使用 TrackPoint。
+        if (
+            self._sequence_workspace_active()
+            or self.analysis is None
+            or self.preview is None
+            or self.preview_shape is None
+        ):
             return None
         scale, origin_x, origin_y, _ = self._view_transform()
         base_x = (event.x - origin_x) / scale
@@ -9957,7 +11479,8 @@ class StarfieldApp(tk.Tk):
     def _find_trusted_track_at(self, event: tk.Event) -> tuple[SourceTrack, TrackPoint] | None:
         """Find a quality-passed sequence source near the pointer."""
 
-        if self.preview is None or self.preview_shape is None or self.sequence_result is None:
+        sequence_result = self._motion_evidence_result()
+        if self.preview is None or self.preview_shape is None or sequence_result is None:
             return None
         frame_index = self._sequence_frame_index()
         if frame_index is None:
@@ -9968,7 +11491,7 @@ class StarfieldApp(tk.Tk):
         scale_y = self.preview.height / original_height
         best: tuple[SourceTrack, TrackPoint] | None = None
         best_distance = 12.0 * 12.0
-        for track, point in trusted_points_for_frame(self.sequence_result, frame_index):
+        for track, point in trusted_points_for_frame(sequence_result, frame_index):
             point_x = origin_x + point.x * scale_x * scale
             point_y = origin_y + point.y * scale_y * scale
             distance = (point_x - event.x) ** 2 + (point_y - event.y) ** 2
@@ -9983,7 +11506,10 @@ class StarfieldApp(tk.Tk):
     ) -> tuple[SourceTrack | MotionFeatureTrack, TrackPoint | MotionFeaturePoint] | None:
         if self.preview is None or self.preview_shape is None:
             return None
-        frame_index = self._sequence_frame_index()
+        result = self._motion_evidence_result()
+        frame_index = self._motion_evidence_frame_index()
+        if frame_index is None and result is None and self.long_trails:
+            frame_index = 0
         if frame_index is None:
             return None
         scale, origin_x, origin_y, _ = self._view_transform()
@@ -9992,14 +11518,23 @@ class StarfieldApp(tk.Tk):
         scale_y = self.preview.height / original_height
         best: tuple[SourceTrack | MotionFeatureTrack, TrackPoint | MotionFeaturePoint] | None = None
         best_distance = 12.0 * 12.0
-        for track, point in moving_points_for_frame(self.sequence_result, frame_index):
+        for track, point in moving_points_for_frame(result, frame_index):
             point_x = origin_x + point.x * scale_x * scale
             point_y = origin_y + point.y * scale_y * scale
             distance = (point_x - event.x) ** 2 + (point_y - event.y) ** 2
             if distance <= best_distance:
                 best = (track, point)
                 best_distance = distance
-        for track, point in self._motion_feature_points(frame_index):
+        overlay_mode = (
+            self.overlay_mode_var.get()
+            if self.__dict__.get("overlay_mode_var") is not None
+            else "quality"
+        )
+        feature_points = self._motion_feature_points(
+            frame_index,
+            include_weak=(overlay_mode == "motion" or self._motion_overlay_enabled()),
+        )
+        for track, point in feature_points:
             point_x = origin_x + point.x * scale_x * scale
             point_y = origin_y + point.y * scale_y * scale
             half_length = 0.5 * point.length_px * scale
@@ -10026,7 +11561,8 @@ class StarfieldApp(tk.Tk):
     def _find_stable_track_at(self, event: tk.Event) -> tuple[SourceTrack, TrackPoint] | None:
         """Find the nearest persistent static track point for the stable layer."""
 
-        if self.preview is None or self.preview_shape is None or self.sequence_result is None:
+        sequence_result = self._motion_evidence_result()
+        if self.preview is None or self.preview_shape is None or sequence_result is None:
             return None
         frame_index = self._sequence_frame_index()
         if frame_index is None:
@@ -10037,7 +11573,7 @@ class StarfieldApp(tk.Tk):
         scale_y = self.preview.height / original_height
         best: tuple[SourceTrack, TrackPoint] | None = None
         best_distance = 12.0 * 12.0
-        for track, point in stable_points_for_frame(self.sequence_result, frame_index):
+        for track, point in stable_points_for_frame(sequence_result, frame_index):
             point_x = origin_x + point.x * scale_x * scale
             point_y = origin_y + point.y * scale_y * scale
             distance = (point_x - event.x) ** 2 + (point_y - event.y) ** 2
@@ -10049,7 +11585,8 @@ class StarfieldApp(tk.Tk):
     def _find_stack_faint_track_at(self, event: tk.Event) -> tuple[SourceTrack, TrackPoint] | None:
         """Find the nearest stack-faint recovered source for the overlay layer."""
 
-        if self.preview is None or self.preview_shape is None or self.sequence_result is None:
+        sequence_result = self._motion_evidence_result()
+        if self.preview is None or self.preview_shape is None or sequence_result is None:
             return None
         frame_index = self._sequence_frame_index()
         if frame_index is None:
@@ -10060,7 +11597,7 @@ class StarfieldApp(tk.Tk):
         scale_y = self.preview.height / original_height
         best: tuple[SourceTrack, TrackPoint] | None = None
         best_distance = 12.0 * 12.0
-        for track, point in stack_faint_points_for_frame(self.sequence_result, frame_index):
+        for track, point in stack_faint_points_for_frame(sequence_result, frame_index):
             point_x = origin_x + point.x * scale_x * scale
             point_y = origin_y + point.y * scale_y * scale
             distance = (point_x - event.x) ** 2 + (point_y - event.y) ** 2
@@ -10109,13 +11646,14 @@ class StarfieldApp(tk.Tk):
         self.hover_source_id = None
         self.hover_catalog_match = None
         if track_point is None:
-            self.hover_info_var.set("可信源主层只显示当前帧通过单帧质量规则的源；将鼠标移到青色点查看 SNR 和跨帧证据")
+            self.hover_info_var.set("可信源主层只显示通过点源质量规则且尚未判定为运动的源；将鼠标移到青色点查看 SNR 和跨帧证据")
         else:
             track, point = track_point
             snr_text = f"{point.flux_snr:.1f}" if point.flux_snr is not None else "—"
-            frame_total = len(self.sequence_result.frames) if self.sequence_result is not None else 0
+            sequence_result = self._motion_evidence_result()
+            frame_total = len(sequence_result.frames) if sequence_result is not None else 0
             self.hover_info_var.set(
-                f"可信源 {track.track_id:04d}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
+                f"可信源 T{track.track_id:04d}  ·  F{point.frame_index + 1:02d}  ·  帧内ID {point.detection_id:05d}  ·  "
                 f"X {point.x:.1f} Y {point.y:.1f}  ·  flux SNR {snr_text}  ·  "
                 f"质量通过  ·  持续 {track.presence}/{frame_total} 帧  ·  "
                 f"分类 {track.classification}  ·  配准后位移 {track.displacement_px:.2f}px"
@@ -10151,26 +11689,144 @@ class StarfieldApp(tk.Tk):
         self.hover_catalog_match = None
         if track_point is None:
             if self.overlay_mode_var.get() == "motion":
-                self.hover_info_var.set("运动层只显示跨帧线状候选和严格 moving 点轨迹；将鼠标移到洋红线或橙线查看信息")
+                self.hover_info_var.set("运动层显示跨帧点/线轨迹，以及当前曝光内的线形候选；将鼠标移到洋红线或橙线查看证据")
             else:
                 self.hover_info_var.set("叠加层只显示运动证据；将鼠标移到洋红线或橙线查看轨迹、SNR 和拟合误差")
         else:
             track, point = track_point
             if isinstance(point, MotionFeaturePoint):
                 fit_text = f"{track.fit_rms_px:.2f}px" if track.fit_rms_px is not None else "—"
-                state_text = "moving" if track.classification == "moving" else "单帧候选"
+                edge_truncated = "edge_truncated" in track.evidence_level
+                state_text = (
+                    "跨帧 moving（边界截断）"
+                    if track.classification == "moving" and edge_truncated
+                    else "跨帧 moving"
+                    if track.classification == "moving"
+                    else "单帧曝光线形候选"
+                    if track.is_single_frame_motion_candidate
+                    else "跨帧线形待复核（边界截断）"
+                    if edge_truncated
+                    else "跨帧线形待复核"
+                )
                 selected_frame_index = self._selected_frame_index()
-                display_frame = point.frame_index + 1 if self.sequence_result is not None else ((selected_frame_index + 1) if selected_frame_index is not None else 1)
+                evidence_result = self._motion_evidence_result()
+                display_frame = point.frame_index + 1 if evidence_result is not None else ((selected_frame_index + 1) if selected_frame_index is not None else 1)
+                link_text = ""
+                if evidence_result is not None and track.classification == "moving":
+                    link = next(
+                        (
+                            item
+                            for item in evidence_result.motion_evidence_links
+                            if item.line_track_id == track.track_id
+                        ),
+                        None,
+                    )
+                    if link is not None:
+                        link_text = (
+                            f"  · 与点源 T{link.point_track_id:04d} 同一路径"
+                            f"（共同 {link.overlap_frame_count} 帧，垂直偏差 {link.median_perpendicular_distance_px:.2f}px）"
+                        )
+                continuity_text = (
+                    f"{point.continuity_ratio:.0%}"
+                    if point.continuity_ratio is not None
+                    else "—"
+                )
+                profile_fill_text = (
+                    f"{point.profile_fill_ratio:.0%}"
+                    if point.profile_fill_ratio is not None
+                    else "—"
+                )
+                model_text = ""
+                if not self._sequence_workspace_active() and point.single_frame_model is not None:
+                    model_label = {
+                        "line": "有限线段模型",
+                        "point": "单星模型",
+                        "double": "双星模型",
+                        "elliptical_point": "静态椭圆星像模型",
+                        "background": "背景模型",
+                        "long_line_profile": "超长线段剖面模型",
+                        "not_fit": "局部模型未拟合",
+                    }.get(point.single_frame_model, point.single_frame_model)
+                    line_snr_text = (
+                        f"{float(point.line_template_snr):.1f}"
+                        if point.line_template_snr is not None
+                        else "—"
+                    )
+                    line_delta_text = (
+                        f"{float(point.line_vs_point_delta_bic):.1f}"
+                        if point.line_vs_point_delta_bic is not None
+                        else "—"
+                    )
+                    double_delta_text = (
+                        f"{float(point.line_vs_double_delta_bic):.1f}"
+                        if point.line_vs_double_delta_bic is not None
+                        else "—"
+                    )
+                    elliptical_delta_text = (
+                        f"{float(point.line_vs_elliptical_delta_bic):.1f}"
+                        if point.line_vs_elliptical_delta_bic is not None
+                        else "—"
+                    )
+                    model_text = (
+                        f"  · 局部模型 {model_label} · 线模板 SNR {line_snr_text} · "
+                        f"ΔBIC（单星 − 线） {line_delta_text} · ΔBIC（双星 − 线） {double_delta_text} · "
+                        f"ΔBIC（椭圆星像 − 线） {elliptical_delta_text}"
+                    )
+                if point.line_artifact_overlap_fraction is None:
+                    artifact_text = "  · 线状伪影审计 —"
+                elif point.line_artifact_overlap_fraction > 0.0:
+                    artifact_text = (
+                        f"  · 线状伪影掩膜重叠 {point.line_artifact_overlap_fraction:.0%}（仅提示）"
+                    )
+                else:
+                    artifact_text = "  · 线状伪影掩膜重叠 0%（已检查）"
+                if track.exposure_velocity_ratio is None:
+                    exposure_text = (
+                        "  · 曝光速度一致性 —（没有足够的跨帧线段位移）"
+                    )
+                else:
+                    exposure_text = (
+                        f"  · 曝光内速度/帧间速度比 R {track.exposure_velocity_ratio:.2f}"
+                        f" · 稳健离散 {track.exposure_velocity_log_mad:.3f}"
+                        f" · 门内比例 {track.exposure_consistency_fraction:.0%}"
+                    )
+                edge_text = (
+                    "  · 边界截断：首/末帧线长是可见下限，未补画面外部分"
+                    if edge_truncated
+                    else ""
+                )
+                rejection_text = _motion_rejection_reason_text(track)
+                observed_frames_text = _format_observed_frame_ranges(track.points)
                 self.hover_info_var.set(
                     f"TRAIL {track.track_id:04d}  ·  {state_text}  ·  当前帧 {display_frame:02d}  ·  "
+                    f"观测帧 {observed_frames_text}  ·  "
                     f"X {point.x:.1f}  Y {point.y:.1f}  ·  residual SNR {point.residual_snr:.1f}  ·  "
                     f"长度 {point.length_px:.1f}px  / 宽度 {point.width_px:.1f}px  ·  "
                     f"角度 {point.angle_deg:.1f}°  ·  位移 {track.displacement_px:.1f}px  ·  "
+                    f"连续支撑 {continuity_text}  ·  中段填充 {profile_fill_text}  ·  "
                     f"拟合 RMS {fit_text}  ·  出现 {track.presence} 帧"
+                    f"{exposure_text}{edge_text}{model_text}{artifact_text}{rejection_text}{link_text}"
                 )
             else:
                 fit_text = f"{track.fit_rms_px:.3f}px" if track.fit_rms_px is not None else "—"
                 snr_text = f"{point.flux_snr:.1f}" if point.flux_snr is not None else "—"
+                evidence_result = self._motion_evidence_result()
+                frame_total = len(evidence_result.frames) if evidence_result is not None else 0
+                link_text = ""
+                if evidence_result is not None and track.classification == "moving":
+                    link = next(
+                        (
+                            item
+                            for item in evidence_result.motion_evidence_links
+                            if item.point_track_id == track.track_id
+                        ),
+                        None,
+                    )
+                    if link is not None:
+                        link_text = (
+                            f"  · 与线状 L{link.line_track_id:04d} 同一路径"
+                            f"（共同 {link.overlap_frame_count} 帧，垂直偏差 {link.median_perpendicular_distance_px:.2f}px）"
+                        )
                 motion_type = (
                     "高速点状运动 · 宽筛候选 + 原图复核"
                     if track.evidence_level == "fast_point_motion" and point.candidate_snr is not None
@@ -10184,11 +11840,11 @@ class StarfieldApp(tk.Tk):
                     else ""
                 )
                 self.hover_info_var.set(
-                    f"MOV {track.track_id:04d}  ·  {motion_type}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
+                    f"MOV T{track.track_id:04d}  ·  F{point.frame_index + 1:02d}  ·  帧内ID {point.detection_id:05d}  ·  {motion_type}  ·  "
                     f"X {point.x:.1f}  Y {point.y:.1f}  ·  flux SNR {snr_text}  ·  "
                     f"{candidate_snr_text}"
                     f"位移 {track.displacement_px:.2f}px  ·  速度 {track.speed_px_per_frame:.3f}px/frame  ·  "
-                    f"拟合 RMS {fit_text}  ·  出现 {track.presence} 帧"
+                    f"拟合 RMS {fit_text}  ·  出现 {track.presence}/{frame_total or '?'} 帧{link_text}"
                 )
         self._draw_preview()
 
@@ -10300,7 +11956,8 @@ class StarfieldApp(tk.Tk):
                 else:
                     snr_label = "SNR"
                     snr_text = "—"
-                frame_total = len(self.sequence_result.frames)
+                sequence_result = self._motion_evidence_result()
+                frame_total = len(sequence_result.frames) if sequence_result is not None else 0
                 state_text = (
                     "严格静态"
                     if track.classification == "static"
@@ -10343,7 +12000,8 @@ class StarfieldApp(tk.Tk):
                     snr_text = f"{point.candidate_snr:.1f}"
                 else:
                     snr_text = "—"
-                frame_total = len(self.sequence_result.frames)
+                sequence_result = self._motion_evidence_result()
+                frame_total = len(sequence_result.frames) if sequence_result is not None else 0
                 self.hover_info_var.set(
                     f"叠加暗星 {track.track_id:04d}  ·  当前帧 {point.frame_index + 1:02d}  ·  "
                     f"X {point.x:.1f} Y {point.y:.1f}  ·  逐帧 flux SNR {snr_text}  ·  "
@@ -10361,7 +12019,7 @@ class StarfieldApp(tk.Tk):
             # 复合层没有命中轨迹时，继续向下寻找可信源，而不是让轨迹
             # 的空命中信息遮住星点本身的 SNR/质量说明。
             self.hover_motion_track = None
-        if mode == "quality" and self.analysis is None and self.sequence_result is not None:
+        if mode == "quality" and self._sequence_workspace_active() and self._motion_evidence_result() is not None:
             trusted_track = self._find_trusted_track_at(event)
             if trusted_track is not None:
                 self._update_trusted_hover(trusted_track)
