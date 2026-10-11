@@ -1,0 +1,5 @@
+﻿target_id,expected_presence,baseline_exact_track_recovered,fast_exact_track_recovered,combined_single_track_only_exact,baseline_fragments,fast_supplement_track_count,fast_mixed_with_background_source
+FAST-15,15,False,True,False,15,1,False
+FAST-GAP-12,12,False,True,False,12,1,False
+SLOW-BASE-15,15,True,False,True,1,0,False
+BELOW-12,11,False,False,False,11,0,False
