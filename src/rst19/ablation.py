@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy.spatial import cKDTree
 
 from .detection import Detection, DetectionResult, detect_sources
-from .experiments import _gaussian_source, _select_real_background_positions
+from .experiments import _gaussian_kernel_patch, _gaussian_source, _select_real_background_positions
 from .fits import FitsFrame, auxiliary_mask, read_fits
 
 
@@ -130,7 +130,7 @@ def _summary_row(
     ]
     local_duplicates = sum(max(0, count - 1) for count in candidate_counts.values())
     return {
-        "signal_peak_excess_adu": level,
+        "gaussian_center_amplitude_adu": level,
         "version": version,
         "matched_targets": hit_count,
         "target_total": total,
@@ -153,7 +153,7 @@ def _save_case_sheet(
     output_path: Path,
     level: float,
 ) -> None:
-    selected = [row for row in target_rows if float(row["signal_peak_excess_adu"]) == level]
+    selected = [row for row in target_rows if float(row["gaussian_center_amplitude_adu"]) == level]
     tile = 124
     crop_radius = 28
     columns = 4
@@ -367,8 +367,20 @@ def run_point_source_ablation(
         input_image = np.asarray(control_image, dtype=np.float32).copy()
         level_truths: list[dict[str, object]] = []
         for truth in truths:
+            *_, kernel = _gaussian_kernel_patch(
+                input_image.shape,
+                float(truth["x_px"]),
+                float(truth["y_px"]),
+                injected_fwhm,
+            )
             _gaussian_source(input_image, float(truth["x_px"]), float(truth["y_px"]), level, injected_fwhm)
-            level_truths.append({**truth, "signal_peak_excess_adu": level})
+            peak_fraction = float(kernel.max())
+            level_truths.append({
+                **truth,
+                "gaussian_center_amplitude_adu": level,
+                "sampled_peak_pixel_increment_adu": float(level * peak_fraction),
+                "sampled_peak_fraction_of_center_amplitude": peak_fraction,
+            })
         image_path = frozen_dir / f"injected-peak-{level:g}-adu.npy"
         np.save(image_path, input_image, allow_pickle=False)
         frozen_image = np.load(image_path, allow_pickle=False)
@@ -450,7 +462,7 @@ def run_point_source_ablation(
     _write_csv(target_path, target_rows)
     elapsed_all = time.perf_counter() - start_all
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "experiment": "point_source_detection_ablation",
         "status": "completed",
         "created_local_time": datetime.now(timezone(timedelta(hours=8))).isoformat(timespec="seconds"),
@@ -475,7 +487,7 @@ def run_point_source_ablation(
             "background_candidate_collisions_within_match_radius": 0,
         },
         "targets": truths,
-        "signal_levels_adu": list(levels),
+        "gaussian_center_amplitudes_adu": list(levels),
         "versions": [
             {"id": "A", "name": "基线 Gaussian 提案", "candidate_proposal": "gaussian", "quality_gate": "measured and reported, not used for candidate recall"},
             {"id": "B", "name": "Gaussian + DoG 多尺度提案", "candidate_proposal": "hybrid", "quality_gate": "same existing gate, reported separately"},
@@ -494,7 +506,11 @@ def run_point_source_ablation(
             "match_radius_requested_px": match_radius_px,
             "match_radius_actual_px": actual_match_radius,
             "match_rule": "minimum-distance sorted greedy one-to-one candidate-truth assignment; maximum allowed distance is actual match radius",
-            "signal_definition": "Gaussian peak excess above the original pixel value, ADU",
+            "signal_definition": (
+                "continuous Gaussian center amplitude added to the original image at the subpixel centroid, ADU; "
+                "the theoretical maximum sampled pixel increment is lower according to the exact discrete kernel response, "
+                "recorded for each target"
+            ),
             "dtype_for_all_detector_versions": "float32",
             "background_handling": "original raw FITS values converted once to float32; no global background subtraction before injection; detector local background estimation unchanged",
             "psf_model": "discrete Gaussian kernel",
@@ -508,6 +524,7 @@ def run_point_source_ablation(
             "quality_gate_loss": "B candidate matched but no quality-passed B candidate matches; divided by B candidate matched targets and separately by all injected targets",
             "position_error": "Euclidean distance between measured centroid and injected center; median and P90 among matched targets, with misses reported separately",
             "duplicates": "additional detector candidates inside a target's match radius after one-to-one assignment; not interpreted as false positives",
+            "runtime_attribution": "C reuses B detector output and reports the B detector runtime; the post-hoc quality-gate filtering time is not measured separately",
             "interval": "95% Wilson interval shown descriptively by target at each signal level; target positions share a single image and repeated levels, so it is not a population-level independent-sample interval",
         },
         "runtime": {"total_experiment_seconds": elapsed_all, "detector_seconds_by_version": timings},
@@ -533,6 +550,8 @@ def write_ablation_html(
     run_dir = Path(run_dir).resolve()
     report = Path(report_path).resolve()
     payload = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    if payload.get("schema_version") != 2 or payload.get("experiment") != "point_source_detection_ablation":
+        raise ValueError("point-source report requires schema_version 2 ablation output; rerun the experiment")
     with (run_dir / "summary.csv").open("r", encoding="utf-8-sig", newline="") as stream:
         summaries = list(csv.DictReader(stream))
     with (run_dir / "target_results.csv").open("r", encoding="utf-8-sig", newline="") as stream:
@@ -554,20 +573,32 @@ def write_ablation_html(
         except (TypeError, ValueError):
             return "—"
 
+    def sampled_peak_range(amplitude: float) -> str:
+        values = [
+            float(row["sampled_peak_pixel_increment_adu"])
+            for row in targets
+            if float(row["gaussian_center_amplitude_adu"]) == amplitude
+        ]
+        if not values:
+            return "—"
+        return f"{min(values):.2f}–{max(values):.2f}"
+
     table_rows = []
     for row in summaries:
         recall = fmt(row["recall"])
         ci = f"[{fmt(row['wilson95_low_descriptive'])}, {fmt(row['wilson95_high_descriptive'])}]"
         table_rows.append(
             "<tr>"
-            f"<td>{fmt(row['signal_peak_excess_adu'], 0)} ADU</td><td>{html.escape(row['version'])}</td>"
+            f"<td>{fmt(row['gaussian_center_amplitude_adu'], 0)} / "
+            f"{sampled_peak_range(float(row['gaussian_center_amplitude_adu']))} ADU</td>"
+            f"<td>{html.escape(row['version'])}</td>"
             f"<td>{row['matched_targets']}/{row['target_total']} ({recall})</td><td>{ci}</td>"
             f"<td>{fmt(row['median_position_error_px'])} / {fmt(row['p90_position_error_px'])}</td>"
             f"<td>{row['unmatched_targets']}</td><td>{fmt(row['detector_seconds'], 1)} s</td></tr>"
         )
     loss_by_level = []
-    for level in payload["signal_levels_adu"]:
-        rows = [row for row in targets if float(row["signal_peak_excess_adu"]) == float(level)]
+    for level in payload["gaussian_center_amplitudes_adu"]:
+        rows = [row for row in targets if float(row["gaussian_center_amplitude_adu"]) == float(level)]
         b = sum(row["hybrid_candidate_hit"] == "True" for row in rows)
         c = sum(row["quality_gate_hit"] == "True" for row in rows)
         loss = b - c
@@ -575,7 +606,7 @@ def write_ablation_html(
     source = payload["source_fits"]
     execution = payload.get("execution", {})
     actual_argv = " ".join(str(part) for part in execution.get("argv", []))
-    level_args = " ".join(f"{float(level):g}" for level in payload["signal_levels_adu"])
+    level_args = " ".join(f"{float(level):g}" for level in payload["gaussian_center_amplitudes_adu"])
     replay_command = (
         f'uv run rst19-ablation "{source["path"]}" --targets {len(payload["targets"])} '
         f'--peak-levels {level_args} --reuse-manifest "{run_dir / "manifest.json"}" '
@@ -605,8 +636,8 @@ code{background:#edf1f5;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere
 <section class="card"><h2>2. 实验为什么公平</h2><div class="flow"><span>同一原始 FITS<br>同一 float32 控制图</span><b>→</b><span>固定目标 ID、坐标、PSF<br>分别生成冻结注入图</span><b>→</b><span>A / B / C 读取<br>完全相同的图像</span><b>→</b><span>同一半径<br>一对一匹配</span></div>
 <ul><li>A：Gaussian 候选提案基线。</li><li>B：只把提案扩展为 Gaussian + DoG；候选阈值、FWHM、测量和背景规则不变。</li><li>C：不重跑检测，直接对同一 B 候选池应用现有 <code>quality_passed</code> 质量门；拒绝旗标保留。</li></ul>
 <p>无注入控制在目标位置的匹配半径内有 <b>0</b> 个已有候选。实际匹配半径是 <b>""" + fmt(payload["parameters_requested"]["match_radius_actual_px"], 1) + " px</b>；规则为最近距离优先的一对一分配。" + """</p></section>
-<section class="card"><h2>3. 主要结果：逐信号强度配对</h2><p class="muted">召回写成命中数／注入数。区间为逐目标 Wilson 95% 描述区间；同一图像上的位置和多个信号档相关，因此不能据此做独立样本总体推断。</p>
-<div class="scroll"><table><thead><tr><th>注入强度</th><th>版本</th><th>命中／目标数（召回）</th><th>Wilson 95% 区间*</th><th>定位误差中位数 / P90（px）</th><th>未回收</th><th>单次检测耗时</th></tr></thead><tbody>""" + "".join(table_rows) + """</tbody></table></div>
+<section class="card"><h2>3. 主要结果：逐信号强度配对</h2><p class="muted">振幅指连续 Gaussian 在亚像素质心处的模型中心振幅；斜线后列出 8 个固定位置对应的理论最高采样像素增量范围。召回写成命中数／注入数。区间为逐目标 Wilson 95% 描述区间；同一图像上的位置和多个信号档相关，因此不能据此做独立样本总体推断。</p>
+<div class="scroll"><table><thead><tr><th>Gaussian 中心振幅 / 理论最高采样像素增量范围（ADU）</th><th>版本</th><th>命中／目标数（召回）</th><th>Wilson 95% 区间*</th><th>定位误差中位数 / P90（px）</th><th>未回收</th><th>候选检测耗时（C 复用 B；门控未单独计时）</th></tr></thead><tbody>""" + "".join(table_rows) + """</tbody></table></div>
 <h3>质量门的配对变化</h3><p>""" + " ".join(loss_by_level) + """</p><p class="muted">额外候选仅统计目标匹配半径内一对一分配后剩余的候选，不称作假阳性。未标注背景中的其他候选也没有用于计算精确率或误检率。</p></section>
 <section class="card"><h2>4. 具体注入目标对比</h2><div class="casekey"><span><i class="dot yellow"></i>注入真值</span><span><i class="dot blue"></i>A Gaussian</span><span><i class="dot green"></i>B Hybrid</span></div>
 <p>下图展示最低信号档的每个固定注入点。标题里的 A/B/C 为该目标是否被回收（1=是，0=否）；C 表示质量门后的命中。</p>""" + f'<img src="{quote(os.path.relpath(point_evidence_dir / "cases-weakest-level.png", report.parent).replace(os.sep, "/"), safe="/._-")}" alt="最低注入强度下所有注入目标的检测前后对比">' + """
@@ -644,6 +675,8 @@ code{background:#edf1f5;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere
 
 def _render_motion_section(run_dir: Path, report_parent: Path) -> str:
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != 2 or manifest.get("experiment") != "association_stage_motion_constraint_ablation":
+        raise ValueError("motion report requires schema_version 2 association output; rerun the motion ablation")
     evidence_dir = report_parent / "evidence" / "motion"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     for filename in (
@@ -667,7 +700,7 @@ def _render_motion_section(run_dir: Path, report_parent: Path) -> str:
         presence = f'{row["expected_presence"]}/{row["sequence_frames"]}'
         table_rows.append(
             "<tr>"
-            f'<td>{html.escape(row["target_id"])}</td><td>{html.escape({"FAST-15": "快速正例，15/15", "FAST-GAP-12": "快速正例，3 个分散缺帧，12/15", "SLOW-BASE-15": "慢速基线正例，15/15", "BELOW-12": "持续性负例，11/15"}.get(row["target_id"], row["role"]))}</td>'
+            f'<td>{html.escape(row["target_id"])}</td><td>{html.escape({"FAST-15": "快速正例，15/15", "FAST-GAP-12": "快速正例，3 个分散缺帧，12/15", "SLOW-BASE-15": "慢速普通关联正例，15/15", "BELOW-12": "持续性负例，11/15"}.get(row["target_id"], row["role"]))}</td>'
             f'<td>{presence}</td><td>{row["baseline_exact_track_recovered"]}</td>'
             f'<td>{row["baseline_fragments"]}</td><td>{row["fast_exact_track_recovered"]}</td>'
             f'<td>{row["fast_best_track_target_points"]}/{row["expected_presence"]}</td>'
@@ -680,7 +713,7 @@ def _render_motion_section(run_dir: Path, report_parent: Path) -> str:
     return (
         '<section class="card"><h2>8. 运动约束：独立的轨迹关联对照</h2>'
         '<p>该实验冻结同一逐帧质量源列表，A 使用普通最近邻轨迹关联，B 在保留 A 多帧轨迹的同时，对未被 A 串联的质量点运行速度预测补充关联。'
-        '注入对象是逐帧 <code>Detection</code> 记录，不重新经过图像像素检测；因此它验证的是关联阶段，不是运动目标的像素检出能力。</p>'
+        '轨迹真值按每帧实际观测时间生成，速度以中位相邻帧间隔归一化；图中横轴按帧序显示。注入对象是逐帧 <code>Detection</code> 记录，不重新经过图像像素检测；因此它验证的是关联阶段，不是运动目标的像素检出能力。</p>'
         '<div class="note"><b>比较口径：</b>表中 A 的“精确轨迹”要求普通关联单独形成完整真值轨迹；B 的“精确补充轨迹”表示速度预测补充层形成完整轨迹。'
         'A 中遗留的单帧碎片仍可与 B 补充轨迹同时存在，故碎片数单列，不能把 B 解读为已清除重复轨迹或全序列精确率。</div>'
         '<div class="scroll"><table><thead><tr><th>固定真值轨迹</th><th>角色</th><th>有效观测／总帧数</th>'

@@ -135,24 +135,30 @@ def _make_truth_paths(
     avoid_radius_px: float = 18.0,
 ) -> list[dict[str, object]]:
     specifications = [
-        {"target_id": "FAST-15", "vx_px_frame": 8.0, "vy_px_frame": -4.0, "missing_frames": [], "role": "fast positive, 15/15"},
-        {"target_id": "FAST-GAP-12", "vx_px_frame": 6.0, "vy_px_frame": 2.0, "missing_frames": [3, 7, 11], "role": "fast positive with three separated gaps, 12/15"},
-        {"target_id": "SLOW-BASE-15", "vx_px_frame": 2.0, "vy_px_frame": 0.5, "missing_frames": [], "role": "slow positive control for the 4 px baseline"},
-        {"target_id": "BELOW-12", "vx_px_frame": -7.0, "vy_px_frame": -3.0, "missing_frames": [2, 5, 8, 11], "role": "presence negative control, 11/15"},
+        {"target_id": "FAST-15", "vx_px_per_reference_interval": 8.0, "vy_px_per_reference_interval": -4.0, "missing_frames": [], "role": "fast positive, 15/15"},
+        {"target_id": "FAST-GAP-12", "vx_px_per_reference_interval": 6.0, "vy_px_per_reference_interval": 2.0, "missing_frames": [3, 7, 11], "role": "fast positive with three separated gaps, 12/15"},
+        {"target_id": "SLOW-BASE-15", "vx_px_per_reference_interval": 2.0, "vy_px_per_reference_interval": 0.5, "missing_frames": [], "role": "slow positive control for ordinary association"},
+        {"target_id": "BELOW-12", "vx_px_per_reference_interval": -7.0, "vy_px_per_reference_interval": -3.0, "missing_frames": [2, 5, 8, 11], "role": "presence negative control, 11/15"},
     ]
+    times = np.asarray(frame_times, dtype=np.float64)
+    if times.size != frame_count or np.any(np.diff(times) <= 0):
+        raise ValueError("truth trajectory times must be strictly increasing and match frame_count")
+    reference_interval_s = float(np.median(np.diff(times)))
+    reference_steps = (times - times[0]) / reference_interval_s
     trees = [cKDTree(np.asarray(points, dtype=np.float64)) if points else None for points in background_points]
     rng = random.Random(seed)
     accepted: list[dict[str, object]] = []
     for spec in specifications:
-        vx, vy = float(spec["vx_px_frame"]), float(spec["vy_px_frame"])
+        vx = float(spec["vx_px_per_reference_interval"])
+        vy = float(spec["vy_px_per_reference_interval"])
         missing = {int(index) for index in spec["missing_frames"]}
         accepted_path = None
         for _attempt in range(50_000):
             start_x = rng.uniform(180.0, width - 180.0)
             start_y = rng.uniform(180.0, height - 180.0)
             registered = [
-                (start_x + vx * frame, start_y + vy * frame)
-                for frame in range(frame_count)
+                (start_x + vx * float(step), start_y + vy * float(step))
+                for step in reference_steps
             ]
             if any(
                 not (60.0 <= x + cached_shifts[i][0] <= width - 60.0 and 60.0 <= y + cached_shifts[i][1] <= height - 60.0)
@@ -316,7 +322,8 @@ def _save_track_plot(path: Path, truth_paths: Sequence[dict[str, object]], basel
         expected = {int(point["frame_index"]): point for point in truth["expected_observations"]}
         projected_truth = []
         start = truth["registered_positions"][0]
-        vx, vy = float(truth["vx_px_frame"]), float(truth["vy_px_frame"])
+        vx = float(truth["vx_px_per_reference_interval"])
+        vy = float(truth["vy_px_per_reference_interval"])
         norm = max(1e-9, math.hypot(vx, vy))
         for frame in range(frame_count):
             pos = truth["registered_positions"][frame]
@@ -340,7 +347,7 @@ def _save_track_plot(path: Path, truth_paths: Sequence[dict[str, object]], basel
             left=left, right=right, frame_count=frame_count,
         )
         draw.text((left, top + 4), "Along-track displacement (px)", fill=(75, 89, 107), font=small)
-    draw.text((left, height - 24), "Time: frame index | Yellow = truth | Orange = baseline | Green = supplement", fill=(65, 78, 96), font=small)
+    draw.text((left, height - 24), "Frame order | Yellow = truth | Orange = baseline | Green = supplement", fill=(65, 78, 96), font=small)
     image.save(path)
 
 
@@ -374,6 +381,20 @@ def run_motion_association_ablation(
     actual_link_radius = float(sequence["link_radius_px"] if link_radius_px is None else link_radius_px)
     if actual_min_presence < 3 or actual_min_presence > len(frames):
         raise ValueError("minimum presence must be within the number of cached frames")
+    if actual_min_presence != 12:
+        raise ValueError("the fixed 12/15 and 11/15 trajectory roles require min_presence=12")
+    if not math.isfinite(actual_link_radius) or actual_link_radius <= 0:
+        raise ValueError("link radius must be finite and positive")
+    time_deltas = np.diff(np.asarray(frame_times, dtype=np.float64))
+    if not time_deltas.size or np.any(~np.isfinite(time_deltas)) or np.any(time_deltas <= 0):
+        raise ValueError("cached frame times must be finite and strictly increasing")
+    reference_interval_s = float(np.median(time_deltas))
+    maximum_slow_step_px = math.hypot(2.0, 0.5) * float(np.max(time_deltas)) / reference_interval_s
+    if actual_link_radius < maximum_slow_step_px:
+        raise ValueError(
+            "link radius is too small for the fixed slow-positive control: "
+            f"need at least {maximum_slow_step_px:.3f} px for the largest timestamp interval"
+        )
     truth_paths = _make_truth_paths(
         int(frames[0]["width_px"]),
         int(frames[0]["height_px"]),
@@ -468,7 +489,7 @@ def run_motion_association_ablation(
             "fast_track_classification": fast_metrics["best_track_classification"],
             "fast_mixed_with_other_injected_target": fast_metrics["mixed_with_other_injected_target"],
             "fast_mixed_with_background_source": fast_metrics["mixed_with_background_source"],
-            "combined_exact_track_recovered": combined_metrics["exact_track_recovered"],
+            "combined_single_track_only_exact": combined_metrics["exact_track_recovered"],
             "expected_frame_indices": ",".join(str(i) for i in sorted(expected_frames)),
             "synthetic_detection_id": detection_id,
         }
@@ -478,7 +499,7 @@ def run_motion_association_ablation(
             "expected_presence": truth["expected_presence"],
             "baseline_exact_track_recovered": base_metrics["exact_track_recovered"],
             "fast_exact_track_recovered": fast_metrics["exact_track_recovered"],
-            "combined_exact_track_recovered": combined_metrics["exact_track_recovered"],
+            "combined_single_track_only_exact": combined_metrics["exact_track_recovered"],
             "baseline_fragments": base_metrics["track_count"],
             "fast_supplement_track_count": fast_metrics["track_count"],
             "fast_mixed_with_background_source": fast_metrics["mixed_with_background_source"],
@@ -500,7 +521,7 @@ def run_motion_association_ablation(
         for i in range(len(frames))
     ]
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "experiment": "association_stage_motion_constraint_ablation",
         "status": "completed",
         "created_local_time": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -527,6 +548,12 @@ def run_motion_association_ablation(
             "all_quality_source_flux_snr_verified": True,
         },
         "frame_times_seconds": frame_times,
+        "truth_time_model": {
+            "reference_interval_seconds": reference_interval_s,
+            "registered_position": "origin + velocity_px_per_reference_interval * (frame_time - first_frame_time) / median_adjacent_frame_interval",
+            "coordinate_conversion": "raw position = registered truth position + cached cumulative registration shift",
+            "plot_x_axis": "frame order (not uniformly spaced elapsed time)",
+        },
         "cached_cumulative_shifts_px": [list(shift) for shift in cached_shifts],
         "recomputed_registration_max_delta_px": max(registration_deltas, default=0.0),
         "truth_trajectories": [
@@ -554,6 +581,7 @@ def run_motion_association_ablation(
         "association_metrics": {
             "exact_track": "one output track contains exactly the target's expected detection IDs on every expected frame, with no other frame for that target, and no additional track contains its ID",
             "fragment_count": "number of output tracks containing the target detection ID; baseline singletons count as fragments",
+            "combined_single_track_only_exact": "the union of baseline and supplement has exactly one target-containing track and that track contains exactly the expected target observations; false when baseline fragments remain alongside a complete supplement track",
             "mixed_target_ids": "one track contains synthetic detection IDs from more than one known truth trajectory",
             "background_contamination": "one track containing a synthetic target ID also contains a cached background detection ID",
             "negative_control": "the 11/15 path should not produce a fast supplement because min_presence is 12; it is not a false-positive estimate",

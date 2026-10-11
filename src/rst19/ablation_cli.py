@@ -29,7 +29,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="实验产物目录；非空目录不会被覆盖",
     )
     parser.add_argument("--report", type=Path, default=Path("deliverables/ablation/index.html"), help="中文 HTML 报告路径")
-    parser.add_argument("--peak-levels", nargs="+", type=float, default=(12.0, 24.0, 56.0), help="每个目标的 Gaussian 峰值超额 ADU")
+    parser.add_argument(
+        "--peak-levels",
+        nargs="+",
+        type=float,
+        default=(12.0, 24.0, 56.0),
+        help="连续 Gaussian 模型的中心振幅 ADU；亚像素采样峰值增量会略低并逐目标记录",
+    )
     parser.add_argument("--targets", type=int, default=8, help="一组固定注入位置数")
     parser.add_argument("--seed", type=int, default=19019, help="只用于一次性选址；实际坐标保存在 manifest")
     parser.add_argument("--psf-fwhm", type=float, default=2.0, help="检测 PSF FWHM，pixel")
@@ -105,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         "report": str(report),
         "total_experiment_seconds": manifest["runtime"]["total_experiment_seconds"],
         "target_count": args.targets,
-        "signal_levels_adu": list(args.peak_levels),
+        "gaussian_center_amplitudes_adu": list(args.peak_levels),
     }, ensure_ascii=False, indent=2))
     return 0
 
