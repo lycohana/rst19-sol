@@ -50,6 +50,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-direct-neighbor-audit"
                         | "rst19-feature-cross-axis-audit"
                         | "rst19-source-group-audit"
+                        | "rst19-source-group-sensitivity"
                 )
             ))
 }
@@ -293,6 +294,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-source-group-audit"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-source-group-sensitivity"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

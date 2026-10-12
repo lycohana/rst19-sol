@@ -827,6 +827,47 @@ def verify(package: Path, out: Path) -> dict:
         "source_group_targets.csv", "source_group_summary.json",
     ):
         assert (source_group_out / artifact).is_file(), artifact
+    source_group_sensitivity_out = out / "source-group-radius-sensitivity"
+    source_group_sensitivity_request = {
+        "operation": "tool",
+        "tool": "rst19-source-group-sensitivity",
+        "args": [
+            str(source_group_catalog.resolve()),
+            "--group-radius", "2.5",
+            "--group-radius", "3",
+            "--group-radius", "4",
+            "--target-id", "1",
+            "--target-id", "2",
+            "--workers", "2",
+            "--out-dir", str(source_group_sensitivity_out.resolve()),
+        ],
+        "out_dir": str((out / "source-group-radius-sensitivity-job").resolve()),
+    }
+    source_group_sensitivity_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(source_group_sensitivity_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    source_group_sensitivity_events = [
+        json.loads(line) for line in source_group_sensitivity_response.stdout.splitlines()
+    ]
+    assert (
+        len(source_group_sensitivity_events) == 1
+        and source_group_sensitivity_events[0]["ok"]
+    ), source_group_sensitivity_events
+    source_group_sensitivity_payload = source_group_sensitivity_events[0]["payload"]
+    assert source_group_sensitivity_payload["tool"] == "rst19-source-group-sensitivity"
+    assert [row["group_count"] for row in source_group_sensitivity_payload["result"]["rows"]] == [5, 3, 3]
+    assert [row["multi_member_group_count"] for row in source_group_sensitivity_payload["result"]["rows"]] == [0, 2, 2]
+    assert [target["classification"] for target in source_group_sensitivity_payload["result"]["targets"]] == [
+        "isolated", "isolated", "unresolved_group", "unresolved_group",
+    ]
+    for artifact in (
+        "source_group_radius_sensitivity.csv",
+        "source_group_radius_targets.csv",
+        "source_group_radius_sensitivity.json",
+    ):
+        assert (source_group_sensitivity_out / artifact).is_file(), artifact
     feedback_path = out / "manual threshold feedback.jsonl"
     feedback_record = {
         "timestamp_utc": "2026-10-13T00:00:00+00:00",
@@ -904,6 +945,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-direct-neighbor-audit",
                   "rst19-feature-cross-axis-audit",
                   "rst19-source-group-audit",
+                  "rst19-source-group-sensitivity",
                   "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
@@ -944,6 +986,12 @@ def verify(package: Path, out: Path) -> dict:
         "source_count": source_group_payload["result"]["source_count"],
         "group_count": source_group_payload["result"]["group_count"],
         "multi_member_group_count": source_group_payload["result"]["multi_member_group_count"],
+        "artifacts_written": True,
+        "external_python_search_disabled": True,
+    }
+    report["source_group_sensitivity"] = {
+        "radius_count": len(source_group_sensitivity_payload["result"]["rows"]),
+        "target_count": len(source_group_sensitivity_payload["result"]["targets"]),
         "artifacts_written": True,
         "external_python_search_disabled": True,
     }

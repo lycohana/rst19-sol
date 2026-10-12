@@ -151,6 +151,46 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.source_group_sensitivity" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let group_radii_px = request
+                .get("group_radii_px")
+                .filter(|value| !value.is_null())
+                .map(numbers)
+                .transpose()?
+                .unwrap_or_else(|| {
+                    rst19_core::source_group_sensitivity::DEFAULT_GROUP_RADII_PX.to_vec()
+                });
+            let target_ids = request
+                .get("target_ids")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<i64>>)
+                .transpose()
+                .map_err(|error| error.to_string())?
+                .unwrap_or_default();
+            Ok(rst19_core::source_group_sensitivity::run(
+                std::path::Path::new(catalog_path),
+                &group_radii_px,
+                &target_ids,
+                request
+                    .get("psf_fwhm")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(2.0),
+                request
+                    .get("delta_bic_min")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(10.0),
+                request
+                    .get("component_snr_min")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(5.0),
+                request.get("workers").and_then(Value::as_i64).unwrap_or(1),
+            )?
+            .as_dict())
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
