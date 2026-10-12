@@ -2009,7 +2009,7 @@
         "write_pair_pixel_topology_artifacts",
         "_write_topology_svg"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_pixel_topology_cli",
@@ -2019,7 +2019,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_repair_counterfactual",
@@ -3269,7 +3269,8 @@
     "coherent raw per-frame line-proposal chains with elapsed-time and exposure-scaled displacement gates, direction continuity, and strong-shape admission",
     "single-frame raw-pixel finite-line proposal search with masked Gaussian normalization, spatial seed budgets, local refinement, compact-source controls, and geometry suppression",
     "pair-mechanism geometry context audit with Python-byte-identical pair, summary, and target CSV artifacts",
-    "pair-mechanism multi-window sensitivity audit with native JSONL and desktop worker routes"
+    "pair-mechanism multi-window sensitivity audit with native JSONL and desktop worker routes",
+    "pair-pixel raw and special-excluded connected-component topology, local-maximum diagnostics, and Python-byte-identical CSV/JSON/SVG artifacts"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3314,7 +3315,8 @@
     "rst19-feature-effect-size": "tie-aware feature effect sizes and top feature ranking by detector class; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
     "rst19-feature-class-context": "requested detections with within-class percentile context; complete result parity and byte-identical target/metric CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
     "rst19-pair-mechanism-context": "geometry-conditioned candidate-pair background; result and all three CSV artifacts match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending",
-    "rst19-pair-mechanism-sensitivity": "predeclared multi-window candidate-pair sensitivity; result and CSV artifact match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending"
+    "rst19-pair-mechanism-sensitivity": "predeclared multi-window candidate-pair sensitivity; result and CSV artifact match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending",
+    "rst19-pair-pixel-topology": "raw and special-excluded 8-connected pixel topology plus local-maximum audit; result, CSV, JSON, and SVG match Python byte-for-byte where applicable; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3400,6 +3402,8 @@
     "verify_pair_mechanism.py",
     "tests/test_pair_mechanism_context.py",
     "tests/test_pair_mechanism_sensitivity.py",
+    "verify_pair_pixel_topology.py",
+    "tests/test_pair_pixel_topology.py",
     "verify_package.py"
   ],
   "remaining": [
@@ -3408,10 +3412,11 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; rst19 single-frame, rst19-aux-audit, rst19-feature-flag-profile, rst19-feature-flag-interaction, rst19-feature-gate-margin, rst19-feature-effect-size, rst19-feature-class-context, rst19-pair-mechanism-context, and rst19-pair-mechanism-sensitivity routes are migrated",
+    "route remaining research tools through Rust desktop workers; rst19 single-frame, rst19-aux-audit, rst19-feature-flag-profile, rst19-feature-flag-interaction, rst19-feature-gate-margin, rst19-feature-effect-size, rst19-feature-class-context, rst19-pair-mechanism-context, rst19-pair-mechanism-sensitivity, and rst19-pair-pixel-topology routes are migrated",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
   "native_pair_mechanism_context": "pair geometry, class/quality summaries, target-pair context, and Python-byte-identical CSV/JSON artifacts",
-  "native_pair_mechanism_sensitivity": "predeclared centroid/peak windows with descriptive count changes and no physical-probability interpretation"
+  "native_pair_mechanism_sensitivity": "predeclared centroid/peak windows with descriptive count changes and no physical-probability interpretation",
+  "native_pair_pixel_topology": "raw and special-excluded 8-connected patch components, peak membership, and local maxima; diagnostics describe image pixels and are not physical-source identity"
 }

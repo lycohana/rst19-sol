@@ -1,6 +1,6 @@
 # RST19 Rust 原生桌面
 
-前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context` 和 `rst19-pair-mechanism-sensitivity` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。
+前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity` 和 `rst19-pair-pixel-topology` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。
 完整发布包暂时同时包含 Rust 原生 worker 与 Python/NumPy/SciPy 环境，以及中文字体；使用者无需安装 Python、Rust、Node.js 或浏览器。
 
 ## 直接使用
@@ -68,7 +68,7 @@ desktop/target/release/rst19-desktop.exe --data-dir "doc/00-项目资料/原始�
 
 截图验证的是界面实际启动、环境就绪和 FITS 预览，不等同于全部科学流程验收。
 添加 `--smoke-analysis` 可让截图检查通过 Rust worker 执行当前目录首帧检测并绘制结果叠加；建议使用小型合成 FITS。
-`verify_package.py` 禁用外部 Python 搜索路径，检查冻结环境的工具导入、Rust 单帧分析／辅助姿态审计／旗标统计／旗标交互审计／质量门余量审计／效应量审计／类别上下文审计／近邻机制上下文与窗口敏感性／预览路由、原图不变与包内 SHA-256。
+`verify_package.py` 禁用外部 Python 搜索路径，检查冻结环境的工具导入、Rust 单帧分析／辅助姿态审计／旗标统计／旗标交互审计／质量门余量审计／效应量审计／类别上下文审计／近邻机制上下文、窗口敏感性与像素拓扑／预览路由、原图不变与包内 SHA-256。
 平台运行与完整 15 帧分析需要各自的实际验证记录。
 
 库文档：[eframe](https://docs.rs/eframe/0.31.1/eframe/)、[PyInstaller 打包选项](https://pyinstaller.org/en/stable/usage.html)。

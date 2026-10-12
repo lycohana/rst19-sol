@@ -24,7 +24,9 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 新增 `rst19-native` 单帧 CLI，兼容原 `rst19` 参数入口、默认 hybrid、标准输出与 `--json-out`。已通过合成输入和有返回上限的真实首帧对照；原 CLI 帮助文本布局与全部解析边界仍需扩展核验。
 `rst19-pair-mechanism-context` 已原生计算候选源的质心/整数峰距离、无序近邻对、类别组合与双质量通过背景，并生成与 Python 字节一致的三份 CSV。`rst19-pair-mechanism-sensitivity` 在预先声明的几何窗口内重复该审计，保存窗口参数、目标 pair 状态及对照总体计数；窗口变化不解释成物理概率。两项工具均支持 Rust JSONL engine 与桌面 worker，覆盖 BOM、可选旗标列、目标去重、几何边界和自定义窗口。
 
-桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context` 和 `rst19-pair-mechanism-sensitivity`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
+`rst19-pair-pixel-topology` 对局部原始 ADU patch 计算 raw 与特殊像素排除后的 8 连通分量、峰值成员关系及滑动局部极大值；结果 JSON、CSV 和 SVG 与 Python 基线逐项/逐字节核对。该审计描述像素拓扑，不单独确认物理源身份；Rust JSONL engine 与桌面 worker 均已接入。
+
+桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity` 和 `rst19-pair-pixel-topology`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
 
 ```powershell
 cargo test --locked --manifest-path backend/Cargo.toml

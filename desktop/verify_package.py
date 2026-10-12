@@ -50,6 +50,29 @@ def make_pair_catalog(path: Path) -> None:
     )
 
 
+def make_topology_fixture(frame_path: Path, catalog_path: Path) -> None:
+    def card(key: str, value: str) -> bytes:
+        return f"{key:<8}= {value:>20}".ljust(80).encode("ascii")
+
+    values = [10] * (40 * 40)
+    for x, y, value in ((20, 20, 130), (21, 20, 99), (19, 21, 80),
+                        (18, 21, 70), (17, 21, 50), (16, 21, 40)):
+        values[y * 40 + x] = value
+    header = b"".join((
+        card("SIMPLE", "T"), card("BITPIX", "16"), card("NAXIS", "2"),
+        card("NAXIS1", "40"), card("NAXIS2", "40"), b"END".ljust(80),
+    )).ljust(2880, b" ")
+    image = struct.pack(f">{len(values)}h", *values)
+    image = image.ljust(((len(image) + 2879) // 2880) * 2880, b"\0")
+    frame_path.write_bytes(header + image)
+    catalog_path.write_text(
+        "detection_id,x,y,peak,flux,background,noise,snr,quality_passed,peak_x,peak_y,repeated_code_values\n"
+        "1,21,20,99,100,10,2,20,false,21,20,99\n"
+        "2,16,21,40,100,10,2,20,false,16,21,99\n",
+        encoding="utf-8",
+    )
+
+
 def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -267,6 +290,39 @@ def verify(package: Path, out: Path) -> dict:
     assert [row["target_in_geometry_context"] for row in pair_sensitivity["result"]["rows"]] == [False, True]
     assert Path(pair_sensitivity["result_path"]).is_file()
     assert (pair_sensitivity_out / "pair_mechanism_sensitivity.csv").is_file()
+    topology_frame = out / "近邻原始像素.fits"
+    topology_catalog = out / "topology source catalog.csv"
+    make_topology_fixture(topology_frame, topology_catalog)
+    topology_out = out / "pair-pixel-topology"
+    topology_request = {
+        "operation": "tool",
+        "tool": "rst19-pair-pixel-topology",
+        "args": [
+            str(topology_frame.resolve()), "--source-catalog", str(topology_catalog.resolve()),
+            "--primary-id", "1", "--secondary-id", "2", "--patch-padding-px", "4",
+            "--sigma-levels", "3", "5",
+            "--raw-maximum-neighborhoods-px", "3",
+            "--out-dir", str(topology_out.resolve()),
+        ],
+        "out_dir": str((out / "pair-pixel-topology-job").resolve()),
+    }
+    topology_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(topology_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    topology_events = [json.loads(line) for line in topology_response.stdout.splitlines()]
+    assert len(topology_events) == 1 and topology_events[0]["ok"]
+    topology = topology_events[0]["payload"]
+    assert topology["tool"] == "rst19-pair-pixel-topology"
+    assert topology["result"]["repeated_code_values"] == [99]
+    assert [12, 16, 26, 26] == topology["result"]["patch_bounds"]
+    assert len(topology["result"]["component_rows"]) == 4
+    for artifact in (
+        "pair_pixel_topology_components.csv", "pair_pixel_topology_maxima.csv",
+        "pair_pixel_topology.json", "pair_pixel_topology.svg",
+    ):
+        assert (topology_out / artifact).is_file(), artifact
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -294,6 +350,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-feature-class-context",
                   "rst19-pair-mechanism-context",
                   "rst19-pair-mechanism-sensitivity",
+                  "rst19-pair-pixel-topology",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,

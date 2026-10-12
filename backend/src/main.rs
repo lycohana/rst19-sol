@@ -243,6 +243,45 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.pair_pixel_topology" => {
+            let frame_path = request["frame_path"]
+                .as_str()
+                .ok_or("missing FITS frame path")?;
+            let primary: rst19_core::measurement::Detection = serde_json::from_value(
+                request
+                    .get("primary_detection")
+                    .cloned()
+                    .ok_or("missing primary detection")?,
+            )
+            .map_err(|error| error.to_string())?;
+            let secondary: rst19_core::measurement::Detection = serde_json::from_value(
+                request
+                    .get("secondary_detection")
+                    .cloned()
+                    .ok_or("missing secondary detection")?,
+            )
+            .map_err(|error| error.to_string())?;
+            let options: rst19_core::pair_pixel_topology::Options = serde_json::from_value(
+                request.get("options").cloned().unwrap_or_else(|| json!({})),
+            )
+            .map_err(|error| error.to_string())?;
+            let repeated: Option<Vec<i64>> = request
+                .get("repeated_code_values")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|error| error.to_string())?;
+            let frame = rst19_core::fits::read_fits(frame_path, false)?;
+            Ok(rst19_core::pair_pixel_topology::run(
+                &frame,
+                &primary,
+                &secondary,
+                &options,
+                repeated.as_deref(),
+            )?
+            .as_dict())
+        }
         "sequence.track_detections" => {
             let frames: Vec<Vec<rst19_core::measurement::Detection>> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
