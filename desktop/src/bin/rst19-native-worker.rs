@@ -38,6 +38,20 @@ fn string_args(request: &Value) -> Result<Vec<String>, String> {
 }
 
 fn run(request: Value) -> Result<Value, String> {
+    if request["operation"] == "feedback.append" {
+        let path = PathBuf::from(request["path"].as_str().ok_or("missing path")?);
+        let payload = request.get("feedback").ok_or("missing feedback")?;
+        let feedback = rst19_core::feedback::from_value(payload)?;
+        let written = rst19_core::feedback::append_manual_feedback(&path, &feedback)?;
+        return Ok(json!({"path":written, "record":feedback.as_dict()}));
+    }
+    if request["operation"] == "feedback.load" {
+        let path = PathBuf::from(request["path"].as_str().ok_or("missing path")?);
+        let records = rst19_core::feedback::load_manual_feedback(&path)?;
+        return Ok(
+            json!({"records":records.iter().map(|record| record.as_dict()).collect::<Vec<_>>()}),
+        );
+    }
     if request["operation"] == "preview" {
         let path = PathBuf::from(request["path"].as_str().ok_or("missing FITS path")?);
         let out_dir = PathBuf::from(

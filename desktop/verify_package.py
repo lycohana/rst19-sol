@@ -794,6 +794,44 @@ def verify(package: Path, out: Path) -> dict:
         "feature_cross_axis_patterns.csv", "feature_cross_axis_audit.json",
     ):
         assert (cross_axis_out / artifact).is_file(), artifact
+    feedback_path = out / "manual threshold feedback.jsonl"
+    feedback_record = {
+        "timestamp_utc": "2026-10-13T00:00:00+00:00",
+        "frame_path": "F01.fits",
+        "threshold_sigma": 3.5,
+        "min_flux_snr": 3.0,
+        "min_distance": 4,
+        "psf_fwhm": 3.0,
+        "candidate_count": 12,
+        "quality_count": 8,
+        "returned_count": 12,
+        "flag_counts": {"LOW_FLUX_SNR": 4},
+        "judgement": "保留弱星",
+        "note": "package worker test",
+        "source": "native_manual",
+        "schema_version": 1,
+    }
+    feedback_append_request = {
+        "operation": "feedback.append",
+        "path": str(feedback_path.resolve()),
+        "feedback": feedback_record,
+    }
+    feedback_append_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(feedback_append_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    feedback_append_events = [json.loads(line) for line in feedback_append_response.stdout.splitlines()]
+    assert len(feedback_append_events) == 1 and feedback_append_events[0]["ok"]
+    feedback_load_response = subprocess.run(
+        [str(native_worker)],
+        input=json.dumps({"operation": "feedback.load", "path": str(feedback_path.resolve())}, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    feedback_load_events = [json.loads(line) for line in feedback_load_response.stdout.splitlines()]
+    assert len(feedback_load_events) == 1 and feedback_load_events[0]["ok"]
+    assert feedback_load_events[0]["payload"]["records"] == [feedback_record]
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -832,6 +870,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-feature-evidence-axes",
                   "rst19-direct-neighbor-audit",
                   "rst19-feature-cross-axis-audit",
+                  "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
@@ -865,6 +904,11 @@ def verify(package: Path, out: Path) -> dict:
         "class_count": len(cross_axis_payload["result"]["class_summaries"]),
         "pattern_count": len(cross_axis_payload["result"]["pattern_summaries"]),
         "artifacts_written": True,
+        "external_python_search_disabled": True,
+    }
+    report["manual_threshold_feedback"] = {
+        "append_and_load_verified": True,
+        "record_count": len(feedback_load_events[0]["payload"]["records"]),
         "external_python_search_disabled": True,
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

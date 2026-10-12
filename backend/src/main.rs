@@ -105,6 +105,21 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "feedback.append" => {
+            let path = request["path"].as_str().ok_or("missing path")?;
+            let payload = request.get("feedback").ok_or("missing feedback")?;
+            let feedback = rst19_core::feedback::from_value(payload)?;
+            let written = rst19_core::feedback::append_manual_feedback(
+                std::path::Path::new(path),
+                &feedback,
+            )?;
+            Ok(json!({"path":written, "record":feedback.as_dict()}))
+        }
+        "feedback.load" => {
+            let path = request["path"].as_str().ok_or("missing path")?;
+            let records = rst19_core::feedback::load_manual_feedback(std::path::Path::new(path))?;
+            Ok(json!({"records":records.iter().map(|record| record.as_dict()).collect::<Vec<_>>()}))
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

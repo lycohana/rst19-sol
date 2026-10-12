@@ -22,6 +22,10 @@ pub struct Job {
 
 fn uses_native_worker(request: &Value) -> bool {
     request["operation"] == "preview"
+        || matches!(
+            request["operation"].as_str(),
+            Some("feedback.append" | "feedback.load")
+        )
         || (request["operation"] == "tool"
             && matches!(
                 request["tool"].as_str(),
@@ -223,6 +227,12 @@ mod tests {
     #[test]
     fn preview_and_single_frame_analysis_use_the_native_worker_route() {
         assert!(uses_native_worker(&json!({"operation":"preview"})));
+        assert!(uses_native_worker(
+            &json!({"operation":"feedback.load","path":"feedback.jsonl"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"feedback.append","path":"feedback.jsonl"})
+        ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19"})
         ));
