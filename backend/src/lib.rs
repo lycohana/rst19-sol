@@ -14,6 +14,7 @@ pub mod detection;
 pub mod feature_class_context;
 pub mod feature_correlation_audit;
 pub mod feature_effect_size;
+pub mod feature_evidence_axes;
 pub mod feature_flag_interaction;
 pub mod feature_flag_profile;
 pub mod feature_gate_margin;

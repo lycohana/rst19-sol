@@ -1,6 +1,6 @@
 # RST19 Rust 原生桌面
 
-前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。
+前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。
 完整发布包暂时同时包含 Rust 原生 worker 与 Python/NumPy/SciPy 环境，以及中文字体；使用者无需安装 Python、Rust、Node.js 或浏览器。
 
 ## 直接使用

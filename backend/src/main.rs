@@ -41,6 +41,15 @@ fn execute(request: Value) -> Result<Value> {
                 .ok_or("missing output_path")?;
             rst19_core::catalog_merge::merge_catalog_csvs(&paths, std::path::Path::new(output_path))
         }
+        "audit.feature_evidence_axes" => {
+            let matrix_path = request["matrix_path"]
+                .as_str()
+                .ok_or("missing matrix_path")?;
+            Ok(
+                rst19_core::feature_evidence_axes::run(std::path::Path::new(matrix_path))?
+                    .as_dict(),
+            )
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

@@ -139,6 +139,19 @@ def make_feature_hard_negative_catalog(path: Path) -> None:
     path.write_bytes(payload.encode("utf-8"))
 
 
+def make_feature_evidence_axes_matrix(path: Path) -> None:
+    payload = (
+        "\ufefffeature_class,feature_class_label,candidate_count,candidate_presence_ge_required_count,"
+        "quality_response_ge_required_count,spatial_local_correlation_median,spatial_local_residual_median\r\n"
+        'compact_quality,"紧凑,清晰",100,95,85,0.84,0.54\r\n'
+        "crowded_blend,拥挤,100,60,1,0.17,0.98\r\n"
+        "masked_or_edge,边缘,100,80,20,0.67,0.74\r\n"
+        "linear_artifact,线伪迹,10,2,1,0.40,0.91\r\n"
+        "other_rejected,其它,0,0,0,,\r\n"
+    )
+    path.write_bytes(payload.encode("utf-8"))
+
+
 def make_gaia_merge_inputs(out: Path) -> tuple[Path, Path]:
     first = out / "gaia calibration layer.csv"
     second = out / "gaia deep layer.csv"
@@ -646,6 +659,34 @@ def verify(package: Path, out: Path) -> dict:
             encoding="utf-8"
         )
     )["complete"] is False
+    axes_matrix = out / "feature evidence axes matrix.csv"
+    make_feature_evidence_axes_matrix(axes_matrix)
+    axes_out = out / "feature-evidence-axes"
+    axes_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-evidence-axes",
+        "args": [str(axes_matrix.resolve()), "--out-dir", str(axes_out.resolve())],
+        "out_dir": str((out / "feature-evidence-axes-job").resolve()),
+    }
+    axes_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(axes_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    axes_events = [json.loads(line) for line in axes_response.stdout.splitlines()]
+    assert len(axes_events) == 1 and axes_events[0]["ok"]
+    axes_payload = axes_events[0]["payload"]
+    assert axes_payload["tool"] == "rst19-feature-evidence-axes"
+    assert len(axes_payload["result"]["rows"]) == 5
+    assert len(axes_payload["result"]["sensitivity_rows"]) == 25
+    assert axes_payload["result"]["rows"][0]["evidence_axis_pattern"] == "aligned_quality_psf"
+    assert axes_payload["result"]["rows"][1]["evidence_axis_pattern"] == "persistent_without_quality"
+    for artifact in (
+        "feature_evidence_axes.csv",
+        "feature_evidence_axes_sensitivity.csv",
+        "feature_evidence_axes.json",
+    ):
+        assert (axes_out / artifact).is_file(), artifact
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -681,6 +722,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-feature-hard-negative",
                   "rst19-gaia-merge",
                   "rst19-gaia-merge native CLI",
+                  "rst19-feature-evidence-axes",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
@@ -696,6 +738,11 @@ def verify(package: Path, out: Path) -> dict:
         "native_cli_input_error_exit_code": invalid_response.returncode,
         "native_cli_help_exit_code": help_response.returncode,
         "native_cli_runs_without_python": True,
+    }
+    report["feature_evidence_axes"] = {
+        "row_count": len(axes_payload["result"]["rows"]),
+        "sensitivity_row_count": len(axes_payload["result"]["sensitivity_rows"]),
+        "artifacts_written": True,
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report
