@@ -33,6 +33,8 @@ def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
     worker = package / "runtime" / ("rst19-worker.exe" if os.name == "nt" else "rst19-worker")
+    native_worker = package / "runtime" / ("rst19-native-worker.exe" if os.name == "nt" else "rst19-native-worker")
+    assert native_worker.is_file(), "Rust single-frame worker is missing from the package"
     environment = {**os.environ, "PYTHONPATH": "", "PYTHONHOME": "", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32") if os.name == "nt" else "/usr/bin:/bin"
     catalog = subprocess.run([str(worker), "--catalog"], capture_output=True, text=True, encoding="utf-8",
@@ -44,7 +46,7 @@ def verify(package: Path, out: Path) -> dict:
     make_fits(frame)
     original = hashlib.sha256(frame.read_bytes()).hexdigest()
     request = {"operation": "tool", "tool": "rst19", "args": [str(frame.resolve())], "out_dir": str((out / "job").resolve())}
-    response = subprocess.run([str(worker)], input=json.dumps(request, ensure_ascii=False), capture_output=True,
+    response = subprocess.run([str(native_worker)], input=json.dumps(request, ensure_ascii=False), capture_output=True,
                               text=True, encoding="utf-8", env=environment, cwd=out, timeout=60, check=True)
     events = [json.loads(line) for line in response.stdout.splitlines()]
     terminal = [event for event in events if event["event"] == "done"]
@@ -52,11 +54,27 @@ def verify(package: Path, out: Path) -> dict:
     payload = terminal[0]["payload"]
     assert payload["result"]["detection"]["quality_count"] >= 3
     assert Path(payload["preview"]).is_file()
+    preview_request = {
+        "operation": "preview",
+        "path": str(frame.resolve()),
+        "mode": "noise",
+        "out_dir": str((out / "preview-job").resolve()),
+    }
+    preview_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(preview_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    preview_events = [json.loads(line) for line in preview_response.stdout.splitlines()]
+    assert len(preview_events) == 1 and preview_events[0]["ok"]
+    assert Path(preview_events[0]["payload"]["preview"]).is_file()
+    assert preview_events[0]["payload"]["width"] == 128
     assert hashlib.sha256(frame.read_bytes()).hexdigest() == original
     checksums = json.loads((package / "SHA256.json").read_text(encoding="utf-8"))
     for relative, expected in checksums.items():
         assert hashlib.sha256((package / relative).read_bytes()).hexdigest() == expected, relative
     report = {"package": str(package), "environment": entry["payload"]["environment"], "tool_count": 78,
+              "single_frame_backend": "Rust native worker",
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
               "external_python_search_disabled": True, "checksum_files": len(checksums)}

@@ -3299,7 +3299,7 @@
   "native_source_photometry": "complete source table status/flags/reference/model magnitude separation; faintest ranking, ties, calibration consistency and partial selection scope; JSONL photometry.table/photometry.faintest",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_cli_contracts": {
-    "rst19": "rst19-native executable; synthetic/default modes, stdout/json-out/errors and bounded original FITS verified; desktop routing not switched",
+    "rst19": "rst19-native executable; synthetic/default modes, stdout/json-out/errors and bounded original FITS verified; desktop single-frame route uses bundled Rust worker",
     "rst19-aux-audit": "single FITS or sorted directory input; CSV/JSON output matches Python; cross-platform packaging and broader parser edges pending"
   },
   "verification": [
@@ -3381,7 +3381,7 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "native desktop routing",
+    "route all remaining research tools through Rust desktop workers; rst19 single-frame route is migrated",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ]

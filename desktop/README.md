@@ -1,7 +1,7 @@
 # RST19 Rust 原生桌面
 
-前端使用 Rust + egui/eframe 原生绘制，科学计算在独立 Python 算法进程运行。
-完整发布包包含 Python 解释器、NumPy、SciPy、Pillow、项目算法模块和中文字体；使用者无需安装 Python、Rust、Node.js 或浏览器。
+前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配和光度分析已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。
+完整发布包暂时同时包含 Rust 原生 worker 与 Python/NumPy/SciPy 环境，以及中文字体；使用者无需安装 Python、Rust、Node.js 或浏览器。
 
 ## 直接使用
 
@@ -27,6 +27,7 @@
 
 ```powershell
 python -m pip install -e .
+cargo build --manifest-path desktop/Cargo.toml --bins
 cargo run --manifest-path desktop/Cargo.toml
 ```
 
@@ -41,7 +42,7 @@ python desktop/build.py
 ```
 
 构建脚本创建专用 `.build-venv`，安装固定版本的科学与打包依赖，构建 Rust release，
-使用 PyInstaller onedir 打包算法环境，下载可再分发的 Noto 中文字体与许可证，
+构建 Rust 桌面与原生计算 worker，使用 PyInstaller onedir 打包尚未迁移的 Python 工具环境，下载可再分发的 Noto 中文字体与许可证，
 验证全部算法工具能在冻结环境中导入，再输出 `dist/RST19-平台-架构-时间/` 与 ZIP。
 包中包含运行环境版本与逐文件 SHA-256 清单。每次构建使用新目录，不清理旧包或用户数据。
 
@@ -66,7 +67,7 @@ desktop/target/release/rst19-desktop.exe --data-dir "doc/00-项目资料/原始�
 ```
 
 截图验证的是界面实际启动、环境就绪和 FITS 预览，不等同于全部科学流程验收。
-添加 `--smoke-analysis` 可让截图检查执行当前目录首帧的检测与结果叠加；建议使用小型合成 FITS。
+添加 `--smoke-analysis` 可让截图检查通过 Rust worker 执行当前目录首帧检测并绘制结果叠加；建议使用小型合成 FITS。
 `verify_package.py` 禁用外部 Python 搜索路径，检查冻结环境的工具导入、合成 FITS 检测、原图不变与包内 SHA-256。
 平台运行与完整 15 帧分析需要各自的实际验证记录。
 

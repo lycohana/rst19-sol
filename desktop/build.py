@@ -63,7 +63,7 @@ def build() -> None:
     staging = DESKTOP / "build" / stamp
     package = ROOT / "dist" / label
     package.mkdir(parents=True, exist_ok=False)
-    command(["cargo", "build", "--release", "--locked", "--manifest-path", str(DESKTOP / "Cargo.toml")])
+    command(["cargo", "build", "--release", "--locked", "--manifest-path", str(DESKTOP / "Cargo.toml"), "--bins"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")})
@@ -77,6 +77,8 @@ def build() -> None:
     freeze.append(str(DESKTOP / "worker_entry.py"))
     command(freeze)
     shutil.copytree(staging / "frozen/rst19-worker", package / "runtime")
+    native_worker = "rst19-native-worker.exe" if os.name == "nt" else "rst19-native-worker"
+    shutil.copy2(DESKTOP / "target/release" / native_worker, package / "runtime" / native_worker)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"

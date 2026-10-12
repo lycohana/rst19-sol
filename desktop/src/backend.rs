@@ -9,6 +9,7 @@ use std::{
 
 pub struct Backend {
     executable: PathBuf,
+    native_worker: Option<PathBuf>,
     root: PathBuf,
     development: bool,
 }
@@ -17,6 +18,11 @@ pub struct Job {
     pub receiver: mpsc::Receiver<Value>,
     child: Arc<Mutex<Child>>,
     pub cancelled: bool,
+}
+
+fn uses_native_worker(request: &Value) -> bool {
+    request["operation"] == "preview"
+        || (request["operation"] == "tool" && request["tool"] == "rst19")
 }
 
 impl Backend {
@@ -29,8 +35,14 @@ impl Backend {
             "rst19-worker"
         });
         if worker.is_file() {
+            let native_worker = package.join("runtime").join(if cfg!(windows) {
+                "rst19-native-worker.exe"
+            } else {
+                "rst19-native-worker"
+            });
             return Ok(Self {
                 executable: worker,
+                native_worker: native_worker.is_file().then_some(native_worker),
                 root: package.to_owned(),
                 development: false,
             });
@@ -46,6 +58,20 @@ impl Backend {
         if !root.join("src/rst19/desktop_worker.py").is_file() {
             return Err("缺少内置算法环境 runtime/rst19-worker，请使用完整发布包。".into());
         }
+        let native_name = if cfg!(windows) {
+            "rst19-native-worker.exe"
+        } else {
+            "rst19-native-worker"
+        };
+        let native_worker = std::env::var_os("RST19_NATIVE_WORKER")
+            .map(PathBuf::from)
+            .filter(|path| path.is_file())
+            .or_else(|| {
+                ["release", "debug"]
+                    .into_iter()
+                    .map(|profile| root.join("desktop/target").join(profile).join(native_name))
+                    .find(|path| path.is_file())
+            });
         let executable = std::env::var_os("RST19_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
@@ -62,6 +88,7 @@ impl Backend {
             });
         Ok(Self {
             executable,
+            native_worker,
             root,
             development: true,
         })
@@ -72,8 +99,15 @@ impl Backend {
     }
 
     pub fn start(&self, request: Option<Value>, working_dir: &Path) -> Result<Job, String> {
-        let mut command = Command::new(&self.executable);
-        if self.development {
+        let use_native =
+            request.as_ref().is_some_and(uses_native_worker) && self.native_worker.is_some();
+        let executable = if use_native {
+            self.native_worker.as_ref().unwrap()
+        } else {
+            &self.executable
+        };
+        let mut command = Command::new(executable);
+        if self.development && !use_native {
             command.args(["-u", "-m", "rst19.desktop_worker"]);
             command.env("PYTHONPATH", self.root.join("src"));
         }
@@ -162,6 +196,20 @@ impl Drop for Job {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preview_and_single_frame_analysis_use_the_native_worker_route() {
+        assert!(uses_native_worker(&json!({"operation":"preview"})));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19"})
+        ));
+        assert!(!uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-sequence"})
+        ));
+        assert!(!uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-mosaic"})
+        ));
+    }
+
     #[test]
     fn cancellation_reaps_the_worker_and_produces_a_terminal_event() {
         let backend = Backend::discover().unwrap();
