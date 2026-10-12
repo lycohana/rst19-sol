@@ -190,6 +190,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.link_motion_evidence_tracks" => {
             rst19_core::sequence_trails::link_motion_evidence_tracks(&request)
         }
+        "sequence.rescue_collinear_motion_feature_groups" => {
+            rst19_core::sequence_trails::rescue_collinear_motion_feature_groups(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }

@@ -6,9 +6,10 @@
 
 本节覆盖最新工作区代码；后文保留此前验证记录，不能视为当前全部测试通过。
 
-- 当前序列链使用同一个 release 引擎完成 19 组原生进程验证，共 321 个请求、全部字段对照一致；统一清单 `tmp/native-sequence-chain-verification-20261013-v19/verification.json` 记录各报告路径和 engine SHA-256 `3b909fd2636ada8e16b1ed653050d03ad094a5887b59e24fa1f0bfcc257aa793`。
+- 当前序列链使用同一个 release 引擎完成 20 组原生进程验证，共 339 个请求、全部字段对照一致；统一清单 `tmp/native-sequence-chain-verification-20261013-v20/verification.json` 记录各报告路径和 engine SHA-256 `5654014b2d54dc0004d748f07395423c31c1ff3dd167586df94f78800ed74ce2`。
 - `sequence.stitch_unassociated_single_frame_points` 通过 33 个原生进程场景，覆盖 review 线模型准入、常速度预测、链式回接、非等间隔/非法时间、时间间隔与角度边界、长度比例、伪影重叠和稳定轨迹排序；报告 `tmp/native-single-frame-stitch-verification-20261013-v1/verification.json`。它只回接图像平面候选，不确认物理身份。
 - `sequence.link_motion_evidence_tracks` 通过 24 个原生进程场景，覆盖共同帧重叠、方向和位移比例边界、中位垂直距离、一对一贪心排序、轨迹去重和输出排序；报告 `tmp/native-motion-evidence-link-verification-20261013-v2/verification.json`。链接用于跨通道候选证据去重，不会删除轨迹或确认物理身份。
+- `sequence.rescue_collinear_motion_feature_groups` 通过 18 个原生进程场景，覆盖长线 singleton 筛选、PSF 相关线长/跨度下限、离散共线组迭代、同帧候选选择、方向/垂距门和不规则时间重拟合；报告 `tmp/native-collinear-motion-rescue-verification-20261013-v2/verification.json`。它恢复图像平面候选组，仍需后续轨迹确认门。
 - 当前固定检测的 138 个案例通过；float32 阶段的 SNR 1 ULP 差异已修复：归约须按 NumPy 默认缓冲大小分块，不能对整个数组直接递归求和。8191 / 8192 / 8193 / 16384 / 16385 等长度及滤波响应逐次裁剪样本纳入固定对照，归约、统计、背景、噪声、Gaussian、Starlet 与 SNR 阶段通过。
 - `measurement_parity` 的 32 个 float64 / float32 源测量案例及近邻质量门控通过。完全重合的 PSF 模板属于不可辨识双源，Python 与 Rust 现均返回空证据；固定样例覆盖了此退化边界。
 - 修正后，`verify_float32.py` 原生进程的 12 个合成图案例与真实首帧 512×512 ROI 的 Gaussian / hybrid / ensemble 三种模式均通过全部字段对照；没有放宽容差。最新报告 `tmp/native-float32-verification-20261013-v2/verification.json`。ROI 显式限额 300 个返回源，不代表全幅检测或完整序列。FITS 哈希仍为 `6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6`。
@@ -49,7 +50,7 @@
 - `sequence.fit_collinear_motion_geometry` 通过 18 个原生进程场景，覆盖水平/垂直/斜向 PCA 主轴、离轴残差、两点与退化各向同性点集、不规则时间、时间向量回退及参考间隔兼容换算；报告 `tmp/native-collinear-motion-geometry-verification-20261013-v2/verification.json`，与本段其余 16 组序列原生进程报告共绑定 engine SHA-256 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。该拟合描述图像平面候选轨迹几何，不是物理天体确认。
 - `sequence.best_collinear_motion_feature_group` 通过 18 个原生进程场景，覆盖候选线长/方向/垂距门、同帧最近线段选择、投影单调与容差、最小跨度、分组大小排序和同分稳定顺序；报告 `tmp/native-collinear-motion-group-verification-20261013-v1/verification.json`，与本段其余 16 组序列原生进程报告共绑定 engine SHA-256 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。这是未关联候选的几何分组，不做 raw-pixel 候选提取或最终运动确认。
 - `attitude.audit.frames`、`attitude.audit.paths` 和 `rst19-aux-audit` 的 4 个原生进程场景逐字段通过，覆盖辅助块缺失、RA 跨零、替代相机轴、FITS 路径读取及产物写入；CSV 与 Python 参考文件逐字节一致，JSON 全字段一致。报告 `tmp/native-attitude-verification-20261013-v6/verification.json`；本次 engine / CLI SHA-256 分别为 `4fadbba6875a72450d1e6e925c68b4e2cb7b33972b5c46ef4231a365912e3c23` 和 `559fad77ade73ace5ae412320a51a5ed303e400e9c87c9bc839b89296fdb21ca`。此处核验辅助字段之间的一致性，不是完整 WCS 或物理指向确认。
-- 当前完整 `cargo test --locked --manifest-path backend/Cargo.toml` 全部 54 项通过；`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 和 release `--bins` 构建通过。完全重合 PSF 的不确定系数分支已替换为明确的不可辨识判断。
+- 当前完整 `cargo test --locked --manifest-path backend/Cargo.toml` 全部 55 项通过；`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 和 release `--bins` 构建通过。完全重合 PSF 的不确定系数分支已替换为明确的不可辨识判断。
 - float32 路径已经实现；后文“仍返回未迁移错误”、16 个源测量案例和 57 个检测案例的描述属于较早版本，当前数量分别为 32 和 138。
 - 后端全量迁移未完成，桌面仍调用原 Python worker；尚无纯 Rust 发布包，也未验证 macOS/Linux 构建。
 

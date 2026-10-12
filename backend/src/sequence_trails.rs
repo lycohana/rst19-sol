@@ -1883,6 +1883,76 @@ pub fn link_motion_evidence_tracks(request: &Value) -> Result<Value> {
     Ok(json!({"links": links}))
 }
 
+/// Recover disjoint collinear groups from otherwise unassociated long trails.
+pub fn rescue_collinear_motion_feature_groups(request: &Value) -> Result<Value> {
+    let tracks = array(request, "tracks")?;
+    let psf_fwhm = number(request, "psf_fwhm")?;
+    let min_presence = request
+        .get("min_presence")
+        .and_then(Value::as_i64)
+        .unwrap_or(3);
+    let angle_tolerance = optional_number(request, "angle_tolerance_deg").unwrap_or(12.0);
+    let line_tolerance = optional_number(request, "line_tolerance_px").unwrap_or(12.0);
+    let min_span = optional_number(request, "min_span_px").unwrap_or(64.0);
+    let minimum_length = 32.0_f64.max(8.0 * psf_fwhm);
+    let minimum_span = min_span.max(4.0 * psf_fwhm);
+    let mut singleton_points = Vec::new();
+    for history in tracks {
+        let history = history
+            .as_array()
+            .ok_or_else(|| "track history must be an array".to_string())?;
+        if history.len() != 1 {
+            continue;
+        }
+        if field_number(&history[0], "length_px")? >= minimum_length {
+            singleton_points.push(history[0].clone());
+        }
+    }
+    if singleton_points.len() < min_presence.max(0) as usize {
+        return Ok(json!({"groups": []}));
+    }
+    let mut available: std::collections::BTreeSet<usize> = (0..singleton_points.len()).collect();
+    let mut rescued = Vec::new();
+    while available.len() >= min_presence.max(0) as usize {
+        let candidate_indices: Vec<usize> = available.iter().copied().collect();
+        let group_request = json!({
+            "points": singleton_points.clone(),
+            "candidate_indices": candidate_indices,
+            "min_length_px": minimum_length,
+            "angle_tolerance_deg": angle_tolerance,
+            "line_tolerance_px": line_tolerance,
+            "min_span_px": minimum_span,
+            "frame_times": request.get("frame_times").cloned().unwrap_or(Value::Null),
+            "reference_interval_s": request.get("reference_interval_s").cloned().unwrap_or(Value::Null),
+        });
+        let selected = best_collinear_motion_feature_group(&group_request)?
+            .get("group_indices")
+            .and_then(Value::as_array)
+            .cloned();
+        let Some(selected) = selected else {
+            break;
+        };
+        if selected.len() < min_presence.max(0) as usize {
+            break;
+        }
+        let mut group = Vec::with_capacity(selected.len());
+        let mut selected_indices = Vec::with_capacity(selected.len());
+        for index in selected {
+            let index = index
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| "rescued group index must be nonnegative".to_string())?;
+            group.push(singleton_points[index].clone());
+            selected_indices.push(index);
+        }
+        rescued.push(group);
+        for index in selected_indices {
+            available.remove(&index);
+        }
+    }
+    Ok(json!({"groups": rescued}))
+}
+
 fn deconvolved_motion_length(measured: f64, psf_fwhm: f64) -> Option<f64> {
     if !measured.is_finite() || !psf_fwhm.is_finite() || measured <= 0.0 || psf_fwhm <= 0.0 {
         return None;
