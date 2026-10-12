@@ -29,3 +29,4 @@ desktop/.assets/
 desktop/build/
 dist/
 build/
+backend/target/
