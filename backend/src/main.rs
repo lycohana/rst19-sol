@@ -159,6 +159,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.motion_feature_track_gates" => {
             rst19_core::sequence_trails::motion_feature_track_gates(&request)
         }
+        "sequence.motion_feature_continuity_gates" => {
+            rst19_core::sequence_trails::motion_feature_continuity_gates(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }

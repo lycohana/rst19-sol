@@ -540,6 +540,127 @@ pub fn motion_feature_track_gates(request: &Value) -> Result<Value> {
     }))
 }
 
+fn unique_frame_indices(points: &[Value]) -> Option<Vec<i64>> {
+    let mut indices: Vec<i64> = points
+        .iter()
+        .map(|point| integer(&point["frame_index"]))
+        .collect::<Option<Vec<_>>>()?;
+    indices.sort_unstable();
+    indices.dedup();
+    Some(indices)
+}
+
+fn frame_runs(indices: &[i64]) -> Vec<Vec<i64>> {
+    let mut runs: Vec<Vec<i64>> = Vec::new();
+    for index in indices {
+        if runs
+            .last()
+            .is_some_and(|run| run.last().is_some_and(|last| *index == *last + 1))
+        {
+            runs.last_mut().unwrap().push(*index);
+        } else {
+            runs.push(vec![*index]);
+        }
+    }
+    runs
+}
+
+fn temporal_continuity_supported(
+    points: &[Value],
+    min_presence: i64,
+    edge_truncated: bool,
+) -> Result<bool> {
+    if points.is_empty() {
+        return Ok(false);
+    }
+    if min_presence <= 0 {
+        return Err("min_presence must be positive".into());
+    }
+    let Some(indices) = unique_frame_indices(points) else {
+        return Ok(false);
+    };
+    let required = if edge_truncated {
+        3_i64.max(min_presence - 1)
+    } else {
+        min_presence
+    };
+    Ok(frame_runs(&indices)
+        .iter()
+        .any(|run| run.len() as i64 >= required))
+}
+
+fn internal_gap_bridge_supported(
+    points: &[Value],
+    max_gap_frames: i64,
+    min_run_length: i64,
+) -> bool {
+    if max_gap_frames <= 0 || min_run_length < 2 || points.is_empty() {
+        return false;
+    }
+    let Some(indices) = unique_frame_indices(points) else {
+        return false;
+    };
+    let runs = frame_runs(&indices);
+    let strong_runs: Vec<&Vec<i64>> = runs
+        .iter()
+        .filter(|run| run.len() as i64 >= min_run_length)
+        .collect();
+    if strong_runs.len() != 2 {
+        return false;
+    }
+    let left = strong_runs[0];
+    let right = strong_runs[1];
+    let gap = right[0] - left[left.len() - 1] - 1;
+    if gap <= 0 || gap > max_gap_frames {
+        return false;
+    }
+    let isolated_runs: Vec<&Vec<i64>> = runs
+        .iter()
+        .filter(|run| (run.len() as i64) < min_run_length)
+        .collect();
+    let isolated_count: usize = isolated_runs.iter().map(|run| run.len()).sum();
+    if isolated_count > 2 {
+        return false;
+    }
+    for run in isolated_runs {
+        let distance = if run[run.len() - 1] < left[0] {
+            left[0] - run[run.len() - 1] - 1
+        } else if run[0] > right[right.len() - 1] {
+            run[0] - right[right.len() - 1] - 1
+        } else {
+            return false;
+        };
+        if distance > max_gap_frames + 1 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Evaluate the continuous-run confirmation and bounded interior-gap gates.
+pub fn motion_feature_continuity_gates(request: &Value) -> Result<Value> {
+    let points = array(request, "points")?;
+    let options = request.get("options").unwrap_or(&Value::Null);
+    let min_presence = request
+        .get("min_presence")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "missing min_presence".to_string())?;
+    let edge_truncated = request
+        .get("edge_truncated")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let temporal = temporal_continuity_supported(points, min_presence, edge_truncated)?;
+    let bridge = internal_gap_bridge_supported(
+        points,
+        optional_number(options, "max_gap_frames").unwrap_or(2.0) as i64,
+        optional_number(options, "min_run_length").unwrap_or(3.0) as i64,
+    );
+    Ok(json!({
+        "temporal_continuity_supported": temporal,
+        "internal_gap_bridge_supported": bridge,
+    }))
+}
+
 fn bilinear(image: &[Vec<f32>], x: f64, y: f64) -> Option<f32> {
     let height = image.len();
     let width = image.first().map_or(0, Vec::len);
