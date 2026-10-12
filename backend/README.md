@@ -26,7 +26,9 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 
 `rst19-pair-pixel-topology` 对局部原始 ADU patch 计算 raw 与特殊像素排除后的 8 连通分量、峰值成员关系及滑动局部极大值；结果 JSON、CSV 和 SVG 与 Python 基线逐项/逐字节核对。该审计描述像素拓扑，不单独确认物理源身份；Rust JSONL engine 与桌面 worker 均已接入。
 
-桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity` 和 `rst19-pair-pixel-topology`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
+`rst19-aperture-peak-ratio` 按 `feature_class` 与提议器来源组统计有限 `flux / peak` 的中位数和高分位数，并在请求候选所在类别中给出经验百分位。三份 CSV 与 Python 输出逐字节一致；这些数值受孔径、背景和 PSF 影响，只是描述性审计，不是真星概率或误报率。
+
+桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology` 和 `rst19-aperture-peak-ratio`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
 
 ```powershell
 cargo test --locked --manifest-path backend/Cargo.toml

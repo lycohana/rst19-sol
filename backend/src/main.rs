@@ -171,6 +171,24 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.aperture_peak_ratio" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let targets = request
+                .get("target_ids")
+                .filter(|value| !value.is_null())
+                .map(|value| {
+                    serde_json::from_value::<Vec<String>>(value.clone())
+                        .map_err(|error| error.to_string())
+                })
+                .transpose()?
+                .unwrap_or_else(|| ["82931", "82934"].into_iter().map(str::to_owned).collect());
+            Ok(
+                rst19_core::aperture_peak_ratio::run(std::path::Path::new(catalog_path), &targets)?
+                    .as_dict(),
+            )
+        }
         "audit.pair_mechanism_context" => {
             let catalog_path = request["catalog_path"]
                 .as_str()

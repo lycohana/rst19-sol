@@ -1,5 +1,6 @@
 #![recursion_limit = "512"]
 //! Native scientific implementation. No Python interpreter, FFI, or subprocess calls.
+pub mod aperture_peak_ratio;
 pub mod assignment;
 pub mod attitude;
 pub mod catalog;

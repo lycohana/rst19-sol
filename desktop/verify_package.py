@@ -73,6 +73,19 @@ def make_topology_fixture(frame_path: Path, catalog_path: Path) -> None:
     )
 
 
+def make_aperture_peak_ratio_catalog(path: Path) -> None:
+    path.write_bytes(
+        b"\xef\xbb\xbf"
+        + b"detection_id,feature_class,peak,flux,proposal_methods\r\n"
+        + b'82931,range_anomaly,4,24,"gaussian|dog_narrow"\r\n'
+        + b"82932,range_anomaly,10,20,gaussian\r\n"
+        + b"82934,crowded_blend,2,50,gaussian\r\n"
+        + b"82935,crowded_blend,5,5,dog_narrow\r\n"
+        + b'82936,complete_set,4,48,"dog_broad|gaussian|dog_narrow|gaussian"\r\n'
+        + b'82937,dog_only,3,45,"dog_narrow|dog_broad"\r\n'
+    )
+
+
 def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -323,6 +336,38 @@ def verify(package: Path, out: Path) -> dict:
         "pair_pixel_topology.json", "pair_pixel_topology.svg",
     ):
         assert (topology_out / artifact).is_file(), artifact
+    ratio_catalog = out / "aperture peak ratio source catalog.csv"
+    make_aperture_peak_ratio_catalog(ratio_catalog)
+    ratio_out = out / "aperture-peak-ratio"
+    ratio_request = {
+        "operation": "tool",
+        "tool": "rst19-aperture-peak-ratio",
+        "args": [
+            str(ratio_catalog.resolve()), "--target-ids", "82934", "82931", "82934",
+            "--out-dir", str(ratio_out.resolve()),
+        ],
+        "out_dir": str((out / "aperture-peak-ratio-job").resolve()),
+    }
+    ratio_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(ratio_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    ratio_events = [json.loads(line) for line in ratio_response.stdout.splitlines()]
+    assert len(ratio_events) == 1 and ratio_events[0]["ok"]
+    ratio = ratio_events[0]["payload"]
+    assert ratio["tool"] == "rst19-aperture-peak-ratio"
+    assert len(ratio["result"]["summaries"]) == 4
+    assert len(ratio["result"]["target_rows"]) == 2
+    assert {row["method_group"] for row in ratio["result"]["method_summaries"]} == {
+        "all_three", "dog_only", "gaussian_only", "partial",
+    }
+    assert Path(ratio["result_path"]).is_file()
+    for artifact in (
+        "aperture_peak_ratio_summary.csv", "aperture_peak_ratio_method_summary.csv",
+        "aperture_peak_ratio_targets.csv",
+    ):
+        assert (ratio_out / artifact).is_file(), artifact
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -351,6 +396,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-pair-mechanism-context",
                   "rst19-pair-mechanism-sensitivity",
                   "rst19-pair-pixel-topology",
+                  "rst19-aperture-peak-ratio",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
