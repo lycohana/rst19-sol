@@ -2,6 +2,8 @@
 
 面向太空天基图像星图识别、星图分析与创新分析赛项的方案仓库。
 
+桌面前端现迁移到 **Rust 原生界面**，科学计算继续复用 Python 算法。`rst19-gui` / `rst19-ui` 启动 Rust 工作台，旧工作台可通过 `rst19-tk` 打开。使用 `python desktop/build.py` 可生成内置 Python、NumPy、SciPy、Pillow 与中文字体的完整运行 ZIP；具体使用、开发及 Windows/macOS/Linux 构建说明见 [Rust 桌面说明](desktop/README.md)。
+
 当前仓库已完成比赛规则、数据格式和本地数据集边界整理，并开始落地可离线运行的 Python 基线。本文档和 `doc/` 只把已经从比赛材料、实际 FITS 文件或可复现实验中确认的信息写成事实，不把规划内容写成已完成能力。
 
 详细的资料分类、方法调研、验证清单和参考链接见 [`doc/README.md`](./doc/README.md)；第一次使用软件请先看 [`软件使用说明`](./doc/软件使用说明.md)。如果要给队友讲清楚从图像识别、测光、星表到 15 帧运动分析的完整路线，可直接打开 [`RST19 研究教程`](./deliverables/rst19-研究教程.html)。

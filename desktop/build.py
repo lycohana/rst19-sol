@@ -1,0 +1,131 @@
+"""Build a complete native desktop distribution on the target OS.
+
+python desktop/build.py
+Never delete an existing package: each build uses a fresh timestamped directory.
+"""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import shutil
+import subprocess
+import sys
+import tomllib
+import urllib.request
+import venv
+
+ROOT = Path(__file__).resolve().parents[1]
+DESKTOP = ROOT / "desktop"
+
+
+def command(args: list[str], **kwargs) -> None:
+    subprocess.run(args, check=True, cwd=ROOT, **kwargs)
+
+
+def finalize(package: Path) -> Path:
+    hashes = {str(p.relative_to(package)).replace("\\", "/"): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in sorted(package.rglob("*")) if p.is_file() and p.name != "SHA256.json"}
+    (package / "SHA256.json").write_text(json.dumps(hashes, indent=2), encoding="utf-8")
+    return Path(shutil.make_archive(str(package), "zip", package.parent, package.name))
+
+
+def bundle_font(cached: Path, assets: Path) -> None:
+    from fontTools.ttLib import TTFont
+    from fontTools.varLib.instancer import instantiateVariableFont
+    font = TTFont(cached / "NotoSansSC-Regular.ttf")
+    # egui reads default outlines. Make the intended Regular weight explicit,
+    # rather than rendering the variable font's very thin default instance.
+    static = instantiateVariableFont(font, {"wght": 400}, inplace=True)
+    static.save(assets / "NotoSansSC-Regular.ttf")
+
+
+def build() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--in-build-environment", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    if not args.in_build_environment:
+        environment = DESKTOP / ".build-venv"
+        if not environment.is_dir():
+            venv.EnvBuilder(with_pip=True).create(environment)
+        python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        command([str(python), "-m", "pip", "install", "-r", str(DESKTOP / "requirements-build.txt")])
+        command([str(python), "-m", "pip", "install", "--no-deps", "--no-build-isolation", str(ROOT)])
+        command([str(python), str(Path(__file__).resolve()), "--in-build-environment"])
+        return
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    label = f"RST19-{platform.system()}-{platform.machine()}-{stamp}"
+    staging = DESKTOP / "build" / stamp
+    package = ROOT / "dist" / label
+    package.mkdir(parents=True, exist_ok=False)
+    command(["cargo", "build", "--release", "--locked", "--manifest-path", str(DESKTOP / "Cargo.toml")])
+    entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
+    modules = sorted({target.split(":")[0] for target in entries.values()
+                      if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")})
+    freeze = [sys.executable, "-m", "PyInstaller", "--onedir", "--noupx", "--name", "rst19-worker",
+              "--distpath", str(staging / "frozen"), "--workpath", str(staging / "work"),
+              "--specpath", str(staging), "--paths", str(ROOT / "src"),
+              "--copy-metadata", "rst19-sol", "--exclude-module", "tkinter",
+              "--exclude-module", "rst19.gui"]
+    for module in modules:
+        freeze += ["--hidden-import", module]
+    freeze.append(str(DESKTOP / "worker_entry.py"))
+    command(freeze)
+    shutil.copytree(staging / "frozen/rst19-worker", package / "runtime")
+    executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
+    shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
+    assets = package / "assets"
+    assets.mkdir()
+    # A redistributable CJK font: do not copy proprietary system fonts.
+    cached = DESKTOP / ".assets"
+    cached.mkdir(exist_ok=True)
+    urls = {
+        "NotoSansSC-Regular.ttf": "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/Variable/TTF/Subset/NotoSansSC-VF.ttf",
+        "NotoSansSC-LICENSE.txt": "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/LICENSE",
+    }
+    for name, url in urls.items():
+        target = cached / name
+        if not target.is_file():
+            temporary = target.with_suffix(".download")
+            with urllib.request.urlopen(url, timeout=30) as response, temporary.open("wb") as output:
+                shutil.copyfileobj(response, output)
+            temporary.replace(target)
+        if not name.endswith(".ttf"):
+            shutil.copy2(target, assets / name)
+    bundle_font(cached, assets)
+    shutil.copy2(DESKTOP / "README.md", package / "使用说明.md")
+    license_dir = package / "licenses"
+    license_dir.mkdir()
+    for distribution in ("numpy", "scipy", "Pillow", "pyinstaller"):
+        import importlib.metadata
+        metadata = importlib.metadata.distribution(distribution)
+        for file in metadata.files or ():
+            if "license" in str(file).lower() or "copying" in str(file).lower():
+                source = Path(metadata.locate_file(file))
+                if source.is_file():
+                    destination = license_dir / distribution / str(file)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, destination)
+    python_license = Path(sys.base_prefix) / "LICENSE.txt"
+    if python_license.is_file():
+        shutil.copy2(python_license, license_dir / "Python-LICENSE.txt")
+    # Frozen catalog imports every advertised algorithm module, including native extensions.
+    worker = package / "runtime" / ("rst19-worker.exe" if os.name == "nt" else "rst19-worker")
+    verification_env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+    result = subprocess.run([str(worker), "--catalog"], capture_output=True, text=True, encoding="utf-8",
+                            check=True, cwd=package, env=verification_env)
+    catalog = json.loads(result.stdout)
+    if not catalog.get("ok") or len(catalog["payload"]["tools"]) != len(modules):
+        raise RuntimeError(f"Frozen environment verification failed: {result.stdout}")
+    (package / "environment.json").write_text(json.dumps(catalog["payload"]["environment"], indent=2), encoding="utf-8")
+    archive = finalize(package)
+    print(f"\n完整运行包：{package}\n分发 ZIP：{archive}")
+
+
+if __name__ == "__main__":
+    build()

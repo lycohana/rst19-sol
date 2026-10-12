@@ -21,3 +21,11 @@ temp/
 
 # 本地编辑器工作区配置
 .obsidian/
+
+# Rust desktop / bundled runtime build artifacts
+desktop/target/
+desktop/.build-venv/
+desktop/.assets/
+desktop/build/
+dist/
+build/
