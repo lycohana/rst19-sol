@@ -15,6 +15,7 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 `sequence.stitch_unassociated_single_frame_points` 将通过线模型复核的单帧候选按常速度预测、时间间隔、运动轴方向、线长比例和伪影重叠门回接到既有轨迹，并按帧号恢复输出顺序。该操作只补充图像平面候选轨迹证据，不确认物理身份；高层序列编排和 raw-pixel motion-feature／拖影提取仍待迁移。
 `sequence.link_motion_evidence_tracks` 将移动点源轨迹和曝光线轨迹按共同观测帧、运动方向、位移比例和垂直距离做一对一证据关联；链接只用于去重和审计，不删去任一轨迹或确认物理身份。
 `sequence.rescue_collinear_motion_feature_groups` 在常规中心关联失败时，从长单帧线候选中迭代恢复互不重叠的共线运动组；结果仍是图像平面候选，需要后续轨迹门复核。
+`sequence.coherent_raw_motion_point_indices` 将相邻帧原始线候选按实测时间、曝光时长、位移方向和线形支持连成短链；少数弱形态帧可以由强点桥接，但整条链至少需要两个强形态点。它只输出候选帧/点索引，后续关联与运动确认仍需独立运行；原始像素提取器和完整多帧编排尚未迁入 Rust。
 
 测光层已原生实现仪器／表观星等算术，带状态的视差／模型距离／星表绝对星等，以及加权零点和颜色项拟合、离群点剔除、确定性留出验证、目录质量门控、样本角色和标定应用。支持 `photometry.evaluate`、`photometry.calibration.fit`、`photometry.calibration.apply`、`photometry.calibration.error`。绝对星等保留消光语义、距离区间和误差完整性门控。
 逐源光度表与最暗源选择支持 `photometry.table`、`photometry.faintest`；保留目录模型星等、图像推导绝对星等、残差拒绝和部分标定集合的区别。`pipeline.analyze` 直接读取 FITS，串联检测、匹配、标定、逐源光度表和最暗源；原生库支持不重复检测的再标定。
@@ -24,6 +25,8 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 ```powershell
 cargo test --locked --manifest-path backend/Cargo.toml
 cargo build --release --locked --manifest-path backend/Cargo.toml --bins
+$verificationDir = "tmp/native-sequence-chain-verification-$((Get-Date).ToString('yyyyMMdd-HHmmss'))"
+python backend/verify_sequence_chain.py backend/target/release/rst19-engine.exe --out $verificationDir
 python backend/verify_fits.py backend/target/release/rst19-engine.exe --out tmp/native-fits-verification --data-dir "doc/00-项目资料/原始数据"
 ```
 

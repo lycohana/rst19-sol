@@ -2438,3 +2438,315 @@ pub fn line_profile_metrics(request: &Value) -> Result<Value> {
         "profile_fill_ratio": relative_count as f64 / valid_count as f64,
     }))
 }
+
+#[derive(Clone, Copy)]
+struct RawMotionPoint {
+    aligned_x: f64,
+    aligned_y: f64,
+    length_px: f64,
+    continuity_ratio: Option<f64>,
+    profile_fill_ratio: Option<f64>,
+    line_artifact_overlap_fraction: Option<f64>,
+    single_frame_model: Option<&'static str>,
+    line_template_snr: Option<f64>,
+    line_vs_point_delta_bic: Option<f64>,
+    line_vs_double_delta_bic: Option<f64>,
+    line_vs_background_delta_bic: Option<f64>,
+    line_vs_elliptical_delta_bic: Option<f64>,
+}
+
+#[derive(Clone, Copy)]
+struct RawMotionChainState {
+    length: usize,
+    previous: Option<(usize, usize)>,
+}
+
+fn optional_finite_number(value: &Value, key: &str) -> Option<f64> {
+    value
+        .get(key)
+        .filter(|candidate| !candidate.is_null())
+        .and_then(python_float)
+}
+
+fn parse_raw_motion_point(value: &Value) -> Result<RawMotionPoint> {
+    let model = value
+        .get("single_frame_model")
+        .and_then(Value::as_str)
+        .and_then(|model| match model {
+            "line" => Some("line"),
+            "long_line_profile" => Some("long_line_profile"),
+            "point" => Some("point"),
+            "double" => Some("double"),
+            "elliptical_point" => Some("elliptical_point"),
+            "background" => Some("background"),
+            "not_fit" => Some("not_fit"),
+            _ => None,
+        });
+    Ok(RawMotionPoint {
+        aligned_x: value
+            .get("aligned_x")
+            .and_then(python_float)
+            .ok_or_else(|| "missing numeric aligned_x".to_string())?,
+        aligned_y: value
+            .get("aligned_y")
+            .and_then(python_float)
+            .ok_or_else(|| "missing numeric aligned_y".to_string())?,
+        length_px: value
+            .get("length_px")
+            .and_then(python_float)
+            .ok_or_else(|| "missing numeric length_px".to_string())?,
+        continuity_ratio: optional_finite_number(value, "continuity_ratio"),
+        profile_fill_ratio: optional_finite_number(value, "profile_fill_ratio"),
+        line_artifact_overlap_fraction: optional_finite_number(
+            value,
+            "line_artifact_overlap_fraction",
+        ),
+        single_frame_model: model,
+        line_template_snr: optional_finite_number(value, "line_template_snr"),
+        line_vs_point_delta_bic: optional_finite_number(value, "line_vs_point_delta_bic"),
+        line_vs_double_delta_bic: optional_finite_number(value, "line_vs_double_delta_bic"),
+        line_vs_background_delta_bic: optional_finite_number(value, "line_vs_background_delta_bic"),
+        line_vs_elliptical_delta_bic: optional_finite_number(value, "line_vs_elliptical_delta_bic"),
+    })
+}
+
+fn raw_motion_model_supported(point: RawMotionPoint) -> bool {
+    if point.single_frame_model == Some("long_line_profile") {
+        return point.line_template_snr.is_some_and(|value| value >= 5.0)
+            && point
+                .line_vs_background_delta_bic
+                .is_some_and(|value| value >= 6.0);
+    }
+    point.single_frame_model == Some("line")
+        && point.line_template_snr.is_some_and(|value| value >= 5.0)
+        && point
+            .line_vs_point_delta_bic
+            .is_some_and(|value| value >= 6.0)
+        && point
+            .line_vs_double_delta_bic
+            .is_some_and(|value| value >= 6.0)
+        && point
+            .line_vs_elliptical_delta_bic
+            .is_some_and(|value| value >= 6.0)
+}
+
+fn raw_motion_shape_supported(point: RawMotionPoint, fill: f64, continuity: f64) -> bool {
+    point.profile_fill_ratio.is_some_and(|value| value >= fill)
+        && point
+            .continuity_ratio
+            .is_some_and(|value| value >= continuity)
+}
+
+fn raw_motion_line_shape_supported(point: RawMotionPoint) -> bool {
+    let Some(continuity) = point.continuity_ratio else {
+        return false;
+    };
+    let Some(fill) = point.profile_fill_ratio else {
+        return false;
+    };
+    if point.length_px < 8.0
+        || point
+            .line_artifact_overlap_fraction
+            .is_some_and(|value| value >= 0.75)
+        || point.single_frame_model == Some("not_fit")
+    {
+        return false;
+    }
+    if raw_motion_model_supported(point) {
+        return continuity >= 0.60 && fill >= 0.60;
+    }
+    if matches!(
+        point.single_frame_model,
+        Some("elliptical_point" | "point" | "double" | "background" | "long_line_profile")
+    ) {
+        return false;
+    }
+    let minimum = if point.length_px >= 16.0 { 0.45 } else { 0.80 };
+    continuity >= minimum && fill >= minimum
+}
+
+fn sequence_raw_motion_line_supported(point: RawMotionPoint) -> bool {
+    if raw_motion_line_shape_supported(point) {
+        return true;
+    }
+    matches!(point.single_frame_model, Some("line" | "long_line_profile"))
+        && raw_motion_model_supported(point)
+        && point.length_px >= 8.0
+        && raw_motion_shape_supported(point, 0.45, 0.45)
+}
+
+fn normalized_raw_motion_times(request: &Value, frame_count: usize) -> Vec<f64> {
+    let fallback: Vec<_> = (0..frame_count).map(|index| index as f64).collect();
+    let Some(values) = request.get("frame_times").filter(|value| !value.is_null()) else {
+        return fallback;
+    };
+    let Some(values) = values.as_array() else {
+        return fallback;
+    };
+    let Some(values): Option<Vec<_>> = values.iter().map(python_float).collect() else {
+        return fallback;
+    };
+    if values.len() != frame_count
+        || values.iter().any(|value| !value.is_finite())
+        || values.windows(2).any(|pair| pair[1] <= pair[0])
+    {
+        return fallback;
+    }
+    let Some(first) = values.first().copied() else {
+        return fallback;
+    };
+    values.iter().map(|value| value - first).collect()
+}
+
+/// Select raw per-frame line proposals that form a direction-consistent chain.
+/// These are proposal IDs only; sequence association and confirmation remain downstream.
+pub fn coherent_raw_motion_point_indices(request: &Value) -> Result<Value> {
+    let raw_frames = request
+        .get("frames")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing frames array".to_string())?;
+    let frame_count = raw_frames.len();
+    let min_presence = request
+        .get("min_presence")
+        .and_then(Value::as_i64)
+        .unwrap_or(3)
+        .max(0) as usize;
+    if frame_count < min_presence {
+        return Ok(json!({"selected_indices":[]}));
+    }
+
+    let mut frames = Vec::with_capacity(frame_count);
+    for frame in raw_frames {
+        let points = frame
+            .as_array()
+            .ok_or_else(|| "expected frame point array".to_string())?;
+        frames.push(
+            points
+                .iter()
+                .map(parse_raw_motion_point)
+                .collect::<Result<Vec<_>>>()?,
+        );
+    }
+
+    let times = normalized_raw_motion_times(request, frame_count);
+    let mut intervals: Vec<_> = times
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .filter(|value| value.is_finite() && *value > 0.0)
+        .collect();
+    let reference_interval = median_f64(&mut intervals).unwrap_or(1.0);
+    let exposures = match request
+        .get("exposure_times_s")
+        .filter(|value| !value.is_null())
+    {
+        None => vec![reference_interval; frame_count],
+        Some(values) => {
+            let values = values.as_array().ok_or_else(|| {
+                "exposure_times_s length must match raw_feature_frames".to_string()
+            })?;
+            let exposures: Option<Vec<_>> = values.iter().map(python_float).collect();
+            let Some(exposures) = exposures else {
+                return Err("exposure_times_s must contain positive finite values".into());
+            };
+            if exposures.len() != frame_count {
+                return Err("exposure_times_s length must match raw_feature_frames".into());
+            }
+            if exposures
+                .iter()
+                .any(|value| !value.is_finite() || *value <= 0.0)
+            {
+                return Err("exposure_times_s must contain positive finite values".into());
+            }
+            exposures
+        }
+    };
+    let psf_fwhm = request
+        .get("psf_fwhm")
+        .and_then(python_float)
+        .ok_or_else(|| "missing numeric psf_fwhm".to_string())?;
+    let minimum_step = python_max(2.0, psf_fwhm);
+    let maximum_step = python_max(18.0, 12.0 * psf_fwhm);
+    let minimum_speed = minimum_step / reference_interval;
+    let maximum_speed = maximum_step / reference_interval;
+
+    let mut states: Vec<Vec<RawMotionChainState>> = Vec::with_capacity(frame_count);
+    for (frame_index, current) in frames.iter().enumerate() {
+        let elapsed = if frame_index > 0 {
+            times[frame_index] - times[frame_index - 1]
+        } else {
+            0.0
+        };
+        let mut current_states = Vec::with_capacity(current.len());
+        for point in current {
+            let mut best_length = 1;
+            let mut best_previous = None;
+            if frame_index > 0 && elapsed > 0.0 {
+                for (previous_index, previous) in frames[frame_index - 1].iter().enumerate() {
+                    let distance = (point.aligned_x - previous.aligned_x)
+                        .hypot(point.aligned_y - previous.aligned_y);
+                    let pair_exposure = (0.5
+                        * (exposures[frame_index] + exposures[frame_index - 1]))
+                        .max(f64::EPSILON);
+                    let expected_line_step =
+                        point.length_px.max(previous.length_px) * elapsed / pair_exposure;
+                    let maximum_pair_step = (maximum_speed * elapsed).max(4.0 * expected_line_step);
+                    if distance < minimum_speed * elapsed || distance > maximum_pair_step {
+                        continue;
+                    }
+                    let previous_state = states[frame_index - 1][previous_index];
+                    if let Some((previous_previous_frame, previous_previous_index)) =
+                        previous_state.previous
+                    {
+                        let previous_previous =
+                            frames[previous_previous_frame][previous_previous_index];
+                        let first_x = previous.aligned_x - previous_previous.aligned_x;
+                        let first_y = previous.aligned_y - previous_previous.aligned_y;
+                        let current_x = point.aligned_x - previous.aligned_x;
+                        let current_y = point.aligned_y - previous.aligned_y;
+                        let denominator = first_x.hypot(first_y) * current_x.hypot(current_y);
+                        let cosine = (first_x * current_x + first_y * current_y) / denominator;
+                        if denominator <= 0.0 || cosine < 0.25 {
+                            continue;
+                        }
+                    }
+                    let candidate_length = previous_state.length + 1;
+                    if candidate_length > best_length {
+                        best_length = candidate_length;
+                        best_previous = Some((frame_index - 1, previous_index));
+                    }
+                }
+            }
+            current_states.push(RawMotionChainState {
+                length: best_length,
+                previous: best_previous,
+            });
+        }
+        states.push(current_states);
+    }
+
+    let mut selected = std::collections::BTreeSet::new();
+    for (frame_index, frame_states) in states.iter().enumerate() {
+        for (point_index, state) in frame_states.iter().enumerate() {
+            if state.length < min_presence {
+                continue;
+            }
+            let mut chain = Vec::with_capacity(state.length);
+            let mut cursor = Some((frame_index, point_index));
+            while let Some((chain_frame, chain_point)) = cursor {
+                chain.push((chain_frame, chain_point));
+                cursor = states[chain_frame][chain_point].previous;
+            }
+            let strong_count = chain
+                .iter()
+                .filter(|(chain_frame, chain_point)| {
+                    sequence_raw_motion_line_supported(frames[*chain_frame][*chain_point])
+                })
+                .count();
+            if strong_count >= 2 {
+                selected.extend(chain);
+            }
+        }
+    }
+
+    Ok(json!({"selected_indices":selected}))
+}

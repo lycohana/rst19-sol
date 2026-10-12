@@ -193,6 +193,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.rescue_collinear_motion_feature_groups" => {
             rst19_core::sequence_trails::rescue_collinear_motion_feature_groups(&request)
         }
+        "sequence.coherent_raw_motion_point_indices" => {
+            rst19_core::sequence_trails::coherent_raw_motion_point_indices(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }
