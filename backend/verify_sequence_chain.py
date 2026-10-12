@@ -11,6 +11,7 @@ import sys
 VERIFIERS = (
     "verify_wcs_sequence.py",
     "verify_sequence_fast.py",
+    "verify_sequence_fast_candidates.py",
     "verify_sequence_consensus.py",
     "verify_sequence_reference.py",
     "verify_sequence_temporal_reference.py",

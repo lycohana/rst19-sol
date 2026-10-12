@@ -83,6 +83,25 @@ fn execute(request: Value) -> Result<Value> {
                 &existing_tracks,
             )
         }
+        "sequence.fast_candidate_associate" => {
+            let frames: Vec<Vec<rst19_core::sequence_fast_candidates::FastCandidateRecord>> =
+                serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
+            let times: Option<Vec<f64>> = request
+                .get("frame_times")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?;
+            let options: rst19_core::sequence_fast_candidates::FastCandidateOptions =
+                serde_json::from_value(request.get("options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            rst19_core::sequence_fast_candidates::associate_fast_candidates(
+                &frames,
+                times.as_deref(),
+                &options,
+            )
+        }
         "sequence.candidate_consensus" => {
             let candidates: Vec<Value> =
                 serde_json::from_value(request["candidate_peak_frames"].clone())

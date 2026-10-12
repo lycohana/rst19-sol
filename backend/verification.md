@@ -36,8 +36,8 @@
 - WCS 仿射拟合和逐帧验证有独立 Python 固定基线，覆盖离群点剔除、样本不足、共线拒绝与多帧汇总；时间轨迹拟合及稳健运动下限覆盖不等间隔秒数、帧号回退、单点与门控场景。
 - 原生序列底层实现 mutual-nearest 平移估计和稀疏连通分量轨迹分配，覆盖大位移一致簇、空帧、搜索边界、近邻冲突、对级硬门与软代价。
 - verify_wcs_sequence.py 通过当前原生进程核验 23 个请求，增加了静态/移动点、漏帧拆轨、非等间隔时间下的仿射漂移，以及移动离群轨迹场景；WCS 拟合/报告、时间轨迹、运动下限、平移估计、帧分配和双张临时合成 FITS 流程也逐字段通过。报告位于 `tmp/native-wcs-sequence-verification-20261013-v24/verification.json`，绑定 engine SHA-256 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。该合成序列不代表真实 15 帧拖影分类。
-- 当前 Rust 对照测试 wcs_sequence_parity 共 7 项通过，覆盖 `sequence.track_detections` 点源主流程。RANSAC 的几何打分与稳健细化保持一致，但固定种子的抽样流为 SplitMix64，尚未与 NumPy PCG64 逐样本一致；线状拖影、motion-feature 以及从原始候选峰补充高速点源的分析仍未迁入。
-- `sequence.fast_point_movers` 通过 3 个原生进程场景，覆盖静态轨迹占用避让、静态质量源不误标、非等间隔时间与单帧缺测；逐字段报告为 `tmp/native-sequence-fast-verification-20261013-v16/verification.json`，engine SHA-256 为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。这是独立补充关联入口，候选峰高速源仍未迁入。
+- 当前 Rust 对照测试 wcs_sequence_parity 共 7 项通过，覆盖 `sequence.track_detections` 点源主流程。RANSAC 的几何打分与稳健细化保持一致，但固定种子的抽样流为 SplitMix64，尚未与 NumPy PCG64 逐样本一致；线状拖影和 motion-feature 主流程仍未迁入；原始候选峰的常速度关联已有独立 Rust 操作，但候选组装、原图复核与质量晋级仍未迁入。
+- `sequence.fast_point_movers` 通过 3 个原生进程场景，覆盖静态轨迹占用避让、静态质量源不误标、非等间隔时间与单帧缺测；逐字段报告为 `tmp/native-sequence-fast-verification-20261013-v16/verification.json`，engine SHA-256 为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。这是独立补充关联入口；候选峰路径已有独立 Rust 常速度关联，但原图强制测光与质量晋级仍待迁入。
 - `sequence.candidate_consensus` 的几何、时序与逐帧图像门控通过 13 个原生进程场景，覆盖坏像素有效性、局部孔径支持、3×3 核心支持、形状/PSF 相关、线伪迹、时间中值 SNR 通道、质量轨迹去重和运动拒绝；报告 `tmp/native-sequence-consensus-verification-20261013-v19/verification.json`，engine SHA-256 为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。操作接收逐帧图像数组与背景/噪声/参数；当前尚未接入完整 `analyze_sequence`。
 - `sequence.reference.median` 与 `sequence.reference.coadd` 通过 6 个原生进程场景，覆盖逐像素中值、MAD 剔除瞬态／宇宙线、配准双线性重采样、坏像素／饱和／辅助行掩膜、帧数不足和形状不匹配；报告 `tmp/native-sequence-reference-verification-20261013-v13/verification.json`，engine SHA-256 为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。
 - `sequence.temporal_reference_candidates` 通过 8 个原生进程场景，覆盖多尺度 Gaussian 提案、参考图形态门、配准位移下的逐帧强制响应、坏像素／饱和门与近边界补提案；报告 `tmp/native-sequence-temporal-reference-verification-20261013-v14/verification.json`，engine SHA-256 为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。该操作接收已构建的参考图；高层序列编排仍待迁移。
@@ -110,3 +110,5 @@
 15 帧 FITS 读取验证证明读取、遥测和抽样像素契约；新增全幅计算验证只证明首帧 hybrid 检测与现有 Python 算法一致，不证明完整 15 帧运动分类或物理天体真值。
 
 本轮详细真实文件报告位于本地 `tmp/native-fits-verification-final/verification.json`，未把原始 FITS 或本地验证产物加入源码目录。
+
+- 新增 `sequence.fast_candidate_associate`，在已筛选的匹配滤波峰上执行三点常速度种子、实测时间轴拟合、单帧缺测回接、残差/速度门和重复轨迹去重。固定 Python 基线的 5 个原生进程请求及 Rust 测试全部通过。完整序列原生回归为 24 个 verifier、427 个请求全部通过；release engine SHA-256 为 `1bc49f0e10ae7d3bbce96667294af4e99ee76abda6171eb3fb183b082b65e982`，报告 `tmp/native-sequence-chain-verification-20261013-v26/verification.json`。该阶段接在候选原图强制测光之前，只生成待复核图像候选；原图测光、质量筛选、多尺度帧候选装配和 `analyze_sequence` 编排仍未迁入 Rust。

@@ -24,6 +24,7 @@ pub mod sequence;
 pub mod sequence_assignment;
 pub mod sequence_consensus;
 pub mod sequence_fast;
+pub mod sequence_fast_candidates;
 pub mod sequence_motion;
 pub mod sequence_motion_features;
 pub mod sequence_registration;
