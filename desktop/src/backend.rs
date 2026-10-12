@@ -43,6 +43,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-feature-hard-negative"
                         | "rst19-gaia-merge"
                         | "rst19-feature-evidence-axes"
+                        | "rst19-direct-neighbor-audit"
                 )
             ))
 }
@@ -271,6 +272,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-evidence-axes"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-direct-neighbor-audit"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

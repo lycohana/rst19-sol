@@ -7,7 +7,8 @@
 本节覆盖最新工作区代码；后文保留此前验证记录，不能视为当前全部测试通过。
 
 - `rst19-feature-evidence-axes` 的 Rust engine 与桌面 worker 对 Python 基线在默认和阈值边界两种情形中全字段一致，两份 CSV 逐字节一致、JSON 字段一致、输入未改；每种情形生成 5 行汇总与 25 行敏感性结果，重复类别、质量计数溢出和非法浮点 3 种错误也与 Python 一致。报告 `tmp/native-feature-evidence-axes-verification-v1/verification.json`，release worker / engine SHA-256 分别为 `44620316ea286afb96e91a8ebd73a4cf7c1998d1ea8b495188e55abb021f0541` 和 `fd260558c73bbcb88137ae6cb456cd376bbdd38076a3f9dba11cd6e1019eb48b`。Windows 包 `dist/RST19-Windows-AMD64-20261012-215809-702012/` 在禁用外部 Python 搜索后通过该 worker 路由；报告 `tmp/package-verification-feature-evidence-axes-v2/verification.json`。此轴分类是 detector-level 描述信息，不代表逐源精度或真值。
-- 最新工作区 `cargo test --locked`（backend）、backend/desktop Clippy `-D warnings`、格式检查、desktop bin tests、release 构建、`tests/test_feature_evidence_axes.py`（3 项）和包验收通过；迁移清单为 30 项 complete、11 项 in progress、117 项 pending。Windows 环境包包含 78 个工具、200 个 SHA-256 校验项及 Python 3.11.9 / NumPy 1.26.4 / SciPy 1.17.1 / Pillow 12.2.0；macOS/Linux 尚未实际构建或运行，Python 运行时仍随包分发给未迁移工具。
+- `rst19-direct-neighbor-audit` 的 Rust engine 与桌面 worker 对 Python 基线在显式半径和默认半径/无目标两种情形中结果全字段一致，三份 CSV 均逐字节相同、JSON 字段一致；覆盖距离边界、目标 pair 反序、重复 ID、无效布尔/浮点和缺失目标，输入保持不变。报告 `tmp/native-direct-neighbor-audit-v3/verification.json`，release worker / engine SHA-256 分别为 `96b6a6ebb7c4ce76cacacba3a4ad782ecde532af926d9e61f36f580cc9664e78` 和 `a8d43bc7fc81bf42863554fc20901537254a16f6f4bff2f5a038adea46a77525`。Windows 包 `dist/RST19-Windows-AMD64-20261012-221047-660995/` 在禁用外部 Python 搜索后通过该路由；包报告 `tmp/package-verification-direct-neighbor-audit-v1/verification.json`。近邻边不做传递合并；独立 pair 标签仍是工程候选，不是物理双星确认。
+- 最新工作区 `cargo test --locked`（backend）、backend/desktop Clippy `-D warnings`、格式检查、desktop bin tests、release 构建、`tests/test_direct_neighbor_audit.py`（3 项）、原生 parity verifier 和 Windows 包验收通过；迁移清单为 32 项 complete、11 项 in progress、115 项 pending。该 Windows 包包含 78 个工具、200 个 SHA-256 校验项及 Python 3.11.9 / NumPy 1.26.4 / SciPy 1.17.1 / Pillow 12.2.0；macOS/Linux 尚未实际构建或运行，Python 运行时仍随包分发给未迁移工具。
 
 - 当前序列链使用同一个 release 引擎完成 23 组原生进程验证，共 422 个请求、全部字段对照一致；统一清单 `tmp/native-sequence-chain-verification-20261013-v24/verification.json` 记录各报告路径和 engine SHA-256 `3d9360bab59934839d28fba77ed13521e78eba9baf5cd23372669ae1a7dd5914`。
 - `sequence.stitch_unassociated_single_frame_points` 通过 33 个原生进程场景，覆盖 review 线模型准入、常速度预测、链式回接、非等间隔/非法时间、时间间隔与角度边界、长度比例、伪影重叠和稳定轨迹排序；报告 `tmp/native-single-frame-stitch-verification-20261013-v1/verification.json`。它只回接图像平面候选，不确认物理身份。
@@ -28,7 +29,7 @@
 - `rst19-pair-pixel-topology` 已在 Rust engine 和桌面 worker 重现 raw / 特殊值排除两种 8 连通分量、峰值成员及局部极大值。完整 JSON 结果相同，两份 CSV 和 SVG 与 Python 基线逐字节一致，输入 FITS 与星表哈希保持不变；报告 `tmp/native-pair-pixel-topology-verification-v5/verification.json`。覆盖 patch 边界 `[12,16,26,26]`、4 行 component、1 行 maximum 和重复代码 `[99]`；这些像素诊断不确认真实物理源身份。
 - `rst19-feature-correlation` 的 Rust engine 与桌面 worker 对 Python 基线所有字段一致，三个 CSV 逐字节一致，JSON 解析后字段一致，源目录哈希不变；覆盖 UTF-8 BOM、引号内逗号、重复/空特征名、首次类别顺序、成对缺失值剔除、并列秩及类内相关。报告 `tmp/native-feature-correlation-verification-v2/verification.json`，release worker / engine SHA-256 分别为 `4f64c9120ac2b06f7e7321224e59513a6660ff3aebb360879bd41e268a084406` 和 `86e4d94934d7e1cc45f66f7c18acf2f598d9372e9f8ed0fc643ad4bd47922be1`。相关只描述本目录里的字段依赖，不表示因果关系或分类准确率。
 - 上一版 Windows 完整环境包 `dist/RST19-Windows-AMD64-20261012-215024-918275/` 已构建并验收；覆盖 78 个工具、200 个文件校验和、内置 Python 3.11.9 / NumPy 1.26.4 / SciPy 1.17.1 / Pillow 12.2.0，并在禁用外部 Python 搜索后通过此前 Rust 工具路由及 Gaia 独立原生 CLI。报告 `tmp/package-verification-catalog-merge-native-cli-v2/verification.json`。本次只验收 Windows。
-- 当前完整 backend `cargo test --locked`、Clippy `-D warnings`、`cargo fmt --check`、desktop bin tests、desktop Clippy 和 backend/desktop release 构建通过；`tests/test_sequence.py` 109 项通过。当前源码迁移清单为 30 项 complete、11 项 in progress、117 项 pending；桌面 `rst19` 单帧主入口、`rst19-aux-audit`、`rst19-gaia-merge`、特征证据轴、其他特征审计、近邻审计及测光工具已路由到 Rust worker，其余未迁移工具仍使用 Python worker。
+- 当前完整 backend `cargo test --locked`、Clippy `-D warnings`、`cargo fmt --check`、desktop bin tests、desktop Clippy 和 backend/desktop release 构建通过；`tests/test_sequence.py` 109 项通过。当前源码迁移清单为 32 项 complete、11 项 in progress、115 项 pending；桌面 `rst19` 单帧主入口、`rst19-aux-audit`、`rst19-gaia-merge`、特征证据轴、直接近邻审计、其他特征审计、近邻审计及测光工具已路由到 Rust worker，其余未迁移工具仍使用 Python worker。
 - 当前固定检测的 138 个案例通过；float32 阶段的 SNR 1 ULP 差异已修复：归约须按 NumPy 默认缓冲大小分块，不能对整个数组直接递归求和。8191 / 8192 / 8193 / 16384 / 16385 等长度及滤波响应逐次裁剪样本纳入固定对照，归约、统计、背景、噪声、Gaussian、Starlet 与 SNR 阶段通过。
 - `measurement_parity` 的 32 个 float64 / float32 源测量案例及近邻质量门控通过。完全重合的 PSF 模板属于不可辨识双源，Python 与 Rust 现均返回空证据；固定样例覆盖了此退化边界。
 - 修正后，`verify_float32.py` 原生进程的 12 个合成图案例与真实首帧 512×512 ROI 的 Gaussian / hybrid / ensemble 三种模式均通过全部字段对照；没有放宽容差。最新报告 `tmp/native-float32-verification-20261013-v2/verification.json`。ROI 显式限额 300 个返回源，不代表全幅检测或完整序列。FITS 哈希仍为 `6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6`。
@@ -71,7 +72,7 @@
 - `attitude.audit.frames`、`attitude.audit.paths` 和 `rst19-aux-audit` 的 4 个原生进程场景逐字段通过，覆盖辅助块缺失、RA 跨零、替代相机轴、FITS 路径读取及产物写入；CSV 与 Python 参考文件逐字节一致，JSON 全字段一致。报告 `tmp/native-attitude-verification-20261013-v6/verification.json`；本次 engine / CLI SHA-256 分别为 `4fadbba6875a72450d1e6e925c68b4e2cb7b33972b5c46ef4231a365912e3c23` 和 `559fad77ade73ace5ae412320a51a5ed303e400e9c87c9bc839b89296fdb21ca`。此处核验辅助字段之间的一致性，不是完整 WCS 或物理指向确认。
 - 当前完整 `cargo test --locked --manifest-path backend/Cargo.toml` 全部 56 项通过；`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 和 release `--bins` 构建通过。完全重合 PSF 的不确定系数分支已替换为明确的不可辨识判断。
 - float32 路径已经实现；后文“仍返回未迁移错误”、16 个源测量案例和 57 个检测案例的描述属于较早版本，当前数量分别为 32 和 138。
-- 后端全量迁移未完成：158 个登记 Python 模块中，30 个已标记为 Rust 迁移完成、11 个仍在迁移、117 个待迁移；桌面单帧、辅助姿态审计、Gaia 合并、特征证据轴、其他特征审计、近邻审计及通量/峰值比工具已走 Rust worker，其余工具仍调用原 Python worker。Windows 完整环境包仍携带 Python 运行时供未迁移工具使用；macOS/Linux 构建及运行尚未验证。
+- 后端全量迁移未完成：158 个登记 Python 模块中，32 个已标记为 Rust 迁移完成、11 个仍在迁移、115 个待迁移；桌面单帧、辅助姿态审计、Gaia 合并、特征证据轴、直接近邻审计、其他特征审计、近邻审计及通量/峰值比工具已走 Rust worker，其余工具仍调用原 Python worker。Windows 完整环境包仍携带 Python 运行时供未迁移工具使用；macOS/Linux 构建及运行尚未验证。
 
 ## 此前已验证记录
 
@@ -118,7 +119,7 @@
 
 ## 尚未完成
 
-当前已有 30 个 Python 模块标记为 Rust 迁移完成，11 个在迁移中，117 个待迁；桌面主入口、Gaia 分层合并、特征证据轴、其他特征与近邻审计及若干序列/测光/姿态功能已由 Rust 执行。完整生产运算链尚未切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
+当前已有 32 个 Python 模块标记为 Rust 迁移完成，11 个在迁移中，115 个待迁；桌面主入口、Gaia 分层合并、特征证据轴、直接近邻、其他特征与近邻审计及若干序列/测光/姿态功能已由 Rust 执行。完整生产运算链尚未切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
 
 检测对照已覆盖 float64 与 float32 固定样例和 ROI，以及首帧 float64 全幅；float32 全幅验收、WCS 拟合与天测流程、序列运动、合成、全部审计／实验及剩余 CLI 契约仍需继续移植和对照。Windows 完整桌面包已构建验收，macOS/Linux 还未实际构建或运行；打包流程仍保留 Python 环境供剩余工具使用。
 

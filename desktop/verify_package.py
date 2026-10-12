@@ -152,6 +152,19 @@ def make_feature_evidence_axes_matrix(path: Path) -> None:
     path.write_bytes(payload.encode("utf-8"))
 
 
+def make_direct_neighbor_catalog(path: Path) -> None:
+    payload = (
+        "\ufeffdetection_id,x,y,peak_x,peak_y,peak,flux_snr,filter_snr,fwhm,"
+        "deblend_delta_bic,deblend_component_snr,quality_passed,feature_class,flags\r\n"
+        "1,0,0,0,0,3992,204.6,1195,2.59,-4.09,0.87,False,range_anomaly,CODE_PATTERN\r\n"
+        "2,2.738,0,4,0,569,115.5,300,2.44,-4.09,0.87,False,crowded_blend,UNRESOLVED_BLEND\r\n"
+        "3,10,0,10,0,250,12,20,2,,,True,compact_quality,\r\n"
+        "4,20,0,20,0,900,20,100,2,12,6,True,compact_quality,\r\n"
+        "5,23,0,23,0,400,10,60,2,,,True,compact_quality,\r\n"
+    )
+    path.write_bytes(payload.encode("utf-8"))
+
+
 def make_gaia_merge_inputs(out: Path) -> tuple[Path, Path]:
     first = out / "gaia calibration layer.csv"
     second = out / "gaia deep layer.csv"
@@ -687,6 +700,41 @@ def verify(package: Path, out: Path) -> dict:
         "feature_evidence_axes.json",
     ):
         assert (axes_out / artifact).is_file(), artifact
+    neighbor_catalog = out / "direct neighbor source catalog.csv"
+    make_direct_neighbor_catalog(neighbor_catalog)
+    neighbor_out = out / "direct-neighbor-audit"
+    neighbor_request = {
+        "operation": "tool",
+        "tool": "rst19-direct-neighbor-audit",
+        "args": [
+            str(neighbor_catalog.resolve()),
+            "--target-id", "1",
+            "--target-id", "2",
+            "--pair-radius", "4",
+            "--out-dir", str(neighbor_out.resolve()),
+        ],
+        "out_dir": str((out / "direct-neighbor-audit-job").resolve()),
+    }
+    neighbor_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(neighbor_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    neighbor_events = [json.loads(line) for line in neighbor_response.stdout.splitlines()]
+    assert len(neighbor_events) == 1 and neighbor_events[0]["ok"]
+    neighbor_payload = neighbor_events[0]["payload"]
+    assert neighbor_payload["tool"] == "rst19-direct-neighbor-audit"
+    assert neighbor_payload["result"]["direct_pair_count"] == 2
+    assert neighbor_payload["result"]["unresolved_pair_count"] == 1
+    assert neighbor_payload["result"]["independent_pair_candidate_count"] == 1
+    assert neighbor_payload["result"]["target"]["classification"] == "unresolved_pair"
+    for artifact in (
+        "direct_neighbor_pairs.csv",
+        "direct_neighbor_summaries.csv",
+        "direct_neighbor_targets.csv",
+        "direct_neighbor_audit.json",
+    ):
+        assert (neighbor_out / artifact).is_file(), artifact
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -723,6 +771,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-gaia-merge",
                   "rst19-gaia-merge native CLI",
                   "rst19-feature-evidence-axes",
+                  "rst19-direct-neighbor-audit",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
@@ -742,6 +791,13 @@ def verify(package: Path, out: Path) -> dict:
     report["feature_evidence_axes"] = {
         "row_count": len(axes_payload["result"]["rows"]),
         "sensitivity_row_count": len(axes_payload["result"]["sensitivity_rows"]),
+        "artifacts_written": True,
+    }
+    report["direct_neighbor_audit"] = {
+        "source_count": neighbor_payload["result"]["source_count"],
+        "direct_pair_count": neighbor_payload["result"]["direct_pair_count"],
+        "unresolved_pair_count": neighbor_payload["result"]["unresolved_pair_count"],
+        "independent_pair_candidate_count": neighbor_payload["result"]["independent_pair_candidate_count"],
         "artifacts_written": True,
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

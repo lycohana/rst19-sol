@@ -40,7 +40,9 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 
 `rst19-feature-evidence-axes` 只读取已有 feature evidence matrix，按类别汇总候选持久性、质量邻域响应与局部 PSF 相关度，并检查五组预设阈值的模式敏感性。Q|P 是 detector-level 描述量，不是逐源精度、FDR 或恒星概率。
 
-桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
+`rst19-direct-neighbor-audit` 保留源表里每条质心半径内的直接近邻边，不做传递合并；按类别组合汇总距离、质量状态和双 PSF 工程证据，并可单独查询目标 pair。独立候选仍需真实 PSF、注入、星表/WCS 或人工真值确认。
+
+桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
 
 ```powershell
 cargo test --locked --manifest-path backend/Cargo.toml

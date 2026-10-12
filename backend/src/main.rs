@@ -50,6 +50,30 @@ fn execute(request: Value) -> Result<Value> {
                     .as_dict(),
             )
         }
+        "audit.direct_neighbor_pairs" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing catalog_path")?;
+            let target_ids: Vec<i64> = request["target_ids"]
+                .as_array()
+                .map(|values| {
+                    values
+                        .iter()
+                        .map(|value| value.as_i64().ok_or("target_ids must contain integers"))
+                        .collect::<std::result::Result<Vec<_>, _>>()
+                })
+                .transpose()?
+                .unwrap_or_default();
+            Ok(rst19_core::direct_neighbor_audit::run(
+                std::path::Path::new(catalog_path),
+                &target_ids,
+                request["psf_fwhm"].as_f64().unwrap_or(2.0),
+                request["pair_radius_px"].as_f64(),
+                request["delta_bic_min"].as_f64().unwrap_or(10.0),
+                request["component_snr_min"].as_f64().unwrap_or(5.0),
+            )?
+            .as_dict())
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
