@@ -172,6 +172,9 @@ fn execute(request: Value) -> Result<Value> {
             rst19_core::sequence_trails::motion_proposal_thresholds(&request)
         }
         "sequence.motion_time_axis" => rst19_core::sequence_trails::motion_time_axis(&request),
+        "sequence.observation_time_axis" => {
+            rst19_core::sequence_trails::observation_time_axis(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }

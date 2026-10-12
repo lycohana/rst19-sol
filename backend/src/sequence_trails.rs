@@ -705,6 +705,177 @@ pub fn motion_time_axis(request: &Value) -> Result<Value> {
     }))
 }
 
+fn days_from_civil(mut year: i64, month: i64, day: i64) -> i64 {
+    year -= i64::from(month <= 2);
+    let era = if year >= 0 {
+        year / 400
+    } else {
+        (year - 399) / 400
+    };
+    let year_of_era = year - era * 400;
+    let adjusted_month = month + if month > 2 { -3 } else { 9 };
+    let day_of_year = (153 * adjusted_month + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era
+}
+
+fn parse_utc_microseconds(value: &str) -> Option<i128> {
+    let text = value.trim().replace('Z', "+00:00");
+    if text.len() < 10 || !text.is_ascii() {
+        return None;
+    }
+    let bytes = text.as_bytes();
+    if bytes[4] != b'-' || bytes[7] != b'-' {
+        return None;
+    }
+    let parse = |start: usize, end: usize| -> Option<i64> { text.get(start..end)?.parse().ok() };
+    let year = parse(0, 4)?;
+    let month = parse(5, 7)?;
+    let day = parse(8, 10)?;
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let month_days = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    if !(1..=9999).contains(&year)
+        || !(1..=12).contains(&month)
+        || day < 1
+        || day > month_days[(month - 1) as usize]
+    {
+        return None;
+    }
+
+    let offset_at = text
+        .char_indices()
+        .find(|(index, character)| *index >= 10 && matches!(character, '+' | '-'))
+        .map(|(index, _)| index);
+    let (date_time, offset_text) = match offset_at {
+        Some(10) => (text.as_str(), None),
+        Some(index) => (&text[..index], Some(&text[index..])),
+        None => (text.as_str(), None),
+    };
+    let offset_seconds = if let Some(offset) = offset_text {
+        let sign = if offset.starts_with('-') {
+            -1_i64
+        } else {
+            1_i64
+        };
+        let digits: String = offset[1..]
+            .chars()
+            .filter(|character| *character != ':')
+            .collect();
+        if !digits.chars().all(|character| character.is_ascii_digit())
+            || !matches!(digits.len(), 2 | 4 | 6)
+        {
+            return None;
+        }
+        let hours: i64 = digits[0..2].parse().ok()?;
+        let minutes: i64 = if digits.len() >= 4 {
+            digits[2..4].parse().ok()?
+        } else {
+            0
+        };
+        let seconds: i64 = if digits.len() == 6 {
+            digits[4..6].parse().ok()?
+        } else {
+            0
+        };
+        if hours >= 24 || minutes >= 60 || seconds >= 60 {
+            return None;
+        }
+        sign * (hours * 3600 + minutes * 60 + seconds)
+    } else {
+        0
+    };
+
+    let time_text = if date_time.len() == 10 {
+        ""
+    } else {
+        &date_time[11..]
+    };
+    let (clock_text, fractional) = time_text
+        .split_once('.')
+        .map_or((time_text, None), |(clock, fraction)| {
+            (clock, Some(fraction))
+        });
+    let clock_parts: Vec<&str> = clock_text.split(':').collect();
+    if !(2..=3).contains(&clock_parts.len()) {
+        if date_time.len() == 10 && time_text.is_empty() {
+            let utc_seconds =
+                days_from_civil(year, month, day) as i128 * 86_400 - offset_seconds as i128;
+            return Some(utc_seconds * 1_000_000);
+        }
+        return None;
+    }
+    let hour: i64 = clock_parts[0].parse().ok()?;
+    let minute: i64 = clock_parts[1].parse().ok()?;
+    let second: i64 = if clock_parts.len() == 3 {
+        clock_parts[2].parse().ok()?
+    } else {
+        0
+    };
+    if hour >= 24 || minute >= 60 || second >= 60 {
+        return None;
+    }
+    let microseconds = if let Some(fraction) = fractional {
+        if fraction.is_empty() || !fraction.chars().all(|character| character.is_ascii_digit()) {
+            return None;
+        }
+        let significant = &fraction[..fraction.len().min(6)];
+        let parsed: i64 = significant.parse().ok()?;
+        parsed * 10_i64.pow((6 - significant.len()) as u32)
+    } else {
+        0
+    };
+    let utc_seconds = days_from_civil(year, month, day) as i128 * 86_400
+        + (hour * 3600 + minute * 60 + second - offset_seconds) as i128;
+    Some(utc_seconds * 1_000_000 + microseconds as i128)
+}
+
+/// Build the observation time axis from FITS DATE-OBS headers with frame fallback.
+pub fn observation_time_axis(request: &Value) -> Result<Value> {
+    let headers = request
+        .get("headers")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing headers array".to_string())?;
+    let fallback: Vec<f64> = (0..headers.len()).map(|index| index as f64).collect();
+    let parsed: Option<Vec<i128>> = headers
+        .iter()
+        .map(|header| {
+            header
+                .get("DATE-OBS")
+                .and_then(Value::as_str)
+                .and_then(parse_utc_microseconds)
+        })
+        .collect();
+    let Some(timestamps) = parsed else {
+        return Ok(json!({"frame_times": fallback}));
+    };
+    let Some(first) = timestamps.first().copied() else {
+        return Ok(json!({"frame_times": fallback}));
+    };
+    let mut times = Vec::with_capacity(timestamps.len());
+    let mut previous = None;
+    for timestamp in timestamps {
+        if previous.is_some_and(|value| timestamp <= value) {
+            return Ok(json!({"frame_times": fallback}));
+        }
+        times.push((timestamp - first) as f64 / 1_000_000.0);
+        previous = Some(timestamp);
+    }
+    Ok(json!({"frame_times": times}))
+}
+
 fn deconvolved_motion_length(measured: f64, psf_fwhm: f64) -> Option<f64> {
     if !measured.is_finite() || !psf_fwhm.is_finite() || measured <= 0.0 || psf_fwhm <= 0.0 {
         return None;
