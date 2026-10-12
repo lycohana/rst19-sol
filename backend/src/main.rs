@@ -74,6 +74,37 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.feature_cross_axis" => {
+            let path = |name: &str| -> Result<std::path::PathBuf> {
+                request[name]
+                    .as_str()
+                    .map(std::path::PathBuf::from)
+                    .ok_or_else(|| format!("missing {name}"))
+            };
+            let feature_classes = request
+                .get("feature_classes")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<String>>)
+                .transpose()
+                .map_err(|error| error.to_string())?;
+            let detection_ids = request
+                .get("detection_ids")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<i64>>)
+                .transpose()
+                .map_err(|error| error.to_string())?;
+            Ok(rst19_core::feature_cross_axis_audit::run(
+                &path("catalog_path")?,
+                &path("raw_summary_path")?,
+                &path("peak_consistency_path")?,
+                &path("temporal_sources_path")?,
+                feature_classes.as_deref(),
+                detection_ids.as_deref(),
+            )?
+            .as_dict())
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

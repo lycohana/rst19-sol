@@ -165,6 +165,39 @@ def make_direct_neighbor_catalog(path: Path) -> None:
     path.write_bytes(payload.encode("utf-8"))
 
 
+def make_feature_cross_axis_inputs(out: Path) -> tuple[Path, Path, Path, Path]:
+    files = {
+        "catalog": (
+            "detection_id,feature_class,feature_class_label,quality_passed\r\n"
+            "1,compact_quality,紧凑,True\r\n2,crowded_blend,拥挤,False\r\n"
+        ),
+        "raw": (
+            "detection_id,core_fraction_median,noise_median,frames_support_ge3,frames_flux_snr_ge5,"
+            "frames_negative_extreme_count_gt0,frames_repeated_code_count_gt0\r\n"
+            "1,0.7,8,15,15,0,0\r\n2,0.2,14,0,2,1,1\r\n"
+        ),
+        "peak": (
+            "detection_id,feature_class,feature_class_label,quality_passed,raw_valid,"
+            "raw_local_maximum_r1,raw_local_max_gap_adu_r1\r\n"
+            "1,compact_quality,紧凑,True,True,True,0\r\n"
+            "2,crowded_blend,拥挤,False,True,False,100\r\n"
+        ),
+        "temporal": (
+            "detection_id,feature_class,expected_frame_count,frame_count,coverage_fraction,"
+            "flux_snr_relative_mad,flux_snr_positive_fraction,flux_snr_ge5_fraction,"
+            "flux_snr_sign_flip_count\r\n"
+            "1,compact_quality,15,15,1,0.1,1,1,0\r\n"
+            "2,crowded_blend,15,10,0.6667,0.3,0.8,0.1,2\r\n"
+        ),
+    }
+    paths = []
+    for name, contents in files.items():
+        path = out / f"cross-axis {name}.csv"
+        path.write_bytes(("\ufeff" + contents).encode("utf-8"))
+        paths.append(path)
+    return tuple(paths)  # type: ignore[return-value]
+
+
 def make_gaia_merge_inputs(out: Path) -> tuple[Path, Path]:
     first = out / "gaia calibration layer.csv"
     second = out / "gaia deep layer.csv"
@@ -735,6 +768,32 @@ def verify(package: Path, out: Path) -> dict:
         "direct_neighbor_audit.json",
     ):
         assert (neighbor_out / artifact).is_file(), artifact
+    cross_axis_inputs = make_feature_cross_axis_inputs(out)
+    cross_axis_out = out / "feature-cross-axis-audit"
+    cross_axis_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-cross-axis-audit",
+        "args": [*(str(path.resolve()) for path in cross_axis_inputs), "--out-dir", str(cross_axis_out.resolve())],
+        "out_dir": str((out / "feature-cross-axis-audit-job").resolve()),
+    }
+    cross_axis_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(cross_axis_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    cross_axis_events = [json.loads(line) for line in cross_axis_response.stdout.splitlines()]
+    assert len(cross_axis_events) == 1 and cross_axis_events[0]["ok"], cross_axis_events
+    cross_axis_payload = cross_axis_events[0]["payload"]
+    assert cross_axis_payload["tool"] == "rst19-feature-cross-axis-audit"
+    assert len(cross_axis_payload["result"]["source_rows"]) == 2
+    assert cross_axis_payload["result"]["source_rows"][1]["evidence_pattern"] == (
+        "raw_non_local_peak+value_domain_anomaly+no_support_seen"
+    )
+    for artifact in (
+        "feature_cross_axis_sources.csv", "feature_cross_axis_summary.csv",
+        "feature_cross_axis_patterns.csv", "feature_cross_axis_audit.json",
+    ):
+        assert (cross_axis_out / artifact).is_file(), artifact
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -772,6 +831,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-gaia-merge native CLI",
                   "rst19-feature-evidence-axes",
                   "rst19-direct-neighbor-audit",
+                  "rst19-feature-cross-axis-audit",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
@@ -799,6 +859,13 @@ def verify(package: Path, out: Path) -> dict:
         "unresolved_pair_count": neighbor_payload["result"]["unresolved_pair_count"],
         "independent_pair_candidate_count": neighbor_payload["result"]["independent_pair_candidate_count"],
         "artifacts_written": True,
+    }
+    report["feature_cross_axis_audit"] = {
+        "source_count": len(cross_axis_payload["result"]["source_rows"]),
+        "class_count": len(cross_axis_payload["result"]["class_summaries"]),
+        "pattern_count": len(cross_axis_payload["result"]["pattern_summaries"]),
+        "artifacts_written": True,
+        "external_python_search_disabled": True,
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report
