@@ -43,7 +43,7 @@ python desktop/build.py
 ```
 
 构建脚本创建专用 `.build-venv`，安装固定版本的科学与打包依赖，构建 Rust release，
-构建 Rust 桌面与原生计算 worker，使用 PyInstaller onedir 打包尚未迁移的 Python 工具环境，下载可再分发的 Noto 中文字体与许可证，
+构建 Rust 桌面、原生计算 worker、`rst19-aux-audit` 和 `rst19-gaia-merge` 命令，使用 PyInstaller onedir 打包尚未迁移的 Python 工具环境，下载可再分发的 Noto 中文字体与许可证，
 验证全部算法工具能在冻结环境中导入，再输出 `dist/RST19-平台-架构-时间/` 与 ZIP。
 包中包含运行环境版本与逐文件 SHA-256 清单。每次构建使用新目录，不清理旧包或用户数据。
 

@@ -114,7 +114,7 @@
         "summarize_auxiliary_boresight",
         "write_auxiliary_boresight_artifacts"
       ],
-      "migration_status": "in_progress"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.attitude_cli",
@@ -125,7 +125,7 @@
         "_paths",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.cache",
@@ -3321,7 +3321,7 @@
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_cli_contracts": {
     "rst19": "rst19-native executable; synthetic/default modes, stdout/json-out/errors and bounded original FITS verified; desktop single-frame route uses bundled Rust worker",
-    "rst19-aux-audit": "single FITS or sorted directory input; CSV/JSON output matches Python; desktop route uses bundled Rust worker; Windows package route verified; cross-platform packaging and broader parser edges pending",
+    "rst19-aux-audit": "single FITS or sorted directory input; Rust CLI and desktop worker match Python CSV/JSON outputs; Windows package includes the native CLI binary and verifies it with external Python search disabled; broader parser-edge and cross-platform acceptance pending",
     "rst19-feature-flag-profile": "overlap-aware CSV profile; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
     "rst19-feature-flag-interaction": "overlap-aware singleton/pair CSV audit with exact-set and high-SNR diagnostics; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
     "rst19-feature-gate-margin": "per-feature-class signed numeric quality-gate margin summaries; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
@@ -3462,7 +3462,8 @@
     "backend/verify_source_proposal_peak_audit.py",
     "tests/test_source_proposal_peak_audit.py",
     "backend/verify_source_proposal_temporal_audit.py",
-    "tests/test_source_proposal_temporal_audit.py"
+    "tests/test_source_proposal_temporal_audit.py",
+    "backend/verify_attitude.py"
   ],
   "remaining": [
     "full float32 detection acceptance coverage",

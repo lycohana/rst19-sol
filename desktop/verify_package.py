@@ -236,6 +236,8 @@ def verify(package: Path, out: Path) -> dict:
     worker = package / "runtime" / ("rst19-worker.exe" if os.name == "nt" else "rst19-worker")
     native_worker = package / "runtime" / ("rst19-native-worker.exe" if os.name == "nt" else "rst19-native-worker")
     assert native_worker.is_file(), "Rust single-frame worker is missing from the package"
+    attitude_cli = package / "runtime" / ("rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit")
+    assert attitude_cli.is_file(), "Rust auxiliary attitude audit CLI is missing from the package"
     environment = {**os.environ, "PYTHONPATH": "", "PYTHONHOME": "", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32") if os.name == "nt" else "/usr/bin:/bin"
     catalog = subprocess.run([str(worker), "--catalog"], capture_output=True, text=True, encoding="utf-8",
@@ -275,6 +277,19 @@ def verify(package: Path, out: Path) -> dict:
     assert attitude["result"]["summary"]["missing_auxiliary_count"] == 1
     assert Path(attitude["result_path"]).is_file()
     assert (attitude_out / "auxiliary_boresight_audit.csv").is_file()
+    attitude_cli_out = out / "attitude-native-cli"
+    attitude_cli_response = subprocess.run(
+        [str(attitude_cli), str(frame.resolve()), "--out-dir", str(attitude_cli_out.resolve())],
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out,
+        timeout=60,
+    )
+    assert attitude_cli_response.returncode == 0, (attitude_cli_response.stdout, attitude_cli_response.stderr)
+    assert (attitude_cli_out / "auxiliary_boresight_audit.csv").read_bytes() == (
+        attitude_out / "auxiliary_boresight_audit.csv"
+    ).read_bytes()
+    assert json.loads((attitude_cli_out / "auxiliary_boresight_audit.json").read_text(encoding="utf-8")) == (
+        json.loads((attitude_out / "auxiliary_boresight_audit.json").read_text(encoding="utf-8"))
+    )
     catalog = out / "source catalog.csv"
     make_feature_catalog(catalog)
     profile_out = out / "feature-flag-profile"
@@ -1136,6 +1151,12 @@ def verify(package: Path, out: Path) -> dict:
         "native_cli_input_error_exit_code": invalid_response.returncode,
         "native_cli_help_exit_code": help_response.returncode,
         "native_cli_runs_without_python": True,
+    }
+    report["attitude_cli"] = {
+        "packaged_native_binary": attitude_cli.name,
+        "csv_matches_worker_byte_for_byte": True,
+        "json_fields_match_worker": True,
+        "external_python_search_disabled": True,
     }
     report["feature_evidence_axes"] = {
         "row_count": len(axes_payload["result"]["rows"]),
