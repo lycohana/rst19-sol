@@ -941,6 +941,45 @@ def verify(package: Path, out: Path) -> dict:
         "source_peak_consistency.json",
     ):
         assert (source_peak_out / artifact).is_file(), artifact
+    proposal_peak_catalog = out / "source proposal peak catalog.csv"
+    proposal_peak_catalog.write_text(
+        "detection_id,feature_class,feature_class_label,quality_passed,flags,proposal_methods,flux_snr,filter_snr\n"
+        "1,compact_quality,紧凑,True,,gaussian|dog_narrow|dog_broad,10,20\n"
+        "2,crowded_blend,拥挤,False,UNRESOLVED_BLEND,dog_narrow|dog_broad,9,30\n"
+        "3,range_anomaly,范围,False,RANGE,gaussian|dog_narrow,7,12\n",
+        encoding="utf-8",
+    )
+    proposal_peak_out = out / "source-proposal-peak-audit"
+    proposal_peak_request = {
+        "operation": "tool",
+        "tool": "rst19-source-proposal-peak-audit",
+        "args": [
+            str(proposal_peak_catalog.resolve()),
+            str((source_peak_out / "source_peak_consistency.csv").resolve()),
+            "--target-id", "2", "--target-id", "2", "--target-id", "3",
+            "--out-dir", str(proposal_peak_out.resolve()),
+        ],
+        "out_dir": str((out / "source-proposal-peak-audit-job").resolve()),
+    }
+    proposal_peak_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(proposal_peak_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    proposal_peak_events = [json.loads(line) for line in proposal_peak_response.stdout.splitlines()]
+    assert len(proposal_peak_events) == 1 and proposal_peak_events[0]["ok"], proposal_peak_events
+    proposal_peak_payload = proposal_peak_events[0]["payload"]
+    assert proposal_peak_payload["tool"] == "rst19-source-proposal-peak-audit"
+    assert len(proposal_peak_payload["result"]["rows"]) == 3
+    assert len(proposal_peak_payload["result"]["summaries"]) == 3
+    assert [row["detection_id"] for row in proposal_peak_payload["result"]["targets"]] == [2, 3]
+    for artifact in (
+        "source_proposal_peak_rows.csv",
+        "source_proposal_peak_summary.csv",
+        "source_proposal_peak_targets.csv",
+        "source_proposal_peak_audit.json",
+    ):
+        assert (proposal_peak_out / artifact).is_file(), artifact
     feedback_path = out / "manual threshold feedback.jsonl"
     feedback_record = {
         "timestamp_utc": "2026-10-13T00:00:00+00:00",
@@ -1021,6 +1060,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-group-sensitivity",
                   "rst19-source-separation-audit",
                   "rst19-source-peak-consistency",
+                  "rst19-source-proposal-peak-audit",
                   "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
@@ -1079,6 +1119,13 @@ def verify(package: Path, out: Path) -> dict:
     report["source_peak_consistency"] = {
         "source_count": len(source_peak_payload["result"]["rows"]),
         "target_count": len(source_peak_payload["result"]["targets"]),
+        "artifacts_written": True,
+        "external_python_search_disabled": True,
+    }
+    report["source_proposal_peak_audit"] = {
+        "source_count": len(proposal_peak_payload["result"]["rows"]),
+        "summary_count": len(proposal_peak_payload["result"]["summaries"]),
+        "target_count": len(proposal_peak_payload["result"]["targets"]),
         "artifacts_written": True,
         "external_python_search_disabled": True,
     }

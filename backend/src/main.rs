@@ -249,6 +249,28 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.source_proposal_peak" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let peak_path = request["peak_consistency_path"]
+                .as_str()
+                .ok_or("missing peak consistency path")?;
+            let target_ids = request
+                .get("target_ids")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<i64>>)
+                .transpose()
+                .map_err(|error| error.to_string())?
+                .unwrap_or_default();
+            Ok(rst19_core::source_proposal_peak_audit::run(
+                std::path::Path::new(catalog_path),
+                std::path::Path::new(peak_path),
+                &target_ids,
+            )?
+            .as_dict())
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

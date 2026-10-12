@@ -53,6 +53,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-source-group-sensitivity"
                         | "rst19-source-separation-audit"
                         | "rst19-source-peak-consistency"
+                        | "rst19-source-proposal-peak-audit"
                 )
             ))
 }
@@ -305,6 +306,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-source-peak-consistency"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-source-proposal-peak-audit"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

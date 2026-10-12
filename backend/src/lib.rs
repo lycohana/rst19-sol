@@ -53,6 +53,7 @@ pub mod source_group_audit;
 pub mod source_group_sensitivity;
 pub mod source_peak_consistency;
 pub mod source_photometry;
+pub mod source_proposal_peak_audit;
 pub mod source_separation_audit;
 pub mod spatial;
 pub mod statistics;
