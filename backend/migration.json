@@ -2842,7 +2842,7 @@
         "_write_rows",
         "write_candidate_group_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.source_group_audit_cli",
@@ -2852,7 +2852,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.source_group_sensitivity",
@@ -3277,7 +3277,8 @@
     "per-source quality-gate route decomposition separating numeric failures from structural flags with class summaries",
     "per-class high-significance rejected-source audit ranked by flux SNR, filter SNR, or peak with configurable other-rejected bucket inclusion",
     "category-level candidate/quality-response/local-PSF evidence-axis classification with five sensitivity configurations, detector-level Q|P interpretation boundary, and Python-byte-identical summary and sensitivity CSVs",
-    "direct non-transitive candidate-neighbor edges with PSF/quality/flag classification, target-pair context, and Python-byte-identical CSV artifacts"
+    "direct non-transitive candidate-neighbor edges with PSF/quality/flag classification, target-pair context, and Python-byte-identical CSV artifacts",
+    "transitive centroid-radius candidate groups with representative ordering, quality/flag classification, per-class summaries and target lookup"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3333,7 +3334,8 @@
     "rst19-feature-evidence-axes": "classifies candidate persistence, neighborhood quality-response, and local-PSF correlation axes; emits the result and summary/sensitivity CSV artifacts byte-identically to Python across default and threshold-boundary fixtures; native JSONL and desktop worker routes verified; Windows package route verified in the 78-tool frozen package with external Python search disabled; macOS/Linux package validation pending",
     "rst19-direct-neighbor-audit": "reads source_catalog CSV and preserves direct centroid-radius edges without transitive merging; result JSON and pair/summary/target CSVs match Python byte-for-byte across explicit/default radii, target/no-target cases, and invalid inputs; JSONL engine and desktop worker routes verified; Windows package route verified in dist/RST19-Windows-AMD64-20261012-221047-660995 with external Python search disabled; macOS/Linux validation pending",
     "rst19-feature-cross-axis-audit": "four-table detector-level cross-axis audit; default and ordered selection results plus all CSV/JSON artifacts match Python; temporal ID-set, invalid boolean, and class mismatch errors match; JSONL engine and desktop worker routes verified; Windows package route verified with external Python search disabled; macOS/Linux package validation pending",
-    "manual-threshold-feedback": "feedback.append and feedback.load JSONL requests preserve record fields, defaults, schema version, and malformed-line indexing; Rust engine and desktop worker verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending"
+    "manual-threshold-feedback": "feedback.append and feedback.load JSONL requests preserve record fields, defaults, schema version, and malformed-line indexing; Rust engine and desktop worker verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending",
+    "rst19-source-group-audit": "transitive centroid-radius source groups; result and all three CSV plus JSON artifacts match Python across default/explicit radii and target selection; invalid boolean, duplicate ID, invalid coordinate, and missing-target errors match; JSONL engine and desktop worker routes verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3441,7 +3443,9 @@
     "backend/verify_feature_cross_axis_audit.py",
     "tests/test_feature_cross_axis_audit.py",
     "backend/verify_feedback.py",
-    "tests/test_feedback.py"
+    "tests/test_feedback.py",
+    "backend/verify_source_group_audit.py",
+    "tests/test_source_group_audit.py"
   ],
   "remaining": [
     "full float32 detection acceptance coverage",
@@ -3449,7 +3453,7 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, and aperture peak-ratio, and feature cross-axis audit; manual threshold feedback storage is native",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, and aperture peak-ratio, feature cross-axis and source-group audits; manual threshold feedback storage is native",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
@@ -3464,5 +3468,6 @@
   "native_feature_evidence_axes": "category-level candidate persistence, neighborhood quality response, and local-PSF correlation classification; five declared threshold configurations; Q|P remains detector-level descriptive context, not per-source precision or truth",
   "native_direct_neighbor_audit": "source-catalog direct neighbor edges from a Rust KD-tree; pair classification combines quality, blocking flags, and double-PSF engineering evidence while keeping every edge non-transitive; physical identity remains unconfirmed",
   "native_feature_cross_axis_audit": "strictly joins source catalog, raw summary, raw peak consistency, and temporal source tables by detection_id; emits per-source evidence, class medians, patterns, SHA-256 provenance, JSONL and desktop worker routes; Windows package route verified; macOS/Linux package validation pending; detector-level descriptions are not physical truth",
-  "native_manual_threshold_feedback": "UTF-8 JSONL append/load, schema version 1, legacy defaults and numeric coercions, missing-file handling, and explicit corrupt-line diagnostics; Rust engine and desktop worker routes verified; Windows package route verified with external Python search disabled; feedback remains human review data"
+  "native_manual_threshold_feedback": "UTF-8 JSONL append/load, schema version 1, legacy defaults and numeric coercions, missing-file handling, and explicit corrupt-line diagnostics; Rust engine and desktop worker routes verified; Windows package route verified with external Python search disabled; feedback remains human review data",
+  "native_source_group_audit": "transitive centroid-radius candidate groups, representative ordering, structural/quality classification, class summaries and target lookup; Python-byte-identical CSV artifacts and field-identical JSON; detector-level organization only, not physical source identity"
 }

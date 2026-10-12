@@ -794,6 +794,39 @@ def verify(package: Path, out: Path) -> dict:
         "feature_cross_axis_patterns.csv", "feature_cross_axis_audit.json",
     ):
         assert (cross_axis_out / artifact).is_file(), artifact
+    source_group_catalog = out / "source group source catalog.csv"
+    make_direct_neighbor_catalog(source_group_catalog)
+    source_group_out = out / "source-group-audit"
+    source_group_request = {
+        "operation": "tool",
+        "tool": "rst19-source-group-audit",
+        "args": [
+            str(source_group_catalog.resolve()),
+            "--target-id", "1",
+            "--target-id", "2",
+            "--out-dir", str(source_group_out.resolve()),
+        ],
+        "out_dir": str((out / "source-group-audit-job").resolve()),
+    }
+    source_group_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(source_group_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    source_group_events = [json.loads(line) for line in source_group_response.stdout.splitlines()]
+    assert len(source_group_events) == 1 and source_group_events[0]["ok"], source_group_events
+    source_group_payload = source_group_events[0]["payload"]
+    assert source_group_payload["tool"] == "rst19-source-group-audit"
+    assert source_group_payload["result"]["source_count"] == 5
+    assert source_group_payload["result"]["group_count"] == 3
+    assert source_group_payload["result"]["multi_member_group_count"] == 2
+    assert source_group_payload["result"]["unresolved_group_count"] == 1
+    assert source_group_payload["result"]["targets"][0]["classification"] == "unresolved_group"
+    for artifact in (
+        "source_groups.csv", "source_group_class_summary.csv",
+        "source_group_targets.csv", "source_group_summary.json",
+    ):
+        assert (source_group_out / artifact).is_file(), artifact
     feedback_path = out / "manual threshold feedback.jsonl"
     feedback_record = {
         "timestamp_utc": "2026-10-13T00:00:00+00:00",
@@ -870,6 +903,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-feature-evidence-axes",
                   "rst19-direct-neighbor-audit",
                   "rst19-feature-cross-axis-audit",
+                  "rst19-source-group-audit",
                   "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
@@ -903,6 +937,13 @@ def verify(package: Path, out: Path) -> dict:
         "source_count": len(cross_axis_payload["result"]["source_rows"]),
         "class_count": len(cross_axis_payload["result"]["class_summaries"]),
         "pattern_count": len(cross_axis_payload["result"]["pattern_summaries"]),
+        "artifacts_written": True,
+        "external_python_search_disabled": True,
+    }
+    report["source_group_audit"] = {
+        "source_count": source_group_payload["result"]["source_count"],
+        "group_count": source_group_payload["result"]["group_count"],
+        "multi_member_group_count": source_group_payload["result"]["multi_member_group_count"],
         "artifacts_written": True,
         "external_python_search_disabled": True,
     }

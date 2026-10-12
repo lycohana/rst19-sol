@@ -120,6 +120,37 @@ fn execute(request: Value) -> Result<Value> {
             let records = rst19_core::feedback::load_manual_feedback(std::path::Path::new(path))?;
             Ok(json!({"records":records.iter().map(|record| record.as_dict()).collect::<Vec<_>>()}))
         }
+        "audit.source_groups" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let target_ids = request
+                .get("target_ids")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<i64>>)
+                .transpose()
+                .map_err(|error| error.to_string())?
+                .unwrap_or_default();
+            Ok(rst19_core::source_group_audit::run(
+                std::path::Path::new(catalog_path),
+                &target_ids,
+                request
+                    .get("psf_fwhm")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(2.0),
+                request.get("group_radius_px").and_then(Value::as_f64),
+                request
+                    .get("delta_bic_min")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(10.0),
+                request
+                    .get("component_snr_min")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(5.0),
+            )?
+            .as_dict())
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

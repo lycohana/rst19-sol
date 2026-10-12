@@ -44,9 +44,11 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 
 `rst19-feature-cross-axis-audit` 严格按 `detection_id` 对齐源目录、raw 局部摘要、raw 峰审计和逐帧响应，输出逐源证据并置、类别中位数、模式计数及输入 SHA-256。模式只描述共享检测器中的证据组合，不是分类器、精度、FDR、伪影率或恒星概率。
 
+`rst19-source-group-audit` 在 Rust 中按质心半径建立传递近邻组，输出组成员、代表候选、质量/结构旗标、类别统计和目标回查。`independent_group_candidate` 仍是工程候选标签，不代表物理星组已确认。
+
 人工阈值反馈以版本化 UTF-8 JSONL 保存；`feedback.append` 与 `feedback.load` 由 Rust 引擎和桌面 worker 实现，保留旧记录默认值和损坏行定位。反馈仅用于人工复核和调参记录，不会在线训练或自动改变检测器。
 
-桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
+桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-source-group-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
 
 ```powershell
 cargo test --locked --manifest-path backend/Cargo.toml
@@ -56,6 +58,7 @@ $worker = "desktop/target/release/rst19-native-worker.exe"
 $engine = "backend/target/release/rst19-engine.exe"
 $verificationDir = "tmp/native-feature-cross-axis-audit-v1"
 python backend/verify_feature_cross_axis_audit.py $worker $engine --out $verificationDir
+python backend/verify_source_group_audit.py $worker $engine --out tmp/native-source-group-audit-v1
 python backend/verify_feedback.py $worker $engine --out tmp/native-feedback-v1
 $verificationDir = "tmp/native-sequence-chain-verification-$((Get-Date).ToString('yyyyMMdd-HHmmss'))"
 python backend/verify_sequence_chain.py backend/target/release/rst19-engine.exe --out $verificationDir
