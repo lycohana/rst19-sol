@@ -99,6 +99,47 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.feature_effect_size" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let reference_class = request["reference_class"]
+                .as_str()
+                .unwrap_or("compact_quality");
+            let comparison_classes = request
+                .get("comparison_classes")
+                .filter(|value| !value.is_null())
+                .map(|value| {
+                    serde_json::from_value::<Vec<String>>(value.clone())
+                        .map_err(|error| error.to_string())
+                })
+                .transpose()?;
+            let features = request
+                .get("features")
+                .map(|value| {
+                    serde_json::from_value::<Vec<String>>(value.clone())
+                        .map_err(|error| error.to_string())
+                })
+                .transpose()?
+                .unwrap_or_else(|| {
+                    rst19_core::feature_effect_size::DEFAULT_EFFECT_FEATURES
+                        .iter()
+                        .map(|feature| (*feature).to_owned())
+                        .collect()
+                });
+            let top_n = request.get("top_n").and_then(Value::as_i64).unwrap_or(5);
+            if top_n < 1 {
+                return Err("top_n must be positive".into());
+            }
+            Ok(rst19_core::feature_effect_size::run(
+                std::path::Path::new(catalog_path),
+                reference_class,
+                comparison_classes.as_deref(),
+                &features,
+                top_n as usize,
+            )?
+            .as_dict())
+        }
         "sequence.track_detections" => {
             let frames: Vec<Vec<rst19_core::measurement::Detection>> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

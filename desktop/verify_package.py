@@ -156,6 +156,30 @@ def verify(package: Path, out: Path) -> dict:
     assert margin["result"]["rows"][0]["class_count"] == 2
     assert Path(margin["result_path"]).is_file()
     assert (margin_out / "feature_gate_margins.csv").is_file()
+    effect_out = out / "feature-effect-size"
+    effect_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-effect-size",
+        "args": [
+            str(catalog.resolve()), "--reference-class", "compact",
+            "--comparison-classes", "diffuse", "--features", "flux_snr", "fwhm",
+            "--top-n", "2", "--out-dir", str(effect_out.resolve()),
+        ],
+        "out_dir": str((out / "feature-effect-size-job").resolve()),
+    }
+    effect_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(effect_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    effect_events = [json.loads(line) for line in effect_response.stdout.splitlines()]
+    assert len(effect_events) == 1 and effect_events[0]["ok"]
+    effect = effect_events[0]["payload"]
+    assert effect["tool"] == "rst19-feature-effect-size"
+    assert effect["result"]["comparison_classes"] == ["diffuse"]
+    assert effect["result"]["top_features_by_class"]["diffuse"] == ["flux_snr", "fwhm"]
+    assert Path(effect["result_path"]).is_file()
+    assert (effect_out / "feature_effect_sizes.csv").is_file()
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -179,6 +203,7 @@ def verify(package: Path, out: Path) -> dict:
               "native_backends": [
                   "rst19 single-frame", "rst19-aux-audit", "rst19-feature-flag-profile",
                   "rst19-feature-flag-interaction", "rst19-feature-gate-margin",
+                  "rst19-feature-effect-size",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
