@@ -67,6 +67,20 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.feature_flag_interaction" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let threshold = request
+                .get("high_snr_threshold")
+                .and_then(Value::as_f64)
+                .unwrap_or(10.0);
+            Ok(rst19_core::feature_flag_interaction::run(
+                std::path::Path::new(catalog_path),
+                threshold,
+            )?
+            .as_dict())
+        }
         "sequence.track_detections" => {
             let frames: Vec<Vec<rst19_core::measurement::Detection>> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

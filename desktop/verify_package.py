@@ -32,10 +32,10 @@ def make_fits(path: Path) -> None:
 def make_feature_catalog(path: Path) -> None:
     path.write_bytes(
         b"\xef\xbb\xbf"
-        + b"detection_id,feature_class,quality_passed,flags\n"
-        + b"1,compact,true,wing|blend|wing\n"
-        + b"2,compact,false,blend\n"
-        + b"3,diffuse,yes,\n"
+        + b"detection_id,feature_class,quality_passed,flags,flux_snr\n"
+        + b"1,compact,true,wing|blend|wing,12\n"
+        + b"2,compact,false,blend,11\n"
+        + b"3,diffuse,yes,,3\n"
     )
 
 
@@ -111,6 +111,30 @@ def verify(package: Path, out: Path) -> dict:
     assert Path(profile["result_path"]).is_file()
     assert (profile_out / "feature_flag_profile.csv").is_file()
     assert (profile_out / "feature_flag_profile_targets.csv").is_file()
+    interaction_out = out / "feature-flag-interaction"
+    interaction_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-flag-interaction",
+        "args": [
+            str(catalog.resolve()), "--high-snr-threshold", "10", "--top-n", "2",
+            "--out-dir", str(interaction_out.resolve()),
+        ],
+        "out_dir": str((out / "feature-flag-interaction-job").resolve()),
+    }
+    interaction_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(interaction_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    interaction_events = [json.loads(line) for line in interaction_response.stdout.splitlines()]
+    assert len(interaction_events) == 1 and interaction_events[0]["ok"]
+    interaction = interaction_events[0]["payload"]
+    assert interaction["tool"] == "rst19-feature-flag-interaction"
+    assert interaction["result"]["record_count"] == 3
+    assert interaction["result"]["rows"][0]["interaction"] == "blend"
+    assert interaction["result"]["rows"][0]["candidate_count"] == 2
+    assert Path(interaction["result_path"]).is_file()
+    assert (interaction_out / "feature_flag_interactions.csv").is_file()
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -131,7 +155,10 @@ def verify(package: Path, out: Path) -> dict:
     for relative, expected in checksums.items():
         assert hashlib.sha256((package / relative).read_bytes()).hexdigest() == expected, relative
     report = {"package": str(package), "environment": entry["payload"]["environment"], "tool_count": 78,
-              "native_backends": ["rst19 single-frame", "rst19-aux-audit", "rst19-feature-flag-profile"],
+              "native_backends": [
+                  "rst19 single-frame", "rst19-aux-audit", "rst19-feature-flag-profile",
+                  "rst19-feature-flag-interaction",
+              ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
               "external_python_search_disabled": True, "checksum_files": len(checksums)}

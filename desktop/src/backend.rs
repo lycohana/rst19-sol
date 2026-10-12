@@ -25,7 +25,12 @@ fn uses_native_worker(request: &Value) -> bool {
         || (request["operation"] == "tool"
             && matches!(
                 request["tool"].as_str(),
-                Some("rst19" | "rst19-aux-audit" | "rst19-feature-flag-profile")
+                Some(
+                    "rst19"
+                        | "rst19-aux-audit"
+                        | "rst19-feature-flag-profile"
+                        | "rst19-feature-flag-interaction"
+                )
             ))
 }
 
@@ -211,6 +216,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-flag-profile"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-feature-flag-interaction"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

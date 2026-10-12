@@ -9,6 +9,7 @@ pub mod compatible_spatial;
 pub mod coordinates;
 pub mod deblend;
 pub mod detection;
+pub mod feature_flag_interaction;
 pub mod feature_flag_profile;
 pub mod filtering;
 pub mod filtering32;
