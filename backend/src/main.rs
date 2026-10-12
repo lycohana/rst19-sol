@@ -196,6 +196,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.coherent_raw_motion_point_indices" => {
             rst19_core::sequence_trails::coherent_raw_motion_point_indices(&request)
         }
+        "trails.local_pixel_proposals" => {
+            rst19_core::single_frame_trails::local_pixel_trail_proposals(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }

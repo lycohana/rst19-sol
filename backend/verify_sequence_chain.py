@@ -30,6 +30,7 @@ VERIFIERS = (
     "verify_motion_evidence_link.py",
     "verify_collinear_motion_rescue.py",
     "verify_coherent_raw_motion_points.py",
+    "verify_local_pixel_trail_proposals.py",
 )
 
 

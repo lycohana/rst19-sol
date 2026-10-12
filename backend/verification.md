@@ -6,11 +6,13 @@
 
 本节覆盖最新工作区代码；后文保留此前验证记录，不能视为当前全部测试通过。
 
-- 当前序列链使用同一个 release 引擎完成 21 组原生进程验证，共 364 个请求、全部字段对照一致；统一清单 `tmp/native-sequence-chain-verification-20261013-v21/verification.json` 记录各报告路径和 engine SHA-256 `6f4de17e860e5a268bfc41de6bcf0ff22522d7e51ba0dcf84ef5323d792b3413`。
+- 当前序列链使用同一个 release 引擎完成 22 组原生进程验证，共 400 个请求、全部字段对照一致；统一清单 `tmp/native-sequence-chain-verification-20261013-v22/verification.json` 记录各报告路径和 engine SHA-256 `babde1ab433253045636bdc0b38c7c38119fb7d5d3aa22aa7b27f7c00321f3b3`。
 - `sequence.stitch_unassociated_single_frame_points` 通过 33 个原生进程场景，覆盖 review 线模型准入、常速度预测、链式回接、非等间隔/非法时间、时间间隔与角度边界、长度比例、伪影重叠和稳定轨迹排序；报告 `tmp/native-single-frame-stitch-verification-20261013-v1/verification.json`。它只回接图像平面候选，不确认物理身份。
 - `sequence.link_motion_evidence_tracks` 通过 24 个原生进程场景，覆盖共同帧重叠、方向和位移比例边界、中位垂直距离、一对一贪心排序、轨迹去重和输出排序；报告 `tmp/native-motion-evidence-link-verification-20261013-v2/verification.json`。链接用于跨通道候选证据去重，不会删除轨迹或确认物理身份。
 - `sequence.rescue_collinear_motion_feature_groups` 通过 18 个原生进程场景，覆盖长线 singleton 筛选、PSF 相关线长/跨度下限、离散共线组迭代、同帧候选选择、方向/垂距门和不规则时间重拟合；报告 `tmp/native-collinear-motion-rescue-verification-20261013-v2/verification.json`。它恢复图像平面候选组，仍需后续轨迹确认门。
-- `sequence.coherent_raw_motion_point_indices` 通过 25 个原生进程请求（23 个输出对照、2 个预期输入拒绝），覆盖非零位移、时间/曝光尺度、方向连续、强弱线形组合、模型与伪影门及 PSF 下限；报告 `tmp/native-sequence-chain-verification-20261013-v21/verify_coherent_raw_motion_points/verification.json`。输出是供后续关联的图像候选索引，不是运动分类或物理身份。
+- `sequence.coherent_raw_motion_point_indices` 通过 25 个原生进程请求（23 个输出对照、2 个预期输入拒绝），覆盖非零位移、时间/曝光尺度、方向连续、强弱线形组合、模型与伪影门及 PSF 下限；报告 `tmp/native-sequence-chain-verification-20261013-v22/verify_coherent_raw_motion_points/verification.json`。输出是供后续关联的图像候选索引，不是运动分类或物理身份。
+- `trails.local_pixel_proposals` 通过 36 个原生进程请求（19 个图像输出对照、17 个预期输入拒绝），覆盖掩膜归一化与边界、空间分块种子预算、线长/角度扫描、局部精修、点源和双源负例、无效图像/参数；报告 `tmp/native-sequence-chain-verification-20261013-v22/verify_local_pixel_trail_proposals/verification.json`。输出仍是单帧图像候选，不确认跨帧运动或物理身份。
+- 当前 `cargo test --locked`、Clippy `-D warnings`、`cargo fmt --check`、Python 验证脚本语法检查及 release 构建全部通过。此次验证覆盖当前源码；迁移仍未完成，桌面仍路由到 Python 算法进程。
 - 当前固定检测的 138 个案例通过；float32 阶段的 SNR 1 ULP 差异已修复：归约须按 NumPy 默认缓冲大小分块，不能对整个数组直接递归求和。8191 / 8192 / 8193 / 16384 / 16385 等长度及滤波响应逐次裁剪样本纳入固定对照，归约、统计、背景、噪声、Gaussian、Starlet 与 SNR 阶段通过。
 - `measurement_parity` 的 32 个 float64 / float32 源测量案例及近邻质量门控通过。完全重合的 PSF 模板属于不可辨识双源，Python 与 Rust 现均返回空证据；固定样例覆盖了此退化边界。
 - 修正后，`verify_float32.py` 原生进程的 12 个合成图案例与真实首帧 512×512 ROI 的 Gaussian / hybrid / ensemble 三种模式均通过全部字段对照；没有放宽容差。最新报告 `tmp/native-float32-verification-20261013-v2/verification.json`。ROI 显式限额 300 个返回源，不代表全幅检测或完整序列。FITS 哈希仍为 `6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6`。
