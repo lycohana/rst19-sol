@@ -168,6 +168,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.motion_feature_confirmation_evidence" => {
             rst19_core::sequence_trails::motion_feature_confirmation_evidence(&request)
         }
+        "sequence.motion_proposal_thresholds" => {
+            rst19_core::sequence_trails::motion_proposal_thresholds(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }

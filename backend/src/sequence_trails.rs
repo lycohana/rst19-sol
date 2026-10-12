@@ -928,6 +928,125 @@ pub fn motion_feature_confirmation_evidence(request: &Value) -> Result<Value> {
     }))
 }
 
+fn python_float(value: &Value) -> Option<f64> {
+    match value {
+        Value::Number(number) => number.as_f64(),
+        Value::String(value) => value.parse().ok(),
+        Value::Bool(value) => Some(if *value { 1.0 } else { 0.0 }),
+        _ => None,
+    }
+}
+
+fn python_max(first: f64, second: f64) -> f64 {
+    if second > first {
+        second
+    } else {
+        first
+    }
+}
+
+fn python_min(first: f64, second: f64) -> f64 {
+    if second < first {
+        second
+    } else {
+        first
+    }
+}
+
+fn median_f64(values: &mut [f64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_by(f64::total_cmp);
+    let middle = values.len() / 2;
+    if values.len().is_multiple_of(2) {
+        Some((values[middle - 1] + values[middle]) / 2.0)
+    } else {
+        Some(values[middle])
+    }
+}
+
+fn sequence_motion_candidate_min_length(request: &Value) -> Result<f64> {
+    if let Some(value) = request
+        .get("min_length_px")
+        .filter(|value| !value.is_null())
+    {
+        return python_float(value).ok_or_else(|| "min_length_px must be numeric or null".into());
+    }
+    let psf_fwhm = request
+        .get("psf_fwhm")
+        .and_then(python_float)
+        .ok_or_else(|| "missing numeric psf_fwhm".to_string())?;
+    let base = python_max(8.0, 3.0 * psf_fwhm);
+    let metadata_supported = request
+        .get("metadata_supported")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if !metadata_supported || psf_fwhm <= 0.0 {
+        return Ok(base);
+    }
+    let exposure_values = request
+        .get("exposure_s")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing exposure_s array".to_string())?;
+    let mut values = Vec::with_capacity(exposure_values.len());
+    for value in exposure_values {
+        let Some(number) = python_float(value) else {
+            return Ok(base);
+        };
+        values.push(number);
+    }
+    if values.is_empty()
+        || values
+            .iter()
+            .any(|value| !value.is_finite() || *value <= 0.0)
+    {
+        return Ok(base);
+    }
+    let minimum = values.iter().copied().fold(f64::INFINITY, f64::min);
+    let maximum = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let mut sorted = values.clone();
+    let median = median_f64(&mut sorted).unwrap_or(0.0);
+    if maximum - minimum > 0.05_f64.max(0.10 * median) || !(1.35..=1.65).contains(&median) {
+        return Ok(base);
+    }
+    Ok(python_min(base, python_max(6.0, 2.5 * psf_fwhm)))
+}
+
+fn exposure_aware_short_trail_min_area(request: &Value) -> i64 {
+    let Some(psf_fwhm) = request.get("psf_fwhm").and_then(python_float) else {
+        return 20;
+    };
+    let Some(exposure_s) = request
+        .get("short_exposure_s")
+        .filter(|value| !value.is_null())
+        .and_then(python_float)
+    else {
+        return 20;
+    };
+    if !psf_fwhm.is_finite()
+        || psf_fwhm <= 0.0
+        || !exposure_s.is_finite()
+        || !(1.35..=1.65).contains(&exposure_s)
+    {
+        return 20;
+    }
+    let exposure_floor = if 1.5 * psf_fwhm * psf_fwhm >= 20.0 {
+        20
+    } else {
+        12.max((1.5 * psf_fwhm * psf_fwhm).ceil() as i64)
+    };
+    20.min(exposure_floor)
+}
+
+/// Return metadata-aware raw sequence trail proposal thresholds.
+pub fn motion_proposal_thresholds(request: &Value) -> Result<Value> {
+    Ok(json!({
+        "min_length_px": sequence_motion_candidate_min_length(request)?,
+        "short_min_area": exposure_aware_short_trail_min_area(request),
+    }))
+}
+
 fn bilinear(image: &[Vec<f32>], x: f64, y: f64) -> Option<f32> {
     let height = image.len();
     let width = image.first().map_or(0, Vec::len);
