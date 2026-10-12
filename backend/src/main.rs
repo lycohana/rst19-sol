@@ -150,6 +150,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.temporal_reference_candidates" => {
             rst19_core::sequence_temporal::temporal_reference_candidates(&request)
         }
+        "sequence.line_profile_metrics" => {
+            rst19_core::sequence_trails::line_profile_metrics(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }
