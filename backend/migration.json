@@ -731,7 +731,7 @@
         "_write_csv",
         "write_feature_class_context_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_class_context_cli",
@@ -741,7 +741,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_correlation_audit",
@@ -3301,6 +3301,7 @@
   "native_feature_flag_interaction": "reads source_catalog CSV; overlap-aware singleton/pair counts, exact-set and quality counts, and high-SNR hard-negative diagnostics; writes matching BOM CSV and JSON artifacts; JSONL audit.feature_flag_interaction",
   "native_feature_gate_margin": "reads source_catalog CSV; computes signed per-source numeric quality-gate margins and per-class median/p10/p90 summaries; writes matching BOM CSV and JSON artifacts; JSONL audit.feature_gate_margin",
   "native_feature_effect_size": "reads source_catalog CSV; computes tie-aware Mann-Whitney AUC, Cliff's delta, IQR-scaled median gaps, and top feature rankings by detector class; writes matching BOM CSV and JSON artifacts; JSONL audit.feature_effect_size",
+  "native_feature_class_context": "reads source_catalog CSV; returns requested detections with within-feature-class counts, quality context, linear p10/median/p90, and inclusive empirical percentiles; writes target, metric, and JSON artifacts; JSONL audit.feature_class_context",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_cli_contracts": {
     "rst19": "rst19-native executable; synthetic/default modes, stdout/json-out/errors and bounded original FITS verified; desktop single-frame route uses bundled Rust worker",
@@ -3308,7 +3309,8 @@
     "rst19-feature-flag-profile": "overlap-aware CSV profile; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
     "rst19-feature-flag-interaction": "overlap-aware singleton/pair CSV audit with exact-set and high-SNR diagnostics; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
     "rst19-feature-gate-margin": "per-feature-class signed numeric quality-gate margin summaries; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
-    "rst19-feature-effect-size": "tie-aware feature effect sizes and top feature ranking by detector class; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending"
+    "rst19-feature-effect-size": "tie-aware feature effect sizes and top feature ranking by detector class; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
+    "rst19-feature-class-context": "requested detections with within-class percentile context; complete result parity and byte-identical target/metric CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3387,6 +3389,8 @@
     "tests/test_feature_flag_interaction.py",
     "tests/test_feature_gate_margin.py",
     "tests/test_feature_effect_size.py",
+    "verify_feature_class_context.py",
+    "tests/test_feature_class_context.py",
     "verify_spatial_ties.py",
     "verify_full_snapshot.py"
   ],
@@ -3396,7 +3400,7 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route all remaining research tools through Rust desktop workers; rst19 single-frame, rst19-aux-audit, rst19-feature-flag-profile, rst19-feature-flag-interaction, rst19-feature-gate-margin, and rst19-feature-effect-size routes are migrated",
+    "route all remaining research tools through Rust desktop workers; rst19 single-frame, rst19-aux-audit, rst19-feature-flag-profile, rst19-feature-flag-interaction, rst19-feature-gate-margin, rst19-feature-effect-size, and rst19-feature-class-context routes are migrated",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ]

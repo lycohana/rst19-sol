@@ -32,6 +32,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-feature-flag-interaction"
                         | "rst19-feature-gate-margin"
                         | "rst19-feature-effect-size"
+                        | "rst19-feature-class-context"
                 )
             ))
 }

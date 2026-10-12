@@ -32,10 +32,10 @@ def make_fits(path: Path) -> None:
 def make_feature_catalog(path: Path) -> None:
     path.write_bytes(
         b"\xef\xbb\xbf"
-        + b"detection_id,feature_class,feature_class_label,quality_passed,flags,flux_snr,psf_support_pixels,fwhm,ellipticity,sharpness,footprint_pixels\n"
-        + b"1,compact,Compact,true,wing|blend|wing,12,5,2.5,0.1,0.3,20\n"
-        + b"2,compact,Compact,false,blend,11,4,2.5,0.1,0.3,20\n"
-        + b"3,diffuse,Diffuse,yes,,3,2,0.5,0.8,0.9,1\n"
+        + b"detection_id,feature_class,feature_class_label,quality_passed,flags,flux_snr,filter_snr,fwhm,ellipticity,sharpness,psf_support_pixels,footprint_pixels,centroid_shift_px,peak\n"
+        + b"1,compact,Compact,true,wing|blend|wing,12,10,2.5,0.1,0.3,5,20,0.1,100\n"
+        + b"2,compact,Compact,false,blend,11,9,2.5,0.1,0.3,4,18,0.2,90\n"
+        + b"3,diffuse,Diffuse,yes,,3,2,0.5,0.8,0.9,2,1,0.9,20\n"
     )
 
 
@@ -180,6 +180,31 @@ def verify(package: Path, out: Path) -> dict:
     assert effect["result"]["top_features_by_class"]["diffuse"] == ["flux_snr", "fwhm"]
     assert Path(effect["result_path"]).is_file()
     assert (effect_out / "feature_effect_sizes.csv").is_file()
+    context_out = out / "feature-class-context"
+    context_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-class-context",
+        "args": [
+            str(catalog.resolve()), "--target-id", "2", "--target-id", "1",
+            "--target-id", "2", "--out-dir", str(context_out.resolve()),
+        ],
+        "out_dir": str((out / "feature-class-context-job").resolve()),
+    }
+    context_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(context_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    context_events = [json.loads(line) for line in context_response.stdout.splitlines()]
+    assert len(context_events) == 1 and context_events[0]["ok"]
+    context = context_events[0]["payload"]
+    assert context["tool"] == "rst19-feature-class-context"
+    assert [row["detection_id"] for row in context["result"]["targets"]] == [2, 1]
+    assert context["result"]["targets"][0]["class_quality_count"] == 1
+    assert len(context["result"]["metrics"]) == 18
+    assert Path(context["result_path"]).is_file()
+    assert (context_out / "feature_class_context_targets.csv").is_file()
+    assert (context_out / "feature_class_context_metrics.csv").is_file()
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -204,6 +229,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19 single-frame", "rst19-aux-audit", "rst19-feature-flag-profile",
                   "rst19-feature-flag-interaction", "rst19-feature-gate-margin",
                   "rst19-feature-effect-size",
+                  "rst19-feature-class-context",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,

@@ -140,6 +140,37 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.feature_class_context" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let target_ids: Vec<i64> = serde_json::from_value(
+                request
+                    .get("target_ids")
+                    .cloned()
+                    .ok_or("missing target detection IDs")?,
+            )
+            .map_err(|error| error.to_string())?;
+            let metric_fields = request
+                .get("metric_fields")
+                .map(|value| {
+                    serde_json::from_value::<Vec<String>>(value.clone())
+                        .map_err(|error| error.to_string())
+                })
+                .transpose()?
+                .unwrap_or_else(|| {
+                    rst19_core::feature_class_context::CONTEXT_METRIC_FIELDS
+                        .iter()
+                        .map(|metric| (*metric).to_owned())
+                        .collect()
+                });
+            Ok(rst19_core::feature_class_context::run(
+                std::path::Path::new(catalog_path),
+                &target_ids,
+                &metric_fields,
+            )?
+            .as_dict())
+        }
         "sequence.track_detections" => {
             let frames: Vec<Vec<rst19_core::measurement::Detection>> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
