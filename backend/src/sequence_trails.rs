@@ -1678,6 +1678,211 @@ pub fn stitch_unassociated_single_frame_points(request: &Value) -> Result<Value>
     Ok(json!({"tracks": mutable_tracks, "remaining_points": remaining}))
 }
 
+fn sequence_track_points(track: &Value) -> Result<&[Value]> {
+    track
+        .get("points")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .ok_or_else(|| "track missing points array".to_string())
+}
+
+fn sequence_point_frame(point: &Value) -> Result<i64> {
+    point
+        .get("frame_index")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "track point missing integer frame_index".to_string())
+}
+
+fn sequence_aligned_position(point: &Value) -> Result<[f64; 2]> {
+    Ok([
+        field_number(point, "aligned_x")?,
+        field_number(point, "aligned_y")?,
+    ])
+}
+
+/// Deduplicate moving point and exposure-line tracks by shared motion evidence.
+pub fn link_motion_evidence_tracks(request: &Value) -> Result<Value> {
+    let point_tracks = array(request, "point_tracks")?;
+    let line_tracks = array(request, "line_tracks")?;
+    let min_overlap_fraction = request
+        .get("min_overlap_fraction")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.5);
+    let max_perpendicular_distance = request
+        .get("max_perpendicular_distance_px")
+        .and_then(Value::as_f64)
+        .unwrap_or(10.0);
+    let max_direction_difference = request
+        .get("max_direction_difference_deg")
+        .and_then(Value::as_f64)
+        .unwrap_or(25.0);
+    if !(0.0 < min_overlap_fraction && min_overlap_fraction <= 1.0) {
+        return Err("min_overlap_fraction must be in (0, 1]".into());
+    }
+    if max_perpendicular_distance <= 0.0 || max_direction_difference <= 0.0 {
+        return Err("motion evidence link thresholds must be positive".into());
+    }
+    let moving_points: Vec<&Value> = point_tracks
+        .iter()
+        .filter(|track| {
+            track.get("classification").and_then(Value::as_str) == Some("moving")
+                && track
+                    .get("points")
+                    .and_then(Value::as_array)
+                    .is_some_and(|points| points.len() >= 2)
+        })
+        .collect();
+    let moving_lines: Vec<&Value> = line_tracks
+        .iter()
+        .filter(|track| {
+            track.get("classification").and_then(Value::as_str) == Some("moving")
+                && track
+                    .get("points")
+                    .and_then(Value::as_array)
+                    .is_some_and(|points| points.len() >= 3)
+        })
+        .collect();
+    if moving_points.is_empty() || moving_lines.is_empty() {
+        return Ok(json!({"links": []}));
+    }
+
+    let mut pair_candidates: Vec<([f64; 4], Value)> = Vec::new();
+    for point_track in &moving_points {
+        let mut point_points = sequence_track_points(point_track)?.to_vec();
+        point_points.sort_by_key(sequence_point_frame);
+        let point_first = sequence_aligned_position(&point_points[0])?;
+        let point_last = sequence_aligned_position(point_points.last().unwrap())?;
+        let point_vector = [
+            point_last[0] - point_first[0],
+            point_last[1] - point_first[1],
+        ];
+        let point_displacement = point_vector[0].hypot(point_vector[1]);
+        if !point_displacement.is_finite() || point_displacement <= 0.0 {
+            continue;
+        }
+        let point_direction = [
+            point_vector[0] / point_displacement,
+            point_vector[1] / point_displacement,
+        ];
+        let point_normal = [-point_direction[1], point_direction[0]];
+        let mut point_by_frame = std::collections::BTreeMap::new();
+        for point in &point_points {
+            point_by_frame.insert(sequence_point_frame(point)?, point);
+        }
+        let point_track_id = point_track
+            .get("track_id")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "point track missing integer track_id".to_string())?;
+
+        for line_track in &moving_lines {
+            let mut line_points = sequence_track_points(line_track)?.to_vec();
+            line_points.sort_by_key(sequence_point_frame);
+            let line_first = sequence_aligned_position(&line_points[0])?;
+            let line_last = sequence_aligned_position(line_points.last().unwrap())?;
+            let line_vector = [line_last[0] - line_first[0], line_last[1] - line_first[1]];
+            let line_displacement = line_vector[0].hypot(line_vector[1]);
+            if !line_displacement.is_finite() || line_displacement <= 0.0 {
+                continue;
+            }
+            let direction_cosine = (point_direction[0] * line_vector[0]
+                + point_direction[1] * line_vector[1])
+                / line_displacement;
+            let direction_difference = direction_cosine.clamp(-1.0, 1.0).acos().to_degrees();
+            if direction_difference > max_direction_difference {
+                continue;
+            }
+            let displacement_ratio = line_displacement / point_displacement;
+            if !(0.35..=2.5).contains(&displacement_ratio) {
+                continue;
+            }
+
+            let mut line_by_frame = std::collections::BTreeMap::new();
+            for point in &line_points {
+                line_by_frame.insert(sequence_point_frame(point)?, point);
+            }
+            let common_frames: Vec<i64> = point_by_frame
+                .keys()
+                .filter(|frame| line_by_frame.contains_key(frame))
+                .copied()
+                .collect();
+            let minimum_overlap = 3_usize.max(
+                (min_overlap_fraction * point_points.len().min(line_points.len()) as f64).ceil()
+                    as usize,
+            );
+            if common_frames.len() < minimum_overlap {
+                continue;
+            }
+            let mut perpendicular_distances = Vec::with_capacity(common_frames.len());
+            for frame in &common_frames {
+                let line_point = line_by_frame[frame];
+                let line_position = sequence_aligned_position(line_point)?;
+                perpendicular_distances.push(
+                    ((line_position[0] - point_first[0]) * point_normal[0]
+                        + (line_position[1] - point_first[1]) * point_normal[1])
+                        .abs(),
+                );
+            }
+            let median_perpendicular_distance =
+                median(&mut perpendicular_distances).unwrap_or(f64::NAN);
+            if !median_perpendicular_distance.is_finite()
+                || median_perpendicular_distance > max_perpendicular_distance
+            {
+                continue;
+            }
+            let overlap_fraction = common_frames.len() as f64
+                / point_points.len().min(line_points.len()).max(1) as f64;
+            let line_track_id = line_track
+                .get("track_id")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "line track missing integer track_id".to_string())?;
+            let link = json!({
+                "point_track_id": point_track_id,
+                "line_track_id": line_track_id,
+                "overlap_frame_count": common_frames.len(),
+                "overlap_fraction": overlap_fraction,
+                "median_perpendicular_distance_px": median_perpendicular_distance,
+                "direction_difference_deg": direction_difference,
+            });
+            pair_candidates.push((
+                [
+                    overlap_fraction,
+                    -median_perpendicular_distance,
+                    -direction_difference,
+                    -displacement_ratio.ln().abs(),
+                ],
+                link,
+            ));
+        }
+    }
+    pair_candidates.sort_by(|(first_score, _), (second_score, _)| {
+        second_score[0]
+            .total_cmp(&first_score[0])
+            .then_with(|| second_score[1].total_cmp(&first_score[1]))
+            .then_with(|| second_score[2].total_cmp(&first_score[2]))
+            .then_with(|| second_score[3].total_cmp(&first_score[3]))
+    });
+    let mut used_points = std::collections::BTreeSet::new();
+    let mut used_lines = std::collections::BTreeSet::new();
+    let mut links = Vec::new();
+    for (_, link) in pair_candidates {
+        let point_id = link["point_track_id"].as_i64().unwrap();
+        let line_id = link["line_track_id"].as_i64().unwrap();
+        if used_points.contains(&point_id) || used_lines.contains(&line_id) {
+            continue;
+        }
+        used_points.insert(point_id);
+        used_lines.insert(line_id);
+        links.push(link);
+    }
+    links.sort_by_key(|link| {
+        (
+            link["point_track_id"].as_i64().unwrap_or_default(),
+            link["line_track_id"].as_i64().unwrap_or_default(),
+        )
+    });
+    Ok(json!({"links": links}))
+}
+
 fn deconvolved_motion_length(measured: f64, psf_fwhm: f64) -> Option<f64> {
     if !measured.is_finite() || !psf_fwhm.is_finite() || measured <= 0.0 || psf_fwhm <= 0.0 {
         return None;

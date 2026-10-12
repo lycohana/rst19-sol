@@ -187,6 +187,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.stitch_unassociated_single_frame_points" => {
             rst19_core::sequence_trails::stitch_unassociated_single_frame_points(&request)
         }
+        "sequence.link_motion_evidence_tracks" => {
+            rst19_core::sequence_trails::link_motion_evidence_tracks(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }
