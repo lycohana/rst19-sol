@@ -18,7 +18,11 @@ fn compare(actual: &Value, expected: &Value, path: &str) {
             }
         }
         (Value::Object(a), Value::Object(b)) => {
-            assert_eq!(a.len(), b.len(), "{path}");
+            assert_eq!(
+                a.keys().collect::<Vec<_>>(),
+                b.keys().collect::<Vec<_>>(),
+                "{path} object keys"
+            );
             for (key, value) in b {
                 compare(&a[key], value, &format!("{path}.{key}"));
             }
@@ -28,7 +32,7 @@ fn compare(actual: &Value, expected: &Value, path: &str) {
 }
 
 #[test]
-fn geometry_only_candidate_consensus_matches_python_reference() {
+fn candidate_consensus_geometry_and_image_gates_match_python_reference() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/sequence_consensus.json")).unwrap();
     for case in fixture["cases"].as_array().unwrap() {
@@ -60,6 +64,7 @@ fn geometry_only_candidate_consensus_matches_python_reference() {
                 .get("temporal_min_psf_correlation")
                 .and_then(Value::as_f64)
                 .unwrap_or(0.8),
+            case.get("image_support"),
         )
         .unwrap();
         compare(&actual, &case["expected"], case["label"].as_str().unwrap());

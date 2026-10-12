@@ -144,6 +144,7 @@ fn execute(request: Value) -> Result<Value> {
                     .get("temporal_min_psf_correlation")
                     .and_then(Value::as_f64)
                     .unwrap_or(0.8),
+                request.get("image_support"),
             )
         }
         "sequence.frame_assign" => {

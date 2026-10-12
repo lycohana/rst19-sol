@@ -1,4 +1,4 @@
-"""Verify the native geometry-only repeated-candidate consensus operation."""
+"""Verify native repeated-candidate consensus and raw-image quality gates."""
 from __future__ import annotations
 
 import argparse
@@ -33,6 +33,8 @@ def main() -> None:
             "frame_times": case["frame_times"],
             "options": case["options"],
         }
+        if case.get("image_support") is not None:
+            request["image_support"] = case["image_support"]
         response = subprocess.run(
             [str(args.engine.resolve())],
             input=json.dumps(request, ensure_ascii=False, allow_nan=False),
@@ -54,7 +56,7 @@ def main() -> None:
         "native_requests_verified": len(records),
         "records": records,
         "all_fields_compared": True,
-        "scope": "geometry-only repeated candidate association, temporal-reference SNR channel, persistent-quality-track overlap and elapsed-time motion rejection; image pixel support gates are not included",
+        "scope": "repeated candidate association, temporal-reference SNR channel, persistent-quality-track overlap, elapsed-time motion rejection, and optional per-frame raw-image validity, local-aperture support, shape, PSF-correlation, and line-artifact gates; temporal-reference image candidate generation and high-level sequence orchestration are not included",
     }
     args.out.mkdir(parents=True, exist_ok=False)
     (args.out / "verification.json").write_text(
