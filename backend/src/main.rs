@@ -216,6 +216,39 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.source_peak_consistency" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let fits_path = request["fits_path"]
+                .as_str()
+                .ok_or("missing source FITS path")?;
+            let targets = request
+                .get("target_ids")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<i64>>)
+                .transpose()
+                .map_err(|error| error.to_string())?
+                .unwrap_or_default();
+            let radii = request
+                .get("local_max_radii_px")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<usize>>)
+                .transpose()
+                .map_err(|error| error.to_string())?
+                .unwrap_or_else(|| {
+                    rst19_core::source_peak_consistency::DEFAULT_LOCAL_MAX_RADII.to_vec()
+                });
+            Ok(rst19_core::source_peak_consistency::run(
+                std::path::Path::new(catalog_path),
+                std::path::Path::new(fits_path),
+                &targets,
+                &radii,
+            )?
+            .as_dict())
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

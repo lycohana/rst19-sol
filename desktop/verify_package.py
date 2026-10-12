@@ -900,6 +900,47 @@ def verify(package: Path, out: Path) -> dict:
         "source_separation_summary.json",
     ):
         assert (source_separation_out / artifact).is_file(), artifact
+    source_peak_catalog = out / "source peak consistency catalog.csv"
+    source_peak_catalog.write_text(
+        "detection_id,feature_class,feature_class_label,quality_passed,peak_x,peak_y\n"
+        "1,compact_quality,紧凑,True,20,20\n"
+        "2,crowded_blend,拥挤,False,21,20\n"
+        "3,range_anomaly,范围,False,16,21\n",
+        encoding="utf-8",
+    )
+    source_peak_out = out / "source-peak-consistency"
+    source_peak_request = {
+        "operation": "tool",
+        "tool": "rst19-source-peak-consistency",
+        "args": [
+            str(source_peak_catalog.resolve()),
+            str(topology_frame.resolve()),
+            "--target-id", "1",
+            "--target-id", "3",
+            "--out-dir", str(source_peak_out.resolve()),
+        ],
+        "out_dir": str((out / "source-peak-consistency-job").resolve()),
+    }
+    source_peak_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(source_peak_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    source_peak_events = [json.loads(line) for line in source_peak_response.stdout.splitlines()]
+    assert len(source_peak_events) == 1 and source_peak_events[0]["ok"], source_peak_events
+    source_peak_payload = source_peak_events[0]["payload"]
+    assert source_peak_payload["tool"] == "rst19-source-peak-consistency"
+    assert source_peak_payload["result"]["image_shape"] == [40, 40]
+    assert len(source_peak_payload["result"]["rows"]) == 3
+    assert len(source_peak_payload["result"]["class_summaries"]) == 3
+    assert len(source_peak_payload["result"]["targets"]) == 6
+    for artifact in (
+        "source_peak_consistency.csv",
+        "source_peak_consistency_class_summary.csv",
+        "source_peak_consistency_targets.csv",
+        "source_peak_consistency.json",
+    ):
+        assert (source_peak_out / artifact).is_file(), artifact
     feedback_path = out / "manual threshold feedback.jsonl"
     feedback_record = {
         "timestamp_utc": "2026-10-13T00:00:00+00:00",
@@ -979,6 +1020,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-group-audit",
                   "rst19-source-group-sensitivity",
                   "rst19-source-separation-audit",
+                  "rst19-source-peak-consistency",
                   "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
@@ -1031,6 +1073,12 @@ def verify(package: Path, out: Path) -> dict:
     report["source_separation_audit"] = {
         "source_count": source_separation_payload["result"]["source_count"],
         "target_count": len(source_separation_payload["result"]["targets"]),
+        "artifacts_written": True,
+        "external_python_search_disabled": True,
+    }
+    report["source_peak_consistency"] = {
+        "source_count": len(source_peak_payload["result"]["rows"]),
+        "target_count": len(source_peak_payload["result"]["targets"]),
         "artifacts_written": True,
         "external_python_search_disabled": True,
     }
