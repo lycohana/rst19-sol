@@ -820,6 +820,114 @@ pub fn motion_feature_exposure_evidence(request: &Value) -> Result<Value> {
     }))
 }
 
+fn motion_feature_confirmation_presence(frame_count: i64) -> Result<i64> {
+    if frame_count <= 0 {
+        return Err("frame_count must be positive".into());
+    }
+    if frame_count < 8 {
+        Ok(3_i64.min(frame_count))
+    } else {
+        Ok(3_i64.max((frame_count as f64 * 0.5).ceil() as i64))
+    }
+}
+
+fn optional_bool(value: &Value, key: &str) -> Option<bool> {
+    value.get(key).and_then(Value::as_bool)
+}
+
+fn motion_feature_rejection_reasons(track: &Value, points: &[Value]) -> Vec<&'static str> {
+    if track.get("classification").and_then(Value::as_str) != Some("candidate") {
+        return Vec::new();
+    }
+    if track.get("evidence_level").and_then(Value::as_str) == Some("single_frame_trail") {
+        let mut reasons = vec!["SINGLE_FRAME_ONLY", "NO_CROSS_FRAME_ASSOCIATION"];
+        if points.is_empty() {
+            reasons.push("NO_GEOMETRIC_POINT");
+        }
+        return reasons;
+    }
+
+    let mut reasons = Vec::new();
+    if points.len() < 2 {
+        reasons.extend(["NO_CROSS_FRAME_ASSOCIATION", "INSUFFICIENT_FRAME_PRESENCE"]);
+    } else if optional_bool(track, "presence_supported") == Some(false) {
+        reasons.push(if optional_bool(track, "edge_truncated") == Some(true) {
+            "EDGE_TRUNCATION_INSUFFICIENT_COVERAGE"
+        } else {
+            "INSUFFICIENT_FRAME_PRESENCE"
+        });
+    }
+    if let Some(minimum) = optional_number(track, "min_displacement_px") {
+        let displacement = optional_number(track, "displacement_px").unwrap_or(0.0);
+        if !displacement.is_finite() || displacement < minimum {
+            reasons.push("INSUFFICIENT_DISPLACEMENT");
+        }
+    }
+    let fit_rms = optional_number(track, "fit_rms_px");
+    if fit_rms.is_none_or(|value| !value.is_finite()) {
+        reasons.push("NO_MOTION_FIT");
+    } else if optional_number(track, "max_fit_rms_px")
+        .is_some_and(|maximum| fit_rms.is_some_and(|value| value > maximum))
+    {
+        reasons.push("MOTION_FIT_RMS_TOO_HIGH");
+    }
+    if optional_bool(track, "shape_supported") == Some(false) {
+        reasons.push("FRAME_SHAPE_INCONSISTENT");
+    }
+    if optional_bool(track, "model_supported") == Some(false) {
+        let models: std::collections::BTreeSet<&str> = points
+            .iter()
+            .filter_map(|point| point.get("single_frame_model").and_then(Value::as_str))
+            .collect();
+        if models.contains("double") {
+            reasons.push("COMPACT_DOUBLE_MODEL_PRESENT");
+        }
+        if models.contains("point") {
+            reasons.push("COMPACT_POINT_MODEL_PRESENT");
+        }
+        if models.contains("elliptical_point") {
+            reasons.push("COMPACT_ELLIPTICAL_MODEL_PRESENT");
+        }
+        reasons.push("RAW_LINE_MODEL_MAJORITY_NOT_MET");
+    }
+    if optional_bool(track, "motion_axis_supported") == Some(false) {
+        reasons.push("MOTION_AXIS_MISMATCH");
+    }
+    if optional_bool(track, "temporal_continuity_supported") == Some(false) {
+        reasons.push("FRAME_GAP_OR_NONCONTIGUOUS");
+    }
+    if optional_bool(track, "exposure_supported") == Some(false) {
+        reasons.push("EXPOSURE_SPEED_INCONSISTENT");
+    }
+    if optional_bool(track, "artifact_supported") == Some(false) {
+        reasons.push("LINE_ARTIFACT_OVERLAP");
+    }
+    if reasons.is_empty() {
+        reasons.push("CONFIRMATION_GATES_NOT_SATISFIED");
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    reasons.retain(|reason| seen.insert(*reason));
+    reasons
+}
+
+/// Return the required confirmation coverage and stable failure reason codes.
+pub fn motion_feature_confirmation_evidence(request: &Value) -> Result<Value> {
+    let frame_count = request
+        .get("frame_count")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "missing frame_count".to_string())?;
+    let required_presence = motion_feature_confirmation_presence(frame_count)?;
+    let track = request
+        .get("track")
+        .ok_or_else(|| "missing track".to_string())?;
+    let points = array(track, "points")?;
+    let reasons = motion_feature_rejection_reasons(track, points);
+    Ok(json!({
+        "required_presence": required_presence,
+        "rejection_reasons": reasons,
+    }))
+}
+
 fn bilinear(image: &[Vec<f32>], x: f64, y: f64) -> Option<f32> {
     let height = image.len();
     let width = image.first().map_or(0, Vec::len);
