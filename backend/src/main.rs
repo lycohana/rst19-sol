@@ -153,6 +153,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.line_profile_metrics" => {
             rst19_core::sequence_trails::line_profile_metrics(&request)
         }
+        "sequence.trail_shape_evidence" => {
+            rst19_core::sequence_trails::trail_shape_evidence(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }

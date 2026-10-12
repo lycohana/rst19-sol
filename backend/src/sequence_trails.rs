@@ -34,6 +34,151 @@ fn number(request: &Value, key: &str) -> Result<f64> {
         .ok_or_else(|| format!("missing numeric {key}"))
 }
 
+fn optional_number(value: &Value, key: &str) -> Option<f64> {
+    value.get(key).and_then(Value::as_f64)
+}
+
+fn model_supported(point: &Value) -> bool {
+    let model = point.get("single_frame_model").and_then(Value::as_str);
+    let snr = optional_number(point, "line_template_snr");
+    if model == Some("long_line_profile") {
+        return snr.is_some_and(|value| value >= 5.0)
+            && optional_number(point, "line_vs_background_delta_bic")
+                .is_some_and(|value| value >= 6.0);
+    }
+    model == Some("line")
+        && snr.is_some_and(|value| value >= 5.0)
+        && optional_number(point, "line_vs_point_delta_bic").is_some_and(|value| value >= 6.0)
+        && optional_number(point, "line_vs_double_delta_bic").is_some_and(|value| value >= 6.0)
+        && optional_number(point, "line_vs_elliptical_delta_bic").is_some_and(|value| value >= 6.0)
+}
+
+fn shape_supported(point: &Value, fill_threshold: f64, continuity_threshold: f64) -> bool {
+    optional_number(point, "profile_fill_ratio").is_some_and(|value| value >= fill_threshold)
+        && optional_number(point, "continuity_ratio")
+            .is_some_and(|value| value >= continuity_threshold)
+}
+
+fn percent(value: f64) -> String {
+    format!("{:.0}%", value * 100.0)
+}
+
+fn trail_shape_reason(
+    point: &Value,
+    min_length: f64,
+    min_fill: f64,
+    min_continuity: f64,
+) -> Result<Option<String>> {
+    if min_length <= 0.0 {
+        return Err("single-frame short-trail length gate must be positive".into());
+    }
+    let length = number(point, "length_px")?;
+    if length < min_length {
+        return Ok(Some(format!("长度不足（{length:.1} < {min_length:.1}px）")));
+    }
+    let Some(continuity) = optional_number(point, "continuity_ratio") else {
+        return Ok(Some("缺少连续支撑证据".into()));
+    };
+    let Some(fill) = optional_number(point, "profile_fill_ratio") else {
+        return Ok(Some("缺少中段填充证据".into()));
+    };
+    if optional_number(point, "line_artifact_overlap_fraction").is_some_and(|value| value >= 0.75) {
+        let overlap = optional_number(point, "line_artifact_overlap_fraction").unwrap();
+        return Ok(Some(format!(
+            "线状伪影候选重叠过高，保留待复核（{}）",
+            percent(overlap)
+        )));
+    }
+    let model = point.get("single_frame_model").and_then(Value::as_str);
+    if model == Some("not_fit") {
+        return Ok(Some("超出局部有限线段模型范围，保留几何候选".into()));
+    }
+    if model_supported(point) {
+        let rescue_continuity = if length >= 16.0 {
+            0.60_f64.max(0.45)
+        } else {
+            0.60
+        };
+        let rescue_fill = if length >= 16.0 {
+            0.60_f64.max(0.45)
+        } else {
+            0.60
+        };
+        if continuity >= rescue_continuity && fill >= rescue_fill {
+            return Ok(None);
+        }
+        return Ok(Some(format!(
+            "有限线段模型较优，但像素连续支撑不足（连续 {} / 填充 {}）",
+            percent(continuity),
+            percent(fill)
+        )));
+    }
+    let model_reason = match model {
+        Some("elliptical_point") => Some("局部模型更像静态椭圆星像"),
+        Some("point") => Some("局部模型更像单星"),
+        Some("double") => Some("局部模型更像双星"),
+        Some("background") => Some("局部模型更像背景起伏"),
+        Some("long_line_profile") => Some("超长线段剖面证据不足，保留待复核"),
+        _ => None,
+    };
+    if let Some(reason) = model_reason {
+        return Ok(Some(reason.into()));
+    }
+    let (required_continuity, required_fill) = if length >= 16.0 {
+        (0.45, 0.45)
+    } else {
+        (min_continuity, min_fill)
+    };
+    if continuity < required_continuity {
+        return Ok(Some(format!(
+            "连续支撑不足（{} < {}）",
+            percent(continuity),
+            percent(required_continuity)
+        )));
+    }
+    if fill < required_fill {
+        return Ok(Some(format!(
+            "中段填充不足（{} < {}）",
+            percent(fill),
+            percent(required_fill)
+        )));
+    }
+    Ok(None)
+}
+
+/// Evaluate pixel-shape evidence gates for a single-frame line candidate.
+pub fn trail_shape_evidence(request: &Value) -> Result<Value> {
+    let point = request
+        .get("point")
+        .ok_or_else(|| "missing point".to_string())?;
+    let options = request.get("options").unwrap_or(&Value::Null);
+    let min_length = optional_number(options, "min_length_px").unwrap_or(8.0);
+    let min_fill = optional_number(options, "min_profile_fill_ratio").unwrap_or(0.80);
+    let min_continuity = optional_number(options, "min_continuity_ratio").unwrap_or(0.80);
+    let motion_min_fill = optional_number(options, "motion_min_profile_fill_ratio").unwrap_or(0.45);
+    let motion_min_continuity =
+        optional_number(options, "motion_min_continuity_ratio").unwrap_or(0.45);
+    let reason = trail_shape_reason(point, min_length, min_fill, min_continuity)?;
+    let single_frame_supported = reason.is_none();
+    let motion_shape_supported = shape_supported(point, motion_min_fill, motion_min_continuity);
+    let sequence_motion_shape_supported = shape_supported(point, 0.45, 0.45);
+    let model = point.get("single_frame_model").and_then(Value::as_str);
+    let length = number(point, "length_px")?;
+    let sequence_single_frame_supported = trail_shape_reason(point, 8.0, 0.80, 0.80)?.is_none();
+    let sequence_line_supported = sequence_single_frame_supported
+        || (matches!(model, Some("line" | "long_line_profile"))
+            && model_supported(point)
+            && length >= 8.0
+            && sequence_motion_shape_supported);
+    Ok(json!({
+        "single_frame_model_supported": model_supported(point),
+        "motion_feature_shape_supported": motion_shape_supported,
+        "single_frame_supported": single_frame_supported,
+        "single_frame_reason": reason,
+        "sequence_line_supported": sequence_line_supported,
+    }))
+}
+
 fn bilinear(image: &[Vec<f32>], x: f64, y: f64) -> Option<f32> {
     let height = image.len();
     let width = image.first().map_or(0, Vec::len);
