@@ -1036,6 +1036,146 @@ pub fn motion_feature_pair_geometry_evidence(request: &Value) -> Result<Value> {
     Ok(json!({"penalty": penalty}))
 }
 
+fn point_motion_times(points: &[Value], frame_times: Option<&[Value]>) -> Result<Vec<f64>> {
+    if points.is_empty() {
+        return Ok(Vec::new());
+    }
+    let frame_indices: Vec<i64> = points
+        .iter()
+        .map(|point| {
+            point
+                .get("frame_index")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "motion feature point missing integer frame_index".to_string())
+        })
+        .collect::<Result<_>>()?;
+    let max_frame = frame_indices.iter().copied().max().unwrap_or(0);
+    let frame_count = usize::try_from(max_frame + 1)
+        .map_err(|_| "motion feature frame_index must be nonnegative".to_string())?;
+    let resolved = normalized_motion_times(frame_times, frame_count);
+    let selected: Option<Vec<f64>> = frame_indices
+        .iter()
+        .map(|index| {
+            let position = if *index < 0 {
+                frame_count.checked_sub(index.unsigned_abs() as usize)?
+            } else {
+                *index as usize
+            };
+            resolved.get(position).copied()
+        })
+        .collect();
+    let selected = selected.ok_or_else(|| "motion feature frame_index out of range".to_string())?;
+    let valid = selected.iter().all(|value| value.is_finite())
+        && selected.windows(2).all(|pair| pair[1] > pair[0]);
+    let values = if valid {
+        selected
+    } else {
+        frame_indices.iter().map(|index| *index as f64).collect()
+    };
+    let first = values.first().copied().unwrap_or(0.0);
+    Ok(values.into_iter().map(|value| value - first).collect())
+}
+
+/// Fit the spatial line and elapsed-time speed of a sequence of trail centers.
+pub fn fit_collinear_motion_geometry(request: &Value) -> Result<Value> {
+    let points = array(request, "points")?;
+    if points.len() < 2 {
+        return Ok(json!({
+            "projected_span": 0.0,
+            "mean_speed_px_per_frame": 0.0,
+            "rms_px": null,
+            "angle_deg": null,
+        }));
+    }
+    let coordinates: Vec<[f64; 2]> = points
+        .iter()
+        .map(|point| {
+            Ok([
+                field_number(point, "aligned_x")?,
+                field_number(point, "aligned_y")?,
+            ])
+        })
+        .collect::<Result<_>>()?;
+    let count = coordinates.len() as f64;
+    let center = [
+        coordinates.iter().map(|point| point[0]).sum::<f64>() / count,
+        coordinates.iter().map(|point| point[1]).sum::<f64>() / count,
+    ];
+    let centered: Vec<[f64; 2]> = coordinates
+        .iter()
+        .map(|point| [point[0] - center[0], point[1] - center[1]])
+        .collect();
+    let xx = centered
+        .iter()
+        .map(|point| point[0] * point[0])
+        .sum::<f64>()
+        / count;
+    let yy = centered
+        .iter()
+        .map(|point| point[1] * point[1])
+        .sum::<f64>()
+        / count;
+    let xy = centered
+        .iter()
+        .map(|point| point[0] * point[1])
+        .sum::<f64>()
+        / count;
+    if ![xx, yy, xy].iter().all(|value| value.is_finite()) {
+        return Ok(json!({
+            "projected_span": 0.0,
+            "mean_speed_px_per_frame": 0.0,
+            "rms_px": null,
+            "angle_deg": null,
+        }));
+    }
+    let anisotropy = (xx - yy).hypot(2.0 * xy);
+    if !anisotropy.is_finite() || anisotropy <= f64::EPSILON {
+        return Ok(json!({
+            "projected_span": 0.0,
+            "mean_speed_px_per_frame": 0.0,
+            "rms_px": null,
+            "angle_deg": null,
+        }));
+    }
+    let principal_angle = 0.5 * (2.0 * xy).atan2(xx - yy);
+    let direction = [principal_angle.cos(), principal_angle.sin()];
+    let normal = [-direction[1], direction[0]];
+    let projections: Vec<f64> = centered
+        .iter()
+        .map(|point| point[0] * direction[0] + point[1] * direction[1])
+        .collect();
+    let residuals: Vec<f64> = centered
+        .iter()
+        .map(|point| (point[0] * normal[0] + point[1] * normal[1]).abs())
+        .collect();
+    let span = projections
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max)
+        - projections.iter().copied().fold(f64::INFINITY, f64::min);
+    let rms = (residuals.iter().map(|value| value * value).sum::<f64>() / count).sqrt();
+    let frame_times = request.get("frame_times").and_then(Value::as_array);
+    let times = point_motion_times(points, frame_times.map(Vec::as_slice))?;
+    let time_span = times.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+        - times.iter().copied().fold(f64::INFINITY, f64::min);
+    let speed_per_second = if time_span > 0.0 {
+        span / time_span
+    } else {
+        0.0
+    };
+    let interval = request
+        .get("reference_interval_s")
+        .and_then(python_float)
+        .filter(|value| value.is_finite() && *value > 0.0)
+        .unwrap_or(1.0);
+    Ok(json!({
+        "projected_span": span,
+        "mean_speed_px_per_frame": speed_per_second * interval,
+        "rms_px": rms,
+        "angle_deg": principal_angle.to_degrees(),
+    }))
+}
+
 fn deconvolved_motion_length(measured: f64, psf_fwhm: f64) -> Option<f64> {
     if !measured.is_finite() || !psf_fwhm.is_finite() || measured <= 0.0 || psf_fwhm <= 0.0 {
         return None;
