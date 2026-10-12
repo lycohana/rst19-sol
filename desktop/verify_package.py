@@ -127,6 +127,18 @@ def make_feature_gate_route_catalog(path: Path) -> None:
     path.write_bytes(payload.encode("utf-8"))
 
 
+def make_feature_hard_negative_catalog(path: Path) -> None:
+    payload = (
+        "\ufeffdetection_id,feature_class,feature_class_label,quality_passed,flags,flux_snr,filter_snr,"
+        "peak,fwhm,ellipticity,sharpness,psf_support_pixels,footprint_pixels\r\n"
+        "1,compact_quality,紧凑,True,,2,4,20,2,0.1,0.3,5,20\r\n"
+        "2,compact_quality,紧凑,False,LOW_FLUX_SNR,12,24,120,2,0.1,0.3,5,20\r\n"
+        "3,compact_quality,紧凑,False,UNRESOLVED_BLEND,20,40,200,2,0.1,0.3,5,20\r\n"
+        "4,other_rejected,其他,False,OTHER,100,200,1000,2,0.1,0.3,5,20\r\n"
+    )
+    path.write_bytes(payload.encode("utf-8"))
+
+
 def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -493,6 +505,34 @@ def verify(package: Path, out: Path) -> dict:
         "feature_gate_route_summary.csv",
     ):
         assert (route_out / artifact).is_file(), artifact
+    hard_negative_catalog = out / "feature hard negative source catalog.csv"
+    make_feature_hard_negative_catalog(hard_negative_catalog)
+    hard_negative_out = out / "feature-hard-negative"
+    hard_negative_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-hard-negative",
+        "args": [
+            str(hard_negative_catalog.resolve()), "--top-n", "1",
+            "--out-dir", str(hard_negative_out.resolve()),
+        ],
+        "out_dir": str((out / "feature-hard-negative-job").resolve()),
+    }
+    hard_negative_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(hard_negative_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    hard_negative_events = [json.loads(line) for line in hard_negative_response.stdout.splitlines()]
+    assert len(hard_negative_events) == 1 and hard_negative_events[0]["ok"]
+    hard_negative = hard_negative_events[0]["payload"]
+    assert hard_negative["tool"] == "rst19-feature-hard-negative"
+    assert [row["detection_id"] for row in hard_negative["result"]["rows"]] == [3]
+    assert [row["feature_class"] for row in hard_negative["result"]["summaries"]] == ["compact_quality"]
+    assert Path(hard_negative["result_path"]).is_file()
+    for artifact in (
+        "feature_hard_negative_summary.csv", "feature_hard_negative_rows.csv",
+    ):
+        assert (hard_negative_out / artifact).is_file(), artifact
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -525,6 +565,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-feature-correlation",
                   "rst19-feature-transition-flow",
                   "rst19-feature-gate-route",
+                  "rst19-feature-hard-negative",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,

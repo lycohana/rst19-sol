@@ -146,6 +146,29 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.feature_hard_negative" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let top_n = request.get("top_n").and_then(Value::as_u64).unwrap_or(5);
+            let metric = request["metric"].as_str().unwrap_or("flux_snr");
+            let exclude_classes = request
+                .get("exclude_classes")
+                .filter(|value| !value.is_null())
+                .map(|value| {
+                    serde_json::from_value::<Vec<String>>(value.clone())
+                        .map_err(|error| error.to_string())
+                })
+                .transpose()?
+                .unwrap_or_else(|| vec!["other_rejected".to_owned()]);
+            Ok(rst19_core::feature_hard_negative::run(
+                std::path::Path::new(catalog_path),
+                top_n as usize,
+                metric,
+                &exclude_classes,
+            )?
+            .as_dict())
+        }
         "audit.feature_correlation" => {
             let catalog_path = request["catalog_path"]
                 .as_str()

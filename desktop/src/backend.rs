@@ -40,6 +40,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-feature-correlation"
                         | "rst19-feature-transition-flow"
                         | "rst19-feature-gate-route"
+                        | "rst19-feature-hard-negative"
                 )
             ))
 }
@@ -259,6 +260,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-gate-route"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-feature-hard-negative"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

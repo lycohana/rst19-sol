@@ -17,6 +17,7 @@ pub mod feature_flag_interaction;
 pub mod feature_flag_profile;
 pub mod feature_gate_margin;
 pub mod feature_gate_route;
+pub mod feature_hard_negative;
 pub mod feature_transition_flow;
 pub mod filtering;
 pub mod filtering32;
