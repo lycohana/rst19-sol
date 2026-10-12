@@ -868,6 +868,38 @@ def verify(package: Path, out: Path) -> dict:
         "source_group_radius_sensitivity.json",
     ):
         assert (source_group_sensitivity_out / artifact).is_file(), artifact
+    source_separation_out = out / "source-separation-audit"
+    source_separation_request = {
+        "operation": "tool",
+        "tool": "rst19-source-separation-audit",
+        "args": [
+            str(source_group_catalog.resolve()),
+            "--target-id", "1",
+            "--target-id", "2",
+            "--radii-px", "3", "4", "6",
+            "--out-dir", str(source_separation_out.resolve()),
+        ],
+        "out_dir": str((out / "source-separation-audit-job").resolve()),
+    }
+    source_separation_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(source_separation_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    source_separation_events = [json.loads(line) for line in source_separation_response.stdout.splitlines()]
+    assert len(source_separation_events) == 1 and source_separation_events[0]["ok"], source_separation_events
+    source_separation_payload = source_separation_events[0]["payload"]
+    assert source_separation_payload["tool"] == "rst19-source-separation-audit"
+    assert source_separation_payload["result"]["source_count"] == 5
+    assert source_separation_payload["result"]["quality_count"] == 3
+    assert source_separation_payload["result"]["targets"][0]["centroid_nn_detection_id"] == 2
+    for artifact in (
+        "source_separation_thresholds.csv",
+        "source_separation_classes.csv",
+        "source_separation_targets.csv",
+        "source_separation_summary.json",
+    ):
+        assert (source_separation_out / artifact).is_file(), artifact
     feedback_path = out / "manual threshold feedback.jsonl"
     feedback_record = {
         "timestamp_utc": "2026-10-13T00:00:00+00:00",
@@ -946,6 +978,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-feature-cross-axis-audit",
                   "rst19-source-group-audit",
                   "rst19-source-group-sensitivity",
+                  "rst19-source-separation-audit",
                   "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
@@ -992,6 +1025,12 @@ def verify(package: Path, out: Path) -> dict:
     report["source_group_sensitivity"] = {
         "radius_count": len(source_group_sensitivity_payload["result"]["rows"]),
         "target_count": len(source_group_sensitivity_payload["result"]["targets"]),
+        "artifacts_written": True,
+        "external_python_search_disabled": True,
+    }
+    report["source_separation_audit"] = {
+        "source_count": source_separation_payload["result"]["source_count"],
+        "target_count": len(source_separation_payload["result"]["targets"]),
         "artifacts_written": True,
         "external_python_search_disabled": True,
     }

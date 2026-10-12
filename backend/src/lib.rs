@@ -52,6 +52,7 @@ pub mod single_frame_trails;
 pub mod source_group_audit;
 pub mod source_group_sensitivity;
 pub mod source_photometry;
+pub mod source_separation_audit;
 pub mod spatial;
 pub mod statistics;
 pub mod statistics32;

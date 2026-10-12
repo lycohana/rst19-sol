@@ -191,6 +191,31 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.source_separation" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let radii_px = request
+                .get("radii_px")
+                .filter(|value| !value.is_null())
+                .map(numbers)
+                .transpose()?
+                .unwrap_or_else(|| rst19_core::source_separation_audit::DEFAULT_RADII_PX.to_vec());
+            let target_ids = request
+                .get("target_ids")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<i64>>)
+                .transpose()
+                .map_err(|error| error.to_string())?
+                .unwrap_or_default();
+            Ok(rst19_core::source_separation_audit::run(
+                std::path::Path::new(catalog_path),
+                &target_ids,
+                &radii_px,
+            )?
+            .as_dict())
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
