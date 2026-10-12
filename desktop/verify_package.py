@@ -86,6 +86,21 @@ def make_aperture_peak_ratio_catalog(path: Path) -> None:
     )
 
 
+def make_feature_correlation_catalog(path: Path) -> None:
+    payload = (
+        "\ufefffeature_class,feature_class_label,a,b,c\r\n"
+        'weak,"弱,背景",4,4,1\r\n'
+        "weak,ignored,5,5,2\r\n"
+        "weak,ignored,6,6,3\r\n"
+        'weak,"ignored,again",,8,4\r\n'
+        'compact_quality,"紧凑,清晰",1,3,10\r\n'
+        "compact_quality,ignored,2,2,20\r\n"
+        "compact_quality,ignored,3,1,30\r\n"
+        ",,7,7,NaN\r\n"
+    )
+    path.write_bytes(payload.encode("utf-8"))
+
+
 def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -368,6 +383,37 @@ def verify(package: Path, out: Path) -> dict:
         "aperture_peak_ratio_targets.csv",
     ):
         assert (ratio_out / artifact).is_file(), artifact
+    correlation_catalog = out / "feature correlation source catalog.csv"
+    make_feature_correlation_catalog(correlation_catalog)
+    correlation_out = out / "feature-correlation"
+    correlation_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-correlation",
+        "args": [
+            str(correlation_catalog.resolve()), "--features", "a", "b", "c",
+            "--strong-threshold", "0.75", "--out-dir", str(correlation_out.resolve()),
+        ],
+        "out_dir": str((out / "feature-correlation-job").resolve()),
+    }
+    correlation_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(correlation_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    correlation_events = [json.loads(line) for line in correlation_response.stdout.splitlines()]
+    assert len(correlation_events) == 1 and correlation_events[0]["ok"]
+    correlation = correlation_events[0]["payload"]
+    assert correlation["tool"] == "rst19-feature-correlation"
+    assert len(correlation["result"]["correlations"]) == 3
+    assert [row["sample_count"] for row in correlation["result"]["correlations"]] == [7, 6, 7]
+    assert [row["feature_class"] for row in correlation["result"]["class_medians"]] == [
+        "weak", "compact_quality",
+    ]
+    for artifact in (
+        "feature_correlations.csv", "feature_class_medians.csv",
+        "feature_class_correlations.csv", "feature_correlation_audit.json",
+    ):
+        assert (correlation_out / artifact).is_file(), artifact
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -397,6 +443,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-pair-mechanism-sensitivity",
                   "rst19-pair-pixel-topology",
                   "rst19-aperture-peak-ratio",
+                  "rst19-feature-correlation",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,

@@ -140,6 +140,35 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.feature_correlation" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let features = request
+                .get("features")
+                .filter(|value| !value.is_null())
+                .map(|value| {
+                    serde_json::from_value::<Vec<String>>(value.clone())
+                        .map_err(|error| error.to_string())
+                })
+                .transpose()?
+                .unwrap_or_else(|| {
+                    rst19_core::feature_correlation_audit::DEFAULT_CORRELATION_FEATURES
+                        .iter()
+                        .map(|feature| (*feature).to_owned())
+                        .collect()
+                });
+            let threshold = request
+                .get("strong_threshold")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.45);
+            Ok(rst19_core::feature_correlation_audit::run(
+                std::path::Path::new(catalog_path),
+                &features,
+                threshold,
+            )?
+            .as_dict())
+        }
         "audit.feature_class_context" => {
             let catalog_path = request["catalog_path"]
                 .as_str()
