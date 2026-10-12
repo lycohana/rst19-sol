@@ -175,6 +175,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.observation_time_axis" => {
             rst19_core::sequence_trails::observation_time_axis(&request)
         }
+        "sequence.motion_feature_pair_geometry" => {
+            rst19_core::sequence_trails::motion_feature_pair_geometry_evidence(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }

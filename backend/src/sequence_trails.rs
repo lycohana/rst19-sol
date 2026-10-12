@@ -876,6 +876,166 @@ pub fn observation_time_axis(request: &Value) -> Result<Value> {
     Ok(json!({"frame_times": times}))
 }
 
+fn line_angle_difference(first: f64, second: f64) -> f64 {
+    ((first - second + 90.0).rem_euclid(180.0) - 90.0).abs()
+}
+
+fn point_distance(first: [f64; 2], second: [f64; 2]) -> f64 {
+    (first[0] - second[0]).hypot(first[1] - second[1])
+}
+
+fn motion_feature_pair_geometry_penalty(
+    previous: &Value,
+    current: &Value,
+    psf_fwhm: f64,
+    expected_step_px: Option<f64>,
+) -> Result<f64> {
+    if psf_fwhm <= 0.0 {
+        return Err("psf_fwhm must be positive".into());
+    }
+    let previous_center = [
+        field_number(previous, "aligned_x")?,
+        field_number(previous, "aligned_y")?,
+    ];
+    let current_center = [
+        field_number(current, "aligned_x")?,
+        field_number(current, "aligned_y")?,
+    ];
+    let delta = [
+        current_center[0] - previous_center[0],
+        current_center[1] - previous_center[1],
+    ];
+    let movement = delta[0].hypot(delta[1]);
+    if !movement.is_finite() || movement <= 1.0_f64.max(0.75 * psf_fwhm) {
+        return Ok(0.0);
+    }
+    let movement_angle = delta[1].atan2(delta[0]).to_degrees();
+    let edge = previous
+        .get("touches_edge")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || current
+            .get("touches_edge")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+    let edge_weight = if edge { 0.30 } else { 1.0 };
+    let angles = [
+        optional_number(previous, "angle_deg"),
+        optional_number(current, "angle_deg"),
+    ];
+    let mut penalty = 0.0;
+    if let [Some(previous_angle), Some(current_angle)] = angles {
+        if previous_angle.is_finite() && current_angle.is_finite() {
+            let angle_error = 0.5
+                * (line_angle_difference(previous_angle, movement_angle)
+                    + line_angle_difference(current_angle, movement_angle));
+            penalty += edge_weight * 5.0_f64.min(2.0 * (angle_error / 35.0).powi(2));
+            if let Some(expected_step) =
+                expected_step_px.filter(|value| value.is_finite() && *value > 0.0)
+            {
+                let radians = previous_angle.to_radians();
+                let previous_unit = [radians.cos(), radians.sin()];
+                let expected_forward = [
+                    previous_center[0] + expected_step * previous_unit[0],
+                    previous_center[1] + expected_step * previous_unit[1],
+                ];
+                let expected_backward = [
+                    previous_center[0] - expected_step * previous_unit[0],
+                    previous_center[1] - expected_step * previous_unit[1],
+                ];
+                let expected_center_error = point_distance(expected_forward, current_center)
+                    .min(point_distance(expected_backward, current_center));
+                let expected_step_scale = (2.0 * psf_fwhm).max(0.20 * expected_step);
+                if expected_center_error.is_finite() && expected_step_scale > 0.0 {
+                    penalty += edge_weight
+                        * 5.0_f64.min(1.25 * (expected_center_error / expected_step_scale).powi(2));
+                }
+            }
+        }
+    }
+
+    let previous_length = field_number(previous, "length_px")?;
+    let current_length = field_number(current, "length_px")?;
+    if [previous_length, current_length]
+        .iter()
+        .all(|length| length.is_finite() && *length > 0.0)
+    {
+        if let [Some(previous_angle), Some(current_angle)] = angles {
+            let previous_radians = previous_angle.to_radians();
+            let current_radians = current_angle.to_radians();
+            if previous_radians.is_finite() && current_radians.is_finite() {
+                let previous_half = [
+                    0.5 * previous_length * previous_radians.cos(),
+                    0.5 * previous_length * previous_radians.sin(),
+                ];
+                let current_half = [
+                    0.5 * current_length * current_radians.cos(),
+                    0.5 * current_length * current_radians.sin(),
+                ];
+                let previous_endpoints = [
+                    [
+                        previous_center[0] - previous_half[0],
+                        previous_center[1] - previous_half[1],
+                    ],
+                    [
+                        previous_center[0] + previous_half[0],
+                        previous_center[1] + previous_half[1],
+                    ],
+                ];
+                let current_endpoints = [
+                    [
+                        current_center[0] - current_half[0],
+                        current_center[1] - current_half[1],
+                    ],
+                    [
+                        current_center[0] + current_half[0],
+                        current_center[1] + current_half[1],
+                    ],
+                ];
+                let translated_previous = [
+                    [
+                        previous_endpoints[0][0] + delta[0],
+                        previous_endpoints[0][1] + delta[1],
+                    ],
+                    [
+                        previous_endpoints[1][0] + delta[0],
+                        previous_endpoints[1][1] + delta[1],
+                    ],
+                ];
+                let direct_error = 0.5
+                    * (point_distance(translated_previous[0], current_endpoints[0])
+                        + point_distance(translated_previous[1], current_endpoints[1]));
+                let swapped_error = 0.5
+                    * (point_distance(translated_previous[0], current_endpoints[1])
+                        + point_distance(translated_previous[1], current_endpoints[0]));
+                let endpoint_error = direct_error.min(swapped_error);
+                let endpoint_scale =
+                    (1.5 * psf_fwhm).max(0.12 * previous_length.min(current_length));
+                if endpoint_error.is_finite() && endpoint_scale > 0.0 {
+                    penalty +=
+                        edge_weight * 3.0_f64.min(0.75 * (endpoint_error / endpoint_scale).powi(2));
+                }
+            }
+        }
+    }
+    Ok(if penalty.is_finite() { penalty } else { 0.0 })
+}
+
+/// Return the soft geometry cost for linking two single-frame trail candidates.
+pub fn motion_feature_pair_geometry_evidence(request: &Value) -> Result<Value> {
+    let previous = request
+        .get("previous")
+        .ok_or_else(|| "missing previous point".to_string())?;
+    let current = request
+        .get("current")
+        .ok_or_else(|| "missing current point".to_string())?;
+    let psf_fwhm = number(request, "psf_fwhm")?;
+    let expected_step_px = optional_number(request, "expected_step_px");
+    let penalty =
+        motion_feature_pair_geometry_penalty(previous, current, psf_fwhm, expected_step_px)?;
+    Ok(json!({"penalty": penalty}))
+}
+
 fn deconvolved_motion_length(measured: f64, psf_fwhm: f64) -> Option<f64> {
     if !measured.is_finite() || !psf_fwhm.is_finite() || measured <= 0.0 || psf_fwhm <= 0.0 {
         return None;
