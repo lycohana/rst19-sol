@@ -339,12 +339,8 @@ pub fn write_artifacts(payload: &Value, output_dir: &Path) -> Result<PathBuf> {
     Ok(parent.to_path_buf())
 }
 
-/// Run the `rst19-aux-audit` command line interface.
-pub fn run_cli(args: &[String]) -> Result<()> {
-    if args.iter().any(|arg| arg == "-h" || arg == "--help") {
-        println!("审计 FITS 辅助四元数与 ra/dec 光轴的一致性\n\nUsage: rst19-aux-audit INPUT_PATH [--out-dir DIR]");
-        return Ok(());
-    }
+/// Run the `rst19-aux-audit` command and return its desktop worker payload.
+pub fn run_desktop(args: &[String]) -> Result<Value> {
     let mut input = None;
     let mut output = PathBuf::from("tmp/auxiliary-attitude-audit");
     let mut index = 0;
@@ -389,13 +385,33 @@ pub fn run_cli(args: &[String]) -> Result<()> {
         .iter()
         .map(|path| path.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
-    let payload = audit_paths(&path_strings, None)?;
-    let frame_count = payload["frames"].as_array().map_or(0, Vec::len);
-    let output = write_artifacts(&payload, &output)?;
-    println!("auxiliary audit: {}", output.display());
+    let result = audit_paths(&path_strings, None)?;
+    write_artifacts(&result, &output)?;
+    Ok(json!({
+        "tool": "rst19-aux-audit",
+        "out_dir": output,
+        "result_path": output.join("auxiliary_boresight_audit.json"),
+        "result": result,
+    }))
+}
+
+/// Run the `rst19-aux-audit` command line interface.
+pub fn run_cli(args: &[String]) -> Result<()> {
+    if args.iter().any(|arg| arg == "-h" || arg == "--help") {
+        println!("审计 FITS 辅助四元数与 ra/dec 光轴的一致性\n\nUsage: rst19-aux-audit INPUT_PATH [--out-dir DIR]");
+        return Ok(());
+    }
+    let response = run_desktop(args)?;
+    let output = response["out_dir"]
+        .as_str()
+        .ok_or("attitude audit payload is missing output directory")?;
+    let frame_count = response["result"]["frames"].as_array().map_or(0, Vec::len);
+    println!("auxiliary audit: {output}");
     println!(
         "frames={frame_count} summary={}",
-        output.join("auxiliary_boresight_audit.json").display()
+        Path::new(output)
+            .join("auxiliary_boresight_audit.json")
+            .display()
     );
     Ok(())
 }

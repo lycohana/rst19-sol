@@ -54,6 +54,26 @@ def verify(package: Path, out: Path) -> dict:
     payload = terminal[0]["payload"]
     assert payload["result"]["detection"]["quality_count"] >= 3
     assert Path(payload["preview"]).is_file()
+    attitude_out = out / "attitude-job"
+    attitude_request = {
+        "operation": "tool",
+        "tool": "rst19-aux-audit",
+        "args": [str(frame.resolve()), "--out-dir", str(attitude_out.resolve())],
+        "out_dir": str(attitude_out.resolve()),
+    }
+    attitude_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(attitude_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    attitude_events = [json.loads(line) for line in attitude_response.stdout.splitlines()]
+    assert len(attitude_events) == 1 and attitude_events[0]["ok"]
+    attitude = attitude_events[0]["payload"]
+    assert attitude["tool"] == "rst19-aux-audit"
+    assert attitude["result"]["summary"]["frame_count"] == 1
+    assert attitude["result"]["summary"]["missing_auxiliary_count"] == 1
+    assert Path(attitude["result_path"]).is_file()
+    assert (attitude_out / "auxiliary_boresight_audit.csv").is_file()
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -74,7 +94,7 @@ def verify(package: Path, out: Path) -> dict:
     for relative, expected in checksums.items():
         assert hashlib.sha256((package / relative).read_bytes()).hexdigest() == expected, relative
     report = {"package": str(package), "environment": entry["payload"]["environment"], "tool_count": 78,
-              "single_frame_backend": "Rust native worker",
+              "native_backends": ["rst19 single-frame", "rst19-aux-audit"],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
               "external_python_search_disabled": True, "checksum_files": len(checksums)}

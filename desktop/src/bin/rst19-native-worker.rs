@@ -37,10 +37,26 @@ fn run(request: Value) -> Result<Value, String> {
             request["mode"].as_str().unwrap_or("raw"),
         );
     }
-    if request["operation"] != "tool" || request["tool"] != "rst19" {
-        return Err(
-            "Rust desktop worker only accepts preview and the rst19 single-frame tool".into(),
+    if request["operation"] != "tool" {
+        return Err("Rust desktop worker only accepts preview or native tools".into());
+    }
+    if request["tool"] == "rst19-aux-audit" {
+        return rst19_core::attitude::run_desktop(
+            &request["args"]
+                .as_array()
+                .ok_or("args must be a string array")?
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .map(str::to_owned)
+                        .ok_or_else(|| "args must be a string array".to_owned())
+                })
+                .collect::<Result<Vec<_>, _>>()?,
         );
+    }
+    if request["tool"] != "rst19" {
+        return Err("Rust desktop worker does not support this tool".into());
     }
     let out_dir = PathBuf::from(
         request["out_dir"]
