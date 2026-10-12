@@ -661,6 +661,165 @@ pub fn motion_feature_continuity_gates(request: &Value) -> Result<Value> {
     }))
 }
 
+fn normalized_motion_times(values: Option<&[Value]>, frame_count: usize) -> Vec<f64> {
+    let fallback: Vec<f64> = (0..frame_count).map(|index| index as f64).collect();
+    let Some(values) = values else {
+        return fallback;
+    };
+    let Some(times) = values.iter().map(Value::as_f64).collect::<Option<Vec<_>>>() else {
+        return fallback;
+    };
+    if times.len() != frame_count
+        || times.iter().any(|value| !value.is_finite())
+        || times.windows(2).any(|pair| pair[1] <= pair[0])
+    {
+        return fallback;
+    }
+    let first = times.first().copied().unwrap_or(0.0);
+    times.iter().map(|value| value - first).collect()
+}
+
+fn deconvolved_motion_length(measured: f64, psf_fwhm: f64) -> Option<f64> {
+    if !measured.is_finite() || !psf_fwhm.is_finite() || measured <= 0.0 || psf_fwhm <= 0.0 {
+        return None;
+    }
+    let psf_sigma = psf_fwhm / 2.354_820_045_030_949_3;
+    let motion_variance = 0.75 * (measured * measured - 16.0 * psf_sigma * psf_sigma);
+    (motion_variance.is_finite() && motion_variance > 0.0).then(|| motion_variance.sqrt())
+}
+
+fn median_absolute_deviation(values: &[f64]) -> Option<(f64, f64)> {
+    let mut ordered = values.to_vec();
+    let median_value = median(&mut ordered)?;
+    let mut deviations: Vec<f64> = values
+        .iter()
+        .map(|value| (value - median_value).abs())
+        .collect();
+    Some((median_value, median(&mut deviations)?))
+}
+
+fn motion_feature_exposure_metrics(
+    points: &[Value],
+    headers: &[Value],
+    frame_times: Option<&[Value]>,
+    psf_fwhm: f64,
+) -> Result<(Option<f64>, Option<f64>, Option<f64>)> {
+    if points.len() < 2 || headers.len() < 2 || psf_fwhm <= 0.0 {
+        return Ok((None, None, None));
+    }
+    let mut exposures = Vec::with_capacity(headers.len());
+    for header in headers {
+        let Some(map) = header.as_object() else {
+            return Ok((None, None, None));
+        };
+        if header.get("DATE-OBS").is_none_or(Value::is_null) {
+            return Ok((None, None, None));
+        }
+        let exposure_ms = crate::fits::exposure_milliseconds(map)?;
+        let Some(exposure_ms) = exposure_ms.filter(|value| value.is_finite() && *value > 0.0)
+        else {
+            return Ok((None, None, None));
+        };
+        exposures.push(exposure_ms / 1000.0);
+    }
+    let times = normalized_motion_times(frame_times, headers.len());
+    let mut ordered = points.to_vec();
+    ordered.sort_by_key(|point| integer(&point["frame_index"]).unwrap_or_default());
+    let mut ratios = Vec::new();
+    let minimum_step = 2.0_f64.max(psf_fwhm);
+    for pair in ordered.windows(2) {
+        let Some(previous_index) = integer(&pair[0]["frame_index"]) else {
+            continue;
+        };
+        let Some(current_index) = integer(&pair[1]["frame_index"]) else {
+            continue;
+        };
+        if previous_index < 0
+            || current_index <= previous_index
+            || current_index >= headers.len() as i64
+            || previous_index >= headers.len() as i64
+        {
+            continue;
+        }
+        if pair[1]["touches_edge"].as_bool() == Some(true) {
+            continue;
+        }
+        let previous_index = previous_index as usize;
+        let current_index = current_index as usize;
+        let elapsed = times[current_index] - times[previous_index];
+        let distance = (field_number(&pair[1], "aligned_x")?
+            - field_number(&pair[0], "aligned_x")?)
+        .hypot(field_number(&pair[1], "aligned_y")? - field_number(&pair[0], "aligned_y")?);
+        if !elapsed.is_finite()
+            || elapsed <= 0.0
+            || !distance.is_finite()
+            || distance < minimum_step
+        {
+            continue;
+        }
+        let Some(motion_length) =
+            deconvolved_motion_length(field_number(&pair[1], "length_px")?, psf_fwhm)
+        else {
+            continue;
+        };
+        let denominator = (distance * exposures[current_index]).max(f64::EPSILON);
+        let ratio = motion_length * elapsed / denominator;
+        if ratio.is_finite() && ratio > 0.0 {
+            ratios.push(ratio);
+        }
+    }
+    if ratios.len() < 2 {
+        return Ok((None, None, None));
+    }
+    let logs: Vec<f64> = ratios.iter().map(|ratio| ratio.ln()).collect();
+    let Some((median_log, log_mad)) = median_absolute_deviation(&logs) else {
+        return Ok((None, None, None));
+    };
+    let ratio = median_log.exp();
+    let in_range_count = ratios
+        .iter()
+        .filter(|value| (0.35..=2.50).contains(*value))
+        .count();
+    Ok((
+        Some(ratio),
+        Some(log_mad),
+        Some(in_range_count as f64 / ratios.len() as f64),
+    ))
+}
+
+fn motion_feature_exposure_supported(
+    ratio: Option<f64>,
+    log_mad: Option<f64>,
+    consistency_fraction: Option<f64>,
+) -> bool {
+    let (Some(ratio), Some(log_mad), Some(consistency_fraction)) =
+        (ratio, log_mad, consistency_fraction)
+    else {
+        return true;
+    };
+    (0.35..=2.50).contains(&ratio) && log_mad <= 0.45 && consistency_fraction >= 0.75
+}
+
+/// Measure line-length and inter-frame speed agreement from exposure metadata.
+pub fn motion_feature_exposure_evidence(request: &Value) -> Result<Value> {
+    let points = array(request, "points")?;
+    let headers = array(request, "frame_headers")?;
+    let frame_times = request
+        .get("frame_times")
+        .filter(|value| !value.is_null())
+        .and_then(Value::as_array)
+        .map(Vec::as_slice);
+    let psf_fwhm = number(request, "psf_fwhm")?;
+    let (ratio, log_mad, in_range_fraction) =
+        motion_feature_exposure_metrics(points, headers, frame_times, psf_fwhm)?;
+    Ok(json!({
+        "ratio": ratio,
+        "log_mad": log_mad,
+        "in_range_fraction": in_range_fraction,
+        "supported": motion_feature_exposure_supported(ratio, log_mad, in_range_fraction),
+    }))
+}
+
 fn bilinear(image: &[Vec<f32>], x: f64, y: f64) -> Option<f32> {
     let height = image.len();
     let width = image.first().map_or(0, Vec::len);
