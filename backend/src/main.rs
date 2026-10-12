@@ -24,6 +24,23 @@ fn numbers(value: &Value) -> Result<Vec<f64>> {
 }
 fn execute(request: Value) -> Result<Value> {
     match request["operation"].as_str().ok_or("missing operation")? {
+        "catalog.merge_csvs" => {
+            let input_paths: Vec<String> = serde_json::from_value(
+                request
+                    .get("input_paths")
+                    .cloned()
+                    .ok_or("missing input_paths")?,
+            )
+            .map_err(|error| error.to_string())?;
+            let paths = input_paths
+                .into_iter()
+                .map(std::path::PathBuf::from)
+                .collect::<Vec<_>>();
+            let output_path = request["output_path"]
+                .as_str()
+                .ok_or("missing output_path")?;
+            rst19_core::catalog_merge::merge_catalog_csvs(&paths, std::path::Path::new(output_path))
+        }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

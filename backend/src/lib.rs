@@ -5,6 +5,7 @@ pub mod assignment;
 pub mod attitude;
 pub mod catalog;
 pub mod catalog_csv;
+pub mod catalog_merge;
 pub mod cli;
 pub mod compatible_spatial;
 pub mod coordinates;

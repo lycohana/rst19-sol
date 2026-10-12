@@ -41,6 +41,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-feature-transition-flow"
                         | "rst19-feature-gate-route"
                         | "rst19-feature-hard-negative"
+                        | "rst19-gaia-merge"
                 )
             ))
 }
@@ -263,6 +264,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-hard-negative"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-gaia-merge"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

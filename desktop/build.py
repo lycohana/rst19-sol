@@ -64,6 +64,8 @@ def build() -> None:
     package = ROOT / "dist" / label
     package.mkdir(parents=True, exist_ok=False)
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(DESKTOP / "Cargo.toml"), "--bins"])
+    command(["cargo", "build", "--release", "--locked", "--manifest-path", str(ROOT / "backend/Cargo.toml"),
+             "--bin", "rst19-gaia-merge"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")})
@@ -79,6 +81,8 @@ def build() -> None:
     shutil.copytree(staging / "frozen/rst19-worker", package / "runtime")
     native_worker = "rst19-native-worker.exe" if os.name == "nt" else "rst19-native-worker"
     shutil.copy2(DESKTOP / "target/release" / native_worker, package / "runtime" / native_worker)
+    gaia_merge = "rst19-gaia-merge.exe" if os.name == "nt" else "rst19-gaia-merge"
+    shutil.copy2(ROOT / "backend/target/release" / gaia_merge, package / "runtime" / gaia_merge)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"

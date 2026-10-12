@@ -217,7 +217,7 @@
         "CatalogMergeResult.as_dict",
         "merge_catalog_csvs"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.catalog_merge_cli",
@@ -227,7 +227,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.cli",
@@ -3326,7 +3326,8 @@
     "rst19-feature-correlation": "pairwise Spearman correlations with average tied ranks, first-seen class medians, and within-class pairwise correlations; full result and three CSV artifacts match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending",
     "rst19-feature-transition-flow": "reads sequence_feature_class_transition.csv without FITS access; full result JSON and CSV artifact match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux package validation pending",
     "rst19-feature-gate-route": "reads source_catalog CSV using default gate thresholds; result fields and both CSV artifacts match Python; desktop worker and JSONL engine routes verified; Windows package route verified; macOS/Linux validation pending",
-    "rst19-feature-hard-negative": "per-class rejected-source ranking by flux_snr/filter_snr/peak with configurable top-n and excluded classes; result JSON and summary/detail CSV artifacts match Python; native JSONL, desktop worker, and Windows package routes verified; macOS/Linux validation pending"
+    "rst19-feature-hard-negative": "per-class rejected-source ranking by flux_snr/filter_snr/peak with configurable top-n and excluded classes; result JSON and summary/detail CSV artifacts match Python; native JSONL, desktop worker, and Windows package routes verified; macOS/Linux validation pending",
+    "rst19-gaia-merge": "merges two or more Gaia CSV layers by source_id, preserves richer rows, fills missing values, checks critical-field conflicts and sidecar SHA-256/row-count/footprint bindings; result and CSV match Python across complete, conflict, stale, missing, and footprint-mismatch cases; native JSONL and desktop routes verified; bundled Rust CLI preserves exit codes 0/3/2 without Python; Windows package verified; macOS/Linux validation pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3424,7 +3425,9 @@
     "verify_feature_gate_route.py",
     "tests/test_feature_gate_route.py",
     "verify_feature_hard_negative.py",
-    "tests/test_feature_hard_negative.py"
+    "tests/test_feature_hard_negative.py",
+    "verify_catalog_merge.py",
+    "tests/test_catalog_merge.py"
   ],
   "remaining": [
     "full float32 detection acceptance coverage",
@@ -3432,7 +3435,7 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, and aperture peak-ratio",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, and aperture peak-ratio",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
@@ -3442,5 +3445,6 @@
   "native_aperture_peak_ratio": "feature-class and proposal-method linear quantile summaries, strict ratio exceedance counts, and requested target percentiles; descriptive aperture/PSF contamination context only",
   "native_feature_correlation": "average-tie Spearman rank correlation, pairwise finite row selection, first-seen class order and labels, class medians, and within-class correlations; descriptive field-dependence audit only",
   "native_feature_transition_flow": "same-class and cross-class sequence transition summaries with deterministic layer/class ordering, input consistency checks, BOM CSV/JSON artifacts, and no FITS dependency; descriptive algorithm-category evidence only",
-  "native_feature_hard_negative": "per-feature-class high-significance rejected-source ranking for flux_snr, filter_snr, and peak; preserves shape/flag fields and explicitly separates algorithmic quality rejection from physical truth"
+  "native_feature_hard_negative": "per-feature-class high-significance rejected-source ranking for flux_snr, filter_snr, and peak; preserves shape/flag fields and explicitly separates algorithmic quality rejection from physical truth",
+  "native_catalog_merge": "layered Gaia CSV merge with source_id deduplication, richer-row preservation, missing-field fill, critical-field conflicts, SHA-256 and row-count-bound sidecars, footprint consistency, and Python-byte-identical CSV and audit JSON"
 }

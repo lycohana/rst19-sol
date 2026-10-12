@@ -1,6 +1,6 @@
 # RST19 Rust 原生桌面
 
-前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。
+前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。
 完整发布包暂时同时包含 Rust 原生 worker 与 Python/NumPy/SciPy 环境，以及中文字体；使用者无需安装 Python、Rust、Node.js 或浏览器。
 
 ## 直接使用
@@ -72,3 +72,6 @@ desktop/target/release/rst19-desktop.exe --data-dir "doc/00-项目资料/原始�
 平台运行与完整 15 帧分析需要各自的实际验证记录。
 
 库文档：[eframe](https://docs.rs/eframe/0.31.1/eframe/)、[PyInstaller 打包选项](https://pyinstaller.org/en/stable/usage.html)。
+
+
+Windows 发布包另附 runtime/rst19-gaia-merge.exe，macOS/Linux 发布包会附带同名无扩展名二进制；该命令直接运行 Rust 合并逻辑，完整审计返回 0，不完整审计返回 3，错误返回 2。

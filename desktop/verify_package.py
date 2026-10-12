@@ -139,6 +139,38 @@ def make_feature_hard_negative_catalog(path: Path) -> None:
     path.write_bytes(payload.encode("utf-8"))
 
 
+def make_gaia_merge_inputs(out: Path) -> tuple[Path, Path]:
+    first = out / "gaia calibration layer.csv"
+    second = out / "gaia deep layer.csv"
+    first.write_bytes(
+        "\ufeffsource_id,ra_deg,dec_deg,magnitude,color\n"
+        "1,129.5,-1.8,6.2,0.4\n"
+        "2,129.6,-1.7,7.1,0.8\n".encode("utf-8")
+    )
+    second.write_bytes(
+        "source_id,ra_deg,dec_deg,magnitude,color,parallax_mas\n"
+        "2,129.6,-1.7,7.1,0.8,2.3\n"
+        "3,129.7,-1.6,15.4,1.1,1.7\n".encode("utf-8")
+    )
+    for path in (first, second):
+        rows = 2
+        audit = {
+            "catalog": "Gaia DR3",
+            "complete": True,
+            "center_ra_deg": 129.5,
+            "center_dec_deg": -1.8,
+            "search_radius_deg": 6.92,
+            "min_g_mag": 5.0,
+            "max_g_mag": 18.0,
+            "csv_row_count": rows,
+            "csv_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+        path.with_suffix(path.suffix + ".meta.json").write_text(
+            json.dumps(audit), encoding="utf-8"
+        )
+    return first, second
+
+
 def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -533,6 +565,87 @@ def verify(package: Path, out: Path) -> dict:
         "feature_hard_negative_summary.csv", "feature_hard_negative_rows.csv",
     ):
         assert (hard_negative_out / artifact).is_file(), artifact
+    gaia_merge_inputs = make_gaia_merge_inputs(out)
+    gaia_output = out / "gaia-merge" / "merged catalog.csv"
+    gaia_job = out / "gaia-merge-job"
+    gaia_hashes = {
+        str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in gaia_merge_inputs
+    }
+    gaia_request = {
+        "operation": "tool",
+        "tool": "rst19-gaia-merge",
+        "args": [*(str(path.resolve()) for path in gaia_merge_inputs), "--out", str(gaia_output.resolve())],
+        "out_dir": str(gaia_job.resolve()),
+    }
+    gaia_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(gaia_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    gaia_events = [json.loads(line) for line in gaia_response.stdout.splitlines()]
+    assert len(gaia_events) == 1 and gaia_events[0]["ok"]
+    gaia_merge = gaia_events[0]["payload"]
+    assert gaia_merge["tool"] == "rst19-gaia-merge"
+    assert gaia_merge["result"]["complete"] is True
+    assert gaia_merge["result"]["row_count"] == 3
+    assert gaia_merge["result"]["duplicate_count"] == 1
+    assert Path(gaia_merge["result_path"]).is_file()
+    gaia_sidecar = gaia_output.with_suffix(gaia_output.suffix + ".meta.json")
+    assert gaia_sidecar.is_file()
+    assert json.loads(gaia_sidecar.read_text(encoding="utf-8"))["csv_row_count"] == 3
+    assert all(
+        hashlib.sha256(path.read_bytes()).hexdigest() == gaia_hashes[str(path)]
+        for path in gaia_merge_inputs
+    )
+    gaia_cli = package / "runtime" / (
+        "rst19-gaia-merge.exe" if os.name == "nt" else "rst19-gaia-merge"
+    )
+    assert gaia_cli.is_file(), "Native Gaia merge CLI is missing from the package"
+    help_response = subprocess.run(
+        [str(gaia_cli), "--help"], capture_output=True, text=True, encoding="utf-8",
+        env=environment, cwd=out, timeout=60,
+    )
+    assert help_response.returncode == 0 and "用法:" in help_response.stdout
+    invalid_response = subprocess.run(
+        [str(gaia_cli), str(gaia_merge_inputs[0]), "--out", str((out / "unused.csv").resolve())],
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60,
+    )
+    assert invalid_response.returncode == 2, invalid_response.stderr
+    cli_output = out / "gaia-cli" / "merged.csv"
+    cli_response = subprocess.run(
+        [str(gaia_cli), *(str(path.resolve()) for path in gaia_merge_inputs),
+         "--out", str(cli_output.resolve())],
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60,
+    )
+    assert cli_response.returncode == 0, cli_response.stderr
+    assert json.loads(
+        cli_output.with_suffix(cli_output.suffix + ".meta.json").read_text(encoding="utf-8")
+    )["complete"] is True
+    incomplete_dir = out / "gaia-cli-incomplete"
+    incomplete_dir.mkdir()
+    incomplete_inputs = make_gaia_merge_inputs(incomplete_dir)
+    second_audit = incomplete_inputs[1].with_suffix(
+        incomplete_inputs[1].suffix + ".meta.json"
+    )
+    audit_payload = json.loads(second_audit.read_text(encoding="utf-8"))
+    audit_payload["complete"] = False
+    second_audit.write_text(json.dumps(audit_payload), encoding="utf-8")
+    incomplete_output = incomplete_dir / "merged.csv"
+    incomplete_response = subprocess.run(
+        [str(gaia_cli), *(str(path.resolve()) for path in incomplete_inputs),
+         "--out", str(incomplete_output.resolve())],
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60,
+    )
+    assert incomplete_response.returncode == 3, incomplete_response.stderr
+    assert json.loads(
+        incomplete_output.with_suffix(incomplete_output.suffix + ".meta.json").read_text(
+            encoding="utf-8"
+        )
+    )["complete"] is False
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -566,10 +679,24 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-feature-transition-flow",
                   "rst19-feature-gate-route",
                   "rst19-feature-hard-negative",
+                  "rst19-gaia-merge",
+                  "rst19-gaia-merge native CLI",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
               "external_python_search_disabled": True, "checksum_files": len(checksums)}
+    report["catalog_merge"] = {
+        "complete": gaia_merge["result"]["complete"],
+        "row_count": gaia_merge["result"]["row_count"],
+        "duplicate_count": gaia_merge["result"]["duplicate_count"],
+        "sidecar_created": gaia_sidecar.is_file(),
+        "inputs_unchanged": True,
+        "native_cli_complete_exit_code": cli_response.returncode,
+        "native_cli_incomplete_exit_code": incomplete_response.returncode,
+        "native_cli_input_error_exit_code": invalid_response.returncode,
+        "native_cli_help_exit_code": help_response.returncode,
+        "native_cli_runs_without_python": True,
+    }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report
 

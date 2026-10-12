@@ -36,7 +36,9 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 
 `rst19-feature-hard-negative` 在每个算法类别内按通量 SNR、滤波 SNR 或峰值排序质量层落选候选，保留类别计数和形态字段，并可选择纳入 `other_rejected`。这些记录是供后续复核的样本入口，不是物理恒星或误报真值。
 
-桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
+`rst19-gaia-merge` 的去重、字段补齐、关键字段冲突检查和输入 sidecar 完整性继承已由 Rust 引擎、桌面 worker 与独立原生 CLI 实现。只有输入 CSV 哈希与行数仍匹配、各层天空覆盖一致且没有关键字段冲突时，合并结果才标记为 `complete=true`；诊断性合并仍会输出，但会保留 `complete=false` 和原因列表。
+
+桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
 
 ```powershell
 cargo test --locked --manifest-path backend/Cargo.toml

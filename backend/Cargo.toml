@@ -16,6 +16,10 @@ path = "src/main.rs"
 name = "rst19-aux-audit"
 path = "src/bin/rst19-aux-audit.rs"
 
+[[bin]]
+name = "rst19-gaia-merge"
+path = "src/bin/rst19-gaia-merge.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
@@ -23,6 +27,7 @@ regex = "1"
 csv = "1"
 unicode-casefold = "0.2"
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }
+sha2 = "0.10"
 
 [profile.release]
 lto = "thin"
