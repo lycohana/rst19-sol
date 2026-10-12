@@ -3255,7 +3255,8 @@
     "longest contiguous observation support and bounded two-run internal-gap bridge gate",
     "PSF-deconvolved exposure-line versus frame-speed consistency with FITS timing metadata",
     "sequence-length confirmation presence and stable motion-feature rejection reason codes",
-    "metadata-aware line proposal and exposure-aware short-trail area thresholds"
+    "metadata-aware line proposal and exposure-aware short-trail area thresholds",
+    "validated relative frame-time axis and median reference interval"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3280,7 +3281,7 @@
   "native_matching_execution": "TAN or full affine WCS projection; finite projected catalog gating; radius KD-tree; global/greedy assignment; all match fields and statistics; catalog arrays or direct CSV path; JSONL matching.catalog",
   "native_astrometry_execution": "wcs.affine.fit, wcs.validate.matches, and wcs.validate.sequence; prior-WCS local affine refinement, robust clipping, per-frame leave-one-out checks; not blind plate solving",
   "native_attitude_execution": "attitude.audit.frames and attitude.audit.paths; quaternion/boresight residuals, header pointing consistency, missing-auxiliary handling, RA/Dec and attitude range summaries; rst19-aux-audit writes Python-byte-identical CSV and field-identical JSON",
-  "native_sequence_execution": "sequence.translation.estimate, sequence.frame_assign, sequence.track_motion.fit, sequence.motion_displacement_floor, sequence.track_detections, sequence.fast_point_movers, sequence.candidate_consensus with optional per-frame raw-image gates, sequence.reference.median, sequence.reference.coadd, sequence.temporal_reference_candidates for multiscale Gaussian proposals plus forced per-frame PSF responses, sequence.line_profile_metrics for bilinear trail continuity/fill diagnostics, sequence.trail_shape_evidence for single-frame rejection reasons and sequence shape admission, sequence.motion_feature_track_gates for cross-frame shape/motion-axis/artifact/edge checks, sequence.motion_feature_continuity_gates for continuous observation runs and bounded interior-gap bridging, sequence.motion_feature_exposure_evidence for PSF-deconvolved exposure speed versus inter-frame motion, sequence.motion_feature_confirmation_evidence for required coverage and stable rejection codes, and sequence.motion_proposal_thresholds for metadata-aware raw trail proposal floors; high-level multi-frame orchestration and full motion-feature/trail extraction remain pending; affine RANSAC uses deterministic SplitMix64 rather than NumPy PCG64",
+  "native_sequence_execution": "sequence.translation.estimate, sequence.frame_assign, sequence.track_motion.fit, sequence.motion_displacement_floor, sequence.track_detections, sequence.fast_point_movers, sequence.candidate_consensus with optional per-frame raw-image gates, sequence.reference.median, sequence.reference.coadd, sequence.temporal_reference_candidates for multiscale Gaussian proposals plus forced per-frame PSF responses, sequence.line_profile_metrics for bilinear trail continuity/fill diagnostics, sequence.trail_shape_evidence for single-frame rejection reasons and sequence shape admission, sequence.motion_feature_track_gates for cross-frame shape/motion-axis/artifact/edge checks, sequence.motion_feature_continuity_gates for continuous observation runs and bounded interior-gap bridging, sequence.motion_feature_exposure_evidence for PSF-deconvolved exposure speed versus inter-frame motion, sequence.motion_feature_confirmation_evidence for required coverage and stable rejection codes, sequence.motion_proposal_thresholds for metadata-aware raw trail proposal floors, and sequence.motion_time_axis for validated elapsed times and median reference interval; high-level multi-frame orchestration and full motion-feature/trail extraction remain pending; affine RANSAC uses deterministic SplitMix64 rather than NumPy PCG64",
   "native_photometry_execution": "instrumental/apparent/legacy absolute arithmetic; structured parallax/model-distance/catalog absolute estimates; derived error/interval/strict gates; weighted zero point/color fit; clipping/holdout/catalog quality gates/sample roles; calibration application and error; native JSONL operations",
   "native_source_photometry": "complete source table status/flags/reference/model magnitude separation; faintest ranking, ties, calibration consistency and partial selection scope; JSONL photometry.table/photometry.faintest",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
@@ -3312,6 +3313,7 @@
     "tests/sequence_motion_feature_exposure_parity.rs",
     "tests/sequence_motion_feature_confirmation_parity.rs",
     "tests/sequence_motion_proposal_thresholds_parity.rs",
+    "tests/sequence_motion_time_axis_parity.rs",
     "tests/attitude_parity.rs",
     "verify_fits.py",
     "verify_detection.py",
@@ -3332,6 +3334,7 @@
     "verify_sequence_motion_feature_exposure.py",
     "verify_sequence_motion_feature_confirmation.py",
     "verify_sequence_motion_proposal_thresholds.py",
+    "verify_sequence_motion_time_axis.py",
     "verify_attitude.py",
     "verify_spatial_ties.py",
     "verify_full_snapshot.py"

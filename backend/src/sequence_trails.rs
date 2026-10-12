@@ -666,7 +666,7 @@ fn normalized_motion_times(values: Option<&[Value]>, frame_count: usize) -> Vec<
     let Some(values) = values else {
         return fallback;
     };
-    let Some(times) = values.iter().map(Value::as_f64).collect::<Option<Vec<_>>>() else {
+    let Some(times) = values.iter().map(python_float).collect::<Option<Vec<_>>>() else {
         return fallback;
     };
     if times.len() != frame_count
@@ -677,6 +677,32 @@ fn normalized_motion_times(values: Option<&[Value]>, frame_count: usize) -> Vec<
     }
     let first = times.first().copied().unwrap_or(0.0);
     times.iter().map(|value| value - first).collect()
+}
+
+fn reference_time_interval_seconds(frame_times: &[f64]) -> f64 {
+    let differences: Vec<f64> = frame_times
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .filter(|difference| difference.is_finite() && *difference > 0.0)
+        .collect();
+    let mut differences = differences;
+    median(&mut differences).unwrap_or(1.0)
+}
+
+/// Validate a frame-time vector and return its normalized axis and reference step.
+pub fn motion_time_axis(request: &Value) -> Result<Value> {
+    let frame_count = request
+        .get("frame_count")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "frame_count must be a nonnegative integer".to_string())?
+        as usize;
+    let frame_times = request.get("frame_times").and_then(Value::as_array);
+    let normalized = normalized_motion_times(frame_times.map(Vec::as_slice), frame_count);
+    let interval = reference_time_interval_seconds(&normalized);
+    Ok(json!({
+        "frame_times": normalized,
+        "reference_interval_s": interval,
+    }))
 }
 
 fn deconvolved_motion_length(measured: f64, psf_fwhm: f64) -> Option<f64> {
