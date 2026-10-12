@@ -1376,6 +1376,308 @@ pub fn best_collinear_motion_feature_group(request: &Value) -> Result<Value> {
     Ok(json!({"group_indices": best_group}))
 }
 
+fn single_frame_sequence_line_model_is_supported(point: &Value, psf_fwhm: f64) -> bool {
+    let model = point.get("single_frame_model").and_then(Value::as_str);
+    let snr = optional_number(point, "line_template_snr");
+    let background = optional_number(point, "line_vs_background_delta_bic");
+    if model == Some("long_line_profile")
+        && snr.is_some_and(|value| value >= 5.0)
+        && background.is_some_and(|value| value >= 6.0)
+    {
+        return true;
+    }
+    if model == Some("line")
+        && snr.is_some_and(|value| value >= 5.0)
+        && optional_number(point, "line_vs_point_delta_bic").is_some_and(|value| value >= 6.0)
+        && optional_number(point, "line_vs_double_delta_bic").is_some_and(|value| value >= 6.0)
+        && optional_number(point, "line_vs_elliptical_delta_bic").is_some_and(|value| value >= 6.0)
+    {
+        return true;
+    }
+    if model != Some("elliptical_point") {
+        return false;
+    }
+    let (Some(snr), Some(background), Some(continuity), Some(fill)) = (
+        snr,
+        background,
+        optional_number(point, "continuity_ratio"),
+        optional_number(point, "profile_fill_ratio"),
+    ) else {
+        return false;
+    };
+    let Some(width) = optional_number(point, "width_px") else {
+        return false;
+    };
+    let Some(length) = optional_number(point, "length_px") else {
+        return false;
+    };
+    let thin_width_limit = 0.75_f64.max(0.5 * psf_fwhm);
+    width <= thin_width_limit
+        && length >= 8.0_f64.max(3.0 * psf_fwhm)
+        && snr >= 5.0
+        && optional_number(point, "line_vs_point_delta_bic").is_some_and(|value| value >= 6.0)
+        && optional_number(point, "line_vs_double_delta_bic").is_some_and(|value| value >= 6.0)
+        && background >= 6.0
+        && continuity >= 0.80
+        && fill >= 0.80
+}
+
+fn single_frame_sequence_line_model_is_review_supported(point: &Value, psf_fwhm: f64) -> bool {
+    if single_frame_sequence_line_model_is_supported(point, psf_fwhm) {
+        return true;
+    }
+    let model = point.get("single_frame_model").and_then(Value::as_str);
+    if !matches!(
+        model,
+        Some("line" | "long_line_profile" | "elliptical_point")
+    ) {
+        return false;
+    }
+    let (Some(snr), Some(background), Some(continuity), Some(fill), Some(length)) = (
+        optional_number(point, "line_template_snr"),
+        optional_number(point, "line_vs_background_delta_bic"),
+        optional_number(point, "continuity_ratio"),
+        optional_number(point, "profile_fill_ratio"),
+        optional_number(point, "length_px"),
+    ) else {
+        return false;
+    };
+    if length < 6.0_f64.max(2.5 * psf_fwhm)
+        || snr < 5.0
+        || background < 2.0
+        || continuity < 0.45
+        || fill < 0.45
+    {
+        return false;
+    }
+    if matches!(model, Some("line" | "elliptical_point")) {
+        let Some(point_delta) = optional_number(point, "line_vs_point_delta_bic") else {
+            return false;
+        };
+        let Some(double_delta) = optional_number(point, "line_vs_double_delta_bic") else {
+            return false;
+        };
+        let Some(elliptical_delta) = optional_number(point, "line_vs_elliptical_delta_bic") else {
+            return false;
+        };
+        if point_delta < 2.0 || double_delta < 2.0 || elliptical_delta < 2.0 {
+            return false;
+        }
+    }
+    if model == Some("elliptical_point") {
+        let Some(width) = optional_number(point, "width_px") else {
+            return false;
+        };
+        if width > 0.75_f64.max(0.5 * psf_fwhm) {
+            return false;
+        }
+    }
+    true
+}
+
+fn normalized_sequence_frame_times(frame_times: &[Value]) -> Vec<f64> {
+    normalized_motion_times(Some(frame_times), frame_times.len())
+}
+
+fn line_fit(values: &[f64], times: &[f64]) -> Option<(f64, f64)> {
+    if values.len() != times.len() || values.is_empty() {
+        return None;
+    }
+    let mean_time = times.iter().sum::<f64>() / times.len() as f64;
+    let mean_value = values.iter().sum::<f64>() / values.len() as f64;
+    let denominator = times
+        .iter()
+        .map(|time| (time - mean_time).powi(2))
+        .sum::<f64>();
+    if !denominator.is_finite() || denominator <= 0.0 {
+        return None;
+    }
+    let slope = times
+        .iter()
+        .zip(values)
+        .map(|(time, value)| (time - mean_time) * (value - mean_value))
+        .sum::<f64>()
+        / denominator;
+    let intercept = mean_value - slope * mean_time;
+    (slope.is_finite() && intercept.is_finite()).then_some((slope, intercept))
+}
+
+/// Attach well-predicted single-frame line evidence to an existing track.
+pub fn stitch_unassociated_single_frame_points(request: &Value) -> Result<Value> {
+    let tracks = array(request, "tracks")?;
+    let points = array(request, "points")?;
+    let frame_times = array(request, "frame_times")?;
+    let psf_fwhm = number(request, "psf_fwhm")?;
+    let max_frame_gap_value = request
+        .get("max_frame_gap")
+        .and_then(Value::as_f64)
+        .unwrap_or(3.0);
+    if psf_fwhm <= 0.0 || max_frame_gap_value <= 0.0 {
+        return Err("stitching parameters must be positive".into());
+    }
+    let max_frame_gap = max_frame_gap_value.trunc() as i64;
+    let times = normalized_sequence_frame_times(frame_times);
+    let tolerance = request
+        .get("max_prediction_error_px")
+        .and_then(Value::as_f64)
+        .unwrap_or_else(|| 8.0_f64.max(3.0 * psf_fwhm));
+    if !tolerance.is_finite() || tolerance <= 0.0 {
+        return Err("max_prediction_error_px must be positive".into());
+    }
+    let mut mutable_tracks: Vec<Vec<Value>> = tracks
+        .iter()
+        .map(|history| {
+            history
+                .as_array()
+                .cloned()
+                .ok_or_else(|| "track history must be an array".to_string())
+        })
+        .collect::<Result<_>>()?;
+    let mut remaining = points.to_vec();
+    let mut process_order: Vec<usize> = (0..points.len()).collect();
+    process_order.sort_by_key(|index| {
+        std::cmp::Reverse(
+            points[*index]
+                .get("frame_index")
+                .and_then(Value::as_i64)
+                .unwrap_or(0),
+        )
+    });
+
+    for point_index in process_order {
+        let point = &points[point_index];
+        if !single_frame_sequence_line_model_is_review_supported(point, psf_fwhm) {
+            continue;
+        }
+        if optional_number(point, "line_artifact_overlap_fraction")
+            .is_some_and(|overlap| overlap >= 0.75)
+        {
+            continue;
+        }
+        let point_frame = point
+            .get("frame_index")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| "motion feature point missing integer frame_index".to_string())?;
+        let Some(target_time) = usize::try_from(point_frame)
+            .ok()
+            .and_then(|index| times.get(index).copied())
+        else {
+            continue;
+        };
+        let mut best_score: Option<(f64, i64, i64, usize)> = None;
+        for (track_index, history) in mutable_tracks.iter().enumerate() {
+            if history.len() < 3 {
+                continue;
+            }
+            let mut ordered = history.clone();
+            ordered
+                .sort_by_key(|item| item.get("frame_index").and_then(Value::as_i64).unwrap_or(0));
+            let mut track_frames = Vec::with_capacity(ordered.len());
+            let mut frame_set = std::collections::BTreeSet::new();
+            for item in &ordered {
+                let frame = item
+                    .get("frame_index")
+                    .and_then(Value::as_i64)
+                    .ok_or_else(|| {
+                        "motion feature point missing integer frame_index".to_string()
+                    })?;
+                track_frames.push(frame);
+                frame_set.insert(frame);
+            }
+            if frame_set.contains(&point_frame)
+                || point_frame < 0
+                || point_frame as usize >= times.len()
+            {
+                continue;
+            }
+            let nearest_gap = track_frames
+                .iter()
+                .map(|frame| (point_frame - *frame).abs())
+                .min()
+                .unwrap_or(i64::MAX);
+            if nearest_gap < 1 || nearest_gap > max_frame_gap {
+                continue;
+            }
+            if track_frames
+                .iter()
+                .any(|frame| *frame < 0 || *frame as usize >= times.len())
+            {
+                continue;
+            }
+            let fit_times: Vec<f64> = track_frames
+                .iter()
+                .map(|frame| times[*frame as usize])
+                .collect();
+            let unique_times: std::collections::BTreeSet<u64> =
+                fit_times.iter().map(|time| time.to_bits()).collect();
+            if unique_times.len() < 2 {
+                continue;
+            }
+            let mut xs = Vec::with_capacity(ordered.len());
+            let mut ys = Vec::with_capacity(ordered.len());
+            let mut lengths = Vec::with_capacity(ordered.len());
+            for item in &ordered {
+                xs.push(field_number(item, "aligned_x")?);
+                ys.push(field_number(item, "aligned_y")?);
+                lengths.push(field_number(item, "length_px")?);
+            }
+            if xs.iter().chain(&ys).any(|value| !value.is_finite()) {
+                continue;
+            }
+            let (Some((x_slope, x_intercept)), Some((y_slope, y_intercept))) =
+                (line_fit(&xs, &fit_times), line_fit(&ys, &fit_times))
+            else {
+                continue;
+            };
+            let velocity_norm = x_slope.hypot(y_slope);
+            if !velocity_norm.is_finite() || velocity_norm <= 0.0 {
+                continue;
+            }
+            let predicted = [
+                x_slope * target_time + x_intercept,
+                y_slope * target_time + y_intercept,
+            ];
+            let observed = [
+                field_number(point, "aligned_x")?,
+                field_number(point, "aligned_y")?,
+            ];
+            let error = (observed[0] - predicted[0]).hypot(observed[1] - predicted[1]);
+            if !error.is_finite() || error > tolerance {
+                continue;
+            }
+            let motion_angle = y_slope.atan2(x_slope).to_degrees();
+            let point_angle = field_number(point, "angle_deg")?;
+            if line_angle_difference(point_angle, motion_angle) > 35.0 {
+                continue;
+            }
+            let Some(median_length) = median(&mut lengths) else {
+                continue;
+            };
+            let point_length = field_number(point, "length_px")?;
+            if !median_length.is_finite()
+                || median_length <= 0.0
+                || !(0.35..=2.5).contains(&(point_length / median_length))
+            {
+                continue;
+            }
+            let score = (error, nearest_gap, -(ordered.len() as i64), track_index);
+            if best_score.as_ref().is_none_or(|best| score < *best) {
+                best_score = Some(score);
+            }
+        }
+        if let Some((_, _, _, track_index)) = best_score {
+            mutable_tracks[track_index].push(point.clone());
+            if let Some(position) = remaining.iter().position(|value| value == point) {
+                remaining.remove(position);
+            }
+        }
+    }
+    for history in &mut mutable_tracks {
+        history.sort_by_key(|item| item.get("frame_index").and_then(Value::as_i64).unwrap_or(0));
+    }
+    Ok(json!({"tracks": mutable_tracks, "remaining_points": remaining}))
+}
+
 fn deconvolved_motion_length(measured: f64, psf_fwhm: f64) -> Option<f64> {
     if !measured.is_finite() || !psf_fwhm.is_finite() || measured <= 0.0 || psf_fwhm <= 0.0 {
         return None;

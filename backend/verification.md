@@ -6,6 +6,8 @@
 
 本节覆盖最新工作区代码；后文保留此前验证记录，不能视为当前全部测试通过。
 
+- 当前序列链使用同一个 release 引擎完成 18 组原生进程验证，共 297 个请求、全部字段对照一致；统一清单 `tmp/native-sequence-chain-verification-20261013-v18/verification.json` 记录各报告路径和 engine SHA-256 `043e0311b19bacefcf1b181b59deac478b960f3366f6fd5c5bae40a6cb33c81b`。
+- `sequence.stitch_unassociated_single_frame_points` 通过 33 个原生进程场景，覆盖 review 线模型准入、常速度预测、链式回接、非等间隔/非法时间、时间间隔与角度边界、长度比例、伪影重叠和稳定轨迹排序；报告 `tmp/native-single-frame-stitch-verification-20261013-v1/verification.json`。它只回接图像平面候选，不确认物理身份。
 - 当前固定检测的 138 个案例通过；float32 阶段的 SNR 1 ULP 差异已修复：归约须按 NumPy 默认缓冲大小分块，不能对整个数组直接递归求和。8191 / 8192 / 8193 / 16384 / 16385 等长度及滤波响应逐次裁剪样本纳入固定对照，归约、统计、背景、噪声、Gaussian、Starlet 与 SNR 阶段通过。
 - `measurement_parity` 的 32 个 float64 / float32 源测量案例及近邻质量门控通过。完全重合的 PSF 模板属于不可辨识双源，Python 与 Rust 现均返回空证据；固定样例覆盖了此退化边界。
 - 修正后，`verify_float32.py` 原生进程的 12 个合成图案例与真实首帧 512×512 ROI 的 Gaussian / hybrid / ensemble 三种模式均通过全部字段对照；没有放宽容差。最新报告 `tmp/native-float32-verification-20261013-v2/verification.json`。ROI 显式限额 300 个返回源，不代表全幅检测或完整序列。FITS 哈希仍为 `6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6`。
@@ -35,7 +37,7 @@
 - `sequence.temporal_reference_candidates` 通过 8 个原生进程场景，覆盖多尺度 Gaussian 提案、参考图形态门、配准位移下的逐帧强制响应、坏像素／饱和门与近边界补提案；报告 `tmp/native-sequence-temporal-reference-verification-20261013-v14/verification.json`，engine SHA-256 为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。该操作接收已构建的参考图；高层序列编排仍待迁移。
 - `sequence.line_profile_metrics` 的连续支撑度和相对剖面填充度通过 9 个原生进程场景，覆盖点源对拒绝、单采样缺口桥接、旋转横截面、边缘截断、无效插值与非法输入；报告 `tmp/native-sequence-line-profile-verification-20261013-v12/verification.json`，与同轮其余 16 组序列原生进程验证共绑定 engine SHA-256 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。此诊断量只是形态证据，不代表运动确认。
 - `sequence.trail_shape_evidence` 通过 18 个原生进程场景，覆盖长度/像素形态门、局部线段模型与点源对照、伪影重叠复核、逐类拒绝说明、阈值边界及跨帧形状准入；报告 `tmp/native-sequence-trail-shape-verification-20261013-v11/verification.json`，engine SHA-256 为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。它只复现候选证据门，不会单独确认运动。
-- `sequence.motion_feature_track_gates` 通过 21 个原生进程场景，覆盖跨帧线形/长度/方向一致性、运动轴多数门、固定伪影否决及严格例外、序列边界截断例外和阈值修改；报告 `tmp/native-sequence-motion-feature-gates-verification-20261013-v10/verification.json`。本段列出的 17 组序列原生进程报告共 264 个请求，全部绑定 engine SHA-256 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375` 并逐字段通过。
+- `sequence.motion_feature_track_gates` 通过 21 个原生进程场景，覆盖跨帧线形/长度/方向一致性、运动轴多数门、固定伪影否决及严格例外、序列边界截断例外和阈值修改；旧版报告为 `tmp/native-sequence-motion-feature-gates-verification-20261013-v10/verification.json`，最新全链路重跑结果见上方 18 组验证清单。
 - `sequence.motion_feature_continuity_gates` 通过 20 个原生进程场景，覆盖最长连续观测段、边缘截断的一帧宽限、两段短内部缺口回接、孤立点数量/距离、多个强轨拒绝和阈值边界；报告 `tmp/native-sequence-motion-feature-continuity-verification-20261013-v9/verification.json`，engine SHA-256 同为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。
 - `sequence.motion_feature_exposure_evidence` 通过 18 个原生进程场景，覆盖 PSF 去卷积线长、FITS 秒/毫秒单位、真实/回退帧时间、边缘截断跳过、速度范围比例、log-MAD、范围内比例边界和缺失元数据；报告 `tmp/native-sequence-motion-feature-exposure-verification-20261013-v8/verification.json`，engine SHA-256 同为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。这是运动一致性证据，不是速度或天体身份真值。
 - `sequence.motion_feature_confirmation_evidence` 通过 20 个原生进程场景，覆盖短序列与长序列确认帧数缩放、奇数序列向上取整、稳定顺序的拒绝原因、非候选不附带拒绝码及通过候选的空拒绝码；报告 `tmp/native-sequence-motion-feature-confirmation-verification-20261013-v7/verification.json`，engine SHA-256 同为 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。该入口迁移确认门和解释码，不包含原始拖影提取或完整序列编排。
@@ -46,7 +48,7 @@
 - `sequence.fit_collinear_motion_geometry` 通过 18 个原生进程场景，覆盖水平/垂直/斜向 PCA 主轴、离轴残差、两点与退化各向同性点集、不规则时间、时间向量回退及参考间隔兼容换算；报告 `tmp/native-collinear-motion-geometry-verification-20261013-v2/verification.json`，与本段其余 16 组序列原生进程报告共绑定 engine SHA-256 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。该拟合描述图像平面候选轨迹几何，不是物理天体确认。
 - `sequence.best_collinear_motion_feature_group` 通过 18 个原生进程场景，覆盖候选线长/方向/垂距门、同帧最近线段选择、投影单调与容差、最小跨度、分组大小排序和同分稳定顺序；报告 `tmp/native-collinear-motion-group-verification-20261013-v1/verification.json`，与本段其余 16 组序列原生进程报告共绑定 engine SHA-256 `0f05833b029f16ebb91f62b56085ee27b16eb0a59a2d9a5d195503d30d3fe375`。这是未关联候选的几何分组，不做 raw-pixel 候选提取或最终运动确认。
 - `attitude.audit.frames`、`attitude.audit.paths` 和 `rst19-aux-audit` 的 4 个原生进程场景逐字段通过，覆盖辅助块缺失、RA 跨零、替代相机轴、FITS 路径读取及产物写入；CSV 与 Python 参考文件逐字节一致，JSON 全字段一致。报告 `tmp/native-attitude-verification-20261013-v6/verification.json`；本次 engine / CLI SHA-256 分别为 `4fadbba6875a72450d1e6e925c68b4e2cb7b33972b5c46ef4231a365912e3c23` 和 `559fad77ade73ace5ae412320a51a5ed303e400e9c87c9bc839b89296fdb21ca`。此处核验辅助字段之间的一致性，不是完整 WCS 或物理指向确认。
-- 当前完整 `cargo test --locked --manifest-path backend/Cargo.toml` 全部 50 项通过；`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 和 release `--bins` 构建通过。完全重合 PSF 的不确定系数分支已替换为明确的不可辨识判断。
+- 当前完整 `cargo test --locked --manifest-path backend/Cargo.toml` 全部 52 项通过；`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 和 release `--bins` 构建通过。完全重合 PSF 的不确定系数分支已替换为明确的不可辨识判断。
 - float32 路径已经实现；后文“仍返回未迁移错误”、16 个源测量案例和 57 个检测案例的描述属于较早版本，当前数量分别为 32 和 138。
 - 后端全量迁移未完成，桌面仍调用原 Python worker；尚无纯 Rust 发布包，也未验证 macOS/Linux 构建。
 

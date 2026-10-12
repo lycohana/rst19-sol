@@ -184,6 +184,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.best_collinear_motion_feature_group" => {
             rst19_core::sequence_trails::best_collinear_motion_feature_group(&request)
         }
+        "sequence.stitch_unassociated_single_frame_points" => {
+            rst19_core::sequence_trails::stitch_unassociated_single_frame_points(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }
