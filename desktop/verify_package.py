@@ -115,6 +115,18 @@ def make_feature_transition_flow_csv(path: Path) -> None:
     path.write_bytes(payload.encode("utf-8"))
 
 
+def make_feature_gate_route_catalog(path: Path) -> None:
+    payload = (
+        "\ufeffdetection_id,feature_class,feature_class_label,quality_passed,flags,flux_snr,"
+        "psf_support_pixels,fwhm,ellipticity,sharpness,footprint_pixels\r\n"
+        '1,compact_quality,"紧凑,清晰",True,,12,5,2.5,0.1,0.3,20\r\n'
+        "2,weak_or_background,弱,False,LOW_FLUX_SNR,3,5,2.5,0.1,0.3,20\r\n"
+        "3,linear_artifact,线状,False,LINE_ARTIFACT,20,5,2.5,0.1,0.3,20\r\n"
+        "4,crowded_blend,拥挤,False,LOW_FLUX_SNR|UNRESOLVED_BLEND,3,2,2.5,0.1,0.3,20\r\n"
+    )
+    path.write_bytes(payload.encode("utf-8"))
+
+
 def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -454,6 +466,33 @@ def verify(package: Path, out: Path) -> dict:
     assert Path(transition["result_path"]).is_file()
     for artifact in ("sequence_feature_transition_flow.csv", "sequence_feature_transition_flow.json"):
         assert (transition_out / artifact).is_file(), artifact
+    route_catalog = out / "feature gate route source catalog.csv"
+    make_feature_gate_route_catalog(route_catalog)
+    route_out = out / "feature-gate-route"
+    route_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-gate-route",
+        "args": [str(route_catalog.resolve()), "--out-dir", str(route_out.resolve())],
+        "out_dir": str((out / "feature-gate-route-job").resolve()),
+    }
+    route_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(route_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    route_events = [json.loads(line) for line in route_response.stdout.splitlines()]
+    assert len(route_events) == 1 and route_events[0]["ok"]
+    gate_route = route_events[0]["payload"]
+    assert gate_route["tool"] == "rst19-feature-gate-route"
+    assert len(gate_route["result"]["source_rows"]) == 4
+    assert gate_route["result"]["source_rows"][1]["route"] == "rejected_numeric_only"
+    assert gate_route["result"]["source_rows"][3]["structural_flags"] == "UNRESOLVED_BLEND"
+    assert Path(gate_route["result_path"]).is_file()
+    for artifact in (
+        "feature_gate_route_sources.csv",
+        "feature_gate_route_summary.csv",
+    ):
+        assert (route_out / artifact).is_file(), artifact
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -485,6 +524,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-aperture-peak-ratio",
                   "rst19-feature-correlation",
                   "rst19-feature-transition-flow",
+                  "rst19-feature-gate-route",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,

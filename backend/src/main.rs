@@ -99,6 +99,12 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.feature_gate_route" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            Ok(rst19_core::feature_gate_route::run(std::path::Path::new(catalog_path))?.as_dict())
+        }
         "audit.feature_effect_size" => {
             let catalog_path = request["catalog_path"]
                 .as_str()
