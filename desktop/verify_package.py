@@ -101,6 +101,20 @@ def make_feature_correlation_catalog(path: Path) -> None:
     path.write_bytes(payload.encode("utf-8"))
 
 
+def make_feature_transition_flow_csv(path: Path) -> None:
+    payload = (
+        "\ufefflayer,anchor_feature_class,anchor_feature_class_label,response_feature_class,"
+        "response_feature_class_label,anchor_count,frame_count,possible_match_count,matched_count\r\n"
+        'candidate,compact_quality,"紧凑,清晰",compact_quality,紧凑,4,3,12,3\r\n'
+        "candidate,compact_quality,ignored,weak_or_background,背景,4,3,12,2\r\n"
+        "candidate,compact_quality,ignored,linear_artifact,线伪迹,4,3,12,2\r\n"
+        "quality,masked_or_edge,边缘,masked_or_edge,边缘,5,3,15,0\r\n"
+        "quality,other_rejected,拒绝,other_rejected,拒绝,0,0,0,0\r\n"
+        ",,,,,,,,\r\n"
+    )
+    path.write_bytes(payload.encode("utf-8"))
+
+
 def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -414,6 +428,32 @@ def verify(package: Path, out: Path) -> dict:
         "feature_class_correlations.csv", "feature_correlation_audit.json",
     ):
         assert (correlation_out / artifact).is_file(), artifact
+    transition_source = out / "sequence feature transitions.csv"
+    make_feature_transition_flow_csv(transition_source)
+    transition_out = out / "feature-transition-flow"
+    transition_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-transition-flow",
+        "args": [str(transition_source.resolve()), "--out-dir", str(transition_out.resolve())],
+        "out_dir": str((out / "feature-transition-flow-job").resolve()),
+    }
+    transition_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(transition_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    transition_events = [json.loads(line) for line in transition_response.stdout.splitlines()]
+    assert len(transition_events) == 1 and transition_events[0]["ok"]
+    transition = transition_events[0]["payload"]
+    assert transition["tool"] == "rst19-feature-transition-flow"
+    assert transition["result"]["included_group_count"] == 2
+    assert transition["result"]["skipped_zero_anchor_group_count"] == 1
+    assert transition["result"]["rows"][0]["top_non_same_feature_class"] == "linear_artifact"
+    assert transition["result"]["rows"][1]["q_any"] == 0.0
+    assert transition["result"]["rows"][1]["q_same"] is None
+    assert Path(transition["result_path"]).is_file()
+    for artifact in ("sequence_feature_transition_flow.csv", "sequence_feature_transition_flow.json"):
+        assert (transition_out / artifact).is_file(), artifact
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -444,6 +484,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-pair-pixel-topology",
                   "rst19-aperture-peak-ratio",
                   "rst19-feature-correlation",
+                  "rst19-feature-transition-flow",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,

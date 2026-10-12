@@ -169,6 +169,17 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.feature_transition_flow" => {
+            let csv_path = request["csv_path"]
+                .as_str()
+                .ok_or("missing sequence feature transition CSV path")?;
+            Ok(
+                rst19_core::feature_transition_flow::summarize_sequence_feature_transition_flow(
+                    std::path::Path::new(csv_path),
+                )?
+                .as_dict(),
+            )
+        }
         "audit.feature_class_context" => {
             let catalog_path = request["catalog_path"]
                 .as_str()
