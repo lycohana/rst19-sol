@@ -179,6 +179,367 @@ pub fn trail_shape_evidence(request: &Value) -> Result<Value> {
     }))
 }
 
+fn array<'a>(value: &'a Value, key: &str) -> Result<&'a [Value]> {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .ok_or_else(|| format!("missing array {key}"))
+}
+
+fn field_number(point: &Value, key: &str) -> Result<f64> {
+    number(point, key)
+}
+
+fn median(values: &mut [f64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_by(f64::total_cmp);
+    let middle = values.len() / 2;
+    Some(if values.len().is_multiple_of(2) {
+        (values[middle - 1] + values[middle]) * 0.5
+    } else {
+        values[middle]
+    })
+}
+
+fn circular_line_angle_difference(first: f64, second: f64) -> f64 {
+    ((first - second + 90.0).rem_euclid(180.0) - 90.0).abs()
+}
+
+fn motion_feature_track_shape_supported(
+    points: &[Value],
+    min_profile_fill: f64,
+    min_continuity: f64,
+    max_angle_deviation: f64,
+    max_length_deviation: f64,
+) -> Result<bool> {
+    if points.len() < 3 {
+        return Ok(false);
+    }
+    let mut supported = Vec::new();
+    for point in points {
+        let length = field_number(point, "length_px")?;
+        let short = length < 16.0;
+        let fill_threshold = if short {
+            min_profile_fill.max(0.80)
+        } else {
+            min_profile_fill
+        };
+        let continuity_threshold = if short {
+            min_continuity.max(0.80)
+        } else {
+            min_continuity
+        };
+        if shape_supported(point, fill_threshold, continuity_threshold) {
+            supported.push(point);
+        }
+    }
+    let required_count = ((points.len() as f64 * 0.5).ceil() as usize).max(2);
+    if supported.len() < required_count {
+        return Ok(false);
+    }
+    let mut profile_values: Vec<f64> = supported
+        .iter()
+        .filter_map(|point| optional_number(point, "profile_fill_ratio"))
+        .collect();
+    if median(&mut profile_values).is_none_or(|value| value < min_profile_fill) {
+        return Ok(false);
+    }
+
+    let angles: Vec<f64> = supported
+        .iter()
+        .filter_map(|point| optional_number(point, "angle_deg"))
+        .filter(|value| value.is_finite())
+        .collect();
+    if angles.len() >= 2 {
+        let doubled: Vec<f64> = angles
+            .iter()
+            .map(|angle| (2.0 * angle).to_radians())
+            .collect();
+        let mean_sin = doubled.iter().map(|angle| angle.sin()).sum::<f64>() / doubled.len() as f64;
+        let mean_cos = doubled.iter().map(|angle| angle.cos()).sum::<f64>() / doubled.len() as f64;
+        let mean_doubled = mean_sin.atan2(mean_cos);
+        let max_deviation = doubled
+            .iter()
+            .map(|angle| {
+                0.5 * (angle - mean_doubled)
+                    .sin()
+                    .atan2((angle - mean_doubled).cos())
+            })
+            .map(f64::abs)
+            .fold(0.0, f64::max)
+            .to_degrees();
+        if max_deviation > max_angle_deviation {
+            return Ok(false);
+        }
+    }
+
+    let lengths: Vec<f64> = points
+        .iter()
+        .filter_map(|point| optional_number(point, "length_px"))
+        .filter(|value| value.is_finite())
+        .collect();
+    if lengths.len() >= 2 {
+        let Some(median_length) = median(&mut lengths.clone()) else {
+            return Ok(false);
+        };
+        if median_length <= 0.0 {
+            return Ok(false);
+        }
+        let consistent_count = lengths
+            .iter()
+            .filter(|length| {
+                ((*length - median_length).abs() / median_length) <= max_length_deviation
+            })
+            .count();
+        if consistent_count < required_count {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn motion_feature_axis_supported(
+    points: &[Value],
+    max_deviation: f64,
+    min_pass_fraction: f64,
+) -> Result<bool> {
+    if points.len() < 3 {
+        return Ok(false);
+    }
+    if !max_deviation.is_finite() || max_deviation <= 0.0 {
+        return Err("max_deviation_deg must be positive".into());
+    }
+    if !min_pass_fraction.is_finite() || min_pass_fraction <= 0.0 || min_pass_fraction > 1.0 {
+        return Err("min_pass_fraction must be in (0, 1]".into());
+    }
+    let mut ordered = points.to_vec();
+    ordered.sort_by_key(|point| point["frame_index"].as_i64().unwrap_or_default());
+    let mut pass_count = 0usize;
+    let mut transition_count = 0usize;
+    for pair in ordered.windows(2) {
+        let delta_x = field_number(&pair[1], "aligned_x")? - field_number(&pair[0], "aligned_x")?;
+        let delta_y = field_number(&pair[1], "aligned_y")? - field_number(&pair[0], "aligned_y")?;
+        let step = delta_x.hypot(delta_y);
+        if !step.is_finite() || step < 1.0 {
+            continue;
+        }
+        transition_count += 1;
+        let Some(line_angle) = optional_number(&pair[1], "angle_deg").filter(|v| v.is_finite())
+        else {
+            continue;
+        };
+        let motion_angle = delta_y.atan2(delta_x).to_degrees();
+        if circular_line_angle_difference(line_angle, motion_angle) <= max_deviation {
+            pass_count += 1;
+        }
+    }
+    if transition_count == 0 {
+        return Ok(false);
+    }
+    let required = ((transition_count as f64 * min_pass_fraction).ceil() as usize).max(2);
+    Ok(pass_count >= required)
+}
+
+fn artifact_supported_as_moving(
+    points: &[Value],
+    overlap_fraction: f64,
+    min_clear_fraction: f64,
+) -> Result<bool> {
+    if points.is_empty() {
+        return Ok(false);
+    }
+    if !overlap_fraction.is_finite() || !(0.0..=1.0).contains(&overlap_fraction) {
+        return Err("overlap_fraction must be in [0, 1]".into());
+    }
+    if !min_clear_fraction.is_finite() || min_clear_fraction <= 0.0 || min_clear_fraction > 1.0 {
+        return Err("min_clear_fraction must be in (0, 1]".into());
+    }
+    let known: Vec<f64> = points
+        .iter()
+        .filter_map(|point| optional_number(point, "line_artifact_overlap_fraction"))
+        .filter(|value| value.is_finite())
+        .collect();
+    if known.is_empty() {
+        return Ok(true);
+    }
+    let clear_count = known
+        .iter()
+        .filter(|value| **value < overlap_fraction)
+        .count();
+    Ok(clear_count as f64 / known.len() as f64 >= min_clear_fraction)
+}
+
+fn artifact_overlap_compatible(
+    points: &[Value],
+    compatibility: &Value,
+    overlap_fraction: f64,
+    min_clear_fraction: f64,
+) -> Result<bool> {
+    if artifact_supported_as_moving(points, overlap_fraction, min_clear_fraction)? {
+        return Ok(true);
+    }
+    if compatibility["presence_supported"].as_bool() != Some(true) {
+        return Ok(false);
+    }
+    let displacement = number(compatibility, "displacement_px")?;
+    let min_displacement = number(compatibility, "min_displacement_px")?;
+    if !displacement.is_finite() || displacement < min_displacement {
+        return Ok(false);
+    }
+    let Some(fit_rms) = optional_number(compatibility, "fit_rms_px") else {
+        return Ok(false);
+    };
+    let max_fit_rms = number(compatibility, "max_fit_rms_px")?;
+    if !fit_rms.is_finite() || !max_fit_rms.is_finite() || fit_rms > max_fit_rms {
+        return Ok(false);
+    }
+    Ok([
+        "shape_supported",
+        "model_supported",
+        "motion_axis_supported",
+        "temporal_continuity_supported",
+        "exposure_supported",
+    ]
+    .iter()
+    .all(|key| compatibility[*key].as_bool() == Some(true)))
+}
+
+fn integer(value: &Value) -> Option<i64> {
+    value
+        .as_i64()
+        .or_else(|| value.as_f64().map(|number| number as i64))
+}
+
+fn edge_truncation_supported(points: &[Value], frame_shapes: &[Value], margin: f64) -> bool {
+    if points.len() < 3 || frame_shapes.len() < 3 || !margin.is_finite() || margin < 0.0 {
+        return false;
+    }
+    let mut indexed: Vec<(i64, &Value)> = points
+        .iter()
+        .filter_map(|point| integer(&point["frame_index"]).map(|index| (index, point)))
+        .collect();
+    if indexed.len() != points.len() {
+        return false;
+    }
+    indexed.sort_by_key(|(index, _)| *index);
+    let indices: Vec<i64> = indexed.iter().map(|(index, _)| *index).collect();
+    if indices.windows(2).any(|pair| pair[0] == pair[1])
+        || indices.first().is_none_or(|index| *index < 0)
+        || indices
+            .last()
+            .is_none_or(|index| *index >= frame_shapes.len() as i64)
+        || indices.last().unwrap() - indices.first().unwrap() + 1 != indices.len() as i64
+    {
+        return false;
+    }
+    let first = *indices.first().unwrap();
+    let last = *indices.last().unwrap();
+    let prefix = first == 0;
+    let suffix = last == frame_shapes.len() as i64 - 1;
+    if !prefix && !suffix {
+        return false;
+    }
+    let mut endpoint_indices = Vec::new();
+    if suffix {
+        endpoint_indices.push(first);
+    }
+    if prefix {
+        endpoint_indices.push(last);
+    }
+    for index in endpoint_indices {
+        let Some((_, point)) = indexed
+            .iter()
+            .find(|(point_index, _)| *point_index == index)
+        else {
+            continue;
+        };
+        let Some(shape) = frame_shapes.get(index as usize).and_then(Value::as_array) else {
+            continue;
+        };
+        if shape.len() != 2 {
+            continue;
+        }
+        let (Some(height), Some(width)) = (integer(&shape[0]), integer(&shape[1])) else {
+            continue;
+        };
+        if height <= 0 || width <= 0 {
+            continue;
+        }
+        let Some(bbox) = point["bbox"].as_array() else {
+            continue;
+        };
+        if bbox.len() != 4 {
+            continue;
+        }
+        let Some((x_min, y_min, x_max, y_max)) = bbox
+            .iter()
+            .map(Value::as_f64)
+            .collect::<Option<Vec<_>>>()
+            .map(|values| (values[0], values[1], values[2], values[3]))
+        else {
+            continue;
+        };
+        let edge_distance = x_min
+            .min(y_min)
+            .min((width - 1) as f64 - x_max)
+            .min((height - 1) as f64 - y_max);
+        if edge_distance.is_finite() && edge_distance <= margin {
+            return true;
+        }
+    }
+    false
+}
+
+/// Evaluate the cross-frame shape, motion-axis, artifact, and edge gates.
+pub fn motion_feature_track_gates(request: &Value) -> Result<Value> {
+    let points: Vec<Value> = array(request, "points")?.to_vec();
+    let options = request.get("options").unwrap_or(&Value::Null);
+    let track_shape_supported = motion_feature_track_shape_supported(
+        &points,
+        optional_number(options, "min_profile_fill_ratio").unwrap_or(0.45),
+        optional_number(options, "min_continuity_ratio").unwrap_or(0.45),
+        optional_number(options, "max_angle_deviation_deg").unwrap_or(15.0),
+        optional_number(options, "max_length_deviation_fraction").unwrap_or(0.75),
+    )?;
+    let axis_supported = motion_feature_axis_supported(
+        &points,
+        optional_number(options, "max_motion_axis_deviation_deg").unwrap_or(25.0),
+        optional_number(options, "min_motion_axis_pass_fraction").unwrap_or(0.60),
+    )?;
+    let overlap_fraction = optional_number(options, "artifact_overlap_fraction").unwrap_or(0.90);
+    let min_clear_fraction =
+        optional_number(options, "min_artifact_clear_fraction").unwrap_or(0.50);
+    let artifact_supported =
+        artifact_supported_as_moving(&points, overlap_fraction, min_clear_fraction)?;
+    let artifact_compatible = artifact_overlap_compatible(
+        &points,
+        request
+            .get("artifact_compatibility")
+            .unwrap_or(&Value::Null),
+        overlap_fraction,
+        min_clear_fraction,
+    )?;
+    let edge_supported = edge_truncation_supported(
+        &points,
+        request
+            .get("frame_shapes")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]),
+        optional_number(options, "edge_margin_px").unwrap_or(4.0),
+    );
+    Ok(json!({
+        "track_shape_supported": track_shape_supported,
+        "motion_axis_supported": axis_supported,
+        "artifact_supported_as_moving": artifact_supported,
+        "artifact_overlap_compatible_with_motion": artifact_compatible,
+        "edge_truncation_supported": edge_supported,
+    }))
+}
+
 fn bilinear(image: &[Vec<f32>], x: f64, y: f64) -> Option<f32> {
     let height = image.len();
     let width = image.first().map_or(0, Vec::len);
