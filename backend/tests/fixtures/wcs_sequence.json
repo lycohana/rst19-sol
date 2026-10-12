@@ -2,7 +2,7 @@
   "source_hashes": {
     "wcs.py": "ce665d0bc0df0e6801bc7bbfd959dbf08d8a8d3f7ea23f60f8cfb4f46fb718fe",
     "wcs_validation.py": "6a592f77743e515a33335973e0c8338fd19cb29468f0a9573882413f8f5c3020",
-    "sequence.py": "daeed65b2793f39272f5073942a379b32d4926ead3f4e130eb719fcf18498411"
+    "sequence.py": "51fcabdb952c8aefa836877da6032d40b8ed91390ce471ec2841137acae54088"
   },
   "fit_cases": [
     {

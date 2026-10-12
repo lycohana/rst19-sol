@@ -16,6 +16,7 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 `sequence.link_motion_evidence_tracks` 将移动点源轨迹和曝光线轨迹按共同观测帧、运动方向、位移比例和垂直距离做一对一证据关联；链接只用于去重和审计，不删去任一轨迹或确认物理身份。
 `sequence.rescue_collinear_motion_feature_groups` 在常规中心关联失败时，从长单帧线候选中迭代恢复互不重叠的共线运动组；结果仍是图像平面候选，需要后续轨迹门复核。
 `sequence.coherent_raw_motion_point_indices` 将相邻帧原始线候选按实测时间、曝光时长、位移方向和线形支持连成短链；少数弱形态帧可以由强点桥接，但整条链至少需要两个强形态点。它只输出候选帧/点索引，后续关联与运动确认仍需独立运行；完整多尺度候选装配和多帧编排尚未迁入 Rust。
+`sequence.motion_feature_frame_components` 将序列拖影检测的单帧阈值支撑图分成连通候选，支持一像素缺口分组，并返回 PCA 长宽/方向、沿线连续度、边缘和线伪影重叠审计。它只提供几何候选；原图点/双源模型复核与跨帧运动确认仍由后续阶段完成。
 `trails.local_pixel_proposals` 已将单帧原始像素线候选检测迁入 Rust：保留掩膜归一化 Gaussian 平滑、局部峰值预算、方向/长度扫描、局部复核、点源/双星负例控制和线段几何去重。输出仍只是单帧线形候选，不代表跨帧运动；完整序列候选装配仍待迁移。
 
 测光层已原生实现仪器／表观星等算术，带状态的视差／模型距离／星表绝对星等，以及加权零点和颜色项拟合、离群点剔除、确定性留出验证、目录质量门控、样本角色和标定应用。支持 `photometry.evaluate`、`photometry.calibration.fit`、`photometry.calibration.apply`、`photometry.calibration.error`。绝对星等保留消光语义、距离区间和误差完整性门控。

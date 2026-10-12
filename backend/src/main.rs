@@ -193,6 +193,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.rescue_collinear_motion_feature_groups" => {
             rst19_core::sequence_trails::rescue_collinear_motion_feature_groups(&request)
         }
+        "sequence.motion_feature_frame_components" => {
+            rst19_core::sequence_motion_features::motion_feature_frame_components(&request)
+        }
         "sequence.coherent_raw_motion_point_indices" => {
             rst19_core::sequence_trails::coherent_raw_motion_point_indices(&request)
         }

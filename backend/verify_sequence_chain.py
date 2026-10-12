@@ -31,6 +31,7 @@ VERIFIERS = (
     "verify_collinear_motion_rescue.py",
     "verify_coherent_raw_motion_points.py",
     "verify_local_pixel_trail_proposals.py",
+    "verify_sequence_motion_components.py",
 )
 
 

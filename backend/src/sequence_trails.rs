@@ -2356,25 +2356,24 @@ fn bilinear(image: &[Vec<f32>], x: f64, y: f64) -> Option<f32> {
 
 /// Return the absolute continuous support ratio and relative profile fill.
 /// These are morphological diagnostics, not motion confirmation.
-pub fn line_profile_metrics(request: &Value) -> Result<Value> {
-    let Some(image) = plane(request) else {
-        return Ok(json!({"continuity_ratio":null,"profile_fill_ratio":null}));
-    };
-    let center_x = number(request, "center_x")?;
-    let center_y = number(request, "center_y")?;
-    let length = number(request, "length_px")?;
-    let width = number(request, "width_px")?;
-    let angle_deg = number(request, "angle_deg")?;
-    let threshold = number(request, "threshold_adu")?;
+pub(crate) fn line_profile_metrics_for_plane(
+    image: &[Vec<f32>],
+    center_x: f64,
+    center_y: f64,
+    length: f64,
+    width: f64,
+    angle_deg: f64,
+    threshold: f64,
+) -> (Option<f64>, Option<f64>) {
     if image.is_empty() || image[0].is_empty() || length <= 0.0 || threshold <= 0.0 {
-        return Ok(json!({"continuity_ratio":null,"profile_fill_ratio":null}));
+        return (None, None);
     }
     if !length.is_finite()
         || !center_x.is_finite()
         || !center_y.is_finite()
         || !angle_deg.is_finite()
     {
-        return Ok(json!({"continuity_ratio":null,"profile_fill_ratio":null}));
+        return (None, None);
     }
 
     let sample_count = ((length * 2.0).ceil() as usize + 1).max(25);
@@ -2393,7 +2392,7 @@ pub fn line_profile_metrics(request: &Value) -> Result<Value> {
             let across = -half_width + (2.0 * half_width) * across_index as f64 / 8.0;
             let x = center_x + along * unit_x + across * normal_x;
             let y = center_y + along * unit_y + across * normal_y;
-            if let Some(value) = bilinear(&image, x, y).filter(|value| value.is_finite()) {
+            if let Some(value) = bilinear(image, x, y).filter(|value| value.is_finite()) {
                 best = best.max(value);
             }
         }
@@ -2402,7 +2401,7 @@ pub fn line_profile_metrics(request: &Value) -> Result<Value> {
     let valid: Vec<bool> = profile.iter().map(|value| value.is_finite()).collect();
     let valid_count = valid.iter().filter(|value| **value).count();
     if valid_count == 0 {
-        return Ok(json!({"continuity_ratio":null,"profile_fill_ratio":null}));
+        return (None, None);
     }
     let support: Vec<bool> = profile
         .iter()
@@ -2433,9 +2432,30 @@ pub fn line_profile_metrics(request: &Value) -> Result<Value> {
         .zip(&valid)
         .filter(|(value, is_valid)| **is_valid && f64::from(**value) >= relative_threshold)
         .count();
+    (
+        Some(longest as f64 / valid_count as f64),
+        Some(relative_count as f64 / valid_count as f64),
+    )
+}
+
+/// Return the absolute continuous support ratio and relative profile fill.
+/// These are morphological diagnostics, not motion confirmation.
+pub fn line_profile_metrics(request: &Value) -> Result<Value> {
+    let Some(image) = plane(request) else {
+        return Ok(json!({"continuity_ratio":null,"profile_fill_ratio":null}));
+    };
+    let continuity_ratio = line_profile_metrics_for_plane(
+        &image,
+        number(request, "center_x")?,
+        number(request, "center_y")?,
+        number(request, "length_px")?,
+        number(request, "width_px")?,
+        number(request, "angle_deg")?,
+        number(request, "threshold_adu")?,
+    );
     Ok(json!({
-        "continuity_ratio": longest as f64 / valid_count as f64,
-        "profile_fill_ratio": relative_count as f64 / valid_count as f64,
+        "continuity_ratio": continuity_ratio.0,
+        "profile_fill_ratio": continuity_ratio.1,
     }))
 }
 

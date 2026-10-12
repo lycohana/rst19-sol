@@ -6127,6 +6127,168 @@ def _merge_motion_feature_points(
     return merged
 
 
+def _extract_motion_frame_components(
+    residual: np.ndarray,
+    valid: np.ndarray,
+    line_artifact_mask: np.ndarray,
+    *,
+    frame_index: int,
+    shift: tuple[float, float],
+    threshold: float,
+    residual_noise: float,
+    psf_fwhm: float,
+    min_length: float,
+    min_feature_area: int,
+    min_axis_ratio: float,
+    bridge_gaps: bool,
+    short_min_pixels: int,
+) -> tuple[list[MotionFeaturePoint], MotionFrameAudit]:
+    """提取单帧时序残差中的连通线候选及可解释的几何计数。
+
+    该阶段只产生图像平面提案；原图单/双星模型复核与跨帧运动确认由
+    ``detect_motion_features`` 的后续阶段负责。
+    """
+
+    residual = np.asarray(residual, dtype=np.float32)
+    valid = np.asarray(valid, dtype=bool)
+    line_artifact_mask = np.asarray(line_artifact_mask, dtype=bool)
+    support = valid & (residual >= float(threshold))
+    valid_pixel_count = int(np.count_nonzero(valid))
+    support_pixel_count = int(np.count_nonzero(support))
+    # 缺口桥接只影响连通域分组，不把填充像素计入面积、PCA 或通量。
+    geometry_support = (
+        ndimage.binary_dilation(support, structure=np.ones((3, 3), dtype=bool))
+        if bridge_gaps
+        else support
+    )
+    labels, component_count = ndimage.label(geometry_support, structure=np.ones((3, 3), dtype=bool))
+    slices = ndimage.find_objects(labels)
+    sizes = ndimage.sum(support, labels, index=np.arange(1, component_count + 1))
+    frame_features: list[MotionFeaturePoint] = []
+    area_pass_count = 0
+    geometry_pass_count = 0
+    edge_rejected_count = 0
+    short_area_rejected_count = 0
+    length_rejected_count = 0
+    axis_ratio_rejected_count = 0
+    large_area_rejected_count = 0
+    min_pixels = max(int(min_feature_area), int(np.ceil(4.0 * psf_fwhm**2)))
+    for component_id, size in enumerate(sizes, start=1):
+        if float(size) < short_min_pixels:
+            short_area_rejected_count += 1
+            continue
+        area_pass_count += 1
+        component_slice = slices[component_id - 1]
+        if component_slice is None:
+            continue
+        ys, xs = component_slice
+        component = labels[component_slice] == component_id
+        component_support = support[component_slice] & component
+        local_y, local_x = np.nonzero(component_support)
+        if local_x.size < 3:
+            continue
+        raw_x = local_x + xs.start
+        raw_y = local_y + ys.start
+        covariance = np.cov(np.column_stack((raw_x, raw_y)), rowvar=False, bias=True)
+        eigenvalues, eigenvectors = np.linalg.eigh(np.atleast_2d(covariance))
+        major_variance = max(0.0, float(eigenvalues[-1]))
+        minor_variance = max(0.0, float(eigenvalues[0]))
+        length_px = 4.0 * np.sqrt(major_variance)
+        width_px = 4.0 * np.sqrt(minor_variance)
+        axis_ratio = np.sqrt(major_variance / max(minor_variance, np.finfo(np.float64).eps))
+        axis_ratio_gate = float(min_axis_ratio)
+        if length_px < MOTION_FEATURE_SHORT_TRAIL_LENGTH:
+            axis_ratio_gate = min(
+                axis_ratio_gate,
+                MOTION_FEATURE_SHORT_TRAIL_MIN_AXIS_RATIO,
+            )
+        if length_px < min_length:
+            length_rejected_count += 1
+            continue
+        if axis_ratio < axis_ratio_gate:
+            axis_ratio_rejected_count += 1
+            continue
+        if length_px >= MOTION_FEATURE_SHORT_TRAIL_LENGTH and float(size) < min_pixels:
+            large_area_rejected_count += 1
+            continue
+        geometry_pass_count += 1
+        x_min, x_max = int(raw_x.min()), int(raw_x.max())
+        y_min, y_max = int(raw_y.min()), int(raw_y.max())
+        touches_edge = (
+            x_min == 0
+            or y_min == 0
+            or x_max == residual.shape[1] - 1
+            or y_max == residual.shape[0] - 1
+        )
+        if touches_edge and length_px < max(min_length, 8.0 * psf_fwhm):
+            edge_rejected_count += 1
+            continue
+        component_values = residual[component_slice][component_support]
+        component_artifact = line_artifact_mask[component_slice][component_support]
+        artifact_overlap_fraction = (
+            float(np.count_nonzero(component_artifact) / component_values.size)
+            if component_values.size
+            else 0.0
+        )
+        weights = np.maximum(component_values.astype(np.float64), 0.0)
+        weight_sum = float(weights.sum())
+        center_x = float(np.average(raw_x, weights=weights)) if weight_sum > 0 else float(raw_x.mean())
+        center_y = float(np.average(raw_y, weights=weights)) if weight_sum > 0 else float(raw_y.mean())
+        major_vector = eigenvectors[:, -1]
+        angle_deg = float(np.degrees(np.arctan2(major_vector[1], major_vector[0])))
+        residual_peak = float(component_values.max())
+        continuity_ratio, profile_fill_ratio = _line_profile_metrics(
+            residual,
+            center_x=center_x,
+            center_y=center_y,
+            length_px=length_px,
+            width_px=width_px,
+            angle_deg=angle_deg,
+            threshold_adu=threshold,
+        )
+        frame_features.append(
+            MotionFeaturePoint(
+                frame_index=frame_index,
+                x=center_x,
+                y=center_y,
+                aligned_x=center_x - float(shift[0]),
+                aligned_y=center_y - float(shift[1]),
+                residual_snr=residual_peak / residual_noise,
+                area_pixels=int(size),
+                length_px=float(length_px),
+                width_px=float(width_px),
+                angle_deg=angle_deg,
+                bbox=(x_min, y_min, x_max, y_max),
+                touches_edge=touches_edge,
+                continuity_ratio=continuity_ratio,
+                profile_fill_ratio=profile_fill_ratio,
+                line_artifact_overlap_fraction=artifact_overlap_fraction,
+            )
+        )
+    audit = MotionFrameAudit(
+        frame_index=frame_index,
+        threshold_adu=float(threshold),
+        residual_noise_adu=float(residual_noise),
+        valid_pixel_count=valid_pixel_count,
+        support_pixel_count=support_pixel_count,
+        component_count=int(component_count),
+        area_pass_count=area_pass_count,
+        geometry_pass_count=geometry_pass_count,
+        edge_rejected_count=edge_rejected_count,
+        feature_count=len(frame_features),
+        max_feature_residual_snr=max(
+            (float(point.residual_snr) for point in frame_features),
+            default=None,
+        ),
+        short_area_rejected_count=short_area_rejected_count,
+        length_rejected_count=length_rejected_count,
+        axis_ratio_rejected_count=axis_ratio_rejected_count,
+        large_area_rejected_count=large_area_rejected_count,
+        short_min_pixels=int(short_min_pixels),
+    )
+    return frame_features, audit
+
+
 def detect_motion_features(
     frame_analyses: Sequence[FrameAnalysis],
     cumulative_shifts: Sequence[tuple[float, float]],
@@ -6282,148 +6444,23 @@ def detect_motion_features(
             )
             residual = np.where(valid & np.isfinite(raw_reference), values - raw_reference, 0.0)
             del raw_reference
-        support = valid & (residual >= threshold)
-        valid_pixel_count = int(np.count_nonzero(valid))
-        support_pixel_count = int(np.count_nonzero(support))
-        # 单帧短拖影可能因像素量化或局部背景起伏在一条直线上断开一个
-        # 像素。单帧预检可以先用一次 3×3 邻域膨胀做“相邻缺口”分组，
-        # 但后续
-        # 面积、PCA 和权重一律回到原始 support 像素，绝不把补出来的
-        # 像素当成信号。序列确认层也允许显式开启缺口桥接；桥接只用于
-        # 连通域分组，不会把补出来的像素计入面积、PCA 或通量。
-        geometry_support = (
-            ndimage.binary_dilation(support, structure=np.ones((3, 3), dtype=bool))
-            if bridge_gaps
-            else support
+        frame_features, frame_audit = _extract_motion_frame_components(
+            residual,
+            valid,
+            line_artifact_mask,
+            frame_index=frame_index,
+            shift=shift,
+            threshold=threshold,
+            residual_noise=residual_noise,
+            psf_fwhm=float(psf_fwhm),
+            min_length=float(min_length),
+            min_feature_area=int(min_feature_area),
+            min_axis_ratio=float(min_axis_ratio),
+            bridge_gaps=bool(bridge_gaps),
+            short_min_pixels=int(short_min_pixels),
         )
-        labels, component_count = ndimage.label(geometry_support, structure=np.ones((3, 3), dtype=bool))
-        slices = ndimage.find_objects(labels)
-        sizes = ndimage.sum(support, labels, index=np.arange(1, component_count + 1))
-        frame_features: list[MotionFeaturePoint] = []
-        area_pass_count = 0
-        geometry_pass_count = 0
-        edge_rejected_count = 0
-        short_area_rejected_count = 0
-        length_rejected_count = 0
-        axis_ratio_rejected_count = 0
-        large_area_rejected_count = 0
-        for component_id, size in enumerate(sizes, start=1):
-            if float(size) < short_min_pixels:
-                short_area_rejected_count += 1
-                continue
-            area_pass_count += 1
-            component_slice = slices[component_id - 1]
-            if component_slice is None:
-                continue
-            ys, xs = component_slice
-            component = labels[component_slice] == component_id
-            component_support = support[component_slice] & component
-            local_y, local_x = np.nonzero(component_support)
-            if local_x.size < 3:
-                continue
-            raw_x = local_x + xs.start
-            raw_y = local_y + ys.start
-            covariance = np.cov(np.column_stack((raw_x, raw_y)), rowvar=False, bias=True)
-            eigenvalues, eigenvectors = np.linalg.eigh(np.atleast_2d(covariance))
-            major_variance = max(0.0, float(eigenvalues[-1]))
-            minor_variance = max(0.0, float(eigenvalues[0]))
-            length_px = 4.0 * np.sqrt(major_variance)
-            width_px = 4.0 * np.sqrt(minor_variance)
-            axis_ratio = np.sqrt(major_variance / max(minor_variance, np.finfo(np.float64).eps))
-            axis_ratio_gate = float(min_axis_ratio)
-            if length_px < MOTION_FEATURE_SHORT_TRAIL_LENGTH:
-                # 短线先允许较低轴比进入候选池，但不会绕过后面的
-                # 0.80/0.80 逐帧形态门以及跨帧位移/拟合门。
-                axis_ratio_gate = min(
-                    axis_ratio_gate,
-                    MOTION_FEATURE_SHORT_TRAIL_MIN_AXIS_RATIO,
-                )
-            if length_px < min_length:
-                length_rejected_count += 1
-                continue
-            if axis_ratio < axis_ratio_gate:
-                axis_ratio_rejected_count += 1
-                continue
-            if length_px >= MOTION_FEATURE_SHORT_TRAIL_LENGTH and float(size) < min_pixels:
-                large_area_rejected_count += 1
-                continue
-            geometry_pass_count += 1
-            x_min, x_max = int(raw_x.min()), int(raw_x.max())
-            y_min, y_max = int(raw_y.min()), int(raw_y.max())
-            touches_edge = x_min == 0 or y_min == 0 or x_max == values.shape[1] - 1 or y_max == values.shape[0] - 1
-            # 小型边缘横线通常是数组边界/截断异常；保留足够长的真实拖影，
-            # 但不把几十个像素的边缘噪声当成目标。
-            if touches_edge and length_px < max(min_length, 8.0 * psf_fwhm):
-                edge_rejected_count += 1
-                continue
-            component_values = residual[component_slice][component_support]
-            component_artifact = line_artifact_mask[component_slice][component_support]
-            artifact_overlap_fraction = (
-                float(np.count_nonzero(component_artifact) / component_values.size)
-                if component_values.size
-                else 0.0
-            )
-            weights = np.maximum(component_values.astype(np.float64), 0.0)
-            weight_sum = float(weights.sum())
-            center_x = float(np.average(raw_x, weights=weights)) if weight_sum > 0 else float(raw_x.mean())
-            center_y = float(np.average(raw_y, weights=weights)) if weight_sum > 0 else float(raw_y.mean())
-            major_vector = eigenvectors[:, -1]
-            angle_deg = float(np.degrees(np.arctan2(major_vector[1], major_vector[0])))
-            residual_peak = float(component_values.max())
-            continuity_ratio, profile_fill_ratio = _line_profile_metrics(
-                residual,
-                center_x=center_x,
-                center_y=center_y,
-                length_px=length_px,
-                width_px=width_px,
-                angle_deg=angle_deg,
-                threshold_adu=threshold,
-            )
-            point = MotionFeaturePoint(
-                frame_index=frame_index,
-                x=center_x,
-                y=center_y,
-                aligned_x=center_x - float(shift[0]),
-                aligned_y=center_y - float(shift[1]),
-                residual_snr=residual_peak / residual_noise,
-                area_pixels=int(size),
-                length_px=float(length_px),
-                width_px=float(width_px),
-                angle_deg=angle_deg,
-                bbox=(x_min, y_min, x_max, y_max),
-                touches_edge=touches_edge,
-                continuity_ratio=continuity_ratio,
-                profile_fill_ratio=profile_fill_ratio,
-                line_artifact_overlap_fraction=artifact_overlap_fraction,
-            )
-            # The temporal residual is only a proposal image.  Its raw-frame
-            # model evidence is attached after the per-frame raw fallback has
-            # finished, so the same local point/double/ellipse fit is not
-            # repeated once per temporal candidate.
-            frame_features.append(point)
         feature_frames.append(frame_features)
-        frame_audits.append(
-            MotionFrameAudit(
-                frame_index=frame_index,
-                threshold_adu=float(threshold),
-                residual_noise_adu=float(residual_noise),
-                valid_pixel_count=valid_pixel_count,
-                support_pixel_count=support_pixel_count,
-                component_count=int(component_count),
-                area_pass_count=area_pass_count,
-                geometry_pass_count=geometry_pass_count,
-                edge_rejected_count=edge_rejected_count,
-                feature_count=len(frame_features),
-                max_feature_residual_snr=(
-                    max((float(point.residual_snr) for point in frame_features), default=None)
-                ),
-                short_area_rejected_count=short_area_rejected_count,
-                length_rejected_count=length_rejected_count,
-                axis_ratio_rejected_count=axis_ratio_rejected_count,
-                large_area_rejected_count=large_area_rejected_count,
-                short_min_pixels=int(short_min_pixels),
-            )
-        )
+        frame_audits.append(frame_audit)
         if progress is not None:
             progress(
                 20.0 + 60.0 * (frame_index + 1) / len(frame_analyses),
