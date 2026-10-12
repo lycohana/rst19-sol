@@ -980,6 +980,64 @@ def verify(package: Path, out: Path) -> dict:
         "source_proposal_peak_audit.json",
     ):
         assert (proposal_peak_out / artifact).is_file(), artifact
+    temporal_catalog = out / "source proposal temporal catalog.csv"
+    temporal_catalog.write_text(
+        "detection_id,feature_class,feature_class_label,quality_passed,flags,proposal_methods\n"
+        "1,compact_quality,紧凑,True,,gaussian|dog_narrow|dog_broad\n"
+        "2,compact_quality,紧凑,True,,dog_narrow|dog_broad\n"
+        "3,range_anomaly,范围,False,RANGE,gaussian\n",
+        encoding="utf-8",
+    )
+    temporal_diagnostic = out / "source proposal temporal diagnostics.csv"
+    temporal_diagnostic.write_text(
+        "detection_id,feature_class,feature_class_label,diagnostic_subgroup,diagnostic_subgroup_label,"
+        "quality_passed,proposal_methods,candidate_presence,candidate_same_subgroup_presence,"
+        "quality_presence,quality_same_subgroup_presence,frame_count,required_presence,association_radius_px\n"
+        "3,range_anomaly,范围,range,范围,False,gaussian,4,3,2,1,5,4,1.0\n",
+        encoding="utf-8",
+    )
+    temporal_subgroups = out / "source proposal temporal subgroups.csv"
+    temporal_subgroups.write_text(
+        "feature_class,feature_class_label,proposal_subgroup,proposal_subgroup_label,anchor_count,"
+        "anchor_quality_count,frame_count,required_presence,association_radius_px,candidate_mean_presence,"
+        "candidate_presence_ge_required_count,candidate_presence_all_frames_count,quality_mean_presence,"
+        "quality_presence_ge_required_count,quality_presence_all_frames_count\n"
+        "compact_quality,紧凑,all_three,三路,1,1,5,4,1.0,5,1,1,5,1,1\n"
+        "compact_quality,紧凑,dog_only_no_deblend,DoG,1,1,5,4,1.0,2,0,0,1,0,0\n",
+        encoding="utf-8",
+    )
+    temporal_out = out / "source-proposal-temporal-audit"
+    temporal_request = {
+        "operation": "tool",
+        "tool": "rst19-source-proposal-temporal-audit",
+        "args": [
+            str(temporal_catalog.resolve()), str(temporal_diagnostic.resolve()),
+            str(temporal_subgroups.resolve()), "--target-id", "2", "--target-id", "3",
+            "--target-id", "2", "--out-dir", str(temporal_out.resolve()),
+        ],
+        "out_dir": str((out / "source-proposal-temporal-audit-job").resolve()),
+    }
+    temporal_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(temporal_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    temporal_events = [json.loads(line) for line in temporal_response.stdout.splitlines()]
+    assert len(temporal_events) == 1 and temporal_events[0]["ok"], temporal_events
+    temporal_payload = temporal_events[0]["payload"]
+    assert temporal_payload["tool"] == "rst19-source-proposal-temporal-audit"
+    assert temporal_payload["result"]["source_row_count"] == 1
+    assert len(temporal_payload["result"]["summary_rows"]) == 3
+    assert [row["detection_id"] for row in temporal_payload["result"]["target_rows"]] == [2, 3]
+    assert temporal_payload["result"]["target_rows"][0]["candidate_presence"] is None
+    assert temporal_payload["result"]["target_rows"][1]["candidate_presence"] == 4
+    for artifact in (
+        "source_proposal_temporal_rows.csv",
+        "source_proposal_temporal_summary.csv",
+        "source_proposal_temporal_targets.csv",
+        "source_proposal_temporal_audit.json",
+    ):
+        assert (temporal_out / artifact).is_file(), artifact
     feedback_path = out / "manual threshold feedback.jsonl"
     feedback_record = {
         "timestamp_utc": "2026-10-13T00:00:00+00:00",
@@ -1061,6 +1119,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-separation-audit",
                   "rst19-source-peak-consistency",
                   "rst19-source-proposal-peak-audit",
+                  "rst19-source-proposal-temporal-audit",
                   "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
@@ -1126,6 +1185,13 @@ def verify(package: Path, out: Path) -> dict:
         "source_count": len(proposal_peak_payload["result"]["rows"]),
         "summary_count": len(proposal_peak_payload["result"]["summaries"]),
         "target_count": len(proposal_peak_payload["result"]["targets"]),
+        "artifacts_written": True,
+        "external_python_search_disabled": True,
+    }
+    report["source_proposal_temporal_audit"] = {
+        "source_count": temporal_payload["result"]["source_row_count"],
+        "summary_count": len(temporal_payload["result"]["summary_rows"]),
+        "target_count": len(temporal_payload["result"]["target_rows"]),
         "artifacts_written": True,
         "external_python_search_disabled": True,
     }

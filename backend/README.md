@@ -54,9 +54,11 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 
 `rst19-source-proposal-peak-audit` 按 `detection_id` 连接源目录与 raw 峰一致性 CSV，再按 `feature_class × method_group` 汇总质量通过率、局部峰比例、非局部峰差值和 SNR 中位数，并可保留指定目标的输入顺序。它只读取已有 CSV；提议器来源彼此相关，不是独立投票，也不表示物理身份。
 
+`rst19-source-proposal-temporal-audit` 将来源目录与非紧凑候选的逐源时序、紧凑候选的 proposal subgroup 聚合连接起来，分别生成逐源行、类别×来源汇总和有序目标结果。紧凑来源只有子组聚合，指定目标的空逐源时序值表示证据不可用，不是零响应。
+
 人工阈值反馈以版本化 UTF-8 JSONL 保存；`feedback.append` 与 `feedback.load` 由 Rust 引擎和桌面 worker 实现，保留旧记录默认值和损坏行定位。反馈仅用于人工复核和调参记录，不会在线训练或自动改变检测器。
 
-桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-source-group-audit`、`rst19-source-group-sensitivity`、`rst19-source-separation-audit`、`rst19-source-peak-consistency`、`rst19-source-proposal-peak-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
+桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-source-group-audit`、`rst19-source-group-sensitivity`、`rst19-source-separation-audit`、`rst19-source-peak-consistency`、`rst19-source-proposal-peak-audit`、`rst19-source-proposal-temporal-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
 
 ```powershell
 cargo test --locked --manifest-path backend/Cargo.toml
@@ -71,6 +73,7 @@ python backend/verify_source_group_sensitivity.py $worker $engine --out tmp/nati
 python backend/verify_source_separation_audit.py $worker $engine --out tmp/native-source-separation-audit-v1
 python backend/verify_source_peak_consistency.py $worker $engine --out tmp/native-source-peak-consistency-v1
 python backend/verify_source_proposal_peak_audit.py $worker $engine --out tmp/native-source-proposal-peak-audit-v1
+python backend/verify_source_proposal_temporal_audit.py $worker $engine --out tmp/native-source-proposal-temporal-audit-v1
 python backend/verify_feedback.py $worker $engine --out tmp/native-feedback-v1
 $verificationDir = "tmp/native-sequence-chain-verification-$((Get-Date).ToString('yyyyMMdd-HHmmss'))"
 python backend/verify_sequence_chain.py backend/target/release/rst19-engine.exe --out $verificationDir
