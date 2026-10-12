@@ -147,6 +147,15 @@ fn execute(request: Value) -> Result<Value> {
                 request.get("image_support"),
             )
         }
+        "sequence.temporal_reference_candidates" => {
+            rst19_core::sequence_temporal::temporal_reference_candidates(&request)
+        }
+        "sequence.reference.median" => {
+            rst19_core::sequence_temporal::registered_median_reference(&request)
+        }
+        "sequence.reference.coadd" => {
+            rst19_core::sequence_temporal::registered_coadd_reference(&request)
+        }
         "sequence.frame_assign" => {
             let raw_tracks: Vec<(i64, f64, f64)> =
                 serde_json::from_value(request["track_positions"].clone())

@@ -26,6 +26,7 @@ pub mod sequence_consensus;
 pub mod sequence_fast;
 pub mod sequence_motion;
 pub mod sequence_registration;
+pub mod sequence_temporal;
 pub mod source_photometry;
 pub mod spatial;
 pub mod statistics;
