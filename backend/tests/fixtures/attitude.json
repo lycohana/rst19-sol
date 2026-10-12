@@ -1,0 +1,364 @@
+{
+  "source_hashes": {
+    "attitude.py": "e2377eef1a9bb936028fe19814ca9d0a88882fe6ddb4af311d4a853d36f926c1",
+    "fits.py": "c9b711b38c812efdd39aca03bf15d45d43b2fe68384d7213511e8c4d5792277b"
+  },
+  "cases": [
+    {
+      "label": "default_axis_wrap_headers_and_missing_auxiliary",
+      "frames": [
+        {
+          "path": "aligned.fits",
+          "header": {
+            "SIMPLE": true,
+            "BITPIX": 16,
+            "NAXIS": 2,
+            "NAXIS1": 16,
+            "NAXIS2": 16,
+            "AZIMUTH": 270.0,
+            "ELEVATIO": 0.0,
+            "DATE-OBS": "2026-03-30T16:32:05.4132"
+          },
+          "auxiliary_values": [
+            270.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.7071067811865476,
+            0.7071067811865476,
+            1.0,
+            -2.0,
+            3.5,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "path": "ra-wrap.fits",
+          "header": {
+            "SIMPLE": true,
+            "BITPIX": 16,
+            "NAXIS": 2,
+            "NAXIS1": 16,
+            "NAXIS2": 16,
+            "AZIMUTH": 270.0,
+            "DATE-OBS": "2026-03-30T16:32:05.4132"
+          },
+          "auxiliary_values": [
+            270.0,
+            0.0,
+            359.99995,
+            -0.0001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.7071067811865476,
+            0.7071067811865476,
+            -4.0,
+            2.0,
+            8.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "path": "missing-aux.fits",
+          "header": {
+            "SIMPLE": true,
+            "BITPIX": 16,
+            "NAXIS": 2,
+            "NAXIS1": 16,
+            "NAXIS2": 16,
+            "AZIMUTH": "bad",
+            "ELEVATIO": -5.5,
+            "DATE-OBS": "2026-03-30T16:32:05.4132"
+          },
+          "auxiliary_values": null
+        }
+      ],
+      "camera_body_axis": null,
+      "expected": {
+        "schema_version": 1,
+        "summary": {
+          "frame_count": 3,
+          "ok_frame_count": 2,
+          "missing_auxiliary_count": 1,
+          "camera_body_axis": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "quaternion_norm": {
+            "min": 1.0,
+            "max": 1.0,
+            "max_abs_deviation_from_one": 0.0
+          },
+          "boresight_residual_arcsec": {
+            "max": 0.4024922359296328,
+            "rms": 0.2846049894007791
+          },
+          "auxiliary_ra_deg": {
+            "min": 0.0,
+            "max": 359.99995,
+            "range": 359.99995
+          },
+          "auxiliary_dec_deg": {
+            "min": -0.0001,
+            "max": 0.0,
+            "range": 0.0001
+          },
+          "auxiliary_ra_range_arcsec": 1295999.82,
+          "auxiliary_dec_range_arcsec": 0.36000000000000004,
+          "attitude_ranges": {
+            "roll_deg": {
+              "min": -4.0,
+              "max": 1.0,
+              "range": 5.0
+            },
+            "pitch_deg": {
+              "min": -2.0,
+              "max": 2.0,
+              "range": 4.0
+            },
+            "yaw_deg": {
+              "min": 3.5,
+              "max": 8.0,
+              "range": 4.5
+            }
+          },
+          "header_pointing_match_count": 1,
+          "header_pointing_checked_count": 2,
+          "note": "四元数-光轴一致性只验证辅助字段之间的约定；它不提供像元角尺度、图像轴方向、畸变或曝光期间姿态变化，因此不能单独构成完整 WCS。"
+        },
+        "frames": [
+          {
+            "frame_index": 0,
+            "frame_number": 1,
+            "path": "aligned.fits",
+            "timestamp": "2026-03-30T16:32:05.4132",
+            "auxiliary_ra_deg": 0.0,
+            "auxiliary_dec_deg": 0.0,
+            "derived_ra_deg": 1.2722218725854064e-14,
+            "derived_dec_deg": 0.0,
+            "delta_ra_arcsec": 0.0,
+            "delta_dec_arcsec": 0.0,
+            "angular_residual_arcsec": 0.0,
+            "quaternion_norm": 1.0,
+            "p_az_deg": 270.0,
+            "p_el_deg": 0.0,
+            "roll_deg": 1.0,
+            "pitch_deg": -2.0,
+            "yaw_deg": 3.5,
+            "header_azimuth_deg": 270.0,
+            "header_elevation_deg": 0.0,
+            "header_pointing_match": true,
+            "status": "ok"
+          },
+          {
+            "frame_index": 1,
+            "frame_number": 2,
+            "path": "ra-wrap.fits",
+            "timestamp": "2026-03-30T16:32:05.4132",
+            "auxiliary_ra_deg": 359.99995,
+            "auxiliary_dec_deg": -0.0001,
+            "derived_ra_deg": 1.2722218725854064e-14,
+            "derived_dec_deg": 0.0,
+            "delta_ra_arcsec": 0.1799999999548163,
+            "delta_dec_arcsec": 0.36000000000000004,
+            "angular_residual_arcsec": 0.4024922359296328,
+            "quaternion_norm": 1.0,
+            "p_az_deg": 270.0,
+            "p_el_deg": 0.0,
+            "roll_deg": -4.0,
+            "pitch_deg": 2.0,
+            "yaw_deg": 8.0,
+            "header_azimuth_deg": 270.0,
+            "header_elevation_deg": null,
+            "header_pointing_match": false,
+            "status": "ok"
+          },
+          {
+            "frame_index": 2,
+            "frame_number": 3,
+            "path": "missing-aux.fits",
+            "timestamp": "2026-03-30T16:32:05.4132",
+            "auxiliary_ra_deg": null,
+            "auxiliary_dec_deg": null,
+            "derived_ra_deg": null,
+            "derived_dec_deg": null,
+            "delta_ra_arcsec": null,
+            "delta_dec_arcsec": null,
+            "angular_residual_arcsec": null,
+            "quaternion_norm": null,
+            "p_az_deg": null,
+            "p_el_deg": null,
+            "roll_deg": null,
+            "pitch_deg": null,
+            "yaw_deg": null,
+            "header_azimuth_deg": null,
+            "header_elevation_deg": -5.5,
+            "header_pointing_match": null,
+            "status": "missing_auxiliary"
+          }
+        ]
+      }
+    },
+    {
+      "label": "alternate_camera_axis",
+      "frames": [
+        {
+          "path": "aligned.fits",
+          "header": {
+            "SIMPLE": true,
+            "BITPIX": 16,
+            "NAXIS": 2,
+            "NAXIS1": 16,
+            "NAXIS2": 16,
+            "AZIMUTH": 270.0,
+            "ELEVATIO": 0.0,
+            "DATE-OBS": "2026-03-30T16:32:05.4132"
+          },
+          "auxiliary_values": [
+            270.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.7071067811865476,
+            0.7071067811865476,
+            1.0,
+            -2.0,
+            3.5,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "camera_body_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "expected": {
+        "schema_version": 1,
+        "summary": {
+          "frame_count": 1,
+          "ok_frame_count": 1,
+          "missing_auxiliary_count": 0,
+          "camera_body_axis": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "quaternion_norm": {
+            "min": 1.0,
+            "max": 1.0,
+            "max_abs_deviation_from_one": 0.0
+          },
+          "boresight_residual_arcsec": {
+            "max": 324000.0,
+            "rms": 324000.0
+          },
+          "auxiliary_ra_deg": {
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0
+          },
+          "auxiliary_dec_deg": {
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0
+          },
+          "auxiliary_ra_range_arcsec": 0.0,
+          "auxiliary_dec_range_arcsec": 0.0,
+          "attitude_ranges": {
+            "roll_deg": {
+              "min": 1.0,
+              "max": 1.0,
+              "range": 0.0
+            },
+            "pitch_deg": {
+              "min": -2.0,
+              "max": -2.0,
+              "range": 0.0
+            },
+            "yaw_deg": {
+              "min": 3.5,
+              "max": 3.5,
+              "range": 0.0
+            }
+          },
+          "header_pointing_match_count": 1,
+          "header_pointing_checked_count": 1,
+          "note": "四元数-光轴一致性只验证辅助字段之间的约定；它不提供像元角尺度、图像轴方向、畸变或曝光期间姿态变化，因此不能单独构成完整 WCS。"
+        },
+        "frames": [
+          {
+            "frame_index": 0,
+            "frame_number": 1,
+            "path": "aligned.fits",
+            "timestamp": "2026-03-30T16:32:05.4132",
+            "auxiliary_ra_deg": 0.0,
+            "auxiliary_dec_deg": 0.0,
+            "derived_ra_deg": 90.00000000000001,
+            "derived_dec_deg": 0.0,
+            "delta_ra_arcsec": 324000.0,
+            "delta_dec_arcsec": 0.0,
+            "angular_residual_arcsec": 324000.0,
+            "quaternion_norm": 1.0,
+            "p_az_deg": 270.0,
+            "p_el_deg": 0.0,
+            "roll_deg": 1.0,
+            "pitch_deg": -2.0,
+            "yaw_deg": 3.5,
+            "header_azimuth_deg": 270.0,
+            "header_elevation_deg": 0.0,
+            "header_pointing_match": true,
+            "status": "ok"
+          }
+        ]
+      }
+    }
+  ]
+}

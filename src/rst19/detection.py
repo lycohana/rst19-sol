@@ -1067,6 +1067,10 @@ def _pair_psf_evidence(
     margin = max(4, int(np.ceil(3.5 * sigma)))
     px, py = primary_xy
     sx, sy = secondary_xy
+    # Identical fixed-position PSF columns cannot identify two amplitudes.
+    # Do not let a near-singular normal solve choose a BLAS-dependent split.
+    if px == sx and py == sy:
+        return None, None
     height, width = image.shape
     x0 = max(0, int(np.floor(min(px, sx))) - margin)
     x1 = min(width, int(np.ceil(max(px, sx))) + margin + 1)

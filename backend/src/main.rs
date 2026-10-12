@@ -8,6 +8,7 @@ use rst19_core::{
     psf, statistics, Result,
 };
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, BufRead};
 
 fn numbers(value: &Value) -> Result<Vec<f64>> {
@@ -23,6 +24,506 @@ fn numbers(value: &Value) -> Result<Vec<f64>> {
 }
 fn execute(request: Value) -> Result<Value> {
     match request["operation"].as_str().ok_or("missing operation")? {
+        "attitude.audit.frames" => {
+            let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =
+                serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
+            let axis = request
+                .get("camera_body_axis")
+                .filter(|value| !value.is_null())
+                .map(numbers)
+                .transpose()?;
+            rst19_core::attitude::audit_frames(&frames, axis.as_deref())
+        }
+        "attitude.audit.paths" => {
+            let paths: Vec<String> =
+                serde_json::from_value(request["paths"].clone()).map_err(|e| e.to_string())?;
+            let axis = request
+                .get("camera_body_axis")
+                .filter(|value| !value.is_null())
+                .map(numbers)
+                .transpose()?;
+            rst19_core::attitude::audit_paths(&paths, axis.as_deref())
+        }
+        "sequence.track_detections" => {
+            let frames: Vec<Vec<rst19_core::measurement::Detection>> =
+                serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
+            let options: rst19_core::sequence::TrackSequenceOptions =
+                serde_json::from_value(request.get("options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            rst19_core::sequence::track_detections(&frames, &options)
+        }
+        "sequence.fast_point_movers" => {
+            let frames: Vec<Vec<rst19_core::measurement::Detection>> =
+                serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
+            let shifts: Vec<[f64; 2]> =
+                serde_json::from_value(request["cumulative_shifts"].clone())
+                    .map_err(|e| e.to_string())?;
+            let times: Option<Vec<f64>> = request
+                .get("frame_times")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?;
+            let options: rst19_core::sequence_fast::FastPointOptions =
+                serde_json::from_value(request.get("options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            let existing_tracks: Vec<Value> = request
+                .get("existing_tracks")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            rst19_core::sequence_fast::track_fast_point_movers(
+                &frames,
+                &shifts,
+                times.as_deref(),
+                &options,
+                &existing_tracks,
+            )
+        }
+        "sequence.candidate_consensus" => {
+            let candidates: Vec<Value> =
+                serde_json::from_value(request["candidate_peak_frames"].clone())
+                    .map_err(|e| e.to_string())?;
+            let shifts: Vec<[f64; 2]> =
+                serde_json::from_value(request["cumulative_shifts"].clone())
+                    .map_err(|e| e.to_string())?;
+            let quality_tracks: Vec<Value> = request
+                .get("quality_tracks")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            let times: Option<Vec<f64>> = request
+                .get("frame_times")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?;
+            let options = request.get("options").cloned().unwrap_or(json!({}));
+            rst19_core::sequence_consensus::candidate_consensus(
+                &candidates,
+                &shifts,
+                &quality_tracks,
+                times.as_deref(),
+                options
+                    .get("link_radius_px")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(4.0),
+                options
+                    .get("min_presence")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1) as usize,
+                options
+                    .get("persistent_min_presence")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1) as usize,
+                options
+                    .get("motion_min_displacement_px")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(2.0),
+                options
+                    .get("max_motion_fit_rms_px")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.75),
+                options
+                    .get("min_candidate_snr")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(15.0),
+                options
+                    .get("temporal_candidate_min_snr")
+                    .and_then(Value::as_f64),
+                options
+                    .get("temporal_reference_min_snr")
+                    .and_then(Value::as_f64),
+                options
+                    .get("temporal_min_psf_correlation")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.8),
+            )
+        }
+        "sequence.frame_assign" => {
+            let raw_tracks: Vec<(i64, f64, f64)> =
+                serde_json::from_value(request["track_positions"].clone())
+                    .map_err(|e| e.to_string())?;
+            let tracks: Vec<_> = raw_tracks
+                .iter()
+                .map(
+                    |(track_id, x, y)| rst19_core::sequence_assignment::TrackPosition {
+                        track_id: *track_id,
+                        x: *x,
+                        y: *y,
+                    },
+                )
+                .collect();
+            let current: Vec<[f64; 2]> = serde_json::from_value(request["current_points"].clone())
+                .map_err(|e| e.to_string())?;
+            let allowed_pairs: Option<BTreeSet<(i64, usize)>> = request
+                .get("allowed_pairs")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<(i64, usize)>>)
+                .transpose()
+                .map_err(|e| e.to_string())?
+                .map(|pairs| pairs.into_iter().collect());
+            let costs: Option<BTreeMap<(i64, usize), f64>> = request
+                .get("pair_costs")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<(i64, usize, f64)>>)
+                .transpose()
+                .map_err(|e| e.to_string())?
+                .map(|items| {
+                    items
+                        .into_iter()
+                        .map(|(track_id, source_index, cost)| ((track_id, source_index), cost))
+                        .collect()
+                });
+            let allowed = |track_id, source_index, _distance| {
+                allowed_pairs
+                    .as_ref()
+                    .is_none_or(|pairs| pairs.contains(&(track_id, source_index)))
+            };
+            let pair_cost = |track_id, source_index, _distance| {
+                costs
+                    .as_ref()
+                    .and_then(|values| values.get(&(track_id, source_index)))
+                    .copied()
+                    .unwrap_or(0.0)
+            };
+            let result = rst19_core::sequence_assignment::global_frame_assignments(
+                &tracks,
+                &current,
+                request["link_radius_px"].as_f64().unwrap_or(4.0),
+                allowed_pairs
+                    .as_ref()
+                    .map(|_| &allowed as &dyn Fn(i64, usize, f64) -> bool),
+                costs
+                    .as_ref()
+                    .map(|_| &pair_cost as &dyn Fn(i64, usize, f64) -> f64),
+            )?;
+            Ok(json!({
+                "assignments":result.iter().map(|item|Value::Array(vec![
+                    json!(item.distance_px),
+                    json!(item.track_id),
+                    json!(item.source_index),
+                ])).collect::<Vec<_>>()
+            }))
+        }
+        "sequence.translation.estimate" => {
+            let previous: Vec<rst19_core::measurement::Detection> =
+                serde_json::from_value(request["previous"].clone()).map_err(|e| e.to_string())?;
+            let current: Vec<rst19_core::measurement::Detection> =
+                serde_json::from_value(request["current"].clone()).map_err(|e| e.to_string())?;
+            let delta = rst19_core::sequence_registration::estimate_translation(
+                &previous,
+                &current,
+                request["radius_px"].as_f64().unwrap_or(8.0),
+            )?;
+            Ok(json!({"translation_px":delta}))
+        }
+        "sequence.track_motion.fit" => {
+            let points: Vec<rst19_core::sequence_motion::TrackObservation> =
+                serde_json::from_value(request["points"].clone()).map_err(|e| e.to_string())?;
+            let frame_times: Option<Vec<f64>> = request
+                .get("frame_times")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?;
+            Ok(
+                rst19_core::sequence_motion::fit_track_motion(&points, frame_times.as_deref())?
+                    .as_dict(),
+            )
+        }
+        "sequence.motion_displacement_floor" => {
+            let metrics: Vec<rst19_core::sequence_motion::MotionMetric> =
+                serde_json::from_value(request["metrics"].clone()).map_err(|e| e.to_string())?;
+            let floor = rst19_core::sequence_motion::derive_motion_displacement_floor(
+                &metrics,
+                request["required_presence"]
+                    .as_u64()
+                    .ok_or("missing required_presence")? as usize,
+                request["user_floor"].as_f64().ok_or("missing user_floor")?,
+                request["max_motion_fit_rms_px"]
+                    .as_f64()
+                    .ok_or("missing max_motion_fit_rms_px")?,
+                request["affine_frame_count"]
+                    .as_u64()
+                    .ok_or("missing affine_frame_count")? as usize,
+            )?;
+            Ok(json!({"effective_motion_min_displacement_px":floor}))
+        }
+        "wcs.affine.fit" => {
+            let matches: Vec<rst19_core::matching::CatalogMatch> =
+                serde_json::from_value(request["matches"].clone()).map_err(|e| e.to_string())?;
+            let catalog: Vec<rst19_core::catalog::CatalogSource> =
+                serde_json::from_value(request["catalog"].clone()).map_err(|e| e.to_string())?;
+            let reference_wcs: TangentPlaneWcs = serde_json::from_value(
+                request.get("reference_wcs").cloned().unwrap_or(Value::Null),
+            )
+            .map_err(|e| e.to_string())?;
+            let options: rst19_core::wcs_fit::AffineFitOptions =
+                serde_json::from_value(request.get("fit_options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            Ok(rst19_core::wcs_fit::fit_affine_wcs_from_matches(
+                &matches,
+                &catalog,
+                &reference_wcs,
+                request.get("epoch").and_then(Value::as_f64),
+                options,
+            )?
+            .as_dict())
+        }
+        "wcs.validate.matches" => {
+            let frame_matches: Vec<Vec<rst19_core::matching::CatalogMatch>> =
+                serde_json::from_value(request["frame_matches"].clone())
+                    .map_err(|e| e.to_string())?;
+            let catalog: Vec<rst19_core::catalog::CatalogSource> =
+                serde_json::from_value(request["catalog"].clone()).map_err(|e| e.to_string())?;
+            let reference_wcs: TangentPlaneWcs = serde_json::from_value(
+                request.get("reference_wcs").cloned().unwrap_or(Value::Null),
+            )
+            .map_err(|e| e.to_string())?;
+            let options: rst19_core::wcs_fit::AffineFitOptions =
+                serde_json::from_value(request.get("fit_options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            let frame_paths: Option<Vec<String>> = request
+                .get("frame_paths")
+                .filter(|v| !v.is_null())
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?;
+            rst19_core::wcs_fit::validate_frame_matches(
+                &frame_matches,
+                &catalog,
+                &reference_wcs,
+                frame_paths.as_deref(),
+                request.get("epoch").and_then(Value::as_f64),
+                options,
+            )
+        }
+        "wcs.validate.sequence" => {
+            let frame_paths: Vec<String> =
+                serde_json::from_value(request.get("frame_paths").cloned().unwrap_or(Value::Null))
+                    .map_err(|e| e.to_string())?;
+            let catalog: Vec<rst19_core::catalog::CatalogSource> =
+                serde_json::from_value(request["catalog"].clone()).map_err(|e| e.to_string())?;
+            let reference_wcs: TangentPlaneWcs = serde_json::from_value(
+                request.get("reference_wcs").cloned().unwrap_or(Value::Null),
+            )
+            .map_err(|e| e.to_string())?;
+            let options: rst19_core::pipeline::FrameOptions =
+                serde_json::from_value(request.get("options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            let fit_options: rst19_core::wcs_fit::AffineFitOptions =
+                serde_json::from_value(request.get("fit_options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            rst19_core::wcs_fit::validate_sequence_paths(
+                &frame_paths,
+                &catalog,
+                &reference_wcs,
+                &options,
+                request["match_radius_px"].as_f64().unwrap_or(3.0),
+                request.get("epoch").and_then(Value::as_f64),
+                fit_options,
+            )
+        }
+        "photometry.table" | "photometry.faintest" => {
+            let sources: Vec<rst19_core::measurement::Detection> =
+                serde_json::from_value(request["sources"].clone()).map_err(|e| e.to_string())?;
+            let calibration: Option<rst19_core::photometric_calibration::PhotometricCalibration> =
+                serde_json::from_value(request.get("calibration").cloned().unwrap_or(Value::Null))
+                    .map_err(|e| e.to_string())?;
+            let options = request.get("options").cloned().unwrap_or(json!({}));
+            if request["operation"] == "photometry.table" {
+                let matches: Vec<rst19_core::matching::CatalogMatch> =
+                    serde_json::from_value(request.get("matches").cloned().unwrap_or(json!([])))
+                        .map_err(|e| e.to_string())?;
+                let catalog: Vec<rst19_core::catalog::CatalogSource> =
+                    serde_json::from_value(request.get("catalog").cloned().unwrap_or(json!([])))
+                        .map_err(|e| e.to_string())?;
+                let options = serde_json::from_value(options).map_err(|e| e.to_string())?;
+                Ok(Value::Array(
+                    rst19_core::source_photometry::build_table(
+                        &sources,
+                        &matches,
+                        &catalog,
+                        calibration.as_ref(),
+                        &options,
+                    )?
+                    .iter()
+                    .map(|r| r.as_dict())
+                    .collect(),
+                ))
+            } else {
+                let options = serde_json::from_value(options).map_err(|e| e.to_string())?;
+                Ok(rst19_core::source_photometry::find_faintest(
+                    &sources,
+                    calibration.as_ref(),
+                    &options,
+                )?
+                .map(|r| r.as_dict())
+                .unwrap_or(Value::Null))
+            }
+        }
+        "pipeline.analyze" => {
+            let frame =
+                fits::read_fits(request["path"].as_str().ok_or("missing FITS path")?, false)?;
+            let model = match request.get("background_model") {
+                None | Some(Value::Null) => None,
+                Some(value) if value.is_object() => Some((
+                    numbers(&value["background"])?,
+                    numbers(&value["noise"])?,
+                    value["height"].as_u64().unwrap_or(frame.height as u64) as usize,
+                    value["width"].as_u64().unwrap_or(frame.width as u64) as usize,
+                )),
+                _ => return Err("invalid background model".into()),
+            };
+            let background = model
+                .as_ref()
+                .map(|(b, n, h, w)| detection::BackgroundModel {
+                    background: b,
+                    noise: n,
+                    height: *h,
+                    width: *w,
+                });
+            let catalog: Option<Vec<rst19_core::catalog::CatalogSource>> =
+                if let Some(path) = request["catalog_path"].as_str() {
+                    Some(rst19_core::catalog_csv::load_catalog_csv(path)?)
+                } else {
+                    serde_json::from_value(request.get("catalog").cloned().unwrap_or(Value::Null))
+                        .map_err(|e| e.to_string())?
+                };
+            let wcs: Option<rst19_core::matching::Projection> =
+                serde_json::from_value(request.get("wcs").cloned().unwrap_or(Value::Null))
+                    .map_err(|e| e.to_string())?;
+            let options =
+                serde_json::from_value(request.get("options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            Ok(rst19_core::pipeline::analyze_frame(
+                frame,
+                catalog.as_deref(),
+                wcs.as_ref(),
+                &options,
+                background.as_ref(),
+            )?
+            .as_dict())
+        }
+        "photometry.calibration.fit" => {
+            let matches: Vec<rst19_core::matching::CatalogMatch> =
+                serde_json::from_value(request["matches"].clone()).map_err(|e| e.to_string())?;
+            let detections: Vec<rst19_core::measurement::Detection> =
+                serde_json::from_value(request["detections"].clone()).map_err(|e| e.to_string())?;
+            let catalog: Vec<rst19_core::catalog::CatalogSource> =
+                serde_json::from_value(request["catalog"].clone()).map_err(|e| e.to_string())?;
+            let options =
+                serde_json::from_value(request.get("options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            Ok(
+                rst19_core::photometric_calibration::fit(
+                    &matches,
+                    &detections,
+                    &catalog,
+                    &options,
+                )?
+                .as_dict(),
+            )
+        }
+        "photometry.calibration.apply" | "photometry.calibration.error" => {
+            let calibration: rst19_core::photometric_calibration::PhotometricCalibration =
+                serde_json::from_value(request["calibration"].clone())
+                    .map_err(|e| e.to_string())?;
+            let value = if request["operation"] == "photometry.calibration.apply" {
+                calibration.apply(
+                    request["instrumental"]
+                        .as_f64()
+                        .ok_or("missing instrumental magnitude")?,
+                    request["color"].as_f64(),
+                )
+            } else {
+                calibration.magnitude_error(
+                    request["instrumental_error"].as_f64(),
+                    request["color_error"].as_f64(),
+                )
+            };
+            Ok(json!({"value":value}))
+        }
+        "photometry.evaluate" => rst19_core::photometry::evaluate(
+            request["kind"].as_str().ok_or("missing photometric kind")?,
+            &request["parameters"],
+            request.get("source"),
+        ),
+        "catalog.load" => {
+            let sources = rst19_core::catalog_csv::load_catalog_csv(
+                request["path"].as_str().ok_or("missing catalog path")?,
+            )?;
+            Ok(json!({"sources":sources}))
+        }
+        "catalog.propagate" => {
+            let source: rst19_core::catalog::CatalogSource =
+                serde_json::from_value(request["source"].clone()).map_err(|e| e.to_string())?;
+            let source = source.validated()?.at_epoch(request["epoch"].as_f64())?;
+            Ok(
+                json!({"extinction_compatibility":source.extinction_compatibility(),"source":source}),
+            )
+        }
+        "matching.catalog" => {
+            let detections: Vec<rst19_core::matching::DetectionPosition> =
+                serde_json::from_value(request["detections"].clone()).map_err(|e| e.to_string())?;
+            let catalog = if let Some(path) = request["catalog_path"].as_str() {
+                rst19_core::catalog_csv::load_catalog_csv(path)?
+            } else {
+                let sources: Vec<rst19_core::catalog::CatalogSource> =
+                    serde_json::from_value(request["catalog"].clone())
+                        .map_err(|e| e.to_string())?;
+                sources
+                    .into_iter()
+                    .map(rst19_core::catalog::CatalogSource::validated)
+                    .collect::<Result<Vec<_>>>()?
+            };
+            let wcs = serde_json::from_value(request["wcs"].clone()).map_err(|e| e.to_string())?;
+            let result = rst19_core::matching::match_detections(
+                &detections,
+                &catalog,
+                &wcs,
+                request["radius"].as_f64().unwrap_or(3.),
+                request["epoch"].as_f64(),
+                request["mode"].as_str().unwrap_or("global"),
+            )?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
+        }
+        "assignment.solve" => {
+            let cost = numbers(&request["cost"])?;
+            let result = rst19_core::assignment::linear_sum_assignment(
+                &cost,
+                request["rows"].as_u64().ok_or("missing rows")? as usize,
+                request["columns"].as_u64().ok_or("missing columns")? as usize,
+            )?;
+            Ok(json!({"assignment": result}))
+        }
+        "matching.assign" => {
+            let candidates: Vec<rst19_core::assignment::CandidateEdge> =
+                serde_json::from_value(request["edges"].clone()).map_err(|e| e.to_string())?;
+            let result = rst19_core::assignment::assign_candidates(
+                &candidates,
+                request["detection_count"]
+                    .as_u64()
+                    .ok_or("missing detection_count")? as usize,
+                request["catalog_count"]
+                    .as_u64()
+                    .ok_or("missing catalog_count")? as usize,
+                request["radius"].as_f64().unwrap_or(3.),
+                request["mode"].as_str().unwrap_or("global"),
+            )?;
+            Ok(json!({"matches": result}))
+        }
         "spatial.compatible_query" => {
             let points = request["points"]
                 .as_array()

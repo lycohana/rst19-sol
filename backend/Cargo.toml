@@ -12,10 +12,16 @@ path = "src/lib.rs"
 name = "rst19-engine"
 path = "src/main.rs"
 
+[[bin]]
+name = "rst19-aux-audit"
+path = "src/bin/rst19-aux-audit.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] }
 regex = "1"
+csv = "1"
+unicode-casefold = "0.2"
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 
 [profile.release]

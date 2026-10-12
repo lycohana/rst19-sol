@@ -1,5 +1,10 @@
 #![recursion_limit = "512"]
 //! Native scientific implementation. No Python interpreter, FFI, or subprocess calls.
+pub mod assignment;
+pub mod attitude;
+pub mod catalog;
+pub mod catalog_csv;
+pub mod cli;
 pub mod compatible_spatial;
 pub mod coordinates;
 pub mod deblend;
@@ -7,12 +12,24 @@ pub mod detection;
 pub mod filtering;
 pub mod filtering32;
 pub mod fits;
+pub mod matching;
 pub mod measurement;
 pub mod models;
+pub mod photometric_calibration;
+pub mod photometry;
+pub mod pipeline;
 pub mod precision;
 pub mod psf;
+pub mod sequence;
+pub mod sequence_assignment;
+pub mod sequence_consensus;
+pub mod sequence_fast;
+pub mod sequence_motion;
+pub mod sequence_registration;
+pub mod source_photometry;
 pub mod spatial;
 pub mod statistics;
 pub mod statistics32;
+pub mod wcs_fit;
 
 pub type Result<T> = std::result::Result<T, String>;

@@ -113,8 +113,12 @@ fn float32_background_convolution_and_snr_match_stage_by_stage() {
         assert_eq!(mode, case["starlet_mode"].as_str().unwrap());
         let (snr, center, scale) =
             filtering32::standardize_response(&g, &mask, &n, &valid, 1_000_000).unwrap();
-        compare(&snr, &case["snr"], "SNR");
         assert_eq!(center, case["response_center"].as_f64().unwrap());
-        assert!((scale - case["response_noise"].as_f64().unwrap()).abs() < 1e-12);
+        assert!(
+            (scale - case["response_noise"].as_f64().unwrap()).abs() < 1e-12,
+            "response noise: actual={scale}, expected={}",
+            case["response_noise"]
+        );
+        compare(&snr, &case["snr"], "SNR");
     }
 }

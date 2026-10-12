@@ -1,17 +1,40 @@
 # 原生运算层验证记录
 
-日期：2026-10-12。迁移前 Git 基线：`f834d91b0483b5e0b66f5b80ac3795a10a8616a3`。
+日期：2026-10-13。迁移前 Git 基线：`f834d91b0483b5e0b66f5b80ac3795a10a8616a3`。
 
 ## 当前工作区快照的验证状态
 
-本节覆盖提交前的最新代码；后文记录的是此前验证，不能视为当前全部测试通过。
+本节覆盖最新工作区代码；后文保留此前验证记录，不能视为当前全部测试通过。
 
-- `cargo test --locked --manifest-path backend/Cargo.toml` 当前失败：138 个固定检测案例通过，但 float32 阶段测试的 `SNR[0]` 存在 1 ULP 差异（位模式 3143924160 与 3143924159）。
-- 单独运行 `measurement_parity`：32 个 float64 / float32 源测量案例及近邻质量门控通过；扩展样例后，完全重合 PSF 的奇异拟合案例失败，Rust 返回 BIC `-4.9628446302598945`，Python 基线返回空值。该失败保留，尚未修复。
-- 额外 float32 进程级合成图对照也存在滤波噪声差异：Rust `0.4615626931190491`，Python `0.46156272292137146`。未放宽容差或删除失败测试。
-- float32 背景、噪声、残差、Gaussian 与 Starlet 阶段在当前扩展固定样例中逐位通过；SNR 阶段仍待定位。
+- 当前固定检测的 138 个案例通过；float32 阶段的 SNR 1 ULP 差异已修复：归约须按 NumPy 默认缓冲大小分块，不能对整个数组直接递归求和。8191 / 8192 / 8193 / 16384 / 16385 等长度及滤波响应逐次裁剪样本纳入固定对照，归约、统计、背景、噪声、Gaussian、Starlet 与 SNR 阶段通过。
+- `measurement_parity` 的 32 个 float64 / float32 源测量案例及近邻质量门控通过。完全重合的 PSF 模板属于不可辨识双源，Python 与 Rust 现均返回空证据；固定样例覆盖了此退化边界。
+- 修正后，`verify_float32.py` 原生进程的 12 个合成图案例与真实首帧 512×512 ROI 的 Gaussian / hybrid / ensemble 三种模式均通过全部字段对照；没有放宽容差。最新报告 `tmp/native-float32-verification-20261013-v2/verification.json`。ROI 显式限额 300 个返回源，不代表全幅检测或完整序列。FITS 哈希仍为 `6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6`。
+- PSF 退化分支修正后，`verify_detection.py` 的 3 个合成案例和真实首帧 512×512 ROI 的 Gaussian / hybrid / ensemble 三种模式均通过全部字段对照；最新报告 `tmp/native-detection-verification-20261013-v3/verification.json`。此报告只覆盖有界 ROI。
+- 星表分配核心新增 24 个矩形求解案例及 480 个稀疏全局／贪心案例，覆盖常量与整数平局、转置、拥挤冲突、重复边、独立连通分量和空集合，全部与 Python/SciPy 基线一致。原生分配核心不调用 SciPy；保留原代价函数与平局规则。
+- `verify_assignment.py` 通过原生 JSONL 接口重跑上述全部 504 个案例，全部字段完全相同，报告 `tmp/native-assignment-verification/verification.json`。进程级核验曾发现 JSON 输入浮点解析的 1 ULP 差异；启用 `serde_json` 的 `float_roundtrip` 后通过，没有放宽该对照。
+- 上一轮检测回归的 release 二进制 SHA-256 为 `9a15a88c532152f80c0c629dbe4728f632dfdddc8b854add5ee3860f54f58806`。同一二进制的全幅 float64 hybrid 回归通过：66469 个候选／返回、27553 个质量通过源，全部字段一致；本次含启动与 JSON 输出约 9.56 秒。报告 `tmp/native-detection-full-roundtrip/verification.json`。这只验证首帧检测，不证明序列运动或全部工具完成。
+- 星表链独立核验时的 release 二进制 SHA-256 为 `985af830396394a93cbd76a26c53c272372be14ce33f48ca95e7b68ff020c940`。`matching_parity` 的 35 个传播、14 个非法源、57 个 CSV、40 个完整匹配案例通过。CSV 覆盖 UTF-8 BOM、大小写及别名、重复列、引号内换行、空表、缺失尾列、额外字段、非有限／错误质量值、Gaia 来源和消光冲突；匹配覆盖自行、RA 跨零、TAN 与完整仿射、竞争候选、无法投影的源、未匹配顺序和有符号检测 ID。
+- `verify_matching.py` 通过原生进程核验 200 个请求，含每个匹配样例的直接 CSV 路径分支，以及空检测集合下非法星表源拒绝校验，全部字段通过同一验证器的既定容差；CSV 输入哈希不变。报告 `tmp/native-catalog-matching-validated-route/verification.json`。固定样例记录 `catalog.py`、`matching.py`、`wcs.py` 源码哈希，运行时校验；这不等同于真实星表物理身份确认或原 CLI／桌面完整验收。
+- 测光算术与结构化绝对星等的 404 个固定案例通过，覆盖视差修正、误差门控、模型距离及区间、缺少消光／来源／波段、目录回退、零误差和旧缓存消光语义冲突。核验全部字段，包括派生距离误差、区间状态、误差完整性与严格结果标志；没有把诊断结果升级成数值绝对星等。
+- 加权零点／颜色项拟合的 184 个固定案例及 13 个非法参数案例通过。涵盖 0／1／2 阶颜色项、目录质量过滤、测量／匹配过滤、元数据与重复匹配拒绝、颜色秩不足、MAD 剔除、确定性留出、质量门控和每个源的训练／验证角色；同时核验标定应用、颜色范围拒绝及误差传播。
+- `verify_photometry.py` 核验 2221 个原生进程请求，全部字段通过既定容差，报告 `tmp/native-photometry-gates-verification/verification.json`。核验二进制 SHA-256：`8614013015f015110f7e77ba61837f69692659cb2e3fcf05d20e6ab4d522e148`；Python 测光基线 SHA-256：`f760d3477c88b1c74950feba70894288d439b3da98a5ebb0c55a54694dea2f2f`。基线只用于对照，原生运算不调用 Python。
+- 随后补充缓存颜色阶数的溢出保护；当前 release SHA-256 为 `dede4b63b5e75bdea9d36d1c5b7bde12c036f0529a0d8aa3946e8b5f694e1339`。原生进程接受超大缓存阶数后返回空值，未崩溃；上述 2221 请求报告绑定补充保护前的二进制。
+- 分配、检测、float32、星表链、基础数值、空间索引、测光、标定、逐源结果和单帧流程共 22 个测试通过；当前源码 release 构建、Clippy `-D warnings` 通过。单独重跑源测量的两项通过，PSF 奇异案例仍失败；没有删掉或忽略该失败。
+- 逐源光度表和最暗源选择已迁入 Rust：24 个表格场景、74 个选择场景通过，保留未标定、残差超限、来源／波段不匹配、部分标定集合、目录模型星等与图像绝对星等的区别，核验所有输出字段。
+- 原生单帧分析与免重检再标定通过 48 个合成场景；再标定前后检测输出保持完全一致。覆盖三种提案模式、整数／float64、无星表、空星表、未拟合／已拟合、波段不匹配、手动零点和 float32 快速路径。合成星表由基线测量构造，仅证明程序契约，不证明物理身份。
+- `verify_pipeline.py` 通过原生进程与 `rst19-native` 核验 149 个 JSONL 请求、92 次 CLI 调用，包含直接 FITS、CSV 星表、stdout／json-out、建输出目录及错误退出码。最新报告 `tmp/native-pipeline-verification-20261013-v2/verification.json`；engine SHA-256 为 `9e0db38ef71269db31f5d53a7da92a99987a6890db88840ef9ce130efd67f15d`，CLI SHA-256 为 `b32ca5a6d453926bf43a0050508a88124e877b49f5e990309210e47e62943dfe`。
+- 真实首帧在三种模式下核验完整单帧结果，每种显式 `max_sources=300`。Gaussian / hybrid / ensemble 候选分别为 58411 / 66469 / 73176，返回均为 300，质量通过分别为 223 / 242 / 246；全部字段通过，包括曝光、辅助字段和最暗源。FITS SHA-256 保持 `6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6`。这不是无限制源测量、真实目录标定或序列验收。
+- 单帧原生 CLI 已建立，但桌面和剩余工具仍未切换；原 CLI 的帮助文本布局、全部解析边界与跨平台行为尚需扩展核验。
+- WCS 仿射拟合和逐帧验证有独立 Python 固定基线，覆盖离群点剔除、样本不足、共线拒绝与多帧汇总；时间轨迹拟合及稳健运动下限覆盖不等间隔秒数、帧号回退、单点与门控场景。
+- 原生序列底层实现 mutual-nearest 平移估计和稀疏连通分量轨迹分配，覆盖大位移一致簇、空帧、搜索边界、近邻冲突、对级硬门与软代价。
+- verify_wcs_sequence.py 通过当前原生进程核验 23 个请求，增加了静态/移动点、漏帧拆轨、非等间隔时间下的仿射漂移，以及移动离群轨迹场景；WCS 拟合/报告、时间轨迹、运动下限、平移估计、帧分配和双张临时合成 FITS 流程也逐字段通过。报告位于 `tmp/native-wcs-sequence-verification-20261013-v11/verification.json`，绑定 engine SHA-256 `4fadbba6875a72450d1e6e925c68b4e2cb7b33972b5c46ef4231a365912e3c23`。该合成序列不代表真实 15 帧拖影分类。
+- 当前 Rust 对照测试 wcs_sequence_parity 共 7 项通过，覆盖 `sequence.track_detections` 点源主流程。RANSAC 的几何打分与稳健细化保持一致，但固定种子的抽样流为 SplitMix64，尚未与 NumPy PCG64 逐样本一致；线状拖影、motion-feature、候选共识及高速点源补充分析仍未迁入。
+- `sequence.fast_point_movers` 通过 3 个原生进程场景，覆盖静态轨迹占用避让、静态质量源不误标、非等间隔时间与单帧缺测；逐字段报告为 `tmp/native-sequence-fast-verification-20261013-v3/verification.json`，engine SHA-256 为 `4fadbba6875a72450d1e6e925c68b4e2cb7b33972b5c46ef4231a365912e3c23`。这是独立补充关联入口，候选峰高速源仍未迁入。
+- `sequence.candidate_consensus` 的几何与时序关联层通过 6 个原生进程场景，覆盖普通/时间中值候选、首帧缺失、质量轨迹重叠去重、独立参考 SNR 门、低滤波响应拒绝及运动拟合拒绝；报告 `tmp/native-sequence-consensus-verification-20261013-v2/verification.json`，engine SHA-256 为 `4fadbba6875a72450d1e6e925c68b4e2cb7b33972b5c46ef4231a365912e3c23`。尚不包含原始图像的像素有效性、PSF 支持、形状相关和线伪迹门控，也未接入完整 `analyze_sequence`。
+- `attitude.audit.frames`、`attitude.audit.paths` 和 `rst19-aux-audit` 的 4 个原生进程场景逐字段通过，覆盖辅助块缺失、RA 跨零、替代相机轴、FITS 路径读取及产物写入；CSV 与 Python 参考文件逐字节一致，JSON 全字段一致。报告 `tmp/native-attitude-verification-20261013-v6/verification.json`；本次 engine / CLI SHA-256 分别为 `4fadbba6875a72450d1e6e925c68b4e2cb7b33972b5c46ef4231a365912e3c23` 和 `559fad77ade73ace5ae412320a51a5ed303e400e9c87c9bc839b89296fdb21ca`。此处核验辅助字段之间的一致性，不是完整 WCS 或物理指向确认。
+- 当前完整 `cargo test --locked --manifest-path backend/Cargo.toml` 全部 36 项通过；`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 和 release `--bins` 构建通过。完全重合 PSF 的不确定系数分支已替换为明确的不可辨识判断。
 - float32 路径已经实现；后文“仍返回未迁移错误”、16 个源测量案例和 57 个检测案例的描述属于较早版本，当前数量分别为 32 和 138。
-- 后端全量迁移未完成，桌面仍调用原 Python worker；尚无纯 Rust 发布包。
+- 后端全量迁移未完成，桌面仍调用原 Python worker；尚无纯 Rust 发布包，也未验证 macOS/Linux 构建。
 
 ## 此前已验证记录
 
@@ -60,7 +83,7 @@
 
 现有桌面仍使用原有 Python worker，完整生产运算链尚未切换；`migration.json` 中 `complete` 与 `python_runtime_removed` 均为 false。
 
-数值对照当前覆盖 float64 检测路径；float32 快速序列路径、星表与测光标定、序列运动、合成、全部审计／实验及 78 个 CLI 契约仍需继续移植和对照。完整生产桌面尚未切换，未生成纯 Rust 发布包。
+检测对照已覆盖 float64 与 float32 固定样例和 ROI，以及首帧 float64 全幅；float32 全幅验收、WCS 拟合与天测流程、序列运动、合成、全部审计／实验及剩余 CLI 契约仍需继续移植和对照。完整生产桌面尚未切换，未生成纯 Rust 发布包。
 
 15 帧 FITS 读取验证证明读取、遥测和抽样像素契约；新增全幅计算验证只证明首帧 hybrid 检测与现有 Python 算法一致，不证明完整 15 帧运动分类或物理天体真值。
 

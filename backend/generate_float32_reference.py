@@ -8,7 +8,7 @@ from rst19.detection import sigma_clipped_stats,local_background_rms,_masked_gau
 
 if __name__=="__main__":
     rng=np.random.default_rng(32);stats=[]
-    for n in [1,2,7,8,9,127,128,129,4096,10001]:
+    for n in [1,2,7,8,9,127,128,129,4096,8191,8192,8193,10001,16384,16385]:
         values=rng.normal(1234,15,n).astype(np.float32);mask=rng.random(n)<.03;mask[0]=False
         center,noise=sigma_clipped_stats(values,mask=mask)
         stats.append({"values":values.tolist(),"mask":mask.tolist(),"sum":float(values.sum()),"median":float(np.median(values)),"std":float(np.std(values)),"center":center,"noise":noise})
@@ -27,5 +27,11 @@ if __name__=="__main__":
             gaussian,mode=_masked_gaussian_response(residual,valid,sigma=sigma,calculation_dtype=np.float32,fast_sequence=fast)
             starlet,s_mode=_masked_starlet_smooth(residual,valid,step=2,calculation_dtype=np.float32,fast_sequence=fast)
             snr,center,scale=_standardize_response(gaussian,effective_mask=mask,noise_map=noise,valid=valid,sample_limit=1_000_000)
+            selected=gaussian.ravel()[valid.ravel()]
+            for iteration in range(5):
+                mean=np.mean(selected);squares=(selected-mean)**2
+                diagnostic_center=float(np.median(selected));diagnostic_mad=float(np.median(np.abs(selected-diagnostic_center)))
+                stats.append({"values":selected.tolist(),"mask":np.zeros(selected.size,dtype=bool).tolist(),"sum":float(selected.sum()),"median":diagnostic_center,"std":float(np.std(selected)),"center":sigma_clipped_stats(selected)[0],"noise":sigma_clipped_stats(selected)[1],"mean":float(mean),"square_sum":float(squares.sum()),"iteration":iteration})
+                if iteration<4:selected=selected[np.abs(selected-diagnostic_center)<=3*(1.4826*diagnostic_mad)]
             stages.append({"shape":list(image.shape),"sigma":sigma,"box_size":box_size,"global_stats":global_stats,"image":image.ravel().tolist(),"valid":valid.ravel().tolist(),"background":background.ravel().tolist(),"noise":noise.ravel().tolist(),"residual":residual.ravel().tolist(),"fast":fast,"gaussian":gaussian.ravel().tolist(),"gaussian_mode":mode,"starlet":starlet.ravel().tolist(),"starlet_mode":s_mode,"snr":snr.ravel().tolist(),"response_center":center,"response_noise":scale})
     target=ROOT/"backend/tests/fixtures/float32.json";target.write_text(json.dumps({"statistics":stats,"stages":stages},indent=2,allow_nan=False),encoding="utf-8");print(target)

@@ -5,6 +5,15 @@ use crate::{
 };
 
 pub fn pairwise_sum(values: &[f32]) -> f32 {
+    // NumPy's default buffered reduction calls the pairwise inner loop once
+    // per 8192 elements and adds each block to the reduction accumulator.
+    // Recursing over the entire slice changes rounding at block boundaries.
+    values
+        .chunks(8192)
+        .fold(0.0, |sum, block| sum + pairwise_block(block))
+}
+
+fn pairwise_block(values: &[f32]) -> f32 {
     let n = values.len();
     if n < 8 {
         let mut sum = -0.0f32;
@@ -31,7 +40,7 @@ pub fn pairwise_sum(values: &[f32]) -> f32 {
     }
     let mut middle = n / 2;
     middle -= middle % 8;
-    pairwise_sum(&values[..middle]) + pairwise_sum(&values[middle..])
+    pairwise_block(&values[..middle]) + pairwise_block(&values[middle..])
 }
 pub fn median(values: &[f32]) -> Result<f32> {
     if values.is_empty() {

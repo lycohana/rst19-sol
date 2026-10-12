@@ -55,6 +55,11 @@ pub fn pair_psf_evidence_typed(
     {
         return Err("PSF coordinates and width must be finite".into());
     }
+    // Identical template columns leave the two amplitudes unidentifiable.
+    // Return no pair evidence instead of exposing solver-dependent splits.
+    if primary[0] == secondary[0] && primary[1] == secondary[1] {
+        return Ok((None, None));
+    }
     let sigma = (fwhm / 2.35482).max(0.5);
     let margin = (3.5 * sigma).ceil().max(4.0) as i64;
     let [px, py] = primary;
