@@ -181,6 +181,9 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.fit_collinear_motion_geometry" => {
             rst19_core::sequence_trails::fit_collinear_motion_geometry(&request)
         }
+        "sequence.best_collinear_motion_feature_group" => {
+            rst19_core::sequence_trails::best_collinear_motion_feature_group(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }

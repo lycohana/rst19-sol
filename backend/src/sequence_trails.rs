@@ -1176,6 +1176,206 @@ pub fn fit_collinear_motion_geometry(request: &Value) -> Result<Value> {
     }))
 }
 
+/// Select a monotonic, cross-frame collinear group from candidate trail points.
+pub fn best_collinear_motion_feature_group(request: &Value) -> Result<Value> {
+    let points = array(request, "points")?;
+    let candidates = request
+        .get("candidate_indices")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing candidate_indices array".to_string())?;
+    let min_length = number(request, "min_length_px")?;
+    let angle_tolerance = number(request, "angle_tolerance_deg")?;
+    let line_tolerance = number(request, "line_tolerance_px")?;
+    let min_span = number(request, "min_span_px")?;
+    if candidates.len() < 3 {
+        return Ok(json!({"group_indices": null}));
+    }
+    let mut valid_indices = Vec::new();
+    for candidate in candidates {
+        let raw_index = candidate
+            .as_i64()
+            .ok_or_else(|| "candidate index must be an integer".to_string())?;
+        let index = if raw_index < 0 {
+            points
+                .len()
+                .checked_sub(raw_index.unsigned_abs() as usize)
+                .ok_or_else(|| "candidate index out of range".to_string())?
+        } else {
+            raw_index as usize
+        };
+        let point = points
+            .get(index)
+            .ok_or_else(|| "candidate index out of range".to_string())?;
+        if field_number(point, "length_px")? >= min_length {
+            valid_indices.push(index);
+        }
+    }
+    if valid_indices.len() < 3 {
+        return Ok(json!({"group_indices": null}));
+    }
+    let mut coordinates = Vec::with_capacity(valid_indices.len());
+    let mut angles = Vec::with_capacity(valid_indices.len());
+    let mut frame_numbers = Vec::with_capacity(valid_indices.len());
+    for index in &valid_indices {
+        let point = &points[*index];
+        coordinates.push([
+            field_number(point, "aligned_x")?,
+            field_number(point, "aligned_y")?,
+        ]);
+        angles.push(field_number(point, "angle_deg")?);
+        frame_numbers.push(
+            point
+                .get("frame_index")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| "motion feature point missing integer frame_index".to_string())?,
+        );
+    }
+    let monotonic_tolerance = 2.0_f64.max(0.25 * line_tolerance);
+    let mut best_score: Option<(usize, f64, f64, f64)> = None;
+    let mut best_group: Option<Vec<usize>> = None;
+    for left in 0..valid_indices.len().saturating_sub(1) {
+        for right in left + 1..valid_indices.len() {
+            if frame_numbers[left] == frame_numbers[right] {
+                continue;
+            }
+            let vector = [
+                coordinates[right][0] - coordinates[left][0],
+                coordinates[right][1] - coordinates[left][1],
+            ];
+            let separation = vector[0].hypot(vector[1]);
+            if !separation.is_finite() || separation < min_span {
+                continue;
+            }
+            let direction = [vector[0] / separation, vector[1] / separation];
+            let line_angle = direction[1].atan2(direction[0]).to_degrees();
+            let angle_mask: Vec<bool> = angles
+                .iter()
+                .map(|angle| {
+                    angle.is_finite()
+                        && line_angle_difference(*angle, line_angle) <= angle_tolerance
+                })
+                .collect();
+            if angle_mask.iter().filter(|value| **value).count() < 3 {
+                continue;
+            }
+            let normal = [-direction[1], direction[0]];
+            let perpendicular: Vec<f64> = coordinates
+                .iter()
+                .map(|coordinate| {
+                    ((coordinate[0] - coordinates[left][0]) * normal[0]
+                        + (coordinate[1] - coordinates[left][1]) * normal[1])
+                        .abs()
+                })
+                .collect();
+            let member_positions: Vec<usize> = (0..valid_indices.len())
+                .filter(|index| angle_mask[*index] && perpendicular[*index] <= line_tolerance)
+                .collect();
+            if member_positions.len() < 3 {
+                continue;
+            }
+            let mut member_frames: Vec<i64> = member_positions
+                .iter()
+                .map(|position| frame_numbers[*position])
+                .collect();
+            member_frames.sort_unstable();
+            member_frames.dedup();
+            let mut selected_positions = Vec::with_capacity(member_frames.len());
+            for frame_index in member_frames {
+                let selected = member_positions
+                    .iter()
+                    .copied()
+                    .filter(|position| frame_numbers[*position] == frame_index)
+                    .min_by(|first, second| {
+                        perpendicular[*first]
+                            .total_cmp(&perpendicular[*second])
+                            .then_with(|| first.cmp(second))
+                    })
+                    .unwrap();
+                selected_positions.push(selected);
+            }
+            selected_positions.sort_by_key(|position| frame_numbers[*position]);
+            if selected_positions.len() < 3 {
+                continue;
+            }
+            let selected_projection: Vec<f64> = selected_positions
+                .iter()
+                .map(|position| {
+                    (coordinates[*position][0] - coordinates[left][0]) * direction[0]
+                        + (coordinates[*position][1] - coordinates[left][1]) * direction[1]
+                })
+                .collect();
+            let differences: Vec<f64> = selected_projection
+                .windows(2)
+                .map(|pair| pair[1] - pair[0])
+                .collect();
+            let increasing = differences
+                .iter()
+                .all(|difference| *difference >= -monotonic_tolerance);
+            let decreasing = differences
+                .iter()
+                .all(|difference| *difference <= monotonic_tolerance);
+            if !increasing && !decreasing {
+                continue;
+            }
+            let selected_span = selected_projection
+                .iter()
+                .copied()
+                .fold(f64::NEG_INFINITY, f64::max)
+                - selected_projection
+                    .iter()
+                    .copied()
+                    .fold(f64::INFINITY, f64::min);
+            if selected_span < min_span {
+                continue;
+            }
+            let selected_points: Vec<Value> = selected_positions
+                .iter()
+                .map(|position| points[valid_indices[*position]].clone())
+                .collect();
+            let geometry = fit_collinear_motion_geometry(&json!({
+                "points": selected_points,
+                "frame_times": request.get("frame_times").cloned().unwrap_or(Value::Null),
+                "reference_interval_s": request.get("reference_interval_s").cloned().unwrap_or(Value::Null),
+            }))?;
+            let fitted_span = optional_number(&geometry, "projected_span").unwrap_or(0.0);
+            let fitted_rms = optional_number(&geometry, "rms_px");
+            let Some(fitted_rms) = fitted_rms else {
+                continue;
+            };
+            if fitted_span < min_span || fitted_rms > line_tolerance {
+                continue;
+            }
+            let perpendicular_sum = selected_positions
+                .iter()
+                .map(|position| perpendicular[*position])
+                .sum::<f64>();
+            let score = (
+                selected_positions.len(),
+                fitted_span,
+                -fitted_rms,
+                -perpendicular_sum,
+            );
+            let greater = best_score.is_none_or(|best| {
+                score.0 > best.0
+                    || (score.0 == best.0
+                        && (score.1 > best.1
+                            || (score.1 == best.1
+                                && (score.2 > best.2 || (score.2 == best.2 && score.3 > best.3)))))
+            });
+            if greater {
+                best_score = Some(score);
+                best_group = Some(
+                    selected_positions
+                        .iter()
+                        .map(|position| valid_indices[*position])
+                        .collect(),
+                );
+            }
+        }
+    }
+    Ok(json!({"group_indices": best_group}))
+}
+
 fn deconvolved_motion_length(measured: f64, psf_fwhm: f64) -> Option<f64> {
     if !measured.is_finite() || !psf_fwhm.is_finite() || measured <= 0.0 || psf_fwhm <= 0.0 {
         return None;

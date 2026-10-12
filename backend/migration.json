@@ -3259,7 +3259,8 @@
     "validated relative frame-time axis and median reference interval",
     "UTC-normalized FITS DATE-OBS parsing with monotonic frame fallback",
     "soft pairwise line-feature association cost with endpoint and motion-axis evidence",
-    "PCA collinear track span/RMS/axis and exposure-aware motion speed"
+    "PCA collinear track span/RMS/axis and exposure-aware motion speed",
+    "best monotonic one-per-frame collinear motion group selection"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3284,7 +3285,7 @@
   "native_matching_execution": "TAN or full affine WCS projection; finite projected catalog gating; radius KD-tree; global/greedy assignment; all match fields and statistics; catalog arrays or direct CSV path; JSONL matching.catalog",
   "native_astrometry_execution": "wcs.affine.fit, wcs.validate.matches, and wcs.validate.sequence; prior-WCS local affine refinement, robust clipping, per-frame leave-one-out checks; not blind plate solving",
   "native_attitude_execution": "attitude.audit.frames and attitude.audit.paths; quaternion/boresight residuals, header pointing consistency, missing-auxiliary handling, RA/Dec and attitude range summaries; rst19-aux-audit writes Python-byte-identical CSV and field-identical JSON",
-  "native_sequence_execution": "sequence.translation.estimate, sequence.frame_assign, sequence.track_motion.fit, sequence.motion_displacement_floor, sequence.track_detections, sequence.fast_point_movers, sequence.candidate_consensus with optional per-frame raw-image gates, sequence.reference.median, sequence.reference.coadd, sequence.temporal_reference_candidates for multiscale Gaussian proposals plus forced per-frame PSF responses, sequence.line_profile_metrics for bilinear trail continuity/fill diagnostics, sequence.trail_shape_evidence for single-frame rejection reasons and sequence shape admission, sequence.motion_feature_track_gates for cross-frame shape/motion-axis/artifact/edge checks, sequence.motion_feature_continuity_gates for continuous observation runs and bounded interior-gap bridging, sequence.motion_feature_exposure_evidence for PSF-deconvolved exposure speed versus inter-frame motion, sequence.motion_feature_confirmation_evidence for required coverage and stable rejection codes, sequence.motion_proposal_thresholds for metadata-aware raw trail proposal floors, and sequence.motion_time_axis for validated elapsed times and median reference interval, sequence.observation_time_axis for UTC-normalized FITS DATE-OBS parsing with monotonic frame fallback, sequence.motion_feature_pair_geometry for the soft trail association cost, sequence.fit_collinear_motion_geometry for PCA trail span and time-aware legacy speed;   high-level multi-frame orchestration and full motion-feature/trail extraction remain pending; affine RANSAC uses deterministic SplitMix64 rather than NumPy PCG64",
+  "native_sequence_execution": "sequence.translation.estimate, sequence.frame_assign, sequence.track_motion.fit, sequence.motion_displacement_floor, sequence.track_detections, sequence.fast_point_movers, sequence.candidate_consensus with optional per-frame raw-image gates, sequence.reference.median, sequence.reference.coadd, sequence.temporal_reference_candidates for multiscale Gaussian proposals plus forced per-frame PSF responses, sequence.line_profile_metrics for bilinear trail continuity/fill diagnostics, sequence.trail_shape_evidence for single-frame rejection reasons and sequence shape admission, sequence.motion_feature_track_gates for cross-frame shape/motion-axis/artifact/edge checks, sequence.motion_feature_continuity_gates for continuous observation runs and bounded interior-gap bridging, sequence.motion_feature_exposure_evidence for PSF-deconvolved exposure speed versus inter-frame motion, sequence.motion_feature_confirmation_evidence for required coverage and stable rejection codes, sequence.motion_proposal_thresholds for metadata-aware raw trail proposal floors, and sequence.motion_time_axis for validated elapsed times and median reference interval, sequence.observation_time_axis for UTC-normalized FITS DATE-OBS parsing with monotonic frame fallback, sequence.motion_feature_pair_geometry for the soft trail association cost, sequence.fit_collinear_motion_geometry for PCA trail span and time-aware legacy speed, sequence.best_collinear_motion_feature_group for deterministic monotonic cross-frame candidate grouping;    high-level multi-frame orchestration and full motion-feature/trail extraction remain pending; affine RANSAC uses deterministic SplitMix64 rather than NumPy PCG64",
   "native_photometry_execution": "instrumental/apparent/legacy absolute arithmetic; structured parallax/model-distance/catalog absolute estimates; derived error/interval/strict gates; weighted zero point/color fit; clipping/holdout/catalog quality gates/sample roles; calibration application and error; native JSONL operations",
   "native_source_photometry": "complete source table status/flags/reference/model magnitude separation; faintest ranking, ties, calibration consistency and partial selection scope; JSONL photometry.table/photometry.faintest",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
@@ -3320,6 +3321,7 @@
     "tests/sequence_observation_time_axis_parity.rs",
     "tests/sequence_motion_feature_pair_geometry_parity.rs",
     "tests/collinear_motion_geometry_parity.rs",
+    "tests/collinear_motion_group_parity.rs",
     "tests/attitude_parity.rs",
     "verify_fits.py",
     "verify_detection.py",
@@ -3344,6 +3346,7 @@
     "verify_sequence_observation_time_axis.py",
     "verify_sequence_motion_feature_pair_geometry.py",
     "verify_collinear_motion_geometry.py",
+    "verify_collinear_motion_group.py",
     "verify_attitude.py",
     "verify_spatial_ties.py",
     "verify_full_snapshot.py"
