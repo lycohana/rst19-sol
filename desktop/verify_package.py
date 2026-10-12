@@ -32,10 +32,10 @@ def make_fits(path: Path) -> None:
 def make_feature_catalog(path: Path) -> None:
     path.write_bytes(
         b"\xef\xbb\xbf"
-        + b"detection_id,feature_class,quality_passed,flags,flux_snr\n"
-        + b"1,compact,true,wing|blend|wing,12\n"
-        + b"2,compact,false,blend,11\n"
-        + b"3,diffuse,yes,,3\n"
+        + b"detection_id,feature_class,feature_class_label,quality_passed,flags,flux_snr,psf_support_pixels,fwhm,ellipticity,sharpness,footprint_pixels\n"
+        + b"1,compact,Compact,true,wing|blend|wing,12,5,2.5,0.1,0.3,20\n"
+        + b"2,compact,Compact,false,blend,11,4,2.5,0.1,0.3,20\n"
+        + b"3,diffuse,Diffuse,yes,,3,2,0.5,0.8,0.9,1\n"
     )
 
 
@@ -135,6 +135,27 @@ def verify(package: Path, out: Path) -> dict:
     assert interaction["result"]["rows"][0]["candidate_count"] == 2
     assert Path(interaction["result_path"]).is_file()
     assert (interaction_out / "feature_flag_interactions.csv").is_file()
+    margin_out = out / "feature-gate-margin"
+    margin_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-gate-margin",
+        "args": [str(catalog.resolve()), "--out-dir", str(margin_out.resolve())],
+        "out_dir": str((out / "feature-gate-margin-job").resolve()),
+    }
+    margin_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(margin_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    margin_events = [json.loads(line) for line in margin_response.stdout.splitlines()]
+    assert len(margin_events) == 1 and margin_events[0]["ok"]
+    margin = margin_events[0]["payload"]
+    assert margin["tool"] == "rst19-feature-gate-margin"
+    assert margin["result"]["rows"][0]["feature_class"] == "compact"
+    assert margin["result"]["rows"][0]["metric"] == "ellipticity"
+    assert margin["result"]["rows"][0]["class_count"] == 2
+    assert Path(margin["result_path"]).is_file()
+    assert (margin_out / "feature_gate_margins.csv").is_file()
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -157,7 +178,7 @@ def verify(package: Path, out: Path) -> dict:
     report = {"package": str(package), "environment": entry["payload"]["environment"], "tool_count": 78,
               "native_backends": [
                   "rst19 single-frame", "rst19-aux-audit", "rst19-feature-flag-profile",
-                  "rst19-feature-flag-interaction",
+                  "rst19-feature-flag-interaction", "rst19-feature-gate-margin",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,

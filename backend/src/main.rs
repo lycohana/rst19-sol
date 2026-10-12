@@ -81,6 +81,24 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.feature_gate_margin" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let thresholds: rst19_core::feature_gate_margin::FeatureGateMarginThresholds =
+                serde_json::from_value(
+                    request
+                        .get("thresholds")
+                        .cloned()
+                        .unwrap_or_else(|| json!({})),
+                )
+                .map_err(|error| error.to_string())?;
+            Ok(rst19_core::feature_gate_margin::run(
+                std::path::Path::new(catalog_path),
+                thresholds,
+            )?
+            .as_dict())
+        }
         "sequence.track_detections" => {
             let frames: Vec<Vec<rst19_core::measurement::Detection>> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
