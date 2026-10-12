@@ -29,6 +29,16 @@ def make_fits(path: Path) -> None:
     path.write_bytes(header + struct.pack(f">{len(pixels)}h", *pixels))
 
 
+def make_feature_catalog(path: Path) -> None:
+    path.write_bytes(
+        b"\xef\xbb\xbf"
+        + b"detection_id,feature_class,quality_passed,flags\n"
+        + b"1,compact,true,wing|blend|wing\n"
+        + b"2,compact,false,blend\n"
+        + b"3,diffuse,yes,\n"
+    )
+
+
 def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -74,6 +84,33 @@ def verify(package: Path, out: Path) -> dict:
     assert attitude["result"]["summary"]["missing_auxiliary_count"] == 1
     assert Path(attitude["result_path"]).is_file()
     assert (attitude_out / "auxiliary_boresight_audit.csv").is_file()
+    catalog = out / "source catalog.csv"
+    make_feature_catalog(catalog)
+    profile_out = out / "feature-flag-profile"
+    profile_request = {
+        "operation": "tool",
+        "tool": "rst19-feature-flag-profile",
+        "args": [
+            str(catalog.resolve()), "--target-ids", "3", "1", "3", "missing",
+            "--out-dir", str(profile_out.resolve()),
+        ],
+        "out_dir": str((out / "feature-flag-job").resolve()),
+    }
+    profile_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(profile_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    profile_events = [json.loads(line) for line in profile_response.stdout.splitlines()]
+    assert len(profile_events) == 1 and profile_events[0]["ok"]
+    profile = profile_events[0]["payload"]
+    assert profile["tool"] == "rst19-feature-flag-profile"
+    assert profile["result"]["targets"] == ["3", "1", "missing"]
+    assert profile["result"]["rows"][0]["flag"] == "blend"
+    assert profile["result"]["rows"][0]["flag_count"] == 2
+    assert Path(profile["result_path"]).is_file()
+    assert (profile_out / "feature_flag_profile.csv").is_file()
+    assert (profile_out / "feature_flag_profile_targets.csv").is_file()
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -94,7 +131,7 @@ def verify(package: Path, out: Path) -> dict:
     for relative, expected in checksums.items():
         assert hashlib.sha256((package / relative).read_bytes()).hexdigest() == expected, relative
     report = {"package": str(package), "environment": entry["payload"]["environment"], "tool_count": 78,
-              "native_backends": ["rst19 single-frame", "rst19-aux-audit"],
+              "native_backends": ["rst19 single-frame", "rst19-aux-audit", "rst19-feature-flag-profile"],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,
               "external_python_search_disabled": True, "checksum_files": len(checksums)}

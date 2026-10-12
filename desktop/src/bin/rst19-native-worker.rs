@@ -23,6 +23,20 @@ fn output_path(args: &mut Vec<String>, out_dir: &Path) -> PathBuf {
     path
 }
 
+fn string_args(request: &Value) -> Result<Vec<String>, String> {
+    request["args"]
+        .as_array()
+        .ok_or("args must be a string array")?
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| "args must be a string array".to_owned())
+        })
+        .collect()
+}
+
 fn run(request: Value) -> Result<Value, String> {
     if request["operation"] == "preview" {
         let path = PathBuf::from(request["path"].as_str().ok_or("missing FITS path")?);
@@ -40,20 +54,22 @@ fn run(request: Value) -> Result<Value, String> {
     if request["operation"] != "tool" {
         return Err("Rust desktop worker only accepts preview or native tools".into());
     }
-    if request["tool"] == "rst19-aux-audit" {
-        return rst19_core::attitude::run_desktop(
-            &request["args"]
-                .as_array()
-                .ok_or("args must be a string array")?
-                .iter()
-                .map(|value| {
-                    value
-                        .as_str()
-                        .map(str::to_owned)
-                        .ok_or_else(|| "args must be a string array".to_owned())
-                })
-                .collect::<Result<Vec<_>, _>>()?,
+    if request["tool"] == "rst19-feature-flag-profile" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
         );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        return rst19_core::feature_flag_profile::run_desktop(&string_args(&request)?);
+    }
+    if request["tool"] == "rst19-aux-audit" {
+        return rst19_core::attitude::run_desktop(&string_args(&request)?);
     }
     if request["tool"] != "rst19" {
         return Err("Rust desktop worker does not support this tool".into());
@@ -69,17 +85,7 @@ fn run(request: Value) -> Result<Value, String> {
         serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
     )
     .map_err(|error| error.to_string())?;
-    let mut args = request["args"]
-        .as_array()
-        .ok_or("args must be a string array")?
-        .iter()
-        .map(|value| {
-            value
-                .as_str()
-                .map(str::to_owned)
-                .ok_or_else(|| "args must be a string array".to_owned())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut args = string_args(&request)?;
     let input_path = args
         .first()
         .filter(|value| !value.starts_with('-'))

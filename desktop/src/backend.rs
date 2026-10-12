@@ -23,7 +23,10 @@ pub struct Job {
 fn uses_native_worker(request: &Value) -> bool {
     request["operation"] == "preview"
         || (request["operation"] == "tool"
-            && matches!(request["tool"].as_str(), Some("rst19" | "rst19-aux-audit")))
+            && matches!(
+                request["tool"].as_str(),
+                Some("rst19" | "rst19-aux-audit" | "rst19-feature-flag-profile")
+            ))
 }
 
 impl Backend {
@@ -205,6 +208,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-aux-audit"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-feature-flag-profile"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

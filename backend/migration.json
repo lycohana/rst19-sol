@@ -961,7 +961,7 @@
         "run_feature_flag_profile",
         "write_feature_flag_profile_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_flag_profile_cli",
@@ -971,7 +971,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_gate_margin",
@@ -3297,10 +3297,12 @@
   "native_trail_proposals_execution": "trails.local_pixel_proposals; masked constant-boundary Gaussian whitening, spatially tiled local maxima, per-length/angle line responses, local refinement, point/double-source negative controls, and geometry NMS; candidate proposals only",
   "native_photometry_execution": "instrumental/apparent/legacy absolute arithmetic; structured parallax/model-distance/catalog absolute estimates; derived error/interval/strict gates; weighted zero point/color fit; clipping/holdout/catalog quality gates/sample roles; calibration application and error; native JSONL operations",
   "native_source_photometry": "complete source table status/flags/reference/model magnitude separation; faintest ranking, ties, calibration consistency and partial selection scope; JSONL photometry.table/photometry.faintest",
+  "native_feature_flag_profile": "reads source_catalog CSV; overlap-aware category/flag counts and target extraction; writes matching BOM CSV and JSON artifacts; JSONL audit.feature_flag_profile",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_cli_contracts": {
     "rst19": "rst19-native executable; synthetic/default modes, stdout/json-out/errors and bounded original FITS verified; desktop single-frame route uses bundled Rust worker",
-    "rst19-aux-audit": "single FITS or sorted directory input; CSV/JSON output matches Python; desktop route uses bundled Rust worker; cross-platform packaging and broader parser edges pending"
+    "rst19-aux-audit": "single FITS or sorted directory input; CSV/JSON output matches Python; desktop route uses bundled Rust worker; cross-platform packaging and broader parser edges pending",
+    "rst19-feature-flag-profile": "overlap-aware CSV profile; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; cross-platform package validation pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3372,6 +3374,7 @@
     "verify_local_pixel_trail_proposals.py",
     "verify_sequence_chain.py",
     "verify_attitude.py",
+    "verify_feature_flag_profile.py",
     "verify_spatial_ties.py",
     "verify_full_snapshot.py"
   ],
@@ -3381,7 +3384,7 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route all remaining research tools through Rust desktop workers; rst19 single-frame and rst19-aux-audit routes are migrated",
+    "route all remaining research tools through Rust desktop workers; rst19 single-frame, rst19-aux-audit, and rst19-feature-flag-profile routes are migrated",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ]

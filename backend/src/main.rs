@@ -44,6 +44,29 @@ fn execute(request: Value) -> Result<Value> {
                 .transpose()?;
             rst19_core::attitude::audit_paths(&paths, axis.as_deref())
         }
+        "audit.feature_flag_profile" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let target_ids: Vec<String> = request
+                .get("target_ids")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|error| error.to_string())?
+                .unwrap_or_else(|| {
+                    ["82931", "82934", "44132"]
+                        .into_iter()
+                        .map(str::to_owned)
+                        .collect()
+                });
+            Ok(rst19_core::feature_flag_profile::run(
+                std::path::Path::new(catalog_path),
+                &target_ids,
+            )?
+            .as_dict())
+        }
         "sequence.track_detections" => {
             let frames: Vec<Vec<rst19_core::measurement::Detection>> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;
