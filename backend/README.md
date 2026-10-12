@@ -22,7 +22,9 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 测光层已原生实现仪器／表观星等算术，带状态的视差／模型距离／星表绝对星等，以及加权零点和颜色项拟合、离群点剔除、确定性留出验证、目录质量门控、样本角色和标定应用。支持 `photometry.evaluate`、`photometry.calibration.fit`、`photometry.calibration.apply`、`photometry.calibration.error`。绝对星等保留消光语义、距离区间和误差完整性门控。
 逐源光度表与最暗源选择支持 `photometry.table`、`photometry.faintest`；保留目录模型星等、图像推导绝对星等、残差拒绝和部分标定集合的区别。`pipeline.analyze` 直接读取 FITS，串联检测、匹配、标定、逐源光度表和最暗源；原生库支持不重复检测的再标定。
 新增 `rst19-native` 单帧 CLI，兼容原 `rst19` 参数入口、默认 hybrid、标准输出与 `--json-out`。已通过合成输入和有返回上限的真实首帧对照；原 CLI 帮助文本布局与全部解析边界仍需扩展核验。
-桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-effect-size` 和 `rst19-feature-class-context`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
+`rst19-pair-mechanism-context` 已原生计算候选源的质心/整数峰距离、无序近邻对、类别组合与双质量通过背景，并生成与 Python 字节一致的三份 CSV。`rst19-pair-mechanism-sensitivity` 在预先声明的几何窗口内重复该审计，保存窗口参数、目标 pair 状态及对照总体计数；窗口变化不解释成物理概率。两项工具均支持 Rust JSONL engine 与桌面 worker，覆盖 BOM、可选旗标列、目标去重、几何边界和自定义窗口。
+
+桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context` 和 `rst19-pair-mechanism-sensitivity`，已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。尚未支持的工具不会被静默替换为近似实现。
 
 ```powershell
 cargo test --locked --manifest-path backend/Cargo.toml

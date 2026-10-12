@@ -39,6 +39,17 @@ def make_feature_catalog(path: Path) -> None:
     )
 
 
+def make_pair_catalog(path: Path) -> None:
+    path.write_bytes(
+        b"\xef\xbb\xbf"
+        + b"detection_id,x,y,peak_x,peak_y,quality_passed,feature_class,flags\n"
+        + b'2,2.738,0,4,0,false,crowded_blend,"UNRESOLVED_BLEND,MANUAL"\n'
+        + b"4,25,0,25,0,true,compact_quality,\n"
+        + b'1,0,0,0,0,true,range_anomaly,"CODE_PATTERN,MANUAL"\n'
+        + b"3,-0.5,0.5,3.5,0,true,crowded_blend,\n"
+    )
+
+
 def verify(package: Path, out: Path) -> dict:
     package = package.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -205,6 +216,57 @@ def verify(package: Path, out: Path) -> dict:
     assert Path(context["result_path"]).is_file()
     assert (context_out / "feature_class_context_targets.csv").is_file()
     assert (context_out / "feature_class_context_metrics.csv").is_file()
+    pair_catalog = out / "pair source catalog.csv"
+    make_pair_catalog(pair_catalog)
+    pair_context_out = out / "pair-mechanism-context"
+    pair_context_request = {
+        "operation": "tool",
+        "tool": "rst19-pair-mechanism-context",
+        "args": [
+            str(pair_catalog.resolve()), "--target-id", "2", "--target-id", "1",
+            "--target-id", "2", "--out-dir", str(pair_context_out.resolve()),
+        ],
+        "out_dir": str((out / "pair-mechanism-context-job").resolve()),
+    }
+    pair_context_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(pair_context_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    pair_context_events = [json.loads(line) for line in pair_context_response.stdout.splitlines()]
+    assert len(pair_context_events) == 1 and pair_context_events[0]["ok"]
+    pair_context = pair_context_events[0]["payload"]
+    assert pair_context["tool"] == "rst19-pair-mechanism-context"
+    assert pair_context["result"]["source_count"] == 4
+    assert len(pair_context["result"]["pairs"]) == 2
+    assert pair_context["result"]["target"]["in_geometry_context"] is True
+    assert Path(pair_context["result_path"]).is_file()
+    assert (pair_context_out / "pair_mechanism_context_pairs.csv").is_file()
+    pair_sensitivity_out = out / "pair-mechanism-sensitivity"
+    pair_sensitivity_request = {
+        "operation": "tool",
+        "tool": "rst19-pair-mechanism-sensitivity",
+        "args": [
+            str(pair_catalog.resolve()), "--target-id", "2", "--target-id", "1",
+            "--configuration", "narrow,1,3.5,4.8",
+            "--configuration", "target,3.5,3.5,4.8",
+            "--out-dir", str(pair_sensitivity_out.resolve()),
+        ],
+        "out_dir": str((out / "pair-mechanism-sensitivity-job").resolve()),
+    }
+    pair_sensitivity_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(pair_sensitivity_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    pair_sensitivity_events = [json.loads(line) for line in pair_sensitivity_response.stdout.splitlines()]
+    assert len(pair_sensitivity_events) == 1 and pair_sensitivity_events[0]["ok"]
+    pair_sensitivity = pair_sensitivity_events[0]["payload"]
+    assert pair_sensitivity["tool"] == "rst19-pair-mechanism-sensitivity"
+    assert [row["configuration"] for row in pair_sensitivity["result"]["rows"]] == ["narrow", "target"]
+    assert [row["target_in_geometry_context"] for row in pair_sensitivity["result"]["rows"]] == [False, True]
+    assert Path(pair_sensitivity["result_path"]).is_file()
+    assert (pair_sensitivity_out / "pair_mechanism_sensitivity.csv").is_file()
     preview_request = {
         "operation": "preview",
         "path": str(frame.resolve()),
@@ -230,6 +292,8 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-feature-flag-interaction", "rst19-feature-gate-margin",
                   "rst19-feature-effect-size",
                   "rst19-feature-class-context",
+                  "rst19-pair-mechanism-context",
+                  "rst19-pair-mechanism-sensitivity",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
               "quality_count": payload["result"]["detection"]["quality_count"], "raw_fits_unchanged": True,

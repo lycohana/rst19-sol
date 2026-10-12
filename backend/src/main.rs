@@ -171,6 +171,78 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.pair_mechanism_context" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let target_ids: Vec<i64> = serde_json::from_value(
+                request
+                    .get("target_ids")
+                    .cloned()
+                    .ok_or("missing target detection IDs")?,
+            )
+            .map_err(|error| error.to_string())?;
+            let max_centroid = request
+                .get("max_centroid_distance_px")
+                .and_then(Value::as_f64)
+                .unwrap_or(3.5);
+            let peak_min = request
+                .get("peak_distance_min_px")
+                .and_then(Value::as_f64)
+                .unwrap_or(3.5);
+            let peak_max = request
+                .get("peak_distance_max_px")
+                .and_then(Value::as_f64)
+                .unwrap_or(4.8);
+            Ok(rst19_core::pair_mechanism_context::run(
+                std::path::Path::new(catalog_path),
+                &target_ids,
+                max_centroid,
+                peak_min,
+                peak_max,
+            )?
+            .as_dict())
+        }
+        "audit.pair_mechanism_sensitivity" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let target_ids: Vec<i64> = serde_json::from_value(
+                request
+                    .get("target_ids")
+                    .cloned()
+                    .ok_or("missing target detection IDs")?,
+            )
+            .map_err(|error| error.to_string())?;
+            let configurations = request
+                .get("configurations")
+                .filter(|value| !value.is_null())
+                .map(|value| {
+                    serde_json::from_value::<Vec<(String, f64, f64, f64)>>(value.clone())
+                        .map(|values| {
+                            values
+                                .into_iter()
+                                .map(|(name, centroid, peak_min, peak_max)| {
+                                    rst19_core::pair_mechanism_sensitivity::Configuration {
+                                        name,
+                                        max_centroid_distance_px: centroid,
+                                        peak_distance_min_px: peak_min,
+                                        peak_distance_max_px: peak_max,
+                                    }
+                                })
+                                .collect()
+                        })
+                        .map_err(|error| error.to_string())
+                })
+                .transpose()?
+                .unwrap_or_else(rst19_core::pair_mechanism_sensitivity::default_configurations);
+            Ok(rst19_core::pair_mechanism_sensitivity::run(
+                std::path::Path::new(catalog_path),
+                &target_ids,
+                &configurations,
+            )?
+            .as_dict())
+        }
         "sequence.track_detections" => {
             let frames: Vec<Vec<rst19_core::measurement::Detection>> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

@@ -33,6 +33,8 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-feature-gate-margin"
                         | "rst19-feature-effect-size"
                         | "rst19-feature-class-context"
+                        | "rst19-pair-mechanism-context"
+                        | "rst19-pair-mechanism-sensitivity"
                 )
             ))
 }
@@ -222,6 +224,21 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-flag-interaction"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-feature-gate-margin"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-feature-effect-size"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-feature-class-context"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-pair-mechanism-context"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-pair-mechanism-sensitivity"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

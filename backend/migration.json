@@ -1951,7 +1951,7 @@
         "_write_dataclass_rows",
         "write_pair_mechanism_context_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_mechanism_context_cli",
@@ -1961,7 +1961,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_mechanism_sensitivity",
@@ -1976,7 +1976,7 @@
         "run_pair_mechanism_sensitivity",
         "write_pair_mechanism_sensitivity_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_mechanism_sensitivity_cli",
@@ -1987,7 +1987,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_pixel_topology",
@@ -3267,7 +3267,9 @@
     "iterative disjoint grouping of long single-frame trails by monotonic collinear geometry",
     "per-frame sequence residual connected components with gap grouping, PCA line geometry, profile continuity, edge and line-artifact audits",
     "coherent raw per-frame line-proposal chains with elapsed-time and exposure-scaled displacement gates, direction continuity, and strong-shape admission",
-    "single-frame raw-pixel finite-line proposal search with masked Gaussian normalization, spatial seed budgets, local refinement, compact-source controls, and geometry suppression"
+    "single-frame raw-pixel finite-line proposal search with masked Gaussian normalization, spatial seed budgets, local refinement, compact-source controls, and geometry suppression",
+    "pair-mechanism geometry context audit with Python-byte-identical pair, summary, and target CSV artifacts",
+    "pair-mechanism multi-window sensitivity audit with native JSONL and desktop worker routes"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3310,7 +3312,9 @@
     "rst19-feature-flag-interaction": "overlap-aware singleton/pair CSV audit with exact-set and high-SNR diagnostics; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
     "rst19-feature-gate-margin": "per-feature-class signed numeric quality-gate margin summaries; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
     "rst19-feature-effect-size": "tie-aware feature effect sizes and top feature ranking by detector class; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
-    "rst19-feature-class-context": "requested detections with within-class percentile context; complete result parity and byte-identical target/metric CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending"
+    "rst19-feature-class-context": "requested detections with within-class percentile context; complete result parity and byte-identical target/metric CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
+    "rst19-pair-mechanism-context": "geometry-conditioned candidate-pair background; result and all three CSV artifacts match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending",
+    "rst19-pair-mechanism-sensitivity": "predeclared multi-window candidate-pair sensitivity; result and CSV artifact match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3392,7 +3396,11 @@
     "verify_feature_class_context.py",
     "tests/test_feature_class_context.py",
     "verify_spatial_ties.py",
-    "verify_full_snapshot.py"
+    "verify_full_snapshot.py",
+    "verify_pair_mechanism.py",
+    "tests/test_pair_mechanism_context.py",
+    "tests/test_pair_mechanism_sensitivity.py",
+    "verify_package.py"
   ],
   "remaining": [
     "full float32 detection acceptance coverage",
@@ -3400,8 +3408,10 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route all remaining research tools through Rust desktop workers; rst19 single-frame, rst19-aux-audit, rst19-feature-flag-profile, rst19-feature-flag-interaction, rst19-feature-gate-margin, rst19-feature-effect-size, and rst19-feature-class-context routes are migrated",
+    "route remaining research tools through Rust desktop workers; rst19 single-frame, rst19-aux-audit, rst19-feature-flag-profile, rst19-feature-flag-interaction, rst19-feature-gate-margin, rst19-feature-effect-size, rst19-feature-class-context, rst19-pair-mechanism-context, and rst19-pair-mechanism-sensitivity routes are migrated",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
-  ]
+  ],
+  "native_pair_mechanism_context": "pair geometry, class/quality summaries, target-pair context, and Python-byte-identical CSV/JSON artifacts",
+  "native_pair_mechanism_sensitivity": "predeclared centroid/peak windows with descriptive count changes and no physical-probability interpretation"
 }

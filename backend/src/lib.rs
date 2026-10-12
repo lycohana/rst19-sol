@@ -20,6 +20,8 @@ pub mod fits;
 pub mod matching;
 pub mod measurement;
 pub mod models;
+pub mod pair_mechanism_context;
+pub mod pair_mechanism_sensitivity;
 pub mod photometric_calibration;
 pub mod photometry;
 pub mod pipeline;
