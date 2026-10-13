@@ -483,6 +483,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::pair_flux_covariance::run_desktop(&args);
     }
+    if request["tool"] == "rst19-feature-temporal-consistency-audit" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::feature_temporal_consistency_audit::run_desktop(&args);
+    }
     if request["tool"] == "rst19-feature-cross-axis-audit" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -759,5 +781,50 @@ mod tests {
             "{error}"
         );
         fs::remove_dir_all(out_dir).unwrap();
+    }
+
+    #[test]
+    fn feature_temporal_consistency_tool_is_dispatched_to_the_native_audit() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-temporal-consistency-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let catalog = root.join("catalog.csv");
+        let metrics = root.join("frame-metrics.csv");
+        let out_dir = root.join("output");
+        fs::write(
+            &catalog,
+            "detection_id,feature_class,feature_class_label\n1,compact_quality,紧凑\n",
+        )
+        .unwrap();
+        fs::write(
+            &metrics,
+            "detection_id,frame_index,flux_snr_raw,negative_extreme_count,repeated_code_count,zero_count\n1,1,10,0,0,0\n",
+        )
+        .unwrap();
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-feature-temporal-consistency-audit",
+            "out_dir":out_dir,
+            "args":[
+                catalog.to_string_lossy(),
+                metrics.to_string_lossy(),
+                "--expected-frames=1"
+            ]
+        }))
+        .unwrap();
+        assert_eq!(result["tool"], "rst19-feature-temporal-consistency-audit");
+        assert_eq!(result["result"]["source_rows"].as_array().unwrap().len(), 1);
+        for artifact in [
+            "request.json",
+            "feature_temporal_consistency_audit.json",
+            "feature_temporal_consistency_sources.csv",
+            "feature_temporal_consistency_summary.csv",
+        ] {
+            assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 }

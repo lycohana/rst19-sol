@@ -539,7 +539,7 @@ rst19-feature-raw-evidence-audit `
 若要进一步审计各特征类在 15 帧原始固定坐标孔径中的响应波动，可运行：
 
 ```powershell
-rst19-feature-temporal-consistency-audit `
+cargo run --manifest-path backend/Cargo.toml --bin rst19-feature-temporal-consistency-audit -- `
   tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
   tmp/raw-source-diagnostics-stratified-v2/stratified_raw_source_frame_metrics.csv `
   --out-dir tmp/feature-temporal-consistency-audit-code-pattern-current-v2
@@ -548,7 +548,7 @@ rst19-feature-temporal-consistency-audit `
 它输出逐源/逐类别的覆盖率、稳健相对 MAD、正值比例、`flux SNR≥5` 比例、符号翻转和重复码/异常值比例。默认从 `source_catalog.csv` 取类别，并在逐帧表带有不同类别时拒绝静默连接；pair 专用表的类别属于其本地产物，必须显式限定 ID 和来源：
 
 ```powershell
-rst19-feature-temporal-consistency-audit `
+cargo run --manifest-path backend/Cargo.toml --bin rst19-feature-temporal-consistency-audit -- `
   tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
   tmp/raw-source-diagnostics-v1/raw_source_frame_metrics.csv `
   --feature-class-source frame `

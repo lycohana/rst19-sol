@@ -1285,7 +1285,7 @@
         "run_feature_temporal_consistency_audit",
         "write_feature_temporal_consistency_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_temporal_consistency_audit_cli",
@@ -1295,7 +1295,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_transition_flow",
@@ -3206,7 +3206,6 @@
     "rst19-feature-gate-margin": "rst19.feature_gate_margin_cli:main",
     "rst19-feature-gate-route": "rst19.feature_gate_route_cli:main",
     "rst19-feature-gate-temporal-route": "rst19.feature_gate_temporal_route_cli:main",
-    "rst19-feature-temporal-consistency-audit": "rst19.feature_temporal_consistency_audit_cli:main",
     "rst19-feature-cross-axis-audit": "rst19.feature_cross_axis_audit_cli:main",
     "rst19-contaminated-pair-injection": "rst19.contaminated_pair_injection_cli:main",
     "rst19-contaminated-pair-class": "rst19.contaminated_pair_class_cli:main",
@@ -3292,7 +3291,8 @@
     "multi-frame signed-null aggregation with pooled/frame ratios, SNR thresholds, feature/source rows, and connected-component recurrence diagnostics",
     "local pair-repair counterfactual with simultaneous median replacement, native FITS re-detection, four repair variants, and detector-level interpretation limits",
     "local pair-response attribution with normalized Gaussian response, repeated-code/negative-anomaly masks, ranked local maxima, signed pixel-class contributions, and detector-level interpretation limits",
-    "pair forced-photometry covariance with tie-aware Pearson/Spearman statistics, same-frame normalization, source-pair control distributions, and detector-level interpretation limits"
+    "pair forced-photometry covariance with tie-aware Pearson/Spearman statistics, same-frame normalization, source-pair control distributions, and detector-level interpretation limits",
+    "feature temporal-consistency source/class summaries; source and result fields plus BOM CSV artifacts match the Python reference; Rust CLI, JSONL engine, and desktop worker routes verified"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3361,7 +3361,8 @@
     "rst19-wcs-validation": "Rust standalone CLI and desktop worker perform per-frame FITS detection, offline catalog matching, WCS validation, and artifact generation; Python console entrypoint removed",
     "rst19-pair-repair-counterfactual": "Rust standalone CLI, JSONL engine, and desktop worker read FITS plus source_catalog CSV; four repair variants rerun the native detector; Python result fields match within 2e-7 absolute plus 2e-8 relative tolerance; BOM CSV/JSON output and CLI pass with PATH disabled; packaged and macOS/Linux validation pending; Python console entrypoint removed",
     "rst19-pair-response-attribution": "Rust standalone CLI, JSONL engine, and desktop worker read FITS plus source_catalog CSV; masked Gaussian response, local maximum ranks, and signed pixel-class contributions match all Python result fields within 2e-7 absolute plus 2e-8 relative tolerance; BOM CSV/JSON output and CLI pass with PATH disabled; packaged and macOS/Linux validation pending; Python console entrypoint removed",
-    "rst19-pair-covariance-audit": "Rust standalone CLI, JSONL engine, and desktop worker read forced_stability_frame_metrics.csv; Pearson/Spearman, per-frame median normalization, fraction shifts, and control distributions match Python result fields within 2e-7 absolute plus 2e-8 relative tolerance; BOM CSV/JSON output and CLI pass with PATH disabled; packaged and macOS/Linux validation pending; Python console entrypoint removed"
+    "rst19-pair-covariance-audit": "Rust standalone CLI, JSONL engine, and desktop worker read forced_stability_frame_metrics.csv; Pearson/Spearman, per-frame median normalization, fraction shifts, and control distributions match Python result fields within 2e-7 absolute plus 2e-8 relative tolerance; BOM CSV/JSON output and CLI pass with PATH disabled; packaged and macOS/Linux validation pending; Python console entrypoint removed",
+    "rst19-feature-temporal-consistency-audit": "Rust standalone CLI, JSONL audit.feature_temporal_consistency, and desktop worker; full result fields and BOM CSV bytes match the Python reference; PATH-disabled CLI and routing tests pass; release-package and macOS/Linux acceptance pending; Python console entrypoint removed"
   },
   "verification": [
     "tests/parity.rs",
@@ -3508,7 +3509,10 @@
     "tests/test_signed_null.py",
     "tests/test_desktop_worker.py",
     "cargo test --lib signed_null_sequence",
-    "tests/test_signed_null_sequence.py"
+    "tests/test_signed_null_sequence.py",
+    "tests/feature_temporal_consistency_parity.rs",
+    "generate_feature_temporal_consistency_reference.py",
+    "desktop/src/bin/rst19-native-worker.rs"
   ],
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",
@@ -3516,7 +3520,7 @@
     "remaining sequence work: full multi-scale/raw/temporal candidate assembly and verification, motion/trail and stack-faint orchestration, full relative-photometry configuration/output compatibility, full SequenceResult assembly/output compatibility, and exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
@@ -3552,5 +3556,6 @@
   "native_sequence_brief": "sequence.brief returns field-identical structured findings and Chinese display text through the Rust engine and desktop worker; three timestamp, regression, fallback, candidate, mosaic and empty-result scenarios match Python at 5e-7 tolerance; Windows package worker passes with external Python search disabled; macOS/Linux acceptance pending",
   "native_sequence_core": "sequence.analyze_core is available in the Rust JSONL engine and desktop worker; three synthetic timestamped FITS frames match Python FrameAnalysis fields, time axis, and selected track/registration fields at 5e-7; registered temporal-reference median/coadd candidate recovery is integrated from borrowed Rust FITS pixel buffers and parity-checked in median, coadd, and both modes; exact-coordinate raw/temporal duplicate rows can select different non-semantic provenance fields and per-point candidate scores because SciPy and Rust nearest-neighbor tie resolution differs, while track positions/classifications and score membership are verified; a max_sources-truncated moving source passes matched-filter, raw-image measurement, shape/quality, and motion gates; fixed-sentinel impact audits and optional stable-static-track relative photometry match Python; trail/stack orchestration and public rst19-sequence compatibility remain pending, so the public rst19-sequence tool still uses Python",
   "native_wcs_model": "TangentPlaneWcs TAN projection and AffineWcsCalibration fitting, projection, refined TAN compatibility model, velocity conversion, angular speed and serialized fields are implemented in Rust; direct Rust worker operation wcs.affine.refined is routed by the desktop backend; WCS fit and sequence validation fixtures match Python",
-  "native_wcs_validation": "rst19-wcs-validation desktop worker and packaged standalone Rust CLI execute FITS detection, offline catalog matching, per-frame affine WCS validation, and JSON/CSV/PNG artifact generation; worker and CLI artifacts match byte-for-byte; Windows package route is verified without external Python"
+  "native_wcs_validation": "rst19-wcs-validation desktop worker and packaged standalone Rust CLI execute FITS detection, offline catalog matching, per-frame affine WCS validation, and JSON/CSV/PNG artifact generation; worker and CLI artifacts match byte-for-byte; Windows package route is verified without external Python",
+  "native_feature_temporal_consistency_audit": "source and class temporal summaries, strict catalog/frame class provenance, aliases, selected detections, BOM CSV/JSON artifacts, standalone Rust CLI, JSONL audit.feature_temporal_consistency, and desktop worker route; detector-level diagnostics only, not physical identity"
 }

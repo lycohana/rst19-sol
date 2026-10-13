@@ -1,0 +1,109 @@
+{
+  "artifacts": {
+    "feature_temporal_consistency_sources.csv": "﻿detection_id,feature_class,feature_class_label,expected_frame_count,frame_count,finite_flux_frame_count,coverage_fraction,flux_snr_median,flux_snr_mad_scaled,flux_snr_relative_mad,flux_snr_positive_fraction,flux_snr_ge5_fraction,flux_snr_sign_flip_count,zero_frame_fraction,negative_extreme_frame_fraction,repeated_code_frame_fraction\r\n1,compact_quality,紧凑,3,3,3,1.0,10.0,1.4826,0.14826,1.0,1.0,0,0.0,0.0,0.0\r\n2,linear_artifact,线状,3,3,3,1.0,5.0,0.0,0.0,0.6666666666666666,0.6666666666666666,2,0.3333333333333333,0.3333333333333333,0.3333333333333333\r\n",
+    "feature_temporal_consistency_summary.csv": "﻿feature_class,feature_class_label,source_count,frame_count_median,flux_snr_median_median,flux_snr_relative_mad_p10,flux_snr_relative_mad_median,flux_snr_relative_mad_p90,flux_snr_positive_fraction_median,flux_snr_ge5_fraction_median,sign_flip_count_median,source_any_sign_flip_fraction,source_all_positive_fraction,source_any_zero_fraction,source_any_negative_extreme_fraction,source_any_repeated_code_fraction\r\ncompact_quality,紧凑,1,3.0,10.0,0.14826,0.14826,0.14826,1.0,1.0,0.0,0.0,1.0,0.0,0.0,0.0\r\nlinear_artifact,线状,1,3.0,5.0,0.0,0.0,0.0,0.6666666666666666,0.6666666666666666,2.0,1.0,0.0,1.0,1.0,1.0\r\n"
+  },
+  "catalog_csv": "detection_id,feature_class,feature_class_label\n1,compact_quality,紧凑\n2,linear_artifact,线状\n",
+  "expected": {
+    "catalog_path": "<CATALOG>",
+    "class_summaries": [
+      {
+        "feature_class": "compact_quality",
+        "feature_class_label": "紧凑",
+        "flux_snr_ge5_fraction_median": 1.0,
+        "flux_snr_median_median": 10.0,
+        "flux_snr_positive_fraction_median": 1.0,
+        "flux_snr_relative_mad_median": 0.14826,
+        "flux_snr_relative_mad_p10": 0.14826,
+        "flux_snr_relative_mad_p90": 0.14826,
+        "frame_count_median": 3.0,
+        "sign_flip_count_median": 0.0,
+        "source_all_positive_fraction": 1.0,
+        "source_any_negative_extreme_fraction": 0.0,
+        "source_any_repeated_code_fraction": 0.0,
+        "source_any_sign_flip_fraction": 0.0,
+        "source_any_zero_fraction": 0.0,
+        "source_count": 1
+      },
+      {
+        "feature_class": "linear_artifact",
+        "feature_class_label": "线状",
+        "flux_snr_ge5_fraction_median": 0.6666666666666666,
+        "flux_snr_median_median": 5.0,
+        "flux_snr_positive_fraction_median": 0.6666666666666666,
+        "flux_snr_relative_mad_median": 0.0,
+        "flux_snr_relative_mad_p10": 0.0,
+        "flux_snr_relative_mad_p90": 0.0,
+        "frame_count_median": 3.0,
+        "sign_flip_count_median": 2.0,
+        "source_all_positive_fraction": 0.0,
+        "source_any_negative_extreme_fraction": 1.0,
+        "source_any_repeated_code_fraction": 1.0,
+        "source_any_sign_flip_fraction": 1.0,
+        "source_any_zero_fraction": 1.0,
+        "source_count": 1
+      }
+    ],
+    "expected_frame_count": 3,
+    "feature_class_source": "catalog",
+    "feature_classes": [
+      "compact_quality",
+      "linear_artifact"
+    ],
+    "frame_metrics_path": "<FRAME_METRICS>",
+    "interpretation_guardrails": [
+      "逐帧响应来自固定 detector 坐标/孔径口径，不是星表身份匹配。",
+      "稳健波动、正值比例和帧间重复是描述量，不是恒星概率、precision 或 FDR。",
+      "feature_class 是检测器旗标优先级标签；部分 SNR/值域字段与其存在定义重叠。",
+      "缺少 WCS、空间变化 PSF 和官方真值时，不能把响应持久升级为物理恒星确认。",
+      "detection_id 只在同一实验产物内有意义；跨产物连接必须先通过类别血缘校验。"
+    ],
+    "selected_detection_ids": [
+      1,
+      2
+    ],
+    "source_rows": [
+      {
+        "coverage_fraction": 1.0,
+        "detection_id": 1,
+        "expected_frame_count": 3,
+        "feature_class": "compact_quality",
+        "feature_class_label": "紧凑",
+        "finite_flux_frame_count": 3,
+        "flux_snr_ge5_fraction": 1.0,
+        "flux_snr_mad_scaled": 1.4826,
+        "flux_snr_median": 10.0,
+        "flux_snr_positive_fraction": 1.0,
+        "flux_snr_relative_mad": 0.14826,
+        "flux_snr_sign_flip_count": 0,
+        "frame_count": 3,
+        "negative_extreme_frame_fraction": 0.0,
+        "repeated_code_frame_fraction": 0.0,
+        "zero_frame_fraction": 0.0
+      },
+      {
+        "coverage_fraction": 1.0,
+        "detection_id": 2,
+        "expected_frame_count": 3,
+        "feature_class": "linear_artifact",
+        "feature_class_label": "线状",
+        "finite_flux_frame_count": 3,
+        "flux_snr_ge5_fraction": 0.6666666666666666,
+        "flux_snr_mad_scaled": 0.0,
+        "flux_snr_median": 5.0,
+        "flux_snr_positive_fraction": 0.6666666666666666,
+        "flux_snr_relative_mad": 0.0,
+        "flux_snr_sign_flip_count": 2,
+        "frame_count": 3,
+        "negative_extreme_frame_fraction": 0.3333333333333333,
+        "repeated_code_frame_fraction": 0.3333333333333333,
+        "zero_frame_fraction": 0.3333333333333333
+      }
+    ]
+  },
+  "frame_metrics_csv": "detection_id,frame_index,flux_snr_raw,negative_extreme_count,repeated_code_count,zero_count\n1,1,10.0,0,0,0\n1,2,11.0,0,0,0\n1,3,9.0,0,0,0\n2,1,5.0,0,0,0\n2,2,-1.0,1,0,1\n2,3,5.0,0,1,0\n",
+  "source_hashes": {
+    "feature_temporal_consistency_audit.py": "80dd20b32a0c92ffe281c4255b500d0a7925565172083e20d2877898084e0d33",
+    "feature_temporal_consistency_audit_cli.py": "58103cff375a3db882560e8bb9058d957953d4412bf2aa0dce4072b3410d27f6"
+  }
+}
