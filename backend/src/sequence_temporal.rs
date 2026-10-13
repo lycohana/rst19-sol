@@ -10,6 +10,14 @@ struct Plane {
     width: usize,
 }
 
+/// Registered temporal stack pixels shared by native sequence recovery stages.
+#[derive(Debug, Clone)]
+pub struct RegisteredReference {
+    pub values: Vec<f32>,
+    pub height: usize,
+    pub width: usize,
+}
+
 #[derive(Debug, Clone)]
 enum FrameImage<'a> {
     Owned(Plane),
@@ -668,6 +676,22 @@ pub fn temporal_reference_candidates_from_analyses(
         "temporal_multiscale":multiscale,
     });
     temporal_candidates_from_frames(&reference, &frames, cumulative_shifts, &options)
+}
+
+/// Build a registered median or clipped-mean reference from analyzed FITS frames.
+pub fn registered_reference_from_analyses(
+    analyses: &[FrameAnalysis],
+    cumulative_shifts: &[[f64; 2]],
+    coadd: bool,
+    clip_sigma: f64,
+) -> Result<Option<RegisteredReference>> {
+    let frames = frames_from_analyses(analyses)?;
+    let reference = build_registered_reference(&frames, cumulative_shifts, coadd, clip_sigma)?;
+    Ok(reference.map(|plane| RegisteredReference {
+        values: plane.values,
+        height: plane.height,
+        width: plane.width,
+    }))
 }
 
 fn parse_shifts(value: &Value, frame_count: usize) -> Result<Vec<[f64; 2]>> {

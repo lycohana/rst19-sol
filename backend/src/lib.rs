@@ -69,6 +69,7 @@ pub mod sequence_photometry;
 pub mod sequence_pipeline;
 pub mod sequence_registration;
 pub mod sequence_sentinel;
+pub mod sequence_stack;
 pub mod sequence_temporal;
 pub mod sequence_trails;
 pub mod signed_null;

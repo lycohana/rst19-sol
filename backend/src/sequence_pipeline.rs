@@ -12,6 +12,7 @@ use crate::{
     sequence_fast_candidates::{self, FastCandidateOptions, FastCandidateRecord},
     sequence_motion::{self, TrackObservation},
     sequence_photometry::{self, FramePixels, StackMeasurement, StackMeasurementOptions},
+    sequence_stack::{self, StackFaintOptions},
     sequence_trails,
     spatial::KdTree,
     Result,
@@ -23,6 +24,7 @@ const DEFAULT_SEQUENCE_MAX_SOURCES: usize = 6_000;
 const DEFAULT_SEQUENCE_BACKGROUND_BOX_SIZE: usize = 256;
 const DEFAULT_SEQUENCE_BACKGROUND_SAMPLE_LIMIT: usize = 4_096;
 const DEFAULT_FAST_POINT_CANDIDATE_WORKING_LIMIT: usize = 20_000;
+const DEFAULT_SEQUENCE_STACK_WORKING_LIMIT: usize = 8_000;
 
 #[derive(Debug, Clone, Copy)]
 struct PreparedFastCandidate {
@@ -48,6 +50,32 @@ fn optional_request_f64(request: &Value, key: &str) -> Result<Option<f64>> {
             .map(Some)
             .ok_or_else(|| format!("{key} must be a finite number")),
         Some(_) => Err(format!("{key} must be a number")),
+    }
+}
+
+fn optional_request_bool(request: &Value, key: &str, default: bool) -> Result<bool> {
+    match request.get(key) {
+        None | Some(Value::Null) => Ok(default),
+        Some(Value::Bool(value)) => Ok(*value),
+        Some(_) => Err(format!("{key} must be a boolean")),
+    }
+}
+
+fn optional_request_usize(request: &Value, key: &str, default: usize) -> Result<usize> {
+    match request.get(key) {
+        None | Some(Value::Null) => Ok(default),
+        Some(value) => serde_json::from_value(value.clone())
+            .map_err(|_| format!("{key} must be a non-negative integer")),
+    }
+}
+
+fn optional_request_limit(request: &Value, key: &str, default: usize) -> Result<Option<usize>> {
+    match request.get(key) {
+        None => Ok(Some(default)),
+        Some(Value::Null) => Ok(None),
+        Some(value) => serde_json::from_value(value.clone())
+            .map(Some)
+            .map_err(|_| format!("{key} must be a non-negative integer or null")),
     }
 }
 
@@ -792,6 +820,36 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         .and_then(Value::as_f64)
         .unwrap_or_else(|| FastPointOptions::default().min_flux_snr);
     let frame_options = sequence_frame_options(request)?;
+    let mut stack_options = StackFaintOptions::default();
+    stack_options.enabled = optional_request_bool(request, "stack_faint_recovery", true)?;
+    stack_options.reference_mode = request
+        .get("stack_reference_mode")
+        .and_then(Value::as_str)
+        .unwrap_or("median")
+        .trim()
+        .to_ascii_lowercase();
+    if !matches!(stack_options.reference_mode.as_str(), "median" | "coadd") {
+        return Err("stack_reference_mode must be 'median' or 'coadd'".into());
+    }
+    stack_options.threshold_sigma = optional_request_f64(request, "stack_threshold_sigma")?
+        .unwrap_or(stack_options.threshold_sigma);
+    stack_options.min_flux_snr =
+        optional_request_f64(request, "stack_min_flux_snr")?.unwrap_or(stack_options.min_flux_snr);
+    stack_options.frame_min_flux_snr = optional_request_f64(request, "stack_frame_min_flux_snr")?
+        .unwrap_or(stack_options.frame_min_flux_snr);
+    stack_options.min_presence = optional_request_usize(request, "stack_min_presence", 0)?;
+    stack_options.max_reference_sources = optional_request_limit(
+        request,
+        "stack_max_reference_sources",
+        DEFAULT_SEQUENCE_STACK_WORKING_LIMIT,
+    )?;
+    stack_options.min_distance = frame_options.detection.min_distance;
+    stack_options.aperture_radius = frame_options.detection.measurement.aperture_radius;
+    stack_options.psf_fwhm = frame_options.detection.measurement.psf_fwhm;
+    stack_options.min_psf_support_pixels =
+        frame_options.detection.measurement.min_psf_support_pixels;
+    stack_options.proposal_mode = frame_options.detection.proposal_mode.clone();
+    stack_options.mask_zero_pixels = frame_options.detection.mask_zero_pixels.unwrap_or(false);
     let temporal_proposal_mode = request
         .get("temporal_proposal_mode")
         .and_then(Value::as_str)
@@ -1149,6 +1207,40 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     tracking["fast_point_motion_count"] = json!(fast_point_tracks.len());
     tracking["temporal_reference_candidate_count"] = json!(temporal_reference_candidate_count);
     tracking["temporal_coadd_candidate_count"] = json!(temporal_coadd_candidate_count);
+    if stack_options.min_presence == 0 {
+        stack_options.min_presence = tracking["persistent_min_presence"]
+            .as_u64()
+            .map(|value| value as usize)
+            .unwrap_or_else(|| 3usize.max(paths.len().div_ceil(2)));
+    }
+    stack_options.link_radius_px = tracking["link_radius_px"].as_f64().unwrap_or(4.0);
+    let mut existing_tracks = tracking["tracks"].as_array().cloned().unwrap_or_default();
+    existing_tracks.extend(fast_point_tracks.iter().cloned());
+    existing_tracks.extend(
+        candidate_consensus["tracks"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+    );
+    let mut stack_faint = sequence_stack::recover_stack_faint_tracks(
+        &frame_analysis_objects,
+        &shifts,
+        &frame_times,
+        &existing_tracks,
+        &stack_options,
+    )?;
+    for (index, track) in stack_faint.tracks.iter_mut().enumerate() {
+        track["track_id"] =
+            json!(base_track_count + fast_point_tracks.len() + candidate_consensus_count + index);
+    }
+    tracking["stack_faint_count"] = json!(stack_faint.tracks.len());
+    tracking["stack_faint_candidate_count"] = json!(stack_faint.candidate_count);
+    tracking["stack_reference_mode"] = json!(stack_options.reference_mode);
+    tracking["stack_threshold_sigma"] = json!(stack_options.threshold_sigma);
+    tracking["stack_min_flux_snr"] = json!(stack_options.min_flux_snr);
+    tracking["stack_frame_min_flux_snr"] = json!(stack_options.frame_min_flux_snr);
+    tracking["stack_min_presence"] = json!(stack_options.min_presence);
+    tracking["stack_faint_audit"] = stack_faint.audit.clone();
     let relative_photometry_result = if relative_photometry {
         Some(fit_sequence_relative_photometry(
             &quality_frames,
@@ -1170,6 +1262,9 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "fast_point_tracks":fast_point_tracks,
         "fast_candidate_proposals":fast_candidate_proposals,
         "candidate_consensus":candidate_consensus,
+        "stack_faint_tracks":stack_faint.tracks,
+        "stack_faint_candidate_count":stack_faint.candidate_count,
+        "stack_faint_audit":stack_faint.audit,
         "temporal_reference_candidate_count":temporal_reference_candidate_count,
         "temporal_coadd_candidate_count":temporal_coadd_candidate_count,
         "temporal_proposal_mode":temporal_proposal_mode,

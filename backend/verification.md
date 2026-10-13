@@ -141,7 +141,9 @@
 
 ## 尚未完成
 
-当前已有 66 个 Python 模块标记为 Rust 迁移完成，3 个在迁移中，89 个待迁；桌面主入口、格式／姿态审计、Gaia 分层合并、特征证据轴、WCS worker 与 CLI、直接近邻、其他特征与近邻审计及若干序列/测光功能已由 Rust 执行。完整生产运算链尚未切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
+当前迁移账本有 103 个 Python 模块标记为 Rust 迁移完成、3 个在迁移中、52 个待迁；66 个工具映射中，50 个仍直接映射到 Python CLI，16 个已标记为原生实现。生产运算链尚未全量切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
+
+序列 Rust 核心新增了注册中值／coadd 暗星恢复：从参考堆栈提出并去重候选，回到原始帧做强制测光、支持像素和形状门控，按出现帧数生成带 `stack_faint` 证据标记的轨迹并返回审计计数。五帧合成序列和已解释候选去重测试通过；这还没有完成与 Python 全字段对照，也没有切换公开 `rst19-sequence` 路由，该工具当前仍使用 Python。
 
 检测对照已覆盖 float64 与 float32 固定样例和 ROI，以及首帧 float64 全幅；float32 全幅验收、WCS 拟合与天测流程、序列运动、合成、全部审计／实验及剩余 CLI 契约仍需继续移植和对照。Windows 完整桌面包已构建验收，macOS/Linux 还未实际构建或运行；打包流程仍保留 Python 环境供剩余工具使用。
 
