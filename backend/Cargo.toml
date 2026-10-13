@@ -109,6 +109,10 @@ name = "rst19-pair-support-audit"
 path = "src/bin/rst19-pair-support-audit.rs"
 
 [[bin]]
+name = "rst19-feature-cross"
+path = "src/bin/rst19-feature-cross.rs"
+
+[[bin]]
 name = "rst19-feature-parameter-sensitivity"
 path = "src/bin/rst19-feature-parameter-sensitivity.rs"
 

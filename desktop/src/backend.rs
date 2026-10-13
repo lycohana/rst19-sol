@@ -63,6 +63,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-feature-transition-flow"
                         | "rst19-feature-gate-route"
                         | "rst19-feature-parameter-sensitivity"
+                        | "rst19-feature-cross"
                         | "rst19-feature-hard-negative"
                         | "rst19-gaia-merge"
                         | "rst19-feature-evidence-axes"
@@ -365,6 +366,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-parameter-sensitivity"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-feature-cross"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-hard-negative"})

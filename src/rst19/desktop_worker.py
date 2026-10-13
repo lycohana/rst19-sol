@@ -56,6 +56,7 @@ def registry() -> dict[str, str]:
     entries.setdefault("rst19-photometric-report", "native:rst19-photometric-report")
     entries.setdefault("rst19-pair-support-audit", "native:rst19-pair-support-audit")
     entries.setdefault("rst19-feature-parameter-sensitivity", "native:rst19-feature-parameter-sensitivity")
+    entries.setdefault("rst19-feature-cross", "native:rst19-feature-cross")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -487,6 +488,22 @@ def catalog() -> list[dict]:
                 ("out_dir", "--out-dir", False, "tmp/feature-parameter-sensitivity-current", True, "value", []),
             ]
             tools.append({"name": name, "description": "固定同一真实 FITS，扫描候选阈值/flux SNR 并追踪各类候选稳定性",
+                          "fields": [
+                              {"key": key, "flag": flag, "help": "", "required": required,
+                               "default": default, "choices": choices, "kind": kind, "nargs": None,
+                               "path": is_path, "toggle_value": None, "repeat": False}
+                              for key, flag, required, default, is_path, kind, choices in definitions
+                          ]})
+            continue
+        if target == "native:rst19-feature-cross":
+            definitions = [
+                ("source_summary_csv", "", True, None, True, "value", []),
+                ("persistence_csv", "", True, None, True, "value", []),
+                ("class_transition_csv", "--class-transition-csv", False, None, True, "value", []),
+                ("high_snr_threshold", "--high-snr-threshold", False, 10.0, False, "value", []),
+                ("out_dir", "--out-dir", False, "tmp/feature-cross-audit", True, "value", []),
+            ]
+            tools.append({"name": name, "description": "连接单帧特征汇总、跨帧持久性和可选类别转移表",
                           "fields": [
                               {"key": key, "flag": flag, "help": "", "required": required,
                                "default": default, "choices": choices, "kind": kind, "nargs": None,

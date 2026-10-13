@@ -90,6 +90,8 @@ def test_catalog_covers_all_scientific_entry_points():
                                                 "background_box_size", "background_sample_limit",
                                                 "min_psf_support_pixels", "proposal_mode", "max_sources",
                                                 "association_radius_px", "out_dir"],
+        "rst19-feature-cross": ["source_summary_csv", "persistence_csv", "class_transition_csv",
+                                "high_snr_threshold", "out_dir"],
     }
     for tool_name, expected_fields in migrated_tools.items():
         tool = next(item for item in tools if item["name"] == tool_name)
@@ -127,6 +129,13 @@ def test_pair_support_audit_cannot_fall_back_to_python(tmp_path):
 
 def test_feature_parameter_sensitivity_cannot_fall_back_to_python(tmp_path):
     request = {"operation": "tool", "tool": "rst19-feature-parameter-sensitivity", "args": [],
+               "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+def test_feature_cross_cannot_fall_back_to_python(tmp_path):
+    request = {"operation": "tool", "tool": "rst19-feature-cross", "args": [],
                "out_dir": str(tmp_path)}
     with pytest.raises(ValueError, match="必须由 native worker 执行"):
         run(request)

@@ -504,6 +504,77 @@ def verify(package: Path, out: Path) -> dict:
         "feature_parameter_sensitivity.json",
     ):
         assert (feature_parameter_out / artifact).is_file(), artifact
+    feature_cross_cli = out / "runtime" / (
+        "rst19-feature-cross.exe" if os.name == "nt" else "rst19-feature-cross"
+    )
+    assert feature_cross_cli.is_file(), "Rust feature cross CLI is missing from the package"
+    feature_cross_help = subprocess.run(
+        [str(feature_cross_cli), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
+    )
+    assert "Usage: rst19-feature-cross" in feature_cross_help.stdout
+    feature_cross_source = out / "feature-cross-source.csv"
+    feature_cross_persistence = out / "feature-cross-persistence.csv"
+    feature_cross_transitions = out / "feature-cross-transitions.csv"
+    feature_cross_source.write_text(
+        "feature_class,feature_class_label,candidate_count,quality_count,median_flux_snr,max_flux_snr\n"
+        "compact_quality,compact,10,10,12.3,100\n"
+        "spike_or_support,spike,10,0,1.9,133.8\n",
+        encoding="utf-8",
+    )
+    feature_cross_persistence.write_text(
+        "feature_class,feature_class_label,frame_count,required_presence,candidate_presence_ge_required_count,quality_presence_ge_required_count\n"
+        "compact_quality,compact,15,12,9,8\n"
+        "spike_or_support,spike,15,12,8,0\n",
+        encoding="utf-8",
+    )
+    feature_cross_transitions.write_text(
+        "layer,anchor_feature_class,response_feature_class,frame_count,anchor_count,possible_match_count,matched_count\n"
+        "candidate,compact_quality,compact_quality,15,10,150,9\n"
+        "candidate,compact_quality,spike_or_support,15,10,150,3\n"
+        "candidate,spike_or_support,compact_quality,15,10,150,2\n"
+        "candidate,spike_or_support,spike_or_support,15,10,150,6\n"
+        "quality,compact_quality,compact_quality,15,10,150,8\n"
+        "quality,compact_quality,spike_or_support,15,10,150,0\n"
+        "quality,spike_or_support,compact_quality,15,0,0,0\n"
+        "quality,spike_or_support,spike_or_support,15,0,0,0\n",
+        encoding="utf-8",
+    )
+    feature_cross_args = [
+        str(feature_cross_source.resolve()), str(feature_cross_persistence.resolve()),
+        "--class-transition-csv", str(feature_cross_transitions.resolve()),
+        "--high-snr-threshold", "10",
+    ]
+    feature_cross_cli_out = out / "feature-cross-cli"
+    feature_cross_cli_run = subprocess.run(
+        [str(feature_cross_cli), *feature_cross_args, "--out-dir", str(feature_cross_cli_out.resolve())],
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out,
+        timeout=30, check=True,
+    )
+    assert "classes=2 frames=15 required_presence=12" in feature_cross_cli_run.stdout
+    feature_cross_out = out / "feature-cross-job"
+    feature_cross_request = {
+        "operation": "tool", "tool": "rst19-feature-cross",
+        "args": feature_cross_args, "out_dir": str(feature_cross_out.resolve()),
+    }
+    feature_cross_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(feature_cross_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out,
+        timeout=30, check=True,
+    )
+    feature_cross_events = [json.loads(line) for line in feature_cross_response.stdout.splitlines()]
+    assert len(feature_cross_events) == 1 and feature_cross_events[0]["ok"]
+    feature_cross_payload = feature_cross_events[0]["payload"]["result"]
+    feature_cross_artifact = json.loads(
+        (feature_cross_cli_out / "feature_cross_audit.json").read_text(encoding="utf-8")
+    )
+    assert feature_cross_payload == {
+        key: value for key, value in feature_cross_artifact.items() if key in feature_cross_payload
+    }
+    assert "class_transition_note" in feature_cross_artifact
+    assert feature_cross_payload["rows"][1]["high_snr_rejected"] is True
+    for artifact in ("feature_cross_audit.csv", "feature_cross_audit.json", "feature_cross_audit.png"):
+        assert (feature_cross_out / artifact).is_file(), artifact
     request = {"operation": "tool", "tool": "rst19", "args": [str(frame.resolve())], "out_dir": str((out / "job").resolve())}
     response = subprocess.run([str(native_worker)], input=json.dumps(request, ensure_ascii=False), capture_output=True,
                               text=True, encoding="utf-8", env=environment, cwd=out, timeout=60, check=True)

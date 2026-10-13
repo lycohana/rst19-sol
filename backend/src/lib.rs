@@ -16,6 +16,7 @@ pub mod detection_sweep;
 pub mod direct_neighbor_audit;
 pub mod feature_class_context;
 pub mod feature_correlation_audit;
+pub mod feature_cross_audit;
 pub mod feature_cross_axis_audit;
 pub mod feature_effect_size;
 pub mod feature_evidence_axes;
