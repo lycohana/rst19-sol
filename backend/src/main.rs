@@ -98,6 +98,9 @@ fn execute(request: Value) -> Result<Value> {
         "audit.feature_spatial_context" => {
             rst19_core::feature_spatial_context::handle_request(&request)
         }
+        "audit.feature_evidence_matrix" => {
+            rst19_core::feature_evidence_matrix::handle_request(&request)
+        }
         "audit.feature_cross_axis" => {
             let path = |name: &str| -> Result<std::path::PathBuf> {
                 request[name]

@@ -73,6 +73,10 @@ name = "rst19-feature-spatial-context"
 path = "src/bin/rst19-feature-spatial-context.rs"
 
 [[bin]]
+name = "rst19-feature-evidence"
+path = "src/bin/rst19-feature-evidence.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 

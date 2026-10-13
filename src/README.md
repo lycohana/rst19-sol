@@ -308,7 +308,7 @@ rst19-feature-psf-leaveout `
 把宽筛、质量层、15 帧响应和留一 PSF 结果合并成类别证据矩阵：
 
 ```powershell
-rst19-feature-evidence `
+cargo run --manifest-path backend/Cargo.toml --bin rst19-feature-evidence -- `
   --source-morphology tmp/source-quality-audit-code-pattern-current-v3/source_feature_morphology.csv `
   --feature-cross tmp/feature-cross-audit-code-pattern-current-v3/feature_cross_audit.csv `
   --psf-leaveout tmp/feature-psf-leaveout-code-pattern-current-v1/feature_psf_leaveout.csv `

@@ -18,6 +18,7 @@ pub mod feature_correlation_audit;
 pub mod feature_cross_axis_audit;
 pub mod feature_effect_size;
 pub mod feature_evidence_axes;
+pub mod feature_evidence_matrix;
 pub mod feature_flag_interaction;
 pub mod feature_flag_profile;
 pub mod feature_gate_margin;
