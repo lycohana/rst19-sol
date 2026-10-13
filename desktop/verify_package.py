@@ -579,6 +579,12 @@ def verify(package: Path, out: Path) -> dict:
     assert len(candidate_core_events) == 1 and candidate_core_events[0]["ok"]
     candidate_proposals = candidate_core_events[0]["payload"]["fast_candidate_proposals"]
     candidate_core_payload = candidate_core_events[0]["payload"]
+    candidate_consensus = candidate_core_payload["candidate_consensus"]
+    assert candidate_consensus["tracks"]
+    assert candidate_core_payload["tracking"]["candidate_consensus_count"] == len(
+        candidate_consensus["tracks"]
+    )
+    assert candidate_core_payload["tracking"]["candidate_consensus_audit"] == candidate_consensus["audit"]
     candidate_relative_photometry = candidate_core_payload["relative_photometry"]
     assert candidate_relative_photometry["status"] == "VALID"
     assert candidate_relative_photometry["reference_sample_count"] >= 2
@@ -1569,7 +1575,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-proposal-temporal-audit",
                   "rst19-source-geometry-audit",
                   "rst19-relative-photometry",
-        "sequence core FITS detection/tracking/fast-point motion/candidate proposals/relative photometry/fixed-sentinel audits",
+        "sequence core FITS detection/tracking/fast-point motion/candidate proposals/static candidate consensus/relative photometry/fixed-sentinel audits",
                   "sequence evidence brief JSONL",
                   "manual threshold feedback JSONL",
               ],
@@ -1614,11 +1620,14 @@ def verify(package: Path, out: Path) -> dict:
         "fast_candidate_proposal_insufficient_and_disabled_states_verified": True,
         "truncated_moving_candidate_recovered_as_unverified_proposal": True,
         "candidate_original_pixel_quality_and_motion_gates_passed": True,
+        "static_candidate_consensus_tracks_verified": True,
+        "static_candidate_consensus_track_count": len(candidate_consensus["tracks"]),
+        "static_candidate_consensus_audit_field_count": len(candidate_consensus["audit"]),
         "sequence_relative_photometry_orchestration_verified": True,
         "sequence_fixed_sentinel_audits_verified": True,
         "fast_point_motion_disable_verified": True,
         "external_python_search_disabled": True,
-        "scope": "frame detection, ordinary quality-track association, quality-source fast-point motion, matched-filter candidate recovery with original-pixel measurements and quality/motion gates, optional static-track relative photometry, and fixed-sentinel impact audits; accepted tracks remain algorithmic evidence without confirmed physical identity",
+        "scope": "frame detection, ordinary quality-track association, quality-source fast-point motion, matched-filter candidate recovery with original-pixel measurements and quality/motion gates, raw-image-gated static candidate consensus, optional static-track relative photometry, and fixed-sentinel impact audits; accepted tracks remain algorithmic evidence without confirmed physical identity",
     }
     report["wcs_validation"] = {
         "native_worker_tool_route_verified": True,

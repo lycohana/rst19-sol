@@ -40,6 +40,17 @@ fn object_or_empty(value: Option<&Value>, name: &str) -> Result<Map<String, Valu
     }
 }
 
+fn optional_request_f64(request: &Value, key: &str) -> Result<Option<f64>> {
+    match request.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(value)) => value
+            .as_f64()
+            .map(Some)
+            .ok_or_else(|| format!("{key} must be a finite number")),
+        Some(_) => Err(format!("{key} must be a number")),
+    }
+}
+
 fn sequence_frame_options(request: &Value) -> Result<FrameOptions> {
     let mut options = object_or_empty(request.get("frame_options"), "frame_options")?;
     options
@@ -409,10 +420,7 @@ fn verify_fast_candidate_proposals(
             saturation_level,
         )?;
         let image = analysis.frame.data.to_f64();
-        let mut rows = coordinates
-            .iter()
-            .map(|(row_index, _)| *row_index)
-            .collect::<Vec<_>>();
+        let mut rows = coordinates.keys().copied().collect::<Vec<_>>();
         rows.sort_unstable();
         let xs = rows
             .iter()
@@ -861,7 +869,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             .collect::<Vec<_>>();
         quality_frames.push(detections);
         frame_analyses.push(analysis.as_dict());
-        if fast_point_motion && paths.len() >= 3 {
+        if paths.len() >= 3 {
             frame_analysis_objects.push(analysis);
         }
     }
@@ -885,6 +893,17 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         .is_none_or(Value::is_null)
     {
         tracking_options.insert("frame_times".into(), json!(frame_times));
+    }
+    if tracking_options
+        .get("persistent_min_presence")
+        .is_none_or(Value::is_null)
+    {
+        if let Some(value) = request
+            .get("persistent_min_presence")
+            .filter(|v| !v.is_null())
+        {
+            tracking_options.insert("persistent_min_presence".into(), value.clone());
+        }
     }
     let tracking_options: TrackSequenceOptions =
         serde_json::from_value(Value::Object(tracking_options))
@@ -984,6 +1003,52 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         )?;
         fast_point_tracks.append(&mut measured_candidate_tracks);
     }
+    let mut candidate_consensus = if paths.len() >= 3 {
+        let shifts: Vec<[f64; 2]> = serde_json::from_value(tracking["cumulative_shifts"].clone())
+            .map_err(|error| error.to_string())?;
+        let candidate_peak_frames = frame_analysis_objects
+            .iter()
+            .map(|analysis| json!(analysis.detection.candidate_peaks))
+            .collect::<Vec<_>>();
+        crate::sequence_consensus::candidate_consensus_from_analyses(
+            &candidate_peak_frames,
+            &shifts,
+            tracking["tracks"]
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or(&[]),
+            Some(&frame_times),
+            tracking["link_radius_px"].as_f64().unwrap_or(4.0),
+            tracking["min_presence"].as_u64().unwrap_or(3) as usize,
+            tracking["persistent_min_presence"].as_u64().unwrap_or(3) as usize,
+            tracking["effective_motion_min_displacement_px"]
+                .as_f64()
+                .unwrap_or_else(|| {
+                    tracking["motion_min_displacement_px"]
+                        .as_f64()
+                        .unwrap_or(2.0)
+                }),
+            tracking["max_motion_fit_rms_px"].as_f64().unwrap_or(0.75),
+            optional_request_f64(request, "candidate_consensus_min_snr")?.unwrap_or(15.0),
+            optional_request_f64(request, "temporal_candidate_min_snr")?,
+            optional_request_f64(request, "temporal_reference_min_snr")?,
+            optional_request_f64(request, "temporal_min_psf_correlation")?.unwrap_or(0.8),
+            &frame_analysis_objects,
+        )?
+    } else {
+        json!({"tracks":[],"audit":{}})
+    };
+    let candidate_consensus_count = {
+        let tracks = candidate_consensus["tracks"]
+            .as_array_mut()
+            .ok_or("candidate consensus tracks must be an array")?;
+        for (index, track) in tracks.iter_mut().enumerate() {
+            track["track_id"] = json!(base_track_count + fast_point_tracks.len() + index);
+        }
+        tracks.len()
+    };
+    tracking["candidate_consensus_count"] = json!(candidate_consensus_count);
+    tracking["candidate_consensus_audit"] = candidate_consensus["audit"].clone();
     tracking["fast_point_motion_count"] = json!(fast_point_tracks.len());
     let relative_photometry_result = if relative_photometry {
         Some(fit_sequence_relative_photometry(
@@ -1000,11 +1065,12 @@ pub fn handle_request(request: &Value) -> Result<Value> {
 
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
-        "scope":"frame_detection_quality_tracks_fast_point_motion_and_candidate_proposals",
+        "scope":"frame_detection_quality_tracks_fast_point_motion_candidate_proposals_and_candidate_consensus",
         "frame_analyses":frame_analyses,
         "tracking":tracking,
         "fast_point_tracks":fast_point_tracks,
         "fast_candidate_proposals":fast_candidate_proposals,
+        "candidate_consensus":candidate_consensus,
         "relative_photometry":relative_photometry_result,
         "fixed_sentinel_audit":fixed_sentinel_audit,
         "fixed_sentinel_impact_audit":fixed_sentinel_impact_audit,

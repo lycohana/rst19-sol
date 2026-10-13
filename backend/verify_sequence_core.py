@@ -24,6 +24,7 @@ from rst19.sequence import (  # noqa: E402
     _fit_sequence_relative_photometry,
     _observation_times_seconds,
     _stack_forced_frame_measure_batch,
+    _candidate_consensus_tracks,
     _track_fast_candidate_movers,
     audit_fixed_sentinel,
     audit_fixed_sentinel_impacts,
@@ -360,6 +361,55 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         candidate_python_track_rows,
         "candidate.fast_point_tracks",
     )
+    candidate_consensus_audit: dict[str, int] = {}
+    candidate_consensus_tracks = _candidate_consensus_tracks(
+        [analysis.detection.candidate_peaks for analysis in candidate_analyses],
+        candidate_tracking_result.cumulative_shifts,
+        candidate_tracking_result.tracks,
+        frame_analyses=candidate_analyses,
+        frame_times=candidate_times,
+        link_radius_px=candidate_tracking_result.link_radius_px,
+        min_presence=candidate_tracking_result.min_presence,
+        persistent_min_presence=candidate_tracking_result.persistent_min_presence,
+        motion_min_displacement_px=(
+            candidate_tracking_result.effective_motion_min_displacement_px or 2.0
+        ),
+        max_motion_fit_rms_px=candidate_tracking_result.max_motion_fit_rms_px,
+        min_candidate_snr=15.0,
+        temporal_candidate_min_snr=7.5,
+        temporal_reference_min_snr=15.0,
+        temporal_min_psf_correlation=0.8,
+        line_artifact_frames=[
+            analysis.detection.line_artifact_coordinates
+            for analysis in candidate_analyses
+        ],
+        audit_sink=candidate_consensus_audit,
+    )
+    candidate_consensus_rows = []
+    for index, track in enumerate(candidate_consensus_tracks):
+        row = track.as_dict()
+        row["track_id"] = (
+            len(candidate_tracking_result.tracks)
+            + len(candidate_quality_fast_tracks)
+            + len(candidate_python_tracks)
+            + index
+        )
+        candidate_consensus_rows.append(row)
+    compare(
+        candidate_result["candidate_consensus"]["tracks"],
+        candidate_consensus_rows,
+        "candidate.candidate_consensus.tracks",
+    )
+    compare(
+        candidate_result["candidate_consensus"]["audit"],
+        candidate_consensus_audit,
+        "candidate.candidate_consensus.audit",
+    )
+    compare(
+        candidate_result["tracking"]["candidate_consensus_count"],
+        len(candidate_consensus_rows),
+        "candidate.tracking.candidate_consensus_count",
+    )
     for proposal_index, proposal in enumerate(candidate_stage["proposals"]):
         for observation_index, observation in enumerate(proposal["observations"]):
             frame_index = observation["frame_index"]
@@ -429,13 +479,15 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         "fast_candidate_proposal_recovery_verified": True,
         "fast_candidate_original_pixel_measurement_and_quality_gates_verified": True,
         "fast_candidate_tracks_match_python_fields": True,
+        "candidate_consensus_tracks_and_audit_match_python": True,
+        "candidate_consensus_count": len(candidate_consensus_rows),
         "fast_candidate_proposal_count": candidate_stage["proposal_count"],
         "fast_candidate_accepted_track_count": candidate_stage["accepted_track_count"],
         "relative_photometry_orchestration_matches_python": True,
         "relative_photometry_status": candidate_result["relative_photometry"]["status"],
         "fixed_sentinel_and_impact_audits_match_python": True,
         "observation_times_seconds": frame_times,
-        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, matched-filter candidate association with original-pixel forced measurement and quality gates, optional relative-photometry orchestration, and fixed-sentinel impact audits; temporal-reference recovery, trail auditing, and stack recovery remain outside this core operation",
+        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, matched-filter candidate association with original-pixel forced measurement and quality gates, raw-image-gated static candidate consensus, optional relative-photometry orchestration, and fixed-sentinel impact audits; temporal-reference recovery, trail auditing, and stack recovery remain outside this core operation",
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report

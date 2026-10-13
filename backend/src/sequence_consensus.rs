@@ -1,5 +1,7 @@
 //! Repeated-candidate consensus before image-level quality promotion.
 use crate::{
+    models::PixelData,
+    pipeline::FrameAnalysis,
     sequence::TrackPoint,
     sequence_motion::{fit_track_motion, TrackObservation},
     spatial::KdTree,
@@ -122,9 +124,29 @@ fn normalize_times(times: Option<&[f64]>, frame_count: usize) -> Option<Vec<f64>
     Some(values.iter().map(|value| value - values[0]).collect())
 }
 
-#[derive(Debug, Clone)]
-struct ImageFrame {
-    pixels: Vec<Vec<f64>>,
+#[derive(Debug)]
+enum ImagePixels<'a> {
+    Rows(Vec<Vec<f64>>),
+    Fits(&'a PixelData),
+}
+
+impl ImagePixels<'_> {
+    fn value(&self, width: usize, x: usize, y: usize) -> Option<f64> {
+        match self {
+            Self::Rows(rows) => rows.get(y)?.get(x).copied(),
+            Self::Fits(data) => {
+                let index = y.checked_mul(width)?.checked_add(x)?;
+                (index < data.len()).then(|| data.value(index))
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ImageFrame<'a> {
+    pixels: ImagePixels<'a>,
+    width: usize,
+    height: usize,
     background: f64,
     noise: f64,
     mask_zero_pixels: bool,
@@ -175,7 +197,10 @@ fn numeric_flag(value: Option<&Value>) -> bool {
     }
 }
 
-fn image_frames(value: Option<&Value>, frame_count: usize) -> Result<Option<Vec<ImageFrame>>> {
+fn image_frames(
+    value: Option<&Value>,
+    frame_count: usize,
+) -> Result<Option<Vec<ImageFrame<'static>>>> {
     let Some(value) = value else {
         return Ok(None);
     };
@@ -213,8 +238,12 @@ fn image_frames(value: Option<&Value>, frame_count: usize) -> Result<Option<Vec<
             return Err("image_support backgrounds and noises must be finite".into());
         }
         let parameter = &parameters[index];
+        let height = pixels.len();
+        let width = pixels.first().map_or(0, Vec::len);
         frames.push(ImageFrame {
-            pixels,
+            pixels: ImagePixels::Rows(pixels),
+            width,
+            height,
             background,
             noise: noise.max(f64::EPSILON),
             mask_zero_pixels: numeric_flag(parameter.get("mask_zero_pixels")),
@@ -227,16 +256,19 @@ fn image_frames(value: Option<&Value>, frame_count: usize) -> Result<Option<Vec<
     Ok(Some(frames))
 }
 
-#[derive(Debug, Clone)]
-struct ImageSupport {
-    frames: Vec<ImageFrame>,
+#[derive(Debug)]
+struct ImageSupport<'a> {
+    frames: Vec<ImageFrame<'a>>,
     line_frames: Vec<Vec<[f64; 2]>>,
     aperture_radius: usize,
     required_support: usize,
     psf_sigmas: Vec<f64>,
 }
 
-fn parse_image_support(value: Option<&Value>, frame_count: usize) -> Result<Option<ImageSupport>> {
+fn parse_image_support(
+    value: Option<&Value>,
+    frame_count: usize,
+) -> Result<Option<ImageSupport<'static>>> {
     let Some(value) = value.filter(|value| !value.is_null()) else {
         return Ok(None);
     };
@@ -306,6 +338,74 @@ fn parse_image_support(value: Option<&Value>, frame_count: usize) -> Result<Opti
     }))
 }
 
+fn image_support_from_analyses(analyses: &[FrameAnalysis]) -> Result<Option<ImageSupport<'_>>> {
+    if analyses.is_empty() {
+        return Ok(None);
+    }
+    let first = &analyses[0];
+    let aperture_radius = first.detection.parameters["aperture_radius"]
+        .as_u64()
+        .unwrap_or(4)
+        .max(1) as usize;
+    let required_support = first.detection.parameters["min_psf_support_pixels"]
+        .as_u64()
+        .unwrap_or(3)
+        .max(3) as usize;
+    let psf_fwhm = first.detection.parameters["psf_fwhm"]
+        .as_f64()
+        .unwrap_or(3.0);
+    if !psf_fwhm.is_finite() || psf_fwhm <= 0.0 {
+        return Err("image_support psf_fwhm must be positive".into());
+    }
+    let mut fwhm_bank = [0.65, 1.0, 1.35]
+        .into_iter()
+        .map(|factor| ((psf_fwhm * factor).max(0.8) * 1_000_000.0).round_ties_even() / 1_000_000.0)
+        .collect::<Vec<_>>();
+    fwhm_bank.sort_by(f64::total_cmp);
+    fwhm_bank.dedup_by(|a, b| a.to_bits() == b.to_bits());
+    let psf_sigmas = fwhm_bank
+        .into_iter()
+        .map(|fwhm| (fwhm / 2.35482).max(0.5))
+        .collect();
+    let mut frames = Vec::with_capacity(analyses.len());
+    let mut line_frames = Vec::with_capacity(analyses.len());
+    for analysis in analyses {
+        let height = analysis.frame.height;
+        let width = analysis.frame.width;
+        if width.checked_mul(height) != Some(analysis.frame.data.len()) {
+            return Err("FITS image dimensions do not match pixel data".into());
+        }
+        let parameters = &analysis.detection.parameters;
+        frames.push(ImageFrame {
+            pixels: ImagePixels::Fits(&analysis.frame.data),
+            width,
+            height,
+            background: analysis.detection.background,
+            noise: analysis.detection.noise.max(f64::EPSILON),
+            mask_zero_pixels: numeric_flag(parameters.get("mask_zero_pixels")),
+            saturation_level: parameters
+                .get("saturation_level")
+                .and_then(number)
+                .unwrap_or(-1.0),
+        });
+        line_frames.push(
+            analysis
+                .detection
+                .line_artifact_coordinates
+                .iter()
+                .map(|[x, y]| [*x as f64, *y as f64])
+                .collect(),
+        );
+    }
+    Ok(Some(ImageSupport {
+        frames,
+        line_frames,
+        aperture_radius,
+        required_support,
+        psf_sigmas,
+    }))
+}
+
 fn median(values: &mut [f64]) -> f64 {
     values.sort_by(f64::total_cmp);
     let middle = values.len() / 2;
@@ -316,11 +416,11 @@ fn median(values: &mut [f64]) -> f64 {
     }
 }
 
-fn image_pixel_valid(frame: &ImageFrame, x: isize, y: isize) -> Option<f64> {
+fn image_pixel_valid(frame: &ImageFrame<'_>, x: isize, y: isize) -> Option<f64> {
     if x < 0 || y < 0 || (y == 0 && x < 104) {
         return None;
     }
-    let value = *frame.pixels.get(y as usize)?.get(x as usize)?;
+    let value = frame.pixels.value(frame.width, x as usize, y as usize)?;
     (value.is_finite()
         && (!frame.mask_zero_pixels || value != 0.0)
         && (frame.saturation_level <= 0.0 || value < frame.saturation_level))
@@ -328,7 +428,7 @@ fn image_pixel_valid(frame: &ImageFrame, x: isize, y: isize) -> Option<f64> {
 }
 
 fn count_image_support(
-    image_support: &ImageSupport,
+    image_support: &ImageSupport<'_>,
     candidates: &[Vec<CandidatePoint>],
     matches: &[Vec<Option<usize>>],
     eligible: &[usize],
@@ -369,8 +469,8 @@ fn count_image_support(
             let candidate = &candidates[frame_index][candidate_index];
             let center_x = candidate.x.round_ties_even() as isize;
             let center_y = candidate.y.round_ties_even() as isize;
-            let height = frame.pixels.len() as isize;
-            let width = frame.pixels.first().map_or(0, Vec::len) as isize;
+            let height = frame.height as isize;
+            let width = frame.width as isize;
             let edge_margin = aperture_radius as isize + 4;
             if center_x < edge_margin
                 || center_x >= width - edge_margin
@@ -553,6 +653,79 @@ pub fn candidate_consensus(
     temporal_min_psf_correlation: f64,
     image_support_data: Option<&Value>,
 ) -> Result<Value> {
+    let image_support = parse_image_support(image_support_data, candidate_peak_frames.len())?;
+    candidate_consensus_with_image_support(
+        candidate_peak_frames,
+        cumulative_shifts,
+        quality_tracks,
+        frame_times,
+        link_radius_px,
+        min_presence,
+        persistent_min_presence,
+        motion_min_displacement_px,
+        max_motion_fit_rms_px,
+        min_candidate_snr,
+        temporal_candidate_min_snr,
+        temporal_reference_min_snr,
+        temporal_min_psf_correlation,
+        image_support.as_ref(),
+    )
+}
+
+/// Run candidate consensus against FITS pixels already held by native analysis.
+#[allow(clippy::too_many_arguments)]
+pub fn candidate_consensus_from_analyses(
+    candidate_peak_frames: &[Value],
+    cumulative_shifts: &[[f64; 2]],
+    quality_tracks: &[Value],
+    frame_times: Option<&[f64]>,
+    link_radius_px: f64,
+    min_presence: usize,
+    persistent_min_presence: usize,
+    motion_min_displacement_px: f64,
+    max_motion_fit_rms_px: f64,
+    min_candidate_snr: f64,
+    temporal_candidate_min_snr: Option<f64>,
+    temporal_reference_min_snr: Option<f64>,
+    temporal_min_psf_correlation: f64,
+    analyses: &[FrameAnalysis],
+) -> Result<Value> {
+    let image_support = image_support_from_analyses(analyses)?;
+    candidate_consensus_with_image_support(
+        candidate_peak_frames,
+        cumulative_shifts,
+        quality_tracks,
+        frame_times,
+        link_radius_px,
+        min_presence,
+        persistent_min_presence,
+        motion_min_displacement_px,
+        max_motion_fit_rms_px,
+        min_candidate_snr,
+        temporal_candidate_min_snr,
+        temporal_reference_min_snr,
+        temporal_min_psf_correlation,
+        image_support.as_ref(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn candidate_consensus_with_image_support(
+    candidate_peak_frames: &[Value],
+    cumulative_shifts: &[[f64; 2]],
+    quality_tracks: &[Value],
+    frame_times: Option<&[f64]>,
+    link_radius_px: f64,
+    min_presence: usize,
+    persistent_min_presence: usize,
+    motion_min_displacement_px: f64,
+    max_motion_fit_rms_px: f64,
+    min_candidate_snr: f64,
+    temporal_candidate_min_snr: Option<f64>,
+    temporal_reference_min_snr: Option<f64>,
+    temporal_min_psf_correlation: f64,
+    image_support: Option<&ImageSupport<'_>>,
+) -> Result<Value> {
     if candidate_peak_frames.is_empty() || candidate_peak_frames.len() != cumulative_shifts.len() {
         return Ok(json!({"tracks":[],"audit":{}}));
     }
@@ -588,6 +761,9 @@ pub fn candidate_consensus(
     }
 
     let frame_count = frames.len();
+    if image_support.is_some_and(|support| support.frames.len() != frame_count) {
+        return Err("image_support frame count must match candidate_peak_frames".into());
+    }
     let mut anchors = Vec::<[f64; 5]>::new();
     for (frame_index, current) in frames.iter().enumerate() {
         let aligned = current
@@ -693,8 +869,7 @@ pub fn candidate_consensus(
             }
         }));
     }
-    let image_support = parse_image_support(image_support_data, frame_count)?;
-    let image_gate_counts = image_support.as_ref().map(|support| {
+    let image_gate_counts = image_support.map(|support| {
         count_image_support(
             support,
             &frames,
