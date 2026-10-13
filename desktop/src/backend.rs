@@ -45,6 +45,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-feature-raw-evidence-audit"
                         | "rst19-signed-null-overlap"
                         | "rst19-signed-null-audit"
+                        | "rst19-signed-null-sequence"
                         | "rst19-aux-audit"
                         | "rst19-feature-flag-profile"
                         | "rst19-feature-flag-interaction"
@@ -293,6 +294,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-signed-null-audit"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-signed-null-sequence"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-aux-audit"})

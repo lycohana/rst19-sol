@@ -61,6 +61,14 @@ def test_catalog_covers_all_scientific_entry_points():
         "proposal_mode", "background_box_size", "min_flux_snr", "min_psf_support_pixels",
         "keep_linear_artifacts", "snr_thresholds", "out_dir",
     ]
+    signed_null_sequence = next(tool for tool in tools if tool["name"] == "rst19-signed-null-sequence")
+    assert entries["rst19-signed-null-sequence"] == "native:rst19-signed-null-sequence"
+    assert [field["key"] for field in signed_null_sequence["fields"]] == [
+        "inputs", "threshold_sigma", "min_distance", "aperture_radius", "psf_fwhm",
+        "proposal_mode", "background_box_size", "min_flux_snr", "min_psf_support_pixels",
+        "keep_linear_artifacts", "snr_thresholds", "out_dir",
+    ]
+    assert signed_null_sequence["fields"][0]["nargs"] == "+"
 
 
 def test_format_audit_cannot_fall_back_to_python(tmp_path):
@@ -93,6 +101,13 @@ def test_signed_null_overlap_cannot_fall_back_to_python(tmp_path):
 
 def test_signed_null_audit_cannot_fall_back_to_python(tmp_path):
     request = {"operation": "tool", "tool": "rst19-signed-null-audit", "args": [],
+               "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+def test_signed_null_sequence_cannot_fall_back_to_python(tmp_path):
+    request = {"operation": "tool", "tool": "rst19-signed-null-sequence", "args": [],
                "out_dir": str(tmp_path)}
     with pytest.raises(ValueError, match="必须由 native worker 执行"):
         run(request)

@@ -45,6 +45,7 @@ def registry() -> dict[str, str]:
     entries.setdefault("rst19-feature-raw-evidence-audit", "native:rst19-feature-raw-evidence-audit")
     entries.setdefault("rst19-signed-null-overlap", "native:rst19-signed-null-overlap")
     entries.setdefault("rst19-signed-null-audit", "native:rst19-signed-null-audit")
+    entries.setdefault("rst19-signed-null-sequence", "native:rst19-signed-null-sequence")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -195,6 +196,51 @@ def catalog() -> list[dict]:
                                "repeat": False},
                               {"key": "out_dir", "flag": "--out-dir", "help": "JSON/CSV 输出目录",
                                "required": False, "default": "tmp/signed-null-audit", "choices": [],
+                               "kind": "value", "nargs": None, "path": True, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-signed-null-sequence":
+            tools.append({"name": name,
+                          "description": "逐帧运行真实 FITS 的符号反相 signed-tail leakage 对照，可传目录或多个 FITS 文件",
+                          "fields": [
+                              {"key": "inputs", "flag": "", "help": "FITS 文件或包含 FITS 文件的目录",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": "+", "path": True, "repeat": False},
+                              {"key": "threshold_sigma", "flag": "--threshold-sigma", "help": "匹配滤波候选阈值 sigma",
+                               "required": False, "default": 4.0, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "min_distance", "flag": "--min-distance", "help": "候选峰最小间距 pixel",
+                               "required": False, "default": 4, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "aperture_radius", "flag": "--aperture-radius", "help": "孔径测光半径 pixel",
+                               "required": False, "default": 4, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "psf_fwhm", "flag": "--psf-fwhm", "help": "Gaussian 匹配滤波 FWHM pixel",
+                               "required": False, "default": 2.0, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "proposal_mode", "flag": "--proposal-mode", "help": "宽筛选提案方式",
+                               "required": False, "default": "hybrid", "choices": ["gaussian", "hybrid", "ensemble"],
+                               "kind": "value", "nargs": None, "path": False, "repeat": False},
+                              {"key": "background_box_size", "flag": "--background-box-size", "help": "局部背景/RMS 网格大小 pixel",
+                               "required": False, "default": 128, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "min_flux_snr", "flag": "--min-flux-snr", "help": "质量层孔径通量 SNR 下限",
+                               "required": False, "default": 5.0, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "min_psf_support_pixels", "flag": "--min-psf-support-pixels",
+                               "help": "候选峰中心 3x3 内的最少 PSF 支持像素", "required": False,
+                               "default": 3, "choices": [], "kind": "value", "nargs": None,
+                               "path": False, "repeat": False},
+                              {"key": "keep_linear_artifacts", "flag": "--keep-linear-artifacts",
+                               "help": "不标记线状结构为 LINE_ARTIFACT", "required": False,
+                               "default": False, "choices": [], "kind": "bool", "nargs": 0,
+                               "path": False, "toggle_value": True, "repeat": False},
+                              {"key": "snr_thresholds", "flag": "--snr-thresholds", "help": "输出 SNR 分档下限，必须严格递增",
+                               "required": False, "default": [4.0, 5.0, 7.0, 10.0, 15.0, 20.0],
+                               "choices": [], "kind": "value", "nargs": "+", "path": False,
+                               "repeat": False},
+                              {"key": "out_dir", "flag": "--out-dir", "help": "JSON/CSV 输出目录",
+                               "required": False, "default": "tmp/signed-null-sequence", "choices": [],
                                "kind": "value", "nargs": None, "path": True, "repeat": False},
                           ]})
             continue

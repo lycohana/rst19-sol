@@ -507,6 +507,11 @@ fn detector_options(options: &Options) -> DetectionOptions {
 }
 
 fn run(path: &Path, options: &Options) -> Result<AuditResult> {
+    let frame = fits::read_fits(path, false)?;
+    run_frame(frame, options)
+}
+
+fn run_frame(frame: FitsFrame, options: &Options) -> Result<AuditResult> {
     if options.threshold_sigma <= 0.0 {
         return Err("threshold_sigma must be positive".into());
     }
@@ -526,7 +531,6 @@ fn run(path: &Path, options: &Options) -> Result<AuditResult> {
     if !["gaussian", "hybrid", "ensemble"].contains(&options.proposal_mode.as_str()) {
         return Err("proposal_mode must be gaussian, hybrid, or ensemble".into());
     }
-    let frame = fits::read_fits(path, false)?;
     let width = frame.width;
     let height = frame.height;
     let mask = fits::auxiliary_mask(height, width)?;
@@ -664,6 +668,10 @@ fn run(path: &Path, options: &Options) -> Result<AuditResult> {
         parameters,
         conclusion: conclusion.into(),
     })
+}
+
+pub(crate) fn run_frame_value(frame: FitsFrame, options: &Options) -> Result<Value> {
+    Ok(run_frame(frame, options)?.as_dict())
 }
 
 fn write_rows<T: Serialize>(path: &Path, rows: &[T]) -> Result<()> {

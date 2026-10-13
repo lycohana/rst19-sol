@@ -32,7 +32,8 @@ if __name__=="__main__":
                              "sequence_feature_comparison","feature_sequence_compare_cli",
                              "feature_raw_evidence_audit","feature_raw_evidence_audit_cli",
                              "signed_null_forward_overlap","signed_null_forward_overlap_cli",
-                             "signed_null","signed_null_cli"}
+                             "signed_null","signed_null_cli",
+                             "signed_null_sequence","signed_null_sequence_cli"}
     tools={name:target for name,target in scripts.items() if target not in ("rst19.gui:main","rst19.desktop_launcher:main")}
     tools["rst19"]="native Rust executable; Python CLI parser retained only for desktop form metadata"
     tools["rst19-format-audit"]="native Rust executable and desktop worker route; Python entrypoint/module import removed; static desktop schema remains"
@@ -40,6 +41,7 @@ if __name__=="__main__":
     tools["rst19-feature-raw-evidence-audit"]="native Rust JSONL operation, standalone executable, and desktop worker route; Python console entrypoint removed; CSV join and statistical summaries match the Python baseline"
     tools["rst19-signed-null-overlap"]="native Rust FITS detection, local spatial audit, standalone executable, and desktop worker route; Python CLI entrypoint removed"
     tools["rst19-signed-null-audit"]="native Rust single-frame signed-null detector audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate"
+    tools["rst19-signed-null-sequence"]="native Rust multi-frame signed-null aggregation, recurrence audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate"
     administrative={"gui.py","desktop_worker.py","desktop_launcher.py","__init__.py","__main__.py"}
     modules=[]
     for path in sorted((ROOT/"src/rst19").glob("*.py")):
@@ -123,6 +125,7 @@ if __name__=="__main__":
     contracts["rst19-feature-raw-evidence-audit"]="joins existing source_catalog and stratified raw-summary CSV; JSONL engine, standalone CLI, and desktop worker match Python fields and CSV bytes for default/custom classes and metrics; package build and cross-platform acceptance pending"
     contracts["rst19-signed-null-overlap"]="reads FITS frames and reverse-quality CSV, runs the native detector, and writes local candidate/quality overlap evidence; parser, Rust unit, Python baseline, package and cross-platform acceptance pending"
     contracts["rst19-signed-null-audit"]="reads one FITS frame, performs positive and sign-flipped detections, source feature summaries, SNR-threshold leakage counts, and raw aperture evidence in Rust; synthetic parity passed at 1e-10 numeric tolerance; package and cross-platform acceptance pending"
+    contracts["rst19-signed-null-sequence"]="aggregates per-frame signed-null results, pooled and frame-level ratios, source recurrence groups, and five CSV/JSON artifacts in Rust; two-frame positive/negative FITS parity had zero JSON field differences at 1e-10 tolerance, max absolute numeric difference 1.71e-13, threshold CSV bytes identical, float-bearing CSV text differs at last digits; CLI and desktop worker pass with PATH disabled; package and cross-platform acceptance pending"
     payload["native_cli_contracts"]=contracts
     payload["native_format_audit_execution"]=generated["native_format_audit_execution"]
     payload["native_sequence_feature_comparison_execution"]=generated["native_sequence_feature_comparison_execution"]
@@ -136,6 +139,9 @@ if __name__=="__main__":
     payload["native_implemented"]=list(dict.fromkeys([
         *payload.get("native_implemented",[]),
         "single-frame signed-null source audit with sign-flipped detection, quality leakage thresholds, feature classification, range-transfer exclusion, and raw aperture evidence"]))
+    payload["native_implemented"]=list(dict.fromkeys([
+        *payload.get("native_implemented",[]),
+        "multi-frame signed-null aggregation with pooled/frame ratios, SNR thresholds, feature/source rows, and connected-component recurrence diagnostics"]))
     payload["verification"]=list(dict.fromkeys([
         *previous_payload.get("verification",[]),*generated.get("verification",[])]))
     payload["verification"]=list(dict.fromkeys([
@@ -146,6 +152,9 @@ if __name__=="__main__":
         *payload["verification"],"cargo test --lib signed_null_forward_overlap","tests/test_signed_null_forward_overlap.py"]))
     payload["verification"]=list(dict.fromkeys([
         *payload["verification"],"cargo test --lib signed_null","tests/test_signed_null.py","tests/test_desktop_worker.py"]))
+    payload["verification"]=list(dict.fromkeys([
+        *payload["verification"],"cargo test --lib signed_null_sequence","tests/test_signed_null_sequence.py"]
+    ))
     target=ROOT/"backend/migration.json"
     target.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding="utf-8")
     print(f"{len(modules)} Python backend modules, {len(tools)} tools, {sum(len(m['symbols']) for m in modules)} symbols inventoried")
