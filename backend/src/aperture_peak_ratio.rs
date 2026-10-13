@@ -489,6 +489,41 @@ pub fn run_desktop(args: &[String]) -> Result<Value> {
     }))
 }
 
+const CLI_HELP: &str = "按特征类别审计 source_catalog 的 flux/peak，不生成物理恒星概率\n\nUsage: rst19-aperture-peak-ratio <SOURCE_CATALOG.csv> [OPTIONS]\n\nOptions:\n  --target-ids [ID ...]\n  --out-dir DIR\n  -h, --help\n";
+
+/// Run the standalone Rust command while preserving the Python CLI's output
+/// and exit-code contract.
+pub fn run_cli(args: &[String]) -> i32 {
+    if args
+        .iter()
+        .any(|arg| matches!(arg.as_str(), "-h" | "--help"))
+    {
+        println!("{CLI_HELP}");
+        return 0;
+    }
+    let result = match run_desktop(args) {
+        Ok(result) => result,
+        Err(error) => {
+            eprintln!("rst19-aperture-peak-ratio: {error}");
+            return 2;
+        }
+    };
+    let output = result["out_dir"].as_str().unwrap_or_default();
+    println!("aperture/peak ratio audit: {output}");
+    if let Some(rows) = result["result"]["target_rows"].as_array() {
+        for row in rows {
+            let detection_id = row["detection_id"].as_str().unwrap_or_default();
+            let feature_class = row["feature_class"].as_str().unwrap_or_default();
+            let ratio = row["flux_to_peak"].as_f64().unwrap_or_default();
+            let percentile = row["class_percentile"].as_f64().unwrap_or_default();
+            println!(
+                "{detection_id}: {feature_class}, flux/peak={ratio:.6}, class percentile={percentile:.6}"
+            );
+        }
+    }
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -535,5 +570,12 @@ mod tests {
         assert!(run(&catalog, &[])
             .unwrap_err()
             .contains("missing required columns: feature_class"));
+    }
+
+    #[test]
+    fn standalone_cli_help_documents_the_rust_command() {
+        assert!(CLI_HELP.contains("Usage: rst19-aperture-peak-ratio"));
+        assert!(CLI_HELP.contains("--target-ids"));
+        assert!(CLI_HELP.contains("--out-dir"));
     }
 }

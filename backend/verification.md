@@ -152,6 +152,8 @@
 
 独立单帧拖影提案器新增 Rust `trails.single_frame_proposals`：完成旋转多方向/多长度响应、原图坐标局部复核、点源/双星负例门控及几何去重；与原有 `trails.local_pixel_proposals` 一起由 Rust JSONL engine 暴露。固定 Python fixture 覆盖斜线、短/长线、多尺度默认长度库、点源/双星负例、空间变化背景/噪声、无效像素掩膜及输入错误；debug/release Rust 对照和 PATH 清空后的 engine 路由测试通过。release engine SHA-256 为 `63034190410db7aafc07be570b15c9306e6ba4a648291cdfcd484e4fb73263259`，fixture SHA-256 为 `f48dbb27b25a68ae0532d234e6089c80b057bebecfcb848880133e6e1579bd9a`。`rst19.single_frame_trails` 仍为迁移中：2026-10-14 已将单帧 FITS 审计、残差连通域分析、线/点/双源/椭圆模型门和 CSV/PNG 产物接入 Rust 桌面 worker，目录元数据也标为 native；worker fixture 测试核对候选数、质量源数、拖影数和产物存在。Rust 独立二进制 `rst19-trails` 已新增，Python console entrypoint 已从 `pyproject.toml` 移除；独立 CLI 集成测试验证固定 FITS 的摘要与 CSV/PNG 产物。`rst19.single_frame_trails` 的完整算法 parity、发布包及 macOS/Linux 验收仍未完成，Python runtime 仍供其他工具使用。
 
+`rst19-aperture-peak-ratio` 的 flux/peak 类别和 proposal-method 统计已由 Rust 模块实现，之前通过 Python console entrypoint 启动；现已添加 Rust 独立二进制并移除该 Python entrypoint。Rust CLI 复用已做 Python parity 的 JSONL/worker 计算和 CSV/JSON 写出逻辑，集成测试覆盖参数、摘要和四个产物；跨平台包验收仍待完成。
+
 检测对照已覆盖 float64 与 float32 固定样例和 ROI，以及首帧 float64 全幅；float32 全幅验收、WCS 拟合与天测流程、序列运动、合成、全部审计／实验及剩余 CLI 契约仍需继续移植和对照。Windows 完整桌面包已构建验收，macOS/Linux 还未实际构建或运行；打包流程仍保留 Python 环境供剩余工具使用。
 
 15 帧 FITS 读取验证证明读取、遥测和抽样像素契约；新增全幅计算验证只证明首帧 hybrid 检测与现有 Python 算法一致，不证明完整 15 帧运动分类或物理天体真值。
