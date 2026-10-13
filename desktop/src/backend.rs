@@ -143,14 +143,18 @@ impl Backend {
         &self.root
     }
 
+    fn executable_for(&self, request: Option<&Value>) -> Result<&Path, String> {
+        if request.is_some_and(uses_native_worker) {
+            return self.native_worker.as_deref().ok_or_else(|| {
+                "该操作已迁移到 Rust，但没有找到 native worker。请重新构建桌面应用。".into()
+            });
+        }
+        Ok(&self.executable)
+    }
+
     pub fn start(&self, request: Option<Value>, working_dir: &Path) -> Result<Job, String> {
-        let use_native =
-            request.as_ref().is_some_and(uses_native_worker) && self.native_worker.is_some();
-        let executable = if use_native {
-            self.native_worker.as_ref().unwrap()
-        } else {
-            &self.executable
-        };
+        let use_native = request.as_ref().is_some_and(uses_native_worker);
+        let executable = self.executable_for(request.as_ref())?;
         let mut command = Command::new(executable);
         if self.development && !use_native {
             command.args(["-u", "-m", "rst19.desktop_worker"]);
@@ -350,6 +354,20 @@ mod tests {
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-mosaic"})
         ));
+    }
+
+    #[test]
+    fn migrated_operations_never_fall_back_to_python_when_native_worker_is_missing() {
+        let backend = Backend {
+            executable: PathBuf::from("python"),
+            native_worker: None,
+            root: PathBuf::new(),
+            development: true,
+        };
+        let request = json!({"operation":"tool","tool":"rst19"});
+        let error = backend.executable_for(Some(&request)).unwrap_err();
+        assert!(error.contains("已迁移到 Rust"));
+        assert_eq!(backend.executable_for(None).unwrap(), Path::new("python"));
     }
 
     #[test]
