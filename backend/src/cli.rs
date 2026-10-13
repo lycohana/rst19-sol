@@ -95,7 +95,14 @@ fn option(name: &str) -> Result<(&'static str, Kind)> {
 }
 pub fn run(args: &[String]) -> Result<()> {
     if args.iter().any(|a| a == "-h" || a == "--help") {
-        println!("读取 rst19 FITS，检测星点并按先验 WCS 匹配离线星表\n\nUsage: rst19-native FITS_PATH [OPTIONS]\n\n-h, --help");
+        let command = std::env::current_exe()
+            .ok()
+            .and_then(|path| {
+                path.file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
+            })
+            .unwrap_or_else(|| "rst19".into());
+        println!("读取 rst19 FITS，检测星点并按先验 WCS 匹配离线星表\n\nUsage: {command} FITS_PATH [OPTIONS]\n\n-h, --help");
         for names in [FLOATS, INTEGERS, TEXTS, FLAGS] {
             for name in names {
                 println!("  --{name}");

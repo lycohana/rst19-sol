@@ -293,6 +293,11 @@ def verify(package: Path, out: Path) -> dict:
     worker = package / "runtime" / ("rst19-worker.exe" if os.name == "nt" else "rst19-worker")
     native_worker = package / "runtime" / ("rst19-native-worker.exe" if os.name == "nt" else "rst19-native-worker")
     assert native_worker.is_file(), "Rust single-frame worker is missing from the package"
+    single_frame_cli = package / "runtime" / ("rst19.exe" if os.name == "nt" else "rst19")
+    assert single_frame_cli.is_file(), "Rust single-frame CLI is missing from the package"
+    help_result = subprocess.run([str(single_frame_cli), "--help"], capture_output=True, text=True,
+                                 encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True)
+    assert "Usage: rst19 " in help_result.stdout, help_result.stdout
     attitude_cli = package / "runtime" / ("rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit")
     assert attitude_cli.is_file(), "Rust auxiliary attitude audit CLI is missing from the package"
     geometry_cli = package / "runtime" / (

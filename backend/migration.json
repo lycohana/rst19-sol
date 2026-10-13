@@ -238,7 +238,7 @@
         "_build_wcs",
         "main"
       ],
-      "migration_status": "in_progress"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.contaminated_pair_class",
@@ -3152,7 +3152,7 @@
     }
   ],
   "tools": {
-    "rst19": "rst19.cli:main",
+    "rst19": "native Rust executable; Python CLI parser retained only for desktop form metadata",
     "rst19-gaia": "rst19.gaia_remote_cli:main",
     "rst19-gaia-tiled": "rst19.gaia_tiled_cli:main",
     "rst19-gaia-frame": "rst19.gaia_frame_cli:main",
@@ -3326,7 +3326,7 @@
   "native_feature_class_context": "reads source_catalog CSV; returns requested detections with within-feature-class counts, quality context, linear p10/median/p90, and inclusive empirical percentiles; writes target, metric, and JSON artifacts; JSONL audit.feature_class_context",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_cli_contracts": {
-    "rst19": "rst19-native executable; synthetic/default modes, stdout/json-out/errors and bounded original FITS verified; desktop single-frame route uses bundled Rust worker",
+    "rst19": "native rst19 executable is the public command; rst19-native alias retained; stdout/json-out/error contracts match across 89 parity invocations; standalone Windows executable opens help with PATH disabled; package build/verification and macOS/Linux package validation pending",
     "rst19-relative-photometry": "robust relative frame/source fit with MAD rejection, holdout, optional spatial terms and uncertainty output; Rust engine, desktop JSONL/tool routes, and standalone CLI match Python across seven scenarios at 5e-7 tolerance; Windows package worker and CLI run with external Python search disabled; macOS/Linux package validation pending",
     "rst19-aux-audit": "single FITS or sorted directory input; Rust CLI and desktop worker match Python CSV/JSON outputs; Windows package includes the native CLI binary and verifies it with external Python search disabled; broader parser-edge and cross-platform acceptance pending",
     "rst19-feature-flag-profile": "overlap-aware CSV profile; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",

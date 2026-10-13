@@ -20,7 +20,6 @@ dev = [
 ]
 
 [project.scripts]
-rst19 = "rst19.cli:main"
 rst19-gui = "rst19.desktop_launcher:main"
 rst19-ui = "rst19.desktop_launcher:main"
 rst19-tk = "rst19.gui:main"

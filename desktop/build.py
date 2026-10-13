@@ -65,11 +65,11 @@ def build() -> None:
     package.mkdir(parents=True, exist_ok=False)
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(DESKTOP / "Cargo.toml"), "--bins"])
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(ROOT / "backend/Cargo.toml"),
-             "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit", "--bin", "rst19-source-geometry-audit",
+             "--bin", "rst19", "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit", "--bin", "rst19-source-geometry-audit",
               "--bin", "rst19-relative-photometry", "--bin", "rst19-wcs-validation"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
-                      if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")})
+                      if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")} | {"rst19.cli"})
     freeze = [sys.executable, "-m", "PyInstaller", "--onedir", "--noupx", "--name", "rst19-worker",
               "--distpath", str(staging / "frozen"), "--workpath", str(staging / "work"),
               "--specpath", str(staging), "--paths", str(ROOT / "src"),
@@ -82,6 +82,8 @@ def build() -> None:
     shutil.copytree(staging / "frozen/rst19-worker", package / "runtime")
     native_worker = "rst19-native-worker.exe" if os.name == "nt" else "rst19-native-worker"
     shutil.copy2(DESKTOP / "target/release" / native_worker, package / "runtime" / native_worker)
+    single_frame_cli = "rst19.exe" if os.name == "nt" else "rst19"
+    shutil.copy2(ROOT / "backend/target/release" / single_frame_cli, package / "runtime" / single_frame_cli)
     gaia_merge = "rst19-gaia-merge.exe" if os.name == "nt" else "rst19-gaia-merge"
     shutil.copy2(ROOT / "backend/target/release" / gaia_merge, package / "runtime" / gaia_merge)
     auxiliary_audit = "rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit"

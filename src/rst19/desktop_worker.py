@@ -35,6 +35,9 @@ def registry() -> dict[str, str]:
     else:
         entries = {ep.name: ep.value for ep in importlib.metadata.distribution("rst19-sol").entry_points
                    if ep.group == "console_scripts"}
+    # `rst19` is a Rust executable. Keep its parser only as the desktop form
+    # schema; the desktop backend dispatches the calculation to Rust.
+    entries.setdefault("rst19", "rst19.cli:main")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 

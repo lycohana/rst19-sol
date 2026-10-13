@@ -13,6 +13,10 @@ name = "rst19-engine"
 path = "src/main.rs"
 
 [[bin]]
+name = "rst19"
+path = "src/bin/rst19.rs"
+
+[[bin]]
 name = "rst19-aux-audit"
 path = "src/bin/rst19-aux-audit.rs"
 
