@@ -72,6 +72,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-source-proposal-peak-audit"
                         | "rst19-source-proposal-temporal-audit"
                         | "rst19-source-geometry-audit"
+                        | "rst19-innovation-package"
                         | "rst19-relative-photometry"
                 )
             ))
@@ -375,6 +376,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-relative-photometry"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-innovation-package"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

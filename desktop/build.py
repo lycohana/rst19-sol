@@ -67,6 +67,7 @@ def build() -> None:
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(ROOT / "backend/Cargo.toml"),
              "--bin", "rst19", "--bin", "rst19-format-audit", "--bin", "rst19-feature-sequence-compare", "--bin", "rst19-feature-raw-evidence-audit", "--bin", "rst19-signed-null-overlap", "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit", "--bin", "rst19-source-geometry-audit",
               "--bin", "rst19-relative-photometry", "--bin", "rst19-wcs-validation",
+              "--bin", "rst19-innovation-package",
               "--bin", "rst19-signed-null-audit", "--bin", "rst19-signed-null-sequence"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
@@ -108,6 +109,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / relative_photometry, package / "runtime" / relative_photometry)
     wcs_validation = "rst19-wcs-validation.exe" if os.name == "nt" else "rst19-wcs-validation"
     shutil.copy2(ROOT / "backend/target/release" / wcs_validation, package / "runtime" / wcs_validation)
+    innovation_package = "rst19-innovation-package.exe" if os.name == "nt" else "rst19-innovation-package"
+    shutil.copy2(ROOT / "backend/target/release" / innovation_package, package / "runtime" / innovation_package)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"
