@@ -72,6 +72,7 @@ NATIVE_TOOL_NAMES = frozenset(
         "rst19-relative-photometry",
         "rst19-photometric-report",
         "rst19-mosaic",
+        "rst19-contaminated-pair-injection",
     }
 )
 

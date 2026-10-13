@@ -85,6 +85,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-relative-photometry"
                         | "rst19-photometric-report"
                         | "rst19-mosaic"
+                        | "rst19-contaminated-pair-injection"
                 )
             ))
 }
@@ -432,6 +433,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-mosaic"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-contaminated-pair-injection"})
         ));
     }
 

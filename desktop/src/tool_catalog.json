@@ -7201,7 +7201,7 @@
         "repeat": false
       }
     ],
-    "native": false
+    "native": true
   },
   {
     "name": "rst19-contaminated-pair-class",

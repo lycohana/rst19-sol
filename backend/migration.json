@@ -300,7 +300,7 @@
         "run_contaminated_pair_injection_audit",
         "write_contaminated_pair_injection_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.contaminated_pair_injection_cli",
@@ -311,7 +311,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.crowded_ablation",

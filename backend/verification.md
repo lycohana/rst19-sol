@@ -144,7 +144,7 @@
 
 ## 尚未完成
 
-当前迁移账本有 104 个 Python 模块标记为 Rust 迁移完成、4 个在迁移中、50 个待迁；按 `desktop/src/tool_catalog.json` 与 `desktop/src/backend.rs` 的实际 worker 路由核对，桌面工具共 71 项，其中 43 项走 Rust、28 项仍走 Python worker。生产运算链尚未全量切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
+当前迁移账本有 106 个 Python 模块标记为 Rust 迁移完成、4 个在迁移中、48 个待迁；按 `desktop/src/tool_catalog.json` 与 `desktop/src/backend.rs` 的实际 worker 路由核对，桌面工具共 71 项，其中 44 项走 Rust、27 项仍走 Python worker。生产运算链尚未全量切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
 
 序列 Rust 核心新增了注册中值／coadd 暗星恢复：从参考堆栈提出并去重候选，回到原始帧做强制测光、支持像素和形状门控，按出现帧数生成带 `stack_faint` 证据标记的轨迹并返回审计计数；同时输出合并轨迹列表，并按 `SequenceResult` 口径分开统计质量源、共识候选和暗星轨迹。五帧合成序列及已解释候选去重测试通过；这还没有完成与 Python 全字段对照，也没有切换公开 `rst19-sequence` 路由，该工具当前仍使用 Python。
 
@@ -170,4 +170,5 @@
 - `rst19-feature-raw-evidence-audit` 已从 Python 控制台入口迁到 Rust JSONL engine、独立 CLI 和桌面 worker。对照覆盖默认类别、重复/自选类别、重复/自选指标、无效有限值及缺失/重复 ID；JSON 字段一致，摘要 CSV 逐字节一致，原始 CSV 哈希前后不变。debug engine/CLI/worker SHA-256 分别为 `021422a96b5b6c3bf0af573a6f666b2bd2930b0013133ced1553538bfcb3bd7c`、`4e98d6175c38f7663c96acb4b124d705d750769a438fea6987ba3781918dcd71`、`6f5ee407a2a554af556f4719b2d53888be30a9937d711793a9a71c6bfbfaeff1`；报告 `backend/target/feature-raw-evidence-audit-20261013-v4-verification.json`。
 - 随后一批验证：backend 与 desktop 完整 `cargo test --locked`、两套 `cargo clippy --all-targets -- -D warnings`、格式/语法检查及清单幂等性通过；定向 Python 测试 9 项通过。独立 CLI 在清空 `PATH` 后可正常显示帮助。当时迁移清单为 70/158 模块完成、3 个进行中、85 个待迁移，78 个工具；完整发布包尚未重建，Python 运行时仍供剩余工具使用。
 - 新增 `psf.empirical.estimate` Rust 运算：直接读取 FITS 与 Rust 检测结果，返回完整经验 PSF kernel；JSONL engine、桌面 native worker 和桌面后端路由均已接通。固定合成 Python 参考核及相似度指标通过 Rust 数值容差测试；Rust engine/worker 的请求分发测试也通过。`rst19.experiments` 的其他消费者仍待迁移，桌面 28 个工具仍使用 Python，不能据此认定 Python 运行时已移除。
-- `rst19` 单帧工具现在在目录元数据与 Python worker 注册表中都标为 native；Python worker 会拒绝执行它，桌面仍由 Rust native worker 调用现有 Rust CLI。合成 FITS 的 worker 端到端测试核对 CLI 结果与同一 Rust pipeline 结果、检查预览生成和输入文件未变；pipeline parity fixture 覆盖相对 Python 基线的算法字段一致性。实际工具路由现为 43/71 Rust、28/71 Python。
+- `rst19` 单帧工具现在在目录元数据与 Python worker 注册表中都标为 native；Python worker 会拒绝执行它，桌面仍由 Rust native worker 调用现有 Rust CLI。合成 FITS 的 worker 端到端测试核对 CLI 结果与同一 Rust pipeline 结果、检查预览生成和输入文件未变；pipeline parity fixture 覆盖相对 Python 基线的算法字段一致性。实际工具路由现为 44/71 Rust、27/71 Python。
+- `rst19-contaminated-pair-injection` 的运算、CLI 参数解析与桌面 worker 路由已迁到 Rust，Python 控制台入口已从 `pyproject.toml` 移除；本机小型 FITS 固定样例与 Python 基线整份 JSON 逐字段对照通过，数值误差限为 `2e-5 + 2e-6 * max(|a|, |b|)`，布尔值、计数、ID、ROI 和质量原因要求完全一致。Python 基线 SHA-256 为 `517f7e568a304da390aab34465a78d3bedd71854ae52144f5940547faa4859d9`，FITS fixture SHA-256 为 `02a9303a2494cb46dae4d7f5f44d817cbf92f217f405e5da5997aac7008d3c42`；Rust native worker 端到端测试核对 CSV/JSON 产物并确认原 FITS 未变。该模块完成后仍有 48 个 Python 模块未迁移，产品包仍含 Python 运行时。

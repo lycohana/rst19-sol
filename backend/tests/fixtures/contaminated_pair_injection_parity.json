@@ -1,0 +1,102 @@
+{
+  "source_path": "backend\\tests\\fixtures\\contaminated_pair_injection_parity.fits",
+  "anchors": [
+    {
+      "name": "synthetic",
+      "x": 64.0,
+      "y": 112.0,
+      "direction_x": 1.0,
+      "direction_y": 0.0
+    }
+  ],
+  "separations_px": [
+    6.0
+  ],
+  "ratios": [
+    1.0
+  ],
+  "baseline_candidate_count": 3,
+  "baseline_quality_count": 3,
+  "parameters": {
+    "proposal_mode": "gaussian",
+    "threshold_sigma": 4.0,
+    "min_distance": 4,
+    "aperture_radius": 4,
+    "background_box_size": 128,
+    "min_flux_snr": 5.0,
+    "min_psf_support_pixels": 3,
+    "max_sources": null,
+    "reject_linear_artifacts": true,
+    "signal_normalization": "peak_excess",
+    "analysis_scope": "local_roi",
+    "roi_half_size_px": 20,
+    "roi_bounds_order": "x0,y0,x1,y1",
+    "baseline_scope": "full_frame",
+    "injected_count_scope": "local_roi",
+    "detector_psf_fwhm_px": 2.0,
+    "injected_psf_fwhm_px": 2.0,
+    "match_radius_px": 2.0
+  },
+  "rows": [
+    {
+      "source_path": "backend\\tests\\fixtures\\contaminated_pair_injection_parity.fits",
+      "anchor_name": "synthetic",
+      "anchor_x": 64.0,
+      "anchor_y": 112.0,
+      "direction_x": 1.0,
+      "direction_y": 0.0,
+      "separation_px": 6.0,
+      "secondary_to_primary_ratio": 1.0,
+      "total_peak_excess_adu": 2048.0,
+      "primary_signal_adu": 1024.0,
+      "secondary_signal_adu": 1024.0,
+      "primary_x": 67.0,
+      "primary_y": 112.0,
+      "secondary_x": 61.0,
+      "secondary_y": 112.0,
+      "baseline_candidate_primary": false,
+      "baseline_candidate_secondary": false,
+      "injected_candidate_primary": true,
+      "injected_candidate_secondary": true,
+      "new_candidate_primary": true,
+      "new_candidate_secondary": true,
+      "baseline_quality_primary": false,
+      "baseline_quality_secondary": false,
+      "injected_quality_primary": true,
+      "injected_quality_secondary": true,
+      "new_quality_primary": true,
+      "new_quality_secondary": true,
+      "candidate_pair_resolved": true,
+      "quality_pair_resolved": true,
+      "merged_candidate": false,
+      "merged_quality": false,
+      "baseline_candidate_count": 3,
+      "injected_candidate_count": 2,
+      "baseline_quality_count": 3,
+      "injected_quality_count": 2,
+      "new_candidate_hit_count": 2,
+      "new_quality_hit_count": 2,
+      "match_radius_px": 2.0,
+      "detector_psf_fwhm_px": 2.0,
+      "injected_psf_fwhm_px": 2.0,
+      "local_background_adu": 1000.0,
+      "local_noise_adu": 5.9304,
+      "note": "baseline flags describe pre-existing detections at the injected truth positions; new flags are injected-minus-baseline diagnostics, not precision or physical truth; analysis_scope=local_roi; injected counts are ROI-local",
+      "analysis_scope": "local_roi",
+      "roi_bounds": [
+        44,
+        92,
+        85,
+        128
+      ],
+      "injected_primary_match_id": 1,
+      "injected_secondary_match_id": 0,
+      "injected_primary_match_distance_px": 0.0008917265435355933,
+      "injected_secondary_match_distance_px": 0.0027172834397239374,
+      "injected_primary_quality_reason": "QUALITY_PASS",
+      "injected_secondary_quality_reason": "QUALITY_PASS"
+    }
+  ],
+  "conclusion": "污染结构双源注入 pilot：1 个条件中，候选双源分别命中 1/1，质量层分别通过 1/1，候选合并 0/1；baseline 命中必须与新增命中分开解释。",
+  "interpretation_boundary": "contaminated-background injection pilot; baseline overlap is not injection truth; candidate/quality recovery is not precision or physical star truth"
+}

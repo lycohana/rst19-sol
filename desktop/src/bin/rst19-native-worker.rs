@@ -583,6 +583,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::pair_flux_covariance::run_desktop(&args);
     }
+    if request["tool"] == "rst19-contaminated-pair-injection" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::contaminated_pair_injection::run_desktop(&args);
+    }
     if request["tool"] == "rst19-feature-temporal-consistency-audit" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1053,6 +1075,9 @@ mod tests {
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-feature-audit-replicates" && tool["native"] == false
         }));
+        assert!(tools.iter().any(|tool| {
+            tool["name"] == "rst19-contaminated-pair-injection" && tool["native"] == true
+        }));
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-sequence" && tool["native"] == false));
@@ -1109,6 +1134,47 @@ mod tests {
                 >= 3
         );
         assert!(Path::new(result["preview"].as_str().unwrap()).is_file());
+        assert_eq!(fs::read(&fits_path).unwrap(), source_bytes);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn contaminated_pair_injection_runs_through_the_native_worker_without_mutating_fits() {
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-contaminated-pair-{}-{sequence}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let fits_path = root.join("frame.fits");
+        let out_dir = root.join("output");
+        write_single_frame_test_fits(&fits_path);
+        let source_bytes = fs::read(&fits_path).unwrap();
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-contaminated-pair-injection",
+            "args":[
+                fits_path.to_string_lossy(),
+                "--anchor", "synthetic,64,112,1,0",
+                "--separations-px", "6",
+                "--ratios", "1",
+                "--total-peak-adu", "2048",
+                "--proposal-mode", "gaussian",
+                "--analysis-scope", "local_roi",
+                "--roi-half-size-px", "20"
+            ],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+        assert_eq!(result["tool"], "rst19-contaminated-pair-injection");
+        assert_eq!(result["result"]["rows"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            result["result"]["rows"][0]["roi_bounds"],
+            json!([44, 92, 85, 128])
+        );
+        assert!(out_dir.join("contaminated_pair_injection.csv").is_file());
+        assert!(out_dir.join("contaminated_pair_injection.json").is_file());
+        assert!(out_dir.join("request.json").is_file());
         assert_eq!(fs::read(&fits_path).unwrap(), source_bytes);
         fs::remove_dir_all(root).unwrap();
     }

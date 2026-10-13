@@ -9,6 +9,7 @@ pub mod catalog_csv;
 pub mod catalog_merge;
 pub mod cli;
 pub mod compatible_spatial;
+pub mod contaminated_pair_injection;
 pub mod coordinates;
 pub mod deblend;
 pub mod detection;

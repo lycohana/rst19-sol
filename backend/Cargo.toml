@@ -65,6 +65,10 @@ name = "rst19-pair-covariance-audit"
 path = "src/bin/rst19-pair-covariance-audit.rs"
 
 [[bin]]
+name = "rst19-contaminated-pair-injection"
+path = "src/bin/rst19-contaminated-pair-injection.rs"
+
+[[bin]]
 name = "rst19-feature-temporal-consistency-audit"
 path = "src/bin/rst19-feature-temporal-consistency-audit.rs"
 
