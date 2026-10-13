@@ -17,11 +17,13 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from rst19.detection import build_background_model  # noqa: E402
+from rst19.detection import _working_mask, build_background_model  # noqa: E402
 from rst19.fits import auxiliary_mask, read_fits  # noqa: E402
 from rst19.pipeline import analyze_frame  # noqa: E402
 from rst19.sequence import (  # noqa: E402
     _observation_times_seconds,
+    _stack_forced_frame_measure_batch,
+    _track_fast_candidate_movers,
     track_detections,
     track_fast_point_movers,
 )
@@ -76,6 +78,30 @@ def synthetic_frames(directory: Path) -> list[Path]:
         make_fits(path, np.rint(image).astype(np.int16), f"2026-07-03T12:00:{index * 2:02d}.000Z")
         paths.append(path)
     return paths
+
+
+def synthetic_candidate_recovery_frames(directory: Path) -> tuple[list[Path], list[tuple[float, float]]]:
+    rng = np.random.default_rng(77531)
+    yy, xx = np.indices((128, 128), dtype=np.float64)
+    static_stars = [(16, 19, 900), (108, 23, 850), (22, 105, 820), (105, 104, 780)]
+    paths = []
+    truth = []
+    for index in range(3):
+        image = rng.normal(100.0, 2.0, size=(128, 128))
+        for x, y, amplitude in static_stars:
+            image += amplitude * np.exp(
+                -0.5 * (((xx - x) / 1.25) ** 2 + ((yy - y) / 1.25) ** 2)
+            )
+        x = 54 + index * 4
+        y = 57 + index * 2
+        truth.append((float(x), float(y)))
+        image += 220 * np.exp(
+            -0.5 * (((xx - x) / 1.25) ** 2 + ((yy - y) / 1.25) ** 2)
+        )
+        path = directory / f"candidate-frame-{index:02d}.fits"
+        make_fits(path, np.rint(image).astype(np.int16), f"2026-07-03T12:01:{index * 2:02d}.000Z")
+        paths.append(path)
+    return paths, truth
 
 
 def compare(actual: Any, expected: Any, path: str = "result") -> None:
@@ -188,6 +214,152 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
     disabled = invoke(engine.resolve(), {**request, "fast_point_motion": False})
     compare(disabled["fast_point_tracks"], [], "disabled.fast_point_tracks")
     compare(disabled["tracking"]["fast_point_motion_count"], 0, "disabled.tracking.fast_point_motion_count")
+    compare(disabled["fast_candidate_proposals"]["status"], "disabled", "disabled.fast_candidate_proposals.status")
+
+    candidate_dir = out / "fast-candidate-recovery"
+    candidate_dir.mkdir()
+    candidate_paths, candidate_truth = synthetic_candidate_recovery_frames(candidate_dir)
+    candidate_request = {
+        "operation": "sequence.analyze_core",
+        "paths": [str(path) for path in candidate_paths],
+        "frame_options": {**FRAME_OPTIONS, "max_sources": 2},
+    }
+    candidate_result = invoke(engine.resolve(), candidate_request)
+    candidate_stage = candidate_result["fast_candidate_proposals"]
+    if candidate_stage["status"] != "proposals_available":
+        raise AssertionError("Rust did not propose the truncated moving-source peak")
+    if candidate_stage["evidence_level"] != "unverified_candidate_proposal":
+        raise AssertionError("candidate peaks were promoted beyond proposal evidence")
+    if candidate_stage["original_pixel_measurement_applied"] is not True:
+        raise AssertionError("Rust did not remeasure candidate coordinates in original pixels")
+    if candidate_stage["accepted_track_count"] < 1:
+        raise AssertionError("Rust original-pixel gates did not admit the synthetic moving source")
+    if any(frame["detection"]["returned_count"] >= frame["detection"]["candidate_count"]
+           for frame in candidate_result["frame_analyses"]):
+        raise AssertionError("candidate fixture did not exercise source-list truncation")
+    matched_truth = False
+    for proposal in candidate_stage["proposals"]:
+        observations = proposal["observations"]
+        if len(observations) != len(candidate_truth):
+            continue
+        if all(
+            abs(observation["x"] - x) <= 1.5 and abs(observation["y"] - y) <= 1.5
+            for observation, (x, y) in zip(observations, candidate_truth)
+        ):
+            matched_truth = True
+            if proposal["verification_status"] != "original_pixel_quality_and_motion_gates_passed":
+                raise AssertionError("synthetic moving source failed its original-pixel gates")
+            break
+    if not matched_truth:
+        raise AssertionError("Rust candidate proposals did not recover the known moving peak")
+
+    candidate_frame_options = {**FRAME_OPTIONS, "max_sources": 2}
+    candidate_frames = [read_fits(path) for path in candidate_paths]
+    candidate_background = build_background_model(
+        candidate_frames[0].data,
+        mask=auxiliary_mask(candidate_frames[0].data.shape),
+        background_box_size=FRAME_OPTIONS["background_box_size"],
+        background_sample_limit=FRAME_OPTIONS["background_sample_limit"],
+        refine_local_background=FRAME_OPTIONS["refine_local_background"],
+        use_float32=FRAME_OPTIONS["use_float32"],
+    )
+    candidate_analyses = [
+        analyze_frame(path, background_model=candidate_background, **candidate_frame_options)
+        for path in candidate_paths
+    ]
+    candidate_times = _observation_times_seconds(candidate_analyses).tolist()
+    candidate_tracking_result = track_detections(
+        [analysis.detection.quality_sources for analysis in candidate_analyses],
+        frame_names=[str(path) for path in candidate_paths],
+        frame_times=candidate_times,
+    )
+    candidate_quality_fast_tracks = track_fast_point_movers(
+        [analysis.detection.quality_sources for analysis in candidate_analyses],
+        candidate_tracking_result.cumulative_shifts,
+        frame_times=candidate_times,
+        link_radius_px=candidate_tracking_result.link_radius_px,
+        min_presence=candidate_tracking_result.min_presence,
+        motion_min_displacement_px=(
+            candidate_tracking_result.effective_motion_min_displacement_px or 2.0
+        ),
+        existing_tracks=candidate_tracking_result.tracks,
+    )
+    candidate_python_tracks = _track_fast_candidate_movers(
+        [analysis.detection.candidate_peaks for analysis in candidate_analyses],
+        candidate_analyses,
+        candidate_tracking_result.cumulative_shifts,
+        frame_times=candidate_times,
+        link_radius_px=candidate_tracking_result.link_radius_px,
+        min_presence=candidate_tracking_result.min_presence,
+        motion_min_displacement_px=(
+            candidate_tracking_result.effective_motion_min_displacement_px or 2.0
+        ),
+        min_filter_snr=7.0,
+        max_step_px=20.0,
+        gate_px=4.5,
+        max_fit_rms_px=1.5,
+        candidate_limit=20_000,
+        existing_tracks=candidate_tracking_result.tracks + candidate_quality_fast_tracks,
+        aperture_radius=4,
+        min_psf_support_pixels=3,
+        min_fwhm=0.8,
+        max_fwhm=12.0,
+        max_ellipticity=0.65,
+        line_artifact_frames=[
+            analysis.detection.line_artifact_coordinates for analysis in candidate_analyses
+        ],
+    )
+    candidate_python_track_rows = []
+    for index, track in enumerate(candidate_quality_fast_tracks + candidate_python_tracks):
+        row = track.as_dict()
+        row["track_id"] = len(candidate_tracking_result.tracks) + index
+        candidate_python_track_rows.append(row)
+    compare(
+        candidate_result["fast_point_tracks"],
+        candidate_python_track_rows,
+        "candidate.fast_point_tracks",
+    )
+    for proposal_index, proposal in enumerate(candidate_stage["proposals"]):
+        for observation_index, observation in enumerate(proposal["observations"]):
+            frame_index = observation["frame_index"]
+            analysis = candidate_analyses[frame_index]
+            image = np.asarray(analysis.frame.data)
+            saturation_level = analysis.detection.parameters.get("saturation_level")
+            if saturation_level is not None:
+                saturation_level = float(saturation_level)
+                if saturation_level <= 0:
+                    saturation_level = None
+            effective_mask, _inferred_saturation, _used_zero_mask = _working_mask(
+                image,
+                auxiliary_mask(image.shape),
+                background=float(analysis.detection.background),
+                mask_zero_pixels=bool(analysis.detection.parameters.get("mask_zero_pixels")),
+                saturation_level=saturation_level,
+                numeric=np.asarray(image, dtype=np.float32),
+            )
+            expected_measurement = _stack_forced_frame_measure_batch(
+                image,
+                effective_mask,
+                np.asarray([observation["x"]], dtype=np.float64),
+                np.asarray([observation["y"]], dtype=np.float64),
+                aperture_radius=4,
+                min_psf_support_pixels=3,
+                global_background=float(analysis.detection.background),
+                global_noise=float(analysis.detection.noise),
+            )
+            flux_snr, support, center_valid, fwhm, ellipticity = expected_measurement
+            expected = {
+                "flux_snr": float(flux_snr[0]),
+                "psf_support_pixels": int(support[0]),
+                "center_valid": bool(center_valid[0]),
+                "fwhm": float(fwhm[0]),
+                "ellipticity": float(ellipticity[0]),
+            }
+            compare(
+                observation["original_pixel_measurement"],
+                expected,
+                f"candidate.proposals[{proposal_index}].observations[{observation_index}].original_pixel_measurement",
+            )
     report = {
         "engine": str(engine.resolve()),
         "engine_sha256": hashlib.sha256(engine.read_bytes()).hexdigest(),
@@ -213,8 +385,13 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         ],
         "fast_point_motion_track_count": len(python_fast_point_rows),
         "fast_point_motion_disable_verified": True,
+        "fast_candidate_proposal_recovery_verified": True,
+        "fast_candidate_original_pixel_measurement_and_quality_gates_verified": True,
+        "fast_candidate_tracks_match_python_fields": True,
+        "fast_candidate_proposal_count": candidate_stage["proposal_count"],
+        "fast_candidate_accepted_track_count": candidate_stage["accepted_track_count"],
         "observation_times_seconds": frame_times,
-        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, and supplemental fast-point quality tracking; temporal candidate recovery, trail auditing, stack recovery, and relative photometry remain outside this core operation",
+        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, and matched-filter candidate association with original-pixel forced measurement and quality gates; temporal recovery, trail auditing, stack recovery, and relative photometry remain outside this core operation",
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report

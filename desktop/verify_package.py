@@ -29,6 +29,39 @@ def make_fits(path: Path) -> None:
     path.write_bytes(header + struct.pack(f">{len(pixels)}h", *pixels))
 
 
+def make_sequence_candidate_fits(path: Path, frame_index: int) -> None:
+    def card(key: str, value: str) -> bytes:
+        return f"{key:<8}= {value:>20}".ljust(80).encode("ascii")
+
+    timestamp = f"2026-03-30T16:40:{frame_index * 2:02d}.000Z"
+    header = b"".join(
+        [
+            card("SIMPLE", "T"),
+            card("BITPIX", "16"),
+            card("NAXIS", "2"),
+            card("NAXIS1", "128"),
+            card("NAXIS2", "128"),
+            card("DATE-OBS", f"'{timestamp}'"),
+            card("EXPTIME", "1.5"),
+            b"END".ljust(80),
+        ]
+    ).ljust(2880, b" ")
+    rng = random.Random(77531 + frame_index)
+    stars = [(16, 19, 900), (108, 23, 850), (22, 105, 820), (105, 104, 780)]
+    moving_x = 54 + frame_index * 4
+    moving_y = 57 + frame_index * 2
+    pixels = []
+    for y in range(128):
+        for x in range(128):
+            value = rng.gauss(100.0, 2.0)
+            for px, py, amplitude in [*stars, (moving_x, moving_y, 220)]:
+                value += amplitude * math.exp(
+                    -((x - px) ** 2 + (y - py) ** 2) / (2 * 1.25**2)
+                )
+            pixels.append(round(value))
+    path.write_bytes(header + struct.pack(f">{len(pixels)}h", *pixels))
+
+
 def make_wcs_catalog(path: Path) -> None:
     center_ra = math.radians(10.0)
     center_dec = math.radians(20.0)
@@ -487,6 +520,8 @@ def verify(package: Path, out: Path) -> dict:
     assert sequence_core["tracking"]["frame_count"] == 2
     assert isinstance(sequence_core["fast_point_tracks"], list)
     assert sequence_core["tracking"]["fast_point_motion_count"] == len(sequence_core["fast_point_tracks"])
+    assert sequence_core["fast_candidate_proposals"]["status"] == "insufficient_frames"
+    assert sequence_core["fast_candidate_proposals"]["proposal_count"] == 0
     assert len(sequence_core["frame_analyses"]) == 2
     sequence_core_disabled_response = subprocess.run(
         [str(native_worker)],
@@ -501,6 +536,59 @@ def verify(package: Path, out: Path) -> dict:
     sequence_core_disabled = sequence_core_disabled_events[0]["payload"]
     assert sequence_core_disabled["fast_point_tracks"] == []
     assert sequence_core_disabled["tracking"]["fast_point_motion_count"] == 0
+    assert sequence_core_disabled["fast_candidate_proposals"]["status"] == "disabled"
+    candidate_dir = out / "sequence candidate recovery"
+    candidate_dir.mkdir()
+    candidate_frames = []
+    for index in range(3):
+        candidate_frame = candidate_dir / f"frame-{index:02d}.fits"
+        make_sequence_candidate_fits(candidate_frame, index)
+        candidate_frames.append(candidate_frame)
+    candidate_core_request = {
+        "operation": "sequence.analyze_core",
+        "paths": [str(path.resolve()) for path in candidate_frames],
+        "frame_options": {
+            "threshold_sigma": 4.0,
+            "min_distance": 3,
+            "max_sources": 2,
+            "background_box_size": 256,
+            "background_sample_limit": 4_096,
+            "use_float32": True,
+            "fast_sequence": True,
+            "refine_local_background": False,
+        },
+    }
+    candidate_core_response = subprocess.run(
+        [str(native_worker)],
+        input=json.dumps(candidate_core_request, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=environment,
+        cwd=out,
+        timeout=120,
+        check=True,
+    )
+    candidate_core_events = [
+        json.loads(line) for line in candidate_core_response.stdout.splitlines()
+    ]
+    assert len(candidate_core_events) == 1 and candidate_core_events[0]["ok"]
+    candidate_proposals = candidate_core_events[0]["payload"]["fast_candidate_proposals"]
+    assert candidate_proposals["proposal_count"] >= 1
+    assert candidate_proposals["evidence_level"] == "unverified_candidate_proposal"
+    assert candidate_proposals["original_pixel_measurement_applied"] is True
+    assert candidate_proposals["accepted_track_count"] >= 1
+    candidate_truth = [(54.0 + index * 4, 57.0 + index * 2) for index in range(3)]
+    assert any(
+        len(proposal["observations"]) == 3
+        and all(
+            abs(row["x"] - truth[0]) <= 1.5 and abs(row["y"] - truth[1]) <= 1.5
+            for row, truth in zip(proposal["observations"], candidate_truth)
+        )
+        and proposal["verification_status"]
+        == "original_pixel_quality_and_motion_gates_passed"
+        for proposal in candidate_proposals["proposals"]
+    )
     wcs_data_dir = out / "WCS observations"
     wcs_data_dir.mkdir(parents=True)
     make_fits(wcs_data_dir / "frame.fits")
@@ -1470,7 +1558,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-proposal-temporal-audit",
                   "rst19-source-geometry-audit",
                   "rst19-relative-photometry",
-                  "sequence core FITS detection/tracking/fast-point motion",
+        "sequence core FITS detection/tracking/fast-point motion/candidate proposals",
                   "sequence evidence brief JSONL",
                   "manual threshold feedback JSONL",
               ],
@@ -1512,9 +1600,12 @@ def verify(package: Path, out: Path) -> dict:
     report["sequence_core"] = {
         "native_worker_operation_verified": True,
         "shared_background_ordinary_and_fast_point_tracking_verified": True,
+        "fast_candidate_proposal_insufficient_and_disabled_states_verified": True,
+        "truncated_moving_candidate_recovered_as_unverified_proposal": True,
+        "candidate_original_pixel_quality_and_motion_gates_passed": True,
         "fast_point_motion_disable_verified": True,
         "external_python_search_disabled": True,
-        "scope": "frame detection, ordinary quality-track association, and supplemental fast-point motion only",
+        "scope": "frame detection, ordinary quality-track association, quality-source fast-point motion, matched-filter candidate recovery with original-pixel measurements and quality/motion gates; accepted tracks remain algorithmic evidence without confirmed physical identity",
     }
     report["wcs_validation"] = {
         "native_worker_tool_route_verified": True,

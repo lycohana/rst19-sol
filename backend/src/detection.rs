@@ -169,6 +169,29 @@ pub fn working_mask(
         .collect();
     Ok((mask, inferred, zeros))
 }
+
+/// Build the original-frame mask with the float32 comparison values used by
+/// Python sequence candidate forced-photometry gates.
+pub fn working_mask_float32(
+    data: &PixelData,
+    provided: Option<&[bool]>,
+    background: f64,
+    mask_zero_pixels: Option<bool>,
+    saturation: Option<f64>,
+) -> Result<(Vec<bool>, Option<f64>, bool)> {
+    let numeric = (0..data.len())
+        .map(|index| data.value(index) as f32)
+        .collect::<Vec<_>>();
+    working_mask_typed(
+        data,
+        &numeric,
+        provided,
+        background,
+        mask_zero_pixels,
+        saturation,
+    )
+}
+
 fn validate(options: &DetectionOptions) -> Result<()> {
     let m = &options.measurement;
     if options.threshold_sigma <= 0.0
