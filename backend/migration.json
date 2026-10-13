@@ -3304,7 +3304,7 @@
     "local residual deblend proposals",
     "legacy compact KD-tree tie handling"
   ],
-  "native_detection_execution": "float64 and float32 Gaussian/hybrid/ensemble; optional local deblend; shared-background shape validation; exactly overlapping PSF templates return no identifiable pair evidence",
+  "native_detection_execution": "float64 and float32 Gaussian/hybrid/ensemble; optional local deblend; shared-background shape validation; exactly overlapping PSF templates return no identifiable pair evidence; verify_float32.py matches every field on 12 synthetic dtype/mode/fast-path combinations and three 512x512 real FITS ROI modes at max_sources=300; full-image and sequence float32 acceptance pending",
   "native_matching_helpers": [
     "rectangular shortest augmenting path assignment with baseline ties",
     "sparse connected-component global candidate assignment",
@@ -3484,7 +3484,7 @@
     "backend/verify_sequence_core.py"
   ],
   "remaining": [
-    "full float32 detection acceptance coverage",
+    "full-image and sequence float32 detection acceptance coverage",
     "blind plate solving and remaining astrometric workflows",
     "remaining sequence work: full multi-scale/raw/temporal candidate assembly and verification, motion/trail and stack-faint orchestration, full relative-photometry configuration/output compatibility, full SequenceResult assembly/output compatibility, and exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
