@@ -141,6 +141,10 @@ name = "rst19-aperture-peak-ratio"
 path = "src/bin/rst19-aperture-peak-ratio.rs"
 
 [[bin]]
+name = "rst19-contaminated-pair-class"
+path = "src/bin/rst19-contaminated-pair-class.rs"
+
+[[bin]]
 name = "rst19-feature-evidence-axes"
 path = "src/bin/rst19-feature-evidence-axes.rs"
 

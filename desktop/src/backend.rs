@@ -87,6 +87,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-photometric-report"
                         | "rst19-mosaic"
                         | "rst19-contaminated-pair-injection"
+                        | "rst19-contaminated-pair-class"
                 )
             ))
 }

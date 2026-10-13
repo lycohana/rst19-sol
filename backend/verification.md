@@ -156,6 +156,8 @@
 
 `rst19-aperture-peak-ratio` 的 flux/peak 类别和 proposal-method 统计已由 Rust 模块实现，之前通过 Python console entrypoint 启动；现已添加 Rust 独立二进制并移除该 Python entrypoint。Rust CLI 复用已做 Python parity 的 JSONL/worker 计算和 CSV/JSON 写出逻辑，集成测试覆盖参数、摘要和四个产物；跨平台包验收仍待完成。
 
+`rst19-contaminated-pair-class` 已将 Python 类别锚点选择、按类别/间距/强度比聚合、质量拒绝原因计数及产物写出迁到 Rust，并复用已通过 parity 的 Rust contaminated-pair 注入核心。`verify_contaminated_pair_class.py` 固定了源模块 SHA-256 `6db47bcecbff2483f6ec9bf40f00a0e427db7ea8ab27e0e16e40aacec11291c0` 和 FITS SHA-256 `02a9303a2494cb46dae4d7f5f44d817cbf92f217f405e5da5997aac7008d3c42`；3 个锚点、3 个注入条件、2 个类别分组的 JSON 字段在 2e-5 绝对/2e-6 相对误差内一致，类别选择/汇总/质量原因三张 CSV 字节一致，注入 JSON 字段一致，注入 CSV 数值列在同一容差内一致。独立 CLI 在清空 PATH 后可运行，桌面 native worker 通过集成测试；Python console entrypoint 已移除。Windows release CLI 已构建，完整发行包及 macOS/Linux 尚未验收。
+
 检测对照已覆盖 float64 与 float32 固定样例和 ROI，以及首帧 float64 全幅；float32 全幅验收、WCS 拟合与天测流程、序列运动、合成、全部审计／实验及剩余 CLI 契约仍需继续移植和对照。Windows 完整桌面包已构建验收，macOS/Linux 还未实际构建或运行；打包流程仍保留 Python 环境供剩余工具使用。
 
 15 帧 FITS 读取验证证明读取、遥测和抽样像素契约；新增全幅计算验证只证明首帧 hybrid 检测与现有 Python 算法一致，不证明完整 15 帧运动分类或物理天体真值。

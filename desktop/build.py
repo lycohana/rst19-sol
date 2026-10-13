@@ -77,7 +77,7 @@ def build() -> None:
               "--bin", "rst19-feature-parameter-sensitivity",
               "--bin", "rst19-feature-cross",
               "--bin", "rst19-signed-null-audit", "--bin", "rst19-signed-null-sequence",
-              "--bin", "rst19-contaminated-pair-injection"])
+              "--bin", "rst19-contaminated-pair-injection", "--bin", "rst19-contaminated-pair-class"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
@@ -138,6 +138,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / feature_cross, package / "runtime" / feature_cross)
     contaminated_pair_injection = "rst19-contaminated-pair-injection.exe" if os.name == "nt" else "rst19-contaminated-pair-injection"
     shutil.copy2(ROOT / "backend/target/release" / contaminated_pair_injection, package / "runtime" / contaminated_pair_injection)
+    contaminated_pair_class = "rst19-contaminated-pair-class.exe" if os.name == "nt" else "rst19-contaminated-pair-class"
+    shutil.copy2(ROOT / "backend/target/release" / contaminated_pair_class, package / "runtime" / contaminated_pair_class)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"

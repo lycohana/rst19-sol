@@ -264,7 +264,7 @@
         "run_feature_class_contaminated_pair_audit",
         "write_feature_class_contaminated_pair_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.contaminated_pair_class_cli",
@@ -274,7 +274,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.contaminated_pair_injection",
@@ -3200,7 +3200,7 @@
     "rst19-feature-gate-route": "rst19.feature_gate_route_cli:main",
     "rst19-feature-cross-axis-audit": "rst19.feature_cross_axis_audit_cli:main",
     "rst19-contaminated-pair-injection": "rst19.contaminated_pair_injection_cli:main",
-    "rst19-contaminated-pair-class": "rst19.contaminated_pair_class_cli:main",
+    "rst19-contaminated-pair-class": "native:rst19-contaminated-pair-class",
     "rst19-ablation": "rst19.ablation_cli:main",
     "rst19-motion-ablation": "rst19.motion_ablation_cli:main",
     "rst19-motion-crossing-ablation": "rst19.motion_crossing_ablation_cli:main",
@@ -3326,6 +3326,7 @@
   "native_cli_contracts": {
     "rst19": "native rst19 executable is the public command; rst19-native alias retained; stdout/json-out/error contracts match across 89 parity invocations; standalone Windows executable opens help with PATH disabled; package build/verification and macOS/Linux package validation pending",
     "rst19-trails": "Rust standalone binary and native desktop worker route run the single-frame FITS audit; focused worker/CLI tests check counts and CSV/PNG artifacts; Python console entrypoint removed from pyproject.toml; high-level audit parity, full runtime removal, package and cross-platform acceptance remain pending",
+    "rst19-contaminated-pair-class": "Rust standalone CLI and native desktop worker run class-based anchor selection and contaminated-pair injection; full result fields, three class CSVs, injection JSON, and injection CSV values match Python within the established numeric tolerance; Python console entrypoint removed; release-package and macOS/Linux acceptance pending",
     "rst19-innovation-package": "Rust standalone CLI, JSONL audit.innovation_package operation, and desktop worker accept injection JSON plus optional sequence/feature evidence; package JSON parity and CSV/Markdown artifacts verified; formal evidence gates cannot be lowered by caller options; Python console entrypoint removed; macOS/Linux acceptance pending",
     "rst19-temporal-codes": "Rust standalone CLI, JSONL audit.temporal_codes operation, and desktop worker read integer FITS sequences; 8-connected components and focus series match the Python behavior; CLI and engine pass with PATH disabled; BOM CSV/JSON artifacts verified; Python console entrypoint removed; package and macOS/Linux acceptance pending",
     "rst19-sweep": "Rust standalone CLI and native desktop-worker route implement threshold and PSF-FWHM scans; all numeric result fields match the Python baseline within 1e-10 on a synthetic FITS fixture; BOM CSV and native PNG outputs verified; Python console entrypoint removed; release-package and macOS/Linux validation pending",
@@ -3471,6 +3472,7 @@
     "tests/test_pair_pixel_topology.py",
     "verify_aperture_peak_ratio.py",
     "tests/test_aperture_peak_ratio.py",
+    "verify_contaminated_pair_class.py",
     "verify_feature_correlation.py",
     "tests/test_feature_correlation_audit.py",
     "verify_package.py",
@@ -3574,6 +3576,7 @@
   "native_pair_response_attribution": "masked Gaussian response and valid-weight normalization, ordered local-maxima ranking, repeated-code/negative-anomaly classification, signed 4-sigma kernel attribution, Python result-field parity fixture, CLI, JSONL engine, desktop worker, BOM CSV headers, and PATH-disabled execution verified",
   "native_pair_flux_covariance": "forced-stability CSV loading; tie-aware Pearson/Spearman, same-frame median normalization, pair-total fraction shifts, complete control-pair distributions and upper tails; Python result-field parity fixture, CLI, JSONL engine, desktop worker, BOM CSV and JSON artifacts, and PATH-disabled execution verified",
   "native_aperture_peak_ratio": "feature-class and proposal-method linear quantile summaries, strict ratio exceedance counts, and requested target percentiles; descriptive aperture/PSF contamination context only",
+  "native_contaminated_pair_class_execution": "class anchor selection supports the fixed default class order and sorted additional classes, median/high modes, in-bounds pair endpoints, normalized direction, and per-class selection ranks; native contaminated-pair injection is reused; result JSON and class-selection/summary/quality-reason CSVs match Python exactly, injection JSON fields match, and injection CSV numeric cells match within 2e-5 absolute plus 2e-6 relative tolerance",
   "native_feature_correlation": "average-tie Spearman rank correlation, pairwise finite row selection, first-seen class order and labels, class medians, and within-class correlations; descriptive field-dependence audit only",
   "native_feature_transition_flow": "same-class and cross-class sequence transition summaries with deterministic layer/class ordering, input consistency checks, BOM CSV/JSON artifacts, and no FITS dependency; descriptive algorithm-category evidence only",
   "native_feature_hard_negative": "per-feature-class high-significance rejected-source ranking for flux_snr, filter_snr, and peak; preserves shape/flag fields and explicitly separates algorithmic quality rejection from physical truth",
