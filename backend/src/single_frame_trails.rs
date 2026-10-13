@@ -11,6 +11,14 @@ const SEEDS_PER_TILE: usize = 2;
 const MAX_SEEDS: usize = 512;
 const TOP_PER_LENGTH: usize = 96;
 const CENTER_FRACTIONS: [f64; 3] = [-0.25, 0.0, 0.25];
+const COARSE_RESPONSE_MIN: f64 = 3.5;
+const FINAL_RESPONSE_MIN: f64 = 5.0;
+const MIN_LINE_COVERAGE: f64 = 0.90;
+const MAX_PEAKS_PER_TEMPLATE: usize = 24;
+const MAX_REFINEMENT_CANDIDATES: usize = 2048;
+const MAX_OUTPUT_PROPOSALS: usize = 256;
+const MIN_ACCEPTED_LENGTH_IN_FWHM: f64 = 3.0;
+const GAUSSIAN_TRUNCATE: f64 = 4.0;
 
 #[derive(Clone, Copy)]
 struct Candidate {
@@ -200,7 +208,7 @@ fn validate(request: &Value) -> Result<ValidatedInput> {
 }
 
 fn gaussian_constant(input: &[f64], height: usize, width: usize, sigma: f64) -> Vec<f64> {
-    let radius = (4.0 * sigma + 0.5).floor() as isize;
+    let radius = (GAUSSIAN_TRUNCATE * sigma + 0.5).floor() as isize;
     let mut kernel: Vec<_> = (-radius..=radius)
         .map(|offset| (-0.5 / (sigma * sigma) * (offset * offset) as f64).exp())
         .collect();
@@ -663,6 +671,148 @@ fn length_bank(request: &Value, height: usize, width: usize) -> Result<Vec<usize
     Ok(output)
 }
 
+fn single_frame_length_bank(
+    request: &Value,
+    height: usize,
+    width: usize,
+    fwhm: f64,
+) -> Result<Vec<usize>> {
+    let shortest = height.min(width) as f64;
+    let max_allowed = shortest - 1.0;
+    let Some(raw) = request
+        .get("length_bank_px")
+        .filter(|value| !value.is_null())
+    else {
+        let min_length = (1.5 * fwhm).max(2.0);
+        let max_length = max_allowed.min((1024.0_f64).max(256.0 * fwhm));
+        let mut min_length = min_length;
+        if max_length < min_length {
+            min_length = min_length.min(max_length);
+        }
+        min_length = min_length.max(2.0);
+        let max_length = min_length.max(max_length);
+        let mut values = vec![min_length];
+        while *values.last().unwrap() < max_length {
+            let next = max_length.min(values.last().unwrap() * std::f64::consts::SQRT_2);
+            if next <= *values.last().unwrap() {
+                break;
+            }
+            values.push(next);
+        }
+        let mut lengths = Vec::new();
+        for value in values {
+            let rounded = value.round_ties_even().max(2.0) as usize;
+            if rounded <= max_allowed as usize && !lengths.contains(&rounded) {
+                lengths.push(rounded);
+            }
+        }
+        if lengths.is_empty() {
+            return Err("图像尺寸不足以建立有效的线段长度库".into());
+        }
+        return Ok(lengths);
+    };
+
+    let raw_lengths =
+        match raw {
+            Value::Array(values) => values
+                .iter()
+                .map(python_float)
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| "length_bank_px 必须是一维正数序列".to_string())?,
+            value => vec![python_float(value)
+                .ok_or_else(|| "length_bank_px 必须是一维正数序列".to_string())?],
+        };
+    if raw_lengths.is_empty() {
+        return Err("length_bank_px 必须是非空的一维正数序列".into());
+    }
+    if raw_lengths
+        .iter()
+        .any(|value| !value.is_finite() || *value <= 0.0)
+    {
+        return Err("length_bank_px 必须全部是有限的正数".into());
+    }
+    if raw_lengths.iter().any(|value| *value > max_allowed) {
+        return Err(format!(
+            "length_bank_px 不能大于图像最短边减一（{max_allowed} px）"
+        ));
+    }
+    let mut lengths = Vec::new();
+    for value in raw_lengths {
+        let rounded = value.round_ties_even().max(2.0) as usize;
+        if rounded as f64 > max_allowed {
+            return Err("length_bank_px 中存在取整后超出图像尺寸的长度".into());
+        }
+        if !lengths.contains(&rounded) {
+            lengths.push(rounded);
+        }
+    }
+    if lengths.is_empty() {
+        return Err("length_bank_px 取整后没有有效长度".into());
+    }
+    Ok(lengths)
+}
+
+fn rotate_constant(input: &[f64], height: usize, width: usize, angle_deg: f64) -> Vec<f64> {
+    let angle = angle_deg.to_radians();
+    let (cosine, sine) = (angle.cos(), angle.sin());
+    let center_x = (width - 1) as f64 / 2.0;
+    let center_y = (height - 1) as f64 / 2.0;
+    let mut output = vec![0.0; input.len()];
+    for y in 0..height {
+        for x in 0..width {
+            let dx = x as f64 - center_x;
+            let dy = y as f64 - center_y;
+            let source_x = center_x + cosine * dx - sine * dy;
+            let source_y = center_y + sine * dx + cosine * dy;
+            output[y * width + x] = bilinear(input, height, width, source_x, source_y);
+        }
+    }
+    output
+}
+
+fn uniform_filter_rows(input: &[f64], height: usize, width: usize, size: usize) -> Vec<f64> {
+    let mut output = vec![0.0; input.len()];
+    let left = size / 2;
+    let mut prefix = vec![0.0; width + 1];
+    for y in 0..height {
+        prefix[0] = 0.0;
+        for x in 0..width {
+            prefix[x + 1] = prefix[x] + input[y * width + x];
+        }
+        for x in 0..width {
+            let start = (x as isize - left as isize).max(0) as usize;
+            let end = (x + (size - left)).min(width);
+            output[y * width + x] = (prefix[end] - prefix[start]) / size as f64;
+        }
+    }
+    output
+}
+
+fn top_local_peaks(
+    response: &[f64],
+    coverage: &[f64],
+    height: usize,
+    width: usize,
+    threshold: f64,
+    max_peaks: usize,
+    peak_size: usize,
+) -> Vec<usize> {
+    let Ok(local_maximum) = maximum_filter(response, height, width, peak_size / 2) else {
+        return Vec::new();
+    };
+    let mut indices: Vec<_> = (0..response.len())
+        .filter(|index| {
+            response[*index].is_finite()
+                && response[*index] >= threshold
+                && response[*index] >= local_maximum[*index]
+                && coverage[*index] >= MIN_LINE_COVERAGE
+        })
+        .collect();
+    ordered_indices(response, &mut indices);
+    indices.truncate(max_peaks);
+    indices
+}
+
 /// Return local-pixel finite-line proposals for one image.
 pub fn local_pixel_trail_proposals(request: &Value) -> Result<Value> {
     let (image, usable, background, noise, height, width, fwhm) = validate(request)?;
@@ -892,4 +1042,186 @@ pub fn local_pixel_trail_proposals(request: &Value) -> Result<Value> {
         "angle":proposal.angle,
         "response":proposal.response,
     })).collect::<Vec<_>>() }))
+}
+
+/// Return the native-resolution, multi-angle single-frame line proposals.
+/// The operation is restricted to one image and carries no sequence evidence.
+pub fn single_frame_trail_proposals(request: &Value) -> Result<Value> {
+    let (image, usable, background, noise, height, width, fwhm) = validate(request)?;
+    let angle_step = match request.get("angle_step_deg") {
+        None => 10.0,
+        Some(value) => {
+            python_float(value).ok_or_else(|| "angle_step_deg 必须是有限的正数".to_string())?
+        }
+    };
+    if !angle_step.is_finite() || angle_step <= 0.0 || angle_step > 180.0 {
+        return Err("angle_step_deg 必须满足 0 < angle_step_deg <= 180".into());
+    }
+    let max_output = parse_positive_integer(
+        request.get("max_proposals"),
+        MAX_OUTPUT_PROPOSALS,
+        "max_proposals",
+    )?;
+    if max_output > 100_000 {
+        return Err("max_proposals 不能大于 100000".into());
+    }
+    let lengths = single_frame_length_bank(request, height, width, fwhm)?;
+
+    let mut whitened = vec![0.0; image.len()];
+    let mut valid_float = vec![0.0; image.len()];
+    for index in 0..image.len() {
+        if usable[index] {
+            whitened[index] = (image[index] - background[index]) / noise[index];
+            valid_float[index] = 1.0;
+        }
+    }
+    let sigma = (fwhm / 2.354820045).max(0.5);
+    let smoothed_signal = gaussian_constant(&whitened, height, width, sigma);
+    let smoothed_support = gaussian_constant(&valid_float, height, width, sigma);
+    let smoothed: Vec<_> = smoothed_signal
+        .iter()
+        .zip(&smoothed_support)
+        .map(|(signal, support)| {
+            if *support > 1e-6 {
+                signal / support
+            } else {
+                0.0
+            }
+        })
+        .collect();
+
+    let peak_size = (2.0 * fwhm.ceil() + 1.0).max(3.0) as usize;
+    let peaks_per_template = MAX_PEAKS_PER_TEMPLATE.min(8.max(max_output));
+    let center_x = (width - 1) as f64 / 2.0;
+    let center_y = (height - 1) as f64 / 2.0;
+    let mut raw_candidates = Vec::new();
+    let mut angle_index = 0usize;
+    loop {
+        let angle_deg = angle_index as f64 * angle_step;
+        if angle_deg >= 180.0 {
+            break;
+        }
+        let rotated_signal = rotate_constant(&smoothed, height, width, angle_deg);
+        let rotated_valid = rotate_constant(&valid_float, height, width, angle_deg);
+        let mut best_response = vec![f64::NEG_INFINITY; image.len()];
+        let mut best_coverage = vec![0.0; image.len()];
+        let mut best_length = vec![0.0; image.len()];
+        for length in &lengths {
+            let line_mean = uniform_filter_rows(&rotated_signal, height, width, *length);
+            let coverage = uniform_filter_rows(&rotated_valid, height, width, *length);
+            let noise_std = line_noise_std(sigma, *length);
+            for index in 0..image.len() {
+                let cov = coverage[index];
+                let corrected_mean = if cov > 1e-6 {
+                    line_mean[index] / cov
+                } else {
+                    0.0
+                };
+                let response = if cov < MIN_LINE_COVERAGE {
+                    f64::NEG_INFINITY
+                } else {
+                    corrected_mean * cov.clamp(0.0, 1.0).sqrt() / noise_std
+                };
+                if response > best_response[index] {
+                    best_response[index] = response;
+                    best_coverage[index] = cov;
+                    best_length[index] = *length as f64;
+                }
+            }
+        }
+        let peak_indices = top_local_peaks(
+            &best_response,
+            &best_coverage,
+            height,
+            width,
+            COARSE_RESPONSE_MIN,
+            peaks_per_template,
+            peak_size,
+        );
+        let angle = angle_deg.to_radians();
+        let (cosine, sine) = (angle.cos(), angle.sin());
+        for index in peak_indices {
+            let x_rotated = (index % width) as f64;
+            let y_rotated = (index / width) as f64;
+            let dx = x_rotated - center_x;
+            let dy = y_rotated - center_y;
+            let candidate = Candidate {
+                x: center_x + cosine * dx - sine * dy,
+                y: center_y + sine * dx + cosine * dy,
+                length: best_length[index],
+                angle: angle_deg,
+                response: best_response[index],
+            };
+            if [
+                candidate.x,
+                candidate.y,
+                candidate.length,
+                candidate.response,
+            ]
+            .iter()
+            .all(|value| value.is_finite())
+                && candidate.length > 0.0
+            {
+                raw_candidates.push(candidate);
+            }
+        }
+        angle_index += 1;
+    }
+
+    raw_candidates.sort_by(|left, right| right.response.total_cmp(&left.response));
+    raw_candidates.truncate(MAX_REFINEMENT_CANDIDATES.min(64.max(max_output.saturating_mul(4))));
+    let mut refined = Vec::new();
+    for candidate in raw_candidates {
+        let candidate = refine_candidate(
+            candidate,
+            &smoothed,
+            &valid_float,
+            height,
+            width,
+            sigma,
+            angle_step,
+        );
+        if ![
+            candidate.x,
+            candidate.y,
+            candidate.length,
+            candidate.angle,
+            candidate.response,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+        {
+            continue;
+        }
+        if candidate.length < 4.0_f64.max(MIN_ACCEPTED_LENGTH_IN_FWHM * fwhm) {
+            continue;
+        }
+        if !compact_source_control(&whitened, &usable, height, width, candidate, fwhm) {
+            continue;
+        }
+        if candidate.x < -0.5
+            || candidate.x > width as f64 - 0.5
+            || candidate.y < -0.5
+            || candidate.y > height as f64 - 0.5
+        {
+            continue;
+        }
+        if candidate.response >= FINAL_RESPONSE_MIN {
+            refined.push(candidate);
+        }
+    }
+    let proposals = deduplicate(&refined, fwhm, max_output);
+    Ok(json!({
+        "proposals": proposals
+            .iter()
+            .map(|proposal| json!({
+                "x":proposal.x,
+                "y":proposal.y,
+                "length":proposal.length,
+                "width":fwhm,
+                "angle":proposal.angle,
+                "response":proposal.response,
+            }))
+            .collect::<Vec<_>>(),
+    }))
 }

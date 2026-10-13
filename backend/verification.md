@@ -144,11 +144,13 @@
 
 ## 尚未完成
 
-当前迁移账本有 106 个 Python 模块标记为 Rust 迁移完成、4 个在迁移中、48 个待迁；按 `desktop/src/tool_catalog.json` 与 `desktop/src/backend.rs` 的实际 worker 路由核对，桌面工具共 71 项，其中 44 项走 Rust、27 项仍走 Python worker。生产运算链尚未全量切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
+当前迁移账本有 106 个 Python 模块标记为 Rust 迁移完成、5 个在迁移中、47 个待迁；按 `desktop/src/tool_catalog.json` 与 `desktop/src/backend.rs` 的实际 worker 路由核对，桌面工具共 71 项，其中 44 项走 Rust、27 项仍走 Python worker。生产运算链尚未全量切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
 
 序列 Rust 核心新增了注册中值／coadd 暗星恢复：从参考堆栈提出并去重候选，回到原始帧做强制测光、支持像素和形状门控，按出现帧数生成带 `stack_faint` 证据标记的轨迹并返回审计计数；同时输出合并轨迹列表，并按 `SequenceResult` 口径分开统计质量源、共识候选和暗星轨迹。五帧合成序列及已解释候选去重测试通过；这还没有完成与 Python 全字段对照，也没有切换公开 `rst19-sequence` 路由，该工具当前仍使用 Python。
 
 `sequence.analyze_core` 现已增加逐帧注册时间残差连通分量与形态审计：复用内存中的注册中值参考，在 Rust 帧像素缓冲上生成组件点和审计数据。`verify_sequence_core.py` 对 3 帧合成 FITS 将状态、时间元数据支持标志、最短长度以及每帧 points/audit 与 Python 阶段对照，全部一致；release engine SHA-256 为 `969a5b165388c0e9ddf672baaa728ea568f160df9f1fd86f8298b86cfba324ae`，报告 `tmp/native-sequence-core-motion-components-20261014-v3/verification.json`。这只覆盖提案组件阶段，不代表完整拖线/运动模型复核、跨帧形态/连续性/曝光门控或完整 `SequenceResult` 已迁移；公开桌面序列工具仍走 Python。
+
+独立单帧拖影提案器新增 Rust `trails.single_frame_proposals`：完成旋转多方向/多长度响应、原图坐标局部复核、点源/双星负例门控及几何去重；与原有 `trails.local_pixel_proposals` 一起由 Rust JSONL engine 暴露。固定 Python fixture 覆盖斜线、短/长线、多尺度默认长度库、点源/双星负例、空间变化背景/噪声、无效像素掩膜及输入错误；debug/release Rust 对照和 PATH 清空后的 engine 路由测试通过。release engine SHA-256 为 `63034190410db7aafc07be570b15c9306e6ba4a648291cdfcd484e4fb73263259`，fixture SHA-256 为 `f48dbb27b25a68ae0532d234e6089c80b057bebecfcb848880133e6e1579bd9a`。`rst19.single_frame_trails` 从待迁移调整为迁移中：`rst19-trails` 桌面工具仍执行 Python `run_single_frame_trail_audit`，完整审计、连通域/PCA 路径及其 artifact 输出尚未接到 Rust，因此这一算法模块和工具路由都不能标成完成。
 
 检测对照已覆盖 float64 与 float32 固定样例和 ROI，以及首帧 float64 全幅；float32 全幅验收、WCS 拟合与天测流程、序列运动、合成、全部审计／实验及剩余 CLI 契约仍需继续移植和对照。Windows 完整桌面包已构建验收，macOS/Linux 还未实际构建或运行；打包流程仍保留 Python 环境供剩余工具使用。
 

@@ -972,6 +972,9 @@ fn execute(request: Value) -> Result<Value> {
         "trails.local_pixel_proposals" => {
             rst19_core::single_frame_trails::local_pixel_trail_proposals(&request)
         }
+        "trails.single_frame_proposals" => {
+            rst19_core::single_frame_trails::single_frame_trail_proposals(&request)
+        }
         "sequence.reference.median" => {
             rst19_core::sequence_temporal::registered_median_reference(&request)
         }
