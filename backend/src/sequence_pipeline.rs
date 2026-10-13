@@ -1130,21 +1130,40 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     let mut temporal_candidate_frames = vec![Vec::<[f32; 5]>::new(); paths.len()];
     let mut temporal_reference_candidate_count = 0usize;
     let mut temporal_coadd_candidate_count = 0usize;
+    let mut motion_frame_components = json!({
+        "status":"insufficient_frames",
+        "scope":"registered_temporal_residual_components_only",
+        "frames":[]
+    });
     if paths.len() >= 2 {
-        let median_result = crate::sequence_temporal::temporal_reference_candidates_from_analyses(
-            &frame_analysis_objects,
-            &shifts,
-            false,
-            3.0,
-            frame_options.detection.measurement.psf_fwhm,
-            temporal_reference_min_snr,
-            temporal_multiscale,
-        )?;
+        let (median_result, median_reference) =
+            crate::sequence_temporal::temporal_reference_candidates_and_reference_from_analyses(
+                &frame_analysis_objects,
+                &shifts,
+                false,
+                3.0,
+                frame_options.detection.measurement.psf_fwhm,
+                temporal_reference_min_snr,
+                temporal_multiscale,
+            )?;
         temporal_reference_candidate_count =
             median_result["candidate_count"].as_u64().unwrap_or(0) as usize;
         temporal_candidate_frames =
             serde_json::from_value(median_result["candidate_peak_frames"].clone())
                 .map_err(|error| error.to_string())?;
+        motion_frame_components =
+            crate::sequence_motion_features::motion_frame_components_from_analyses(
+                &frame_analysis_objects,
+                median_reference.as_ref(),
+                &shifts,
+                frame_options.detection.measurement.psf_fwhm,
+                15.0,
+                100.0,
+                40,
+                4.0,
+                None,
+                true,
+            )?;
         if matches!(temporal_proposal_mode.as_str(), "coadd" | "both") {
             let coadd_result =
                 crate::sequence_temporal::temporal_reference_candidates_from_analyses(
@@ -1268,14 +1287,9 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     all_tracks.extend(stack_faint.tracks.iter().cloned());
     let track_counts = sequence_track_counts(&all_tracks);
     for key in [
-        "stable_source_count",
-        "persistent_source_count",
-        "stable_field_candidate_count",
         "candidate_consensus_count",
         "temporal_reference_count",
         "stack_faint_count",
-        "moving_track_count",
-        "transient_track_count",
     ] {
         tracking[key] = track_counts[key].clone();
     }
@@ -1316,6 +1330,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "temporal_coadd_candidate_count":temporal_coadd_candidate_count,
         "temporal_proposal_mode":temporal_proposal_mode,
         "relative_photometry":relative_photometry_result,
+        "motion_frame_components":motion_frame_components,
         "fixed_sentinel_audit":fixed_sentinel_audit,
         "fixed_sentinel_impact_audit":fixed_sentinel_impact_audit,
         "observation_time_axis":time_axis,

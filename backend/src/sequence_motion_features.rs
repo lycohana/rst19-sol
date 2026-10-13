@@ -3,7 +3,13 @@
 //! This module preserves the first geometric proposal stage from Python's
 //! `detect_motion_features`. It returns image-plane candidates and audit counts
 //! only; model review and cross-frame motion gates remain separate operations.
-use crate::{sequence_trails::line_profile_metrics_for_plane, Result};
+use crate::{
+    fits,
+    pipeline::FrameAnalysis,
+    sequence_temporal::RegisteredReference,
+    sequence_trails::{self, line_profile_metrics_for_plane},
+    Result,
+};
 use serde_json::{json, Value};
 
 const SHORT_TRAIL_LENGTH: f64 = 16.0;
@@ -405,8 +411,17 @@ pub fn motion_feature_frame_components(request: &Value) -> Result<Value> {
     let residual = matrix_f32(request, "residual")?;
     let valid = matrix_bool(request, "valid_mask")?;
     let line_artifact_mask = matrix_bool(request, "line_artifact_mask")?;
-    validate_shapes(&residual, &valid, &line_artifact_mask)?;
     let options = options(request)?;
+    motion_feature_frame_components_for_planes(&residual, &valid, &line_artifact_mask, options)
+}
+
+fn motion_feature_frame_components_for_planes(
+    residual: &[Vec<f32>],
+    valid: &[Vec<bool>],
+    line_artifact_mask: &[Vec<bool>],
+    options: Options,
+) -> Result<Value> {
+    validate_shapes(residual, valid, line_artifact_mask)?;
     if !options.threshold.is_finite()
         || !options.residual_noise.is_finite()
         || options.residual_noise <= 0.0
@@ -486,9 +501,9 @@ pub fn motion_feature_frame_components(request: &Value) -> Result<Value> {
         }
         area_pass_count += 1;
         let (point, outcome) = motion_profile_point(
-            &residual,
-            &valid,
-            &line_artifact_mask,
+            residual,
+            valid,
+            line_artifact_mask,
             &component_pixels[component_offset],
             size,
             options,
@@ -527,5 +542,229 @@ pub fn motion_feature_frame_components(request: &Value) -> Result<Value> {
             "large_area_rejected_count": large_area_rejected_count,
             "short_min_pixels": options.short_min_pixels
         }
+    }))
+}
+
+fn sample_registered_reference(reference: &RegisteredReference, x: f64, y: f64) -> Option<f32> {
+    if reference.height == 0
+        || reference.width == 0
+        || !x.is_finite()
+        || !y.is_finite()
+        || x < 0.0
+        || y < 0.0
+        || x > (reference.width - 1) as f64
+        || y > (reference.height - 1) as f64
+    {
+        return None;
+    }
+    let x0 = x.floor() as usize;
+    let y0 = y.floor() as usize;
+    let x1 = (x0 + 1).min(reference.width - 1);
+    let y1 = (y0 + 1).min(reference.height - 1);
+    let top_left = reference.values[y0 * reference.width + x0];
+    let top_right = reference.values[y0 * reference.width + x1];
+    let bottom_left = reference.values[y1 * reference.width + x0];
+    let bottom_right = reference.values[y1 * reference.width + x1];
+    if [top_left, top_right, bottom_left, bottom_right]
+        .iter()
+        .any(|value| !value.is_finite())
+    {
+        return Some(f32::NAN);
+    }
+    let dx = x - x0 as f64;
+    let dy = y - y0 as f64;
+    let top = f64::from(top_left) * (1.0 - dx) + f64::from(top_right) * dx;
+    let bottom = f64::from(bottom_left) * (1.0 - dx) + f64::from(bottom_right) * dx;
+    Some((top * (1.0 - dy) + bottom * dy) as f32)
+}
+
+fn numeric_parameter(parameters: &Value, key: &str, default: f64) -> f64 {
+    parameters
+        .get(key)
+        .and_then(Value::as_f64)
+        .unwrap_or(default)
+}
+
+fn enabled_parameter(parameters: &Value, key: &str) -> bool {
+    parameters.get(key).is_some_and(|value| {
+        value
+            .as_bool()
+            .unwrap_or_else(|| value.as_i64().is_some_and(|number| number != 0))
+    })
+}
+
+/// Run the first temporal-residual line-proposal stage directly on Rust frame
+/// buffers. The JSON request adapter remains available for parity fixtures;
+/// production sequence orchestration uses this typed path to avoid expanding
+/// full detector images into JSON values.
+pub fn motion_frame_components_from_analyses(
+    analyses: &[FrameAnalysis],
+    reference: Option<&RegisteredReference>,
+    shifts: &[[f64; 2]],
+    psf_fwhm: f64,
+    residual_sigma: f64,
+    min_residual_adu: f64,
+    min_feature_area: usize,
+    min_axis_ratio: f64,
+    min_length_px: Option<f64>,
+    bridge_gaps: bool,
+) -> Result<Value> {
+    if analyses.len() < 2 {
+        return Ok(json!({
+            "status":"insufficient_frames",
+            "scope":"registered_temporal_residual_components_only",
+            "frames":[]
+        }));
+    }
+    if shifts.len() != analyses.len() {
+        return Err("cumulative_shifts length must match frame_analyses".into());
+    }
+    if !psf_fwhm.is_finite()
+        || psf_fwhm <= 0.0
+        || !residual_sigma.is_finite()
+        || residual_sigma <= 0.0
+        || !min_residual_adu.is_finite()
+        || min_residual_adu <= 0.0
+        || !min_axis_ratio.is_finite()
+        || min_axis_ratio <= 0.0
+        || min_length_px.is_some_and(|value| !value.is_finite() || value <= 0.0)
+    {
+        return Err("motion feature component thresholds must be finite and positive".into());
+    }
+
+    let headers = analyses
+        .iter()
+        .map(|analysis| Value::Object(analysis.frame.header.clone()))
+        .collect::<Vec<_>>();
+    let declared_exposures_s = analyses
+        .iter()
+        .map(|analysis| {
+            fits::exposure_milliseconds(&analysis.frame.header).map(|value| {
+                value.and_then(|milliseconds| {
+                    (milliseconds.is_finite() && milliseconds > 0.0)
+                        .then_some(milliseconds / 1_000.0)
+                })
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let metadata_supported = sequence_trails::observation_time_metadata_supported(&headers)
+        && declared_exposures_s.iter().all(Option::is_some);
+    let proposal_thresholds = sequence_trails::motion_proposal_thresholds(&json!({
+        "psf_fwhm":psf_fwhm,
+        "min_length_px":min_length_px,
+        "exposure_s":declared_exposures_s,
+        "metadata_supported":metadata_supported,
+    }))?;
+    let min_length = proposal_thresholds["min_length_px"]
+        .as_f64()
+        .ok_or("motion proposal threshold did not return min_length_px")?;
+    let reference_is_usable = reference.filter(|plane| {
+        analyses[0].frame.height == plane.height
+            && analyses[0].frame.width == plane.width
+            && plane.values.len() == plane.height.saturating_mul(plane.width)
+    });
+    let difference_noise_factor = if reference_is_usable.is_some() {
+        std::f64::consts::SQRT_2
+    } else {
+        1.0
+    };
+
+    let mut frame_results = Vec::with_capacity(analyses.len());
+    let mut thresholds = Vec::with_capacity(analyses.len());
+    for (frame_index, (analysis, shift)) in analyses.iter().zip(shifts).enumerate() {
+        let height = analysis.frame.height;
+        let width = analysis.frame.width;
+        if height == 0 || width == 0 || analysis.frame.data.len() != height * width {
+            return Err("motion feature frame pixels do not match image shape".into());
+        }
+        if !shift[0].is_finite() || !shift[1].is_finite() {
+            return Err("cumulative shifts must be finite".into());
+        }
+        let auxiliary = fits::auxiliary_mask(height, width)?;
+        let mask_zero = enabled_parameter(&analysis.detection.parameters, "mask_zero_pixels");
+        let saturation_level =
+            numeric_parameter(&analysis.detection.parameters, "saturation_level", -1.0);
+        let background = analysis.detection.background as f32;
+        let residual_noise =
+            (analysis.detection.noise * difference_noise_factor).max(f64::from(f32::EPSILON));
+        let threshold = min_residual_adu.max(residual_sigma * residual_noise);
+        thresholds.push(threshold);
+
+        let mut residual = vec![vec![0.0_f32; width]; height];
+        let mut valid = vec![vec![false; width]; height];
+        let mut line_artifact_mask = vec![vec![false; width]; height];
+        for &[x, y] in &analysis.detection.line_artifact_coordinates {
+            if x < width && y < height {
+                line_artifact_mask[y][x] = true;
+            }
+        }
+        let reference = reference_is_usable;
+        for y in 0..height {
+            for x in 0..width {
+                let index = y * width + x;
+                let value = analysis.frame.data.value(index) as f32;
+                let is_valid = value.is_finite()
+                    && !auxiliary[index]
+                    && (!mask_zero || value != 0.0)
+                    && (saturation_level <= 0.0 || f64::from(value) < saturation_level);
+                valid[y][x] = is_valid;
+                if !is_valid {
+                    continue;
+                }
+                residual[y][x] = if let Some(reference) = reference {
+                    let reference_value = sample_registered_reference(
+                        reference,
+                        x as f64 - shift[0],
+                        y as f64 - shift[1],
+                    );
+                    reference_value
+                        .filter(|sample| sample.is_finite())
+                        .map_or(0.0, |sample| value - sample)
+                } else {
+                    value - background
+                };
+            }
+        }
+
+        let exposure_thresholds = sequence_trails::motion_proposal_thresholds(&json!({
+            "psf_fwhm":psf_fwhm,
+            "min_length_px":min_length_px,
+            "exposure_s":declared_exposures_s,
+            "metadata_supported":metadata_supported,
+            "short_exposure_s":declared_exposures_s[frame_index],
+        }))?;
+        let exposure_area = exposure_thresholds["short_min_area"]
+            .as_u64()
+            .ok_or("motion proposal threshold did not return short_min_area")?
+            as usize;
+        let short_min_pixels = exposure_area.max((2.0 * psf_fwhm * psf_fwhm).ceil() as usize);
+        let result = motion_feature_frame_components_for_planes(
+            &residual,
+            &valid,
+            &line_artifact_mask,
+            Options {
+                frame_index: frame_index as i64,
+                shift_x: shift[0],
+                shift_y: shift[1],
+                threshold,
+                residual_noise,
+                psf_fwhm,
+                min_length,
+                min_feature_area: min_feature_area as i64,
+                min_axis_ratio,
+                bridge_gaps,
+                short_min_pixels,
+            },
+        )?;
+        frame_results.push(result);
+    }
+
+    Ok(json!({
+        "status":"analyzed",
+        "scope":"registered_temporal_residual_components_only",
+        "metadata_supported":metadata_supported,
+        "min_length_px":min_length,
+        "thresholds_adu":thresholds,
+        "frames":frame_results,
     }))
 }

@@ -842,6 +842,26 @@ fn parse_utc_microseconds(value: &str) -> Option<i128> {
     Some(utc_seconds * 1_000_000 + microseconds as i128)
 }
 
+/// Whether every frame has a valid, strictly increasing DATE-OBS timestamp.
+/// This is the metadata gate used for exposure-aware motion proposal floors;
+/// the fallback frame axis returned by `observation_time_axis` must not count
+/// as observed time metadata.
+pub fn observation_time_metadata_supported(headers: &[Value]) -> bool {
+    let Some(timestamps) = headers
+        .iter()
+        .map(|header| {
+            header
+                .get("DATE-OBS")
+                .and_then(Value::as_str)
+                .and_then(parse_utc_microseconds)
+        })
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    timestamps.len() >= 2 && timestamps.windows(2).all(|pair| pair[1] > pair[0])
+}
+
 /// Build the observation time axis from FITS DATE-OBS headers with frame fallback.
 pub fn observation_time_axis(request: &Value) -> Result<Value> {
     let headers = request

@@ -148,6 +148,8 @@
 
 序列 Rust 核心新增了注册中值／coadd 暗星恢复：从参考堆栈提出并去重候选，回到原始帧做强制测光、支持像素和形状门控，按出现帧数生成带 `stack_faint` 证据标记的轨迹并返回审计计数；同时输出合并轨迹列表，并按 `SequenceResult` 口径分开统计质量源、共识候选和暗星轨迹。五帧合成序列及已解释候选去重测试通过；这还没有完成与 Python 全字段对照，也没有切换公开 `rst19-sequence` 路由，该工具当前仍使用 Python。
 
+`sequence.analyze_core` 现已增加逐帧注册时间残差连通分量与形态审计：复用内存中的注册中值参考，在 Rust 帧像素缓冲上生成组件点和审计数据。`verify_sequence_core.py` 对 3 帧合成 FITS 将状态、时间元数据支持标志、最短长度以及每帧 points/audit 与 Python 阶段对照，全部一致；release engine SHA-256 为 `969a5b165388c0e9ddf672baaa728ea568f160df9f1fd86f8298b86cfba324ae`，报告 `tmp/native-sequence-core-motion-components-20261014-v3/verification.json`。这只覆盖提案组件阶段，不代表完整拖线/运动模型复核、跨帧形态/连续性/曝光门控或完整 `SequenceResult` 已迁移；公开桌面序列工具仍走 Python。
+
 检测对照已覆盖 float64 与 float32 固定样例和 ROI，以及首帧 float64 全幅；float32 全幅验收、WCS 拟合与天测流程、序列运动、合成、全部审计／实验及剩余 CLI 契约仍需继续移植和对照。Windows 完整桌面包已构建验收，macOS/Linux 还未实际构建或运行；打包流程仍保留 Python 环境供剩余工具使用。
 
 15 帧 FITS 读取验证证明读取、遥测和抽样像素契约；新增全幅计算验证只证明首帧 hybrid 检测与现有 Python 算法一致，不证明完整 15 帧运动分类或物理天体真值。

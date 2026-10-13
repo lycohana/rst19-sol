@@ -658,9 +658,33 @@ pub fn temporal_reference_candidates_from_analyses(
     min_candidate_snr: f64,
     multiscale: bool,
 ) -> Result<Value> {
+    Ok(temporal_reference_candidates_and_reference_from_analyses(
+        analyses,
+        cumulative_shifts,
+        coadd,
+        clip_sigma,
+        psf_fwhm,
+        min_candidate_snr,
+        multiscale,
+    )?
+    .0)
+}
+
+/// Build temporal-reference candidates while returning the same reference
+/// plane for later sequence stages. This keeps the full-frame stack from being
+/// recomputed when motion-residual analysis also needs the median reference.
+pub fn temporal_reference_candidates_and_reference_from_analyses(
+    analyses: &[FrameAnalysis],
+    cumulative_shifts: &[[f64; 2]],
+    coadd: bool,
+    clip_sigma: f64,
+    psf_fwhm: f64,
+    min_candidate_snr: f64,
+    multiscale: bool,
+) -> Result<(Value, Option<RegisteredReference>)> {
     let frames = frames_from_analyses(analyses)?;
     if frames.len() < 2 {
-        return Ok(empty_result(frames.len()));
+        return Ok((empty_result(frames.len()), None));
     }
     if coadd && clip_sigma <= 0.0 {
         return Err("clip_sigma must be positive".into());
@@ -668,14 +692,21 @@ pub fn temporal_reference_candidates_from_analyses(
     let Some(reference) =
         build_registered_reference(&frames, cumulative_shifts, coadd, clip_sigma)?
     else {
-        return Ok(empty_result(frames.len()));
+        return Ok((empty_result(frames.len()), None));
     };
     let options = json!({
         "psf_fwhm":psf_fwhm,
         "min_candidate_snr":min_candidate_snr,
         "temporal_multiscale":multiscale,
     });
-    temporal_candidates_from_frames(&reference, &frames, cumulative_shifts, &options)
+    let candidates =
+        temporal_candidates_from_frames(&reference, &frames, cumulative_shifts, &options)?;
+    let reference = RegisteredReference {
+        values: reference.values,
+        height: reference.height,
+        width: reference.width,
+    };
+    Ok((candidates, Some(reference)))
 }
 
 /// Build a registered median or clipped-mean reference from analyzed FITS frames.

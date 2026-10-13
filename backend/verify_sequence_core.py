@@ -18,8 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from rst19.detection import _working_mask, build_background_model  # noqa: E402
-from rst19.fits import auxiliary_mask, read_fits  # noqa: E402
+from rst19.fits import auxiliary_mask, exposure_milliseconds, read_fits  # noqa: E402
 from rst19.pipeline import analyze_frame  # noqa: E402
+import rst19.sequence as sequence_module  # noqa: E402
 from rst19.sequence import (  # noqa: E402
     _registered_median_reference,
     _registered_coadd_reference,
@@ -31,6 +32,7 @@ from rst19.sequence import (  # noqa: E402
     _track_fast_candidate_movers,
     audit_fixed_sentinel,
     audit_fixed_sentinel_impacts,
+    detect_motion_features,
     track_detections,
     track_fast_point_movers,
 )
@@ -209,6 +211,70 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
     actual = invoke(engine.resolve(), request)
     if actual["schema"] != "rst19.sequence.core.v1" or not actual["shared_background_model"]:
         raise AssertionError("Rust did not execute the sequence shared-background core")
+
+    # Capture the Python temporal-residual connected-component stage directly.
+    # The full Python motion analyzer continues into raw-frame model review and
+    # cross-frame association; this baseline intentionally stops at the same
+    # proposal boundary now exposed by the Rust core operation.
+    python_motion_components: dict[int, dict[str, Any]] = {}
+    original_component_extractor = sequence_module._extract_motion_frame_components
+
+    def capture_motion_components(*args: Any, **kwargs: Any) -> Any:
+        points, audit = original_component_extractor(*args, **kwargs)
+        frame_index = int(kwargs["frame_index"])
+        python_motion_components[frame_index] = {
+            "points": [point.as_dict() for point in points],
+            "audit": audit.as_dict(),
+        }
+        return points, audit
+
+    sequence_module._extract_motion_frame_components = capture_motion_components
+    python_temporal_reference = _registered_median_reference(
+        python_analyses,
+        python_tracking_result.cumulative_shifts,
+    )
+    try:
+        detect_motion_features(
+            python_analyses,
+            python_tracking_result.cumulative_shifts,
+            psf_fwhm=float(FRAME_OPTIONS.get("psf_fwhm", 3.0)),
+            temporal_reference=python_temporal_reference,
+            raw_fallback_workers=1,
+        )
+    finally:
+        sequence_module._extract_motion_frame_components = original_component_extractor
+    if len(python_motion_components) != len(paths):
+        raise AssertionError(
+            f"Python motion component stage ran {len(python_motion_components)} frames, expected {len(paths)}"
+        )
+    rust_motion_components = actual["motion_frame_components"]
+    compare(rust_motion_components["status"], "analyzed", "motion_frame_components.status")
+    compare(
+        rust_motion_components["metadata_supported"],
+        True,
+        "motion_frame_components.metadata_supported",
+    )
+    declared_exposures_s = tuple(
+        milliseconds / 1_000.0 if milliseconds is not None else None
+        for milliseconds in (exposure_milliseconds(analysis.frame.header) for analysis in python_analyses)
+    )
+    expected_min_length = sequence_module._sequence_motion_candidate_min_length(
+        psf_fwhm=float(FRAME_OPTIONS.get("psf_fwhm", 3.0)),
+        min_length_px=None,
+        exposure_s=declared_exposures_s,
+        metadata_supported=True,
+    )
+    compare(
+        rust_motion_components["min_length_px"],
+        expected_min_length,
+        "motion_frame_components.min_length_px",
+    )
+    for frame_index in range(len(paths)):
+        compare(
+            rust_motion_components["frames"][frame_index],
+            python_motion_components[frame_index],
+            f"motion_frame_components.frames[{frame_index}]",
+        )
     if len(actual["frame_analyses"]) != len(python_analyses):
         raise AssertionError("frame count differs")
     for index, (native, python) in enumerate(zip(actual["frame_analyses"], python_analyses)):
@@ -670,6 +736,7 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         "fast_candidate_tracks_match_python_fields": True,
         "candidate_consensus_tracks_and_audit_match_python": True,
         "temporal_reference_candidate_recovery_matches_python": True,
+        "temporal_residual_component_points_and_audits_match_python": True,
         "both_mode_duplicate_row_tie_note": "SciPy and Rust may select different source rows for exact-coordinate raw/temporal duplicates; track positions and classifications match, while evidence labels, synthetic detection IDs, per-point scores, and acceptance-channel counts can differ; every Rust score is checked against an input candidate row",
         "candidate_consensus_count": len(candidate_consensus_rows),
         "fast_candidate_proposal_count": candidate_stage["proposal_count"],
@@ -678,7 +745,7 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         "relative_photometry_status": candidate_result["relative_photometry"]["status"],
         "fixed_sentinel_and_impact_audits_match_python": True,
         "observation_times_seconds": frame_times,
-        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, registered temporal-reference candidate recovery, matched-filter candidate association with original-pixel forced measurement and quality gates, raw-image-gated static candidate consensus, optional relative-photometry orchestration, and fixed-sentinel impact audits; trail auditing and stack recovery remain outside this core operation",
+        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, registered temporal-reference candidate recovery, registered temporal-residual per-frame connected-component proposals and morphology audits, matched-filter candidate association with original-pixel forced measurement and quality gates, raw-image-gated static candidate consensus, optional relative-photometry orchestration, and fixed-sentinel impact audits; high-level trail/motion review, cross-frame motion-feature association and gates, full stack-faint parity, and complete SequenceResult compatibility remain outside this operation",
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report
