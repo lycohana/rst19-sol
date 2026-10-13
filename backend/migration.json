@@ -167,7 +167,7 @@
         "_rank_faintest",
         "build_calibration_model_sensitivity"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.catalog",
@@ -3467,7 +3467,9 @@
     "tests/test_source_proposal_temporal_audit.py",
     "backend/verify_attitude.py",
     "backend/verify_source_geometry_audit.py",
-    "tests/test_source_geometry_audit.py"
+    "tests/test_source_geometry_audit.py",
+    "backend/verify_calibration_sensitivity.py",
+    "tests/test_calibration_sensitivity.py"
   ],
   "remaining": [
     "full float32 detection acceptance coverage",
@@ -3475,7 +3477,7 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, and aperture peak-ratio, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal-peak, source-proposal-temporal, and source-geometry audits; manual threshold feedback storage is native",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
@@ -3497,5 +3499,6 @@
   "native_source_peak_consistency": "raw FITS peak consistency under auxiliary masking and nearest-edge maximum filtering; local-max multiplicity/gaps at three radii, class medians/p90s, target maxima, and Python-identical result/CSV/JSON outputs",
   "native_source_proposal_peak_audit": "strict detection_id join of source catalog proposal_methods and raw peak-consistency fields; class-by-method-group metrics, ordered target summaries, and Python-identical result/CSV/JSON outputs",
   "native_source_proposal_temporal_audit": "source proposal provenance joined to source-exact diagnostics and compact subgroup persistence; ordered targets preserve unavailable temporal detail as null; Python-identical result and CSV artifacts",
-  "native_source_geometry_audit": "source_catalog coordinate PCA audit with NumPy-compatible PCG64/Floyd/tail-shuffle sampling; result and artifact values parity-checked at 2e-12 tolerance; Windows package worker and standalone CLI verified without external Python; macOS/Linux validation pending"
+  "native_source_geometry_audit": "source_catalog coordinate PCA audit with NumPy-compatible PCG64/Floyd/tail-shuffle sampling; result and artifact values parity-checked at 2e-12 tolerance; Windows package worker and standalone CLI verified without external Python; macOS/Linux validation pending",
+  "native_calibration_sensitivity": "zero/linear/quadratic color-model refits reuse the native photometric calibration quality gates; per-source calibrated magnitudes, spread, faintest-source ranking, model usability and claim boundaries match Python fields within 2e-10 relative and 2e-11 absolute tolerance; JSONL engine and desktop worker routes verified; Windows package route verified without external Python"
 }

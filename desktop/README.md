@@ -2,6 +2,7 @@
 
 前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-source-group-audit`、`rst19-source-group-sensitivity`、`rst19-source-separation-audit`、`rst19-source-peak-consistency`、`rst19-source-proposal-peak-audit`、`rst19-source-proposal-temporal-audit`、`rst19-source-geometry-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。
 桌面 Rust worker 还提供人工阈值反馈 JSONL 的追加与读取操作，作为人工复核记录保存。
+光度颜色模型敏感性通过 `photometry.calibration.sensitivity` 原生操作执行；在缺少已声明光度系统/波段时保留 `DIAGNOSTIC_ONLY` 状态，不把诊断提升为标准测光结论。
 完整发布包暂时同时包含 Rust 原生 worker 与 Python/NumPy/SciPy 环境，以及中文字体；使用者无需安装 Python、Rust、Node.js 或浏览器。
 
 ## 直接使用

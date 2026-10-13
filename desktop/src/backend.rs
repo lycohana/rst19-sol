@@ -24,7 +24,7 @@ fn uses_native_worker(request: &Value) -> bool {
     request["operation"] == "preview"
         || matches!(
             request["operation"].as_str(),
-            Some("feedback.append" | "feedback.load")
+            Some("feedback.append" | "feedback.load" | "photometry.calibration.sensitivity")
         )
         || (request["operation"] == "tool"
             && matches!(
@@ -239,6 +239,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"feedback.append","path":"feedback.jsonl"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"photometry.calibration.sensitivity"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19"})

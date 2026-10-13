@@ -65,8 +65,23 @@ fn run(request: Value) -> Result<Value, String> {
             request["mode"].as_str().unwrap_or("raw"),
         );
     }
+    if request["operation"] == "photometry.calibration.sensitivity" {
+        let matches: Vec<rst19_core::matching::CatalogMatch> =
+            serde_json::from_value(request["matches"].clone()).map_err(|e| e.to_string())?;
+        let detections: Vec<rst19_core::measurement::Detection> =
+            serde_json::from_value(request["detections"].clone()).map_err(|e| e.to_string())?;
+        let catalog: Vec<rst19_core::catalog::CatalogSource> =
+            serde_json::from_value(request["catalog"].clone()).map_err(|e| e.to_string())?;
+        let options: rst19_core::calibration_sensitivity::SensitivityOptions =
+            serde_json::from_value(request.get("options").cloned().unwrap_or(json!({})))
+                .map_err(|e| e.to_string())?;
+        return rst19_core::calibration_sensitivity::run(&matches, &detections, &catalog, &options);
+    }
     if request["operation"] != "tool" {
-        return Err("Rust desktop worker only accepts preview or native tools".into());
+        return Err(
+            "Rust desktop worker only accepts preview, sensitivity, feedback, or native tools"
+                .into(),
+        );
     }
     if request["tool"] == "rst19-feature-flag-profile" {
         let out_dir = PathBuf::from(

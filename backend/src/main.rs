@@ -1157,6 +1157,18 @@ fn execute(request: Value) -> Result<Value> {
                 .as_dict(),
             )
         }
+        "photometry.calibration.sensitivity" => {
+            let matches: Vec<rst19_core::matching::CatalogMatch> =
+                serde_json::from_value(request["matches"].clone()).map_err(|e| e.to_string())?;
+            let detections: Vec<rst19_core::measurement::Detection> =
+                serde_json::from_value(request["detections"].clone()).map_err(|e| e.to_string())?;
+            let catalog: Vec<rst19_core::catalog::CatalogSource> =
+                serde_json::from_value(request["catalog"].clone()).map_err(|e| e.to_string())?;
+            let options: rst19_core::calibration_sensitivity::SensitivityOptions =
+                serde_json::from_value(request.get("options").cloned().unwrap_or(json!({})))
+                    .map_err(|e| e.to_string())?;
+            rst19_core::calibration_sensitivity::run(&matches, &detections, &catalog, &options)
+        }
         "photometry.calibration.apply" | "photometry.calibration.error" => {
             let calibration: rst19_core::photometric_calibration::PhotometricCalibration =
                 serde_json::from_value(request["calibration"].clone())

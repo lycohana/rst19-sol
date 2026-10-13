@@ -3,6 +3,7 @@
 pub mod aperture_peak_ratio;
 pub mod assignment;
 pub mod attitude;
+pub mod calibration_sensitivity;
 pub mod catalog;
 pub mod catalog_csv;
 pub mod catalog_merge;

@@ -353,6 +353,25 @@ def verify(package: Path, out: Path) -> dict:
     assert geometry_help.returncode == 0 and "Usage: rst19-source-geometry-audit" in geometry_help.stdout
     catalog = out / "source catalog.csv"
     make_feature_catalog(catalog)
+
+    sensitivity_request = {
+        "operation": "photometry.calibration.sensitivity",
+        "matches": [],
+        "detections": [],
+        "catalog": [],
+    }
+    sensitivity_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(sensitivity_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    sensitivity_events = [json.loads(line) for line in sensitivity_response.stdout.splitlines()]
+    assert len(sensitivity_events) == 1 and sensitivity_events[0]["ok"]
+    sensitivity_payload = sensitivity_events[0]["payload"]
+    assert sensitivity_payload["status"] == "DIAGNOSTIC_ONLY"
+    assert sensitivity_payload["model_count_usable"] == 0
+    assert sensitivity_payload["sources"] == []
+
     profile_out = out / "feature-flag-profile"
     profile_request = {
         "operation": "tool",
@@ -1227,6 +1246,11 @@ def verify(package: Path, out: Path) -> dict:
         "csv_matches_worker_byte_for_byte": True,
         "json_fields_match_worker": True,
         "help_exit_code": geometry_help.returncode,
+        "external_python_search_disabled": True,
+    }
+    report["photometric_calibration_sensitivity"] = {
+        "native_worker_operation_verified": True,
+        "diagnostic_only_without_photometric_metadata": True,
         "external_python_search_disabled": True,
     }
     report["feature_evidence_axes"] = {
