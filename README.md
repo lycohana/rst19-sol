@@ -262,7 +262,7 @@ rst19-feature-gate-route `
 若要继续把“质量门路径”和“15 帧是否反复出现响应”放在一起检查，可运行：
 
 ```powershell
-rst19-feature-gate-temporal-route `
+cargo run --manifest-path backend/Cargo.toml --bin rst19-feature-gate-temporal-route -- `
   tmp/feature-gate-route-code-pattern-current-v1/feature_gate_route_sources.csv `
   tmp/sequence-feature-persistence-diagnostic-sources-v6/sequence_feature_diagnostic_sources.csv `
   tmp/sequence-feature-persistence-code-pattern-current-v4/sequence_feature_persistence.json `
