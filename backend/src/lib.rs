@@ -49,6 +49,7 @@ pub mod sequence_registration;
 pub mod sequence_temporal;
 pub mod sequence_trails;
 pub mod single_frame_trails;
+pub mod source_geometry_audit;
 pub mod source_group_audit;
 pub mod source_group_sensitivity;
 pub mod source_peak_consistency;

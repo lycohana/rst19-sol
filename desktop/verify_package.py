@@ -238,6 +238,10 @@ def verify(package: Path, out: Path) -> dict:
     assert native_worker.is_file(), "Rust single-frame worker is missing from the package"
     attitude_cli = package / "runtime" / ("rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit")
     assert attitude_cli.is_file(), "Rust auxiliary attitude audit CLI is missing from the package"
+    geometry_cli = package / "runtime" / (
+        "rst19-source-geometry-audit.exe" if os.name == "nt" else "rst19-source-geometry-audit"
+    )
+    assert geometry_cli.is_file(), "Rust source geometry audit CLI is missing from the package"
     environment = {**os.environ, "PYTHONPATH": "", "PYTHONHOME": "", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32") if os.name == "nt" else "/usr/bin:/bin"
     catalog = subprocess.run([str(worker), "--catalog"], capture_output=True, text=True, encoding="utf-8",
@@ -290,6 +294,63 @@ def verify(package: Path, out: Path) -> dict:
     assert json.loads((attitude_cli_out / "auxiliary_boresight_audit.json").read_text(encoding="utf-8")) == (
         json.loads((attitude_out / "auxiliary_boresight_audit.json").read_text(encoding="utf-8"))
     )
+    attitude_help = subprocess.run(
+        [str(attitude_cli), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env=environment, cwd=out, timeout=60,
+    )
+    assert attitude_help.returncode == 0 and "Usage: rst19-aux-audit" in attitude_help.stdout
+    geometry_catalog = out / "source geometry catalog.csv"
+    geometry_rows = [
+        "\ufeffx,y,feature_class,feature_class_label",
+        *[f"{10 + index % 4 * 25},{10 + index // 4 * 35},compact_quality,紧凑质量源" for index in range(12)],
+        *[f"{20 + index * 10},{100 + index * 100},linear_artifact,线状候选" for index in range(4)],
+        *[f"{8 + index % 3 * 31},{12 + index // 3 * 27},same_size_target,等样本目标" for index in range(12)],
+    ]
+    geometry_catalog.write_text("\n".join(geometry_rows) + "\n", encoding="utf-8")
+    geometry_out = out / "source-geometry-audit"
+    geometry_request = {
+        "operation": "tool",
+        "tool": "rst19-source-geometry-audit",
+        "args": [
+            str(geometry_catalog.resolve()), "--trials", "8",
+            "--seed", "19", "--out-dir", str(geometry_out.resolve()),
+        ],
+        "out_dir": str((out / "source-geometry-job").resolve()),
+    }
+    geometry_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(geometry_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    geometry_events = [json.loads(line) for line in geometry_response.stdout.splitlines()]
+    assert len(geometry_events) == 1 and geometry_events[0]["ok"]
+    geometry_payload = geometry_events[0]["payload"]
+    assert geometry_payload["tool"] == "rst19-source-geometry-audit"
+    assert [row["feature_class"] for row in geometry_payload["result"]["summaries"]] == [
+        "compact_quality", "linear_artifact", "same_size_target",
+    ]
+    assert Path(geometry_payload["result_path"]).is_file()
+    assert (geometry_out / "source_geometry_summary.csv").is_file()
+    geometry_cli_out = out / "source-geometry-native-cli"
+    geometry_cli_response = subprocess.run(
+        [
+            str(geometry_cli), str(geometry_catalog.resolve()), "--trials", "8", "--seed", "19",
+            "--out-dir", str(geometry_cli_out.resolve()),
+        ],
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out, timeout=60,
+    )
+    assert geometry_cli_response.returncode == 0, (geometry_cli_response.stdout, geometry_cli_response.stderr)
+    assert (geometry_cli_out / "source_geometry_summary.csv").read_bytes() == (
+        geometry_out / "source_geometry_summary.csv"
+    ).read_bytes()
+    assert json.loads((geometry_cli_out / "source_geometry_audit.json").read_text(encoding="utf-8")) == (
+        json.loads((geometry_out / "source_geometry_audit.json").read_text(encoding="utf-8"))
+    )
+    geometry_help = subprocess.run(
+        [str(geometry_cli), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env=environment, cwd=out, timeout=60,
+    )
+    assert geometry_help.returncode == 0 and "Usage: rst19-source-geometry-audit" in geometry_help.stdout
     catalog = out / "source catalog.csv"
     make_feature_catalog(catalog)
     profile_out = out / "feature-flag-profile"
@@ -1135,6 +1196,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-peak-consistency",
                   "rst19-source-proposal-peak-audit",
                   "rst19-source-proposal-temporal-audit",
+                  "rst19-source-geometry-audit",
                   "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
@@ -1156,6 +1218,15 @@ def verify(package: Path, out: Path) -> dict:
         "packaged_native_binary": attitude_cli.name,
         "csv_matches_worker_byte_for_byte": True,
         "json_fields_match_worker": True,
+        "help_exit_code": attitude_help.returncode,
+        "external_python_search_disabled": True,
+    }
+    report["source_geometry_audit"] = {
+        "packaged_native_binary": geometry_cli.name,
+        "desktop_worker_route_verified": True,
+        "csv_matches_worker_byte_for_byte": True,
+        "json_fields_match_worker": True,
+        "help_exit_code": geometry_help.returncode,
         "external_python_search_disabled": True,
     }
     report["feature_evidence_axes"] = {

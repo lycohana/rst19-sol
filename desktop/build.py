@@ -65,7 +65,7 @@ def build() -> None:
     package.mkdir(parents=True, exist_ok=False)
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(DESKTOP / "Cargo.toml"), "--bins"])
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(ROOT / "backend/Cargo.toml"),
-             "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit"])
+             "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit", "--bin", "rst19-source-geometry-audit"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")})
@@ -85,6 +85,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / gaia_merge, package / "runtime" / gaia_merge)
     auxiliary_audit = "rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit"
     shutil.copy2(ROOT / "backend/target/release" / auxiliary_audit, package / "runtime" / auxiliary_audit)
+    geometry_audit = "rst19-source-geometry-audit.exe" if os.name == "nt" else "rst19-source-geometry-audit"
+    shutil.copy2(ROOT / "backend/target/release" / geometry_audit, package / "runtime" / geometry_audit)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"

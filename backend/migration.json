@@ -2800,7 +2800,7 @@
         "_write_csv",
         "write_source_geometry_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.source_geometry_audit_cli",
@@ -2810,7 +2810,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.source_group_audit",
@@ -3283,7 +3283,8 @@
     "candidate nearest-other spacing at centroid and peak coordinates with radius endpoint fractions, quality context, class quantiles, target lookup, and Python-compatible CSV/JSON artifacts",
     "raw FITS peak-consistency audit with nearest-edge local maxima, three-radius multiplicity and gap summaries, feature-class quantiles, target locations, and Python-compatible CSV/JSON artifacts",
     "proposal-method provenance cross-joined with raw local-peak consistency by detection_id; deterministic class-by-method-group summaries, target routing, and Python-compatible artifacts",
-    "source proposal provenance joined to source-exact diagnostics and compact subgroup persistence; ordered targets preserve unavailable temporal detail as null; Python-identical result and CSV artifacts"
+    "source proposal provenance joined to source-exact diagnostics and compact subgroup persistence; ordered targets preserve unavailable temporal detail as null; Python-identical result and CSV artifacts",
+    "source-coordinate PCA geometry audit with NumPy-compatible SeedSequence/PCG64 choice sampling, Rust JSONL/desktop routes, and a standalone CLI"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3342,7 +3343,8 @@
     "manual-threshold-feedback": "feedback.append and feedback.load JSONL requests preserve record fields, defaults, schema version, and malformed-line indexing; Rust engine and desktop worker verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending",
     "rst19-source-group-audit": "transitive centroid-radius source groups; result and all three CSV plus JSON artifacts match Python across default/explicit radii and target selection; invalid boolean, duplicate ID, invalid coordinate, and missing-target errors match; JSONL engine and desktop worker routes verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending",
     "rst19-source-group-sensitivity": "same source catalog and evidence thresholds across ordered radius scans; result and both CSV plus JSON artifacts match Python across default and custom parallel runs; duplicate/nonpositive radius, nonpositive worker, and missing-target errors match; JSONL engine and desktop worker routes verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending",
-    "rst19-source-separation-audit": "source_catalog CSV input; centroid/peak nearest-other spacing, threshold and class summaries, optional target lookup, three CSV plus JSON outputs; JSONL engine and Rust desktop worker routes verified; Windows package verified with external Python search disabled; SciPy may return any of several equally distant IDs, while Rust deterministically chooses the lowest CSV row index; macOS/Linux package validation pending"
+    "rst19-source-separation-audit": "source_catalog CSV input; centroid/peak nearest-other spacing, threshold and class summaries, optional target lookup, three CSV plus JSON outputs; JSONL engine and Rust desktop worker routes verified; Windows package verified with external Python search disabled; SciPy may return any of several equally distant IDs, while Rust deterministically chooses the lowest CSV row index; macOS/Linux package validation pending",
+    "rst19-source-geometry-audit": "source_catalog CSV; per-class PCA axis ratio/orientation/residuals and equal-size compact_quality controls; NumPy 1.26.4 sampling compatibility for unsigned 64-bit seeds; Rust engine and desktop worker match Python fields and artifacts within 2e-12 numeric tolerance; Windows package worker and standalone CLI verified with external Python search disabled; macOS/Linux package validation pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3463,7 +3465,9 @@
     "tests/test_source_proposal_peak_audit.py",
     "backend/verify_source_proposal_temporal_audit.py",
     "tests/test_source_proposal_temporal_audit.py",
-    "backend/verify_attitude.py"
+    "backend/verify_attitude.py",
+    "backend/verify_source_geometry_audit.py",
+    "tests/test_source_geometry_audit.py"
   ],
   "remaining": [
     "full float32 detection acceptance coverage",
@@ -3471,7 +3475,7 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, and aperture peak-ratio, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal-peak and source-proposal-temporal audits; manual threshold feedback storage is native",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, and aperture peak-ratio, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal-peak, source-proposal-temporal, and source-geometry audits; manual threshold feedback storage is native",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
@@ -3492,5 +3496,6 @@
   "native_source_separation_audit": "centroid and peak nearest-other candidate geometry, endpoint fractions by radius and quality, class quantiles, and target neighbor context; outputs remain detector-level geometry evidence and do not establish physical identity",
   "native_source_peak_consistency": "raw FITS peak consistency under auxiliary masking and nearest-edge maximum filtering; local-max multiplicity/gaps at three radii, class medians/p90s, target maxima, and Python-identical result/CSV/JSON outputs",
   "native_source_proposal_peak_audit": "strict detection_id join of source catalog proposal_methods and raw peak-consistency fields; class-by-method-group metrics, ordered target summaries, and Python-identical result/CSV/JSON outputs",
-  "native_source_proposal_temporal_audit": "source proposal provenance joined to source-exact diagnostics and compact subgroup persistence; ordered targets preserve unavailable temporal detail as null; Python-identical result and CSV artifacts"
+  "native_source_proposal_temporal_audit": "source proposal provenance joined to source-exact diagnostics and compact subgroup persistence; ordered targets preserve unavailable temporal detail as null; Python-identical result and CSV artifacts",
+  "native_source_geometry_audit": "source_catalog coordinate PCA audit with NumPy-compatible PCG64/Floyd/tail-shuffle sampling; result and artifact values parity-checked at 2e-12 tolerance; Windows package worker and standalone CLI verified without external Python; macOS/Linux validation pending"
 }

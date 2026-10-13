@@ -22,6 +22,17 @@ fn numbers(value: &Value) -> Result<Vec<f64>> {
         })
         .collect()
 }
+
+fn nonnegative_seed(value: Option<&Value>) -> Result<u64> {
+    let Some(value) = value else {
+        return Ok(1909);
+    };
+    value
+        .as_u64()
+        .or_else(|| value.to_string().parse::<u64>().ok())
+        .ok_or_else(|| "expected non-negative integer".into())
+}
+
 fn execute(request: Value) -> Result<Value> {
     match request["operation"].as_str().ok_or("missing operation")? {
         "catalog.merge_csvs" => {
@@ -296,6 +307,37 @@ fn execute(request: Value) -> Result<Value> {
                 &target_ids,
             )?
             .as_dict())
+        }
+        "audit.source_geometry" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let target_classes = request
+                .get("target_classes")
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<Vec<String>>)
+                .transpose()
+                .map_err(|error| error.to_string())?;
+            let control_class = request["control_class"]
+                .as_str()
+                .unwrap_or(rst19_core::source_geometry_audit::DEFAULT_CONTROL_CLASS);
+            let trials = request
+                .get("control_trial_count")
+                .map(|value| value.as_u64().ok_or("control_trial_count 必须为正整数"))
+                .transpose()?
+                .map(|value| usize::try_from(value).map_err(|_| "control_trial_count is too large"))
+                .transpose()?
+                .unwrap_or(5000);
+            let seed = nonnegative_seed(request.get("random_seed"))?;
+            let result = rst19_core::source_geometry_audit::run(
+                std::path::Path::new(catalog_path),
+                target_classes.as_deref(),
+                control_class,
+                trials,
+                seed,
+            )?;
+            Ok(result.as_dict())
         }
         "attitude.audit.frames" => {
             let frames: Vec<rst19_core::attitude::AttitudeFrameInput> =

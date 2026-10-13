@@ -17,6 +17,10 @@ name = "rst19-aux-audit"
 path = "src/bin/rst19-aux-audit.rs"
 
 [[bin]]
+name = "rst19-source-geometry-audit"
+path = "src/bin/rst19-source-geometry-audit.rs"
+
+[[bin]]
 name = "rst19-gaia-merge"
 path = "src/bin/rst19-gaia-merge.rs"
 
