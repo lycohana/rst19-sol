@@ -109,9 +109,6 @@ impl Backend {
                     .unwrap()
                     .to_owned()
             });
-        if !root.join("src/rst19/desktop_worker.py").is_file() {
-            return Err("缺少内置算法环境 runtime/rst19-worker，请使用完整发布包。".into());
-        }
         let native_name = if cfg!(windows) {
             "rst19-native-worker.exe"
         } else {
@@ -153,28 +150,36 @@ impl Backend {
     }
 
     fn executable_for(&self, request: Option<&Value>) -> Result<&Path, String> {
-        if request.is_some_and(uses_native_worker) {
-            return self.native_worker.as_deref().ok_or_else(|| {
-                "该操作已迁移到 Rust，但没有找到 native worker。请重新构建桌面应用。".into()
-            });
+        if request.is_none() || request.is_some_and(uses_native_worker) {
+            return self
+                .native_worker
+                .as_deref()
+                .ok_or_else(|| "找不到 Rust native worker。请重新构建桌面应用。".into());
         }
         Ok(&self.executable)
     }
 
     pub fn start(&self, request: Option<Value>, working_dir: &Path) -> Result<Job, String> {
-        let use_native = request.as_ref().is_some_and(uses_native_worker);
+        let use_native = request.is_none() || request.as_ref().is_some_and(uses_native_worker);
+        if self.development
+            && !use_native
+            && !self.root.join("src/rst19/desktop_worker.py").is_file()
+        {
+            return Err("此工具尚未迁移到 Rust，且当前工作区没有 Python 回退模块。".into());
+        }
         let executable = self.executable_for(request.as_ref())?;
         let mut command = Command::new(executable);
         if self.development && !use_native {
             command.args(["-u", "-m", "rst19.desktop_worker"]);
             command.env("PYTHONPATH", self.root.join("src"));
         }
-        command
-            .env("PYTHONUTF8", "1")
-            .env("PYTHONIOENCODING", "utf-8");
-        command
-            .env("OMP_NUM_THREADS", "2")
-            .env("OPENBLAS_NUM_THREADS", "2");
+        if !use_native {
+            command
+                .env("PYTHONUTF8", "1")
+                .env("PYTHONIOENCODING", "utf-8")
+                .env("OMP_NUM_THREADS", "2")
+                .env("OPENBLAS_NUM_THREADS", "2");
+        }
         if request.is_none() {
             command.arg("--catalog");
         }
@@ -188,9 +193,13 @@ impl Backend {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000);
         }
-        let mut child = command
-            .spawn()
-            .map_err(|e| format!("算法环境启动失败：{e}"))?;
+        let mut child = command.spawn().map_err(|e| {
+            if use_native {
+                format!("Rust native worker 启动失败：{e}")
+            } else {
+                format!("Python 回退 worker 启动失败：{e}")
+            }
+        })?;
         if let Some(request) = request {
             let input = format!("{}\n", request);
             if let Err(error) = child.stdin.take().unwrap().write_all(input.as_bytes()) {
@@ -402,8 +411,26 @@ mod tests {
         };
         let request = json!({"operation":"tool","tool":"rst19"});
         let error = backend.executable_for(Some(&request)).unwrap_err();
-        assert!(error.contains("已迁移到 Rust"));
-        assert_eq!(backend.executable_for(None).unwrap(), Path::new("python"));
+        assert!(error.contains("Rust native worker"));
+        assert!(backend
+            .executable_for(None)
+            .unwrap_err()
+            .contains("Rust native worker"));
+        let backend = Backend {
+            executable: PathBuf::from("python"),
+            native_worker: Some(PathBuf::from("rst19-native-worker")),
+            root: PathBuf::new(),
+            development: true,
+        };
+        assert_eq!(
+            backend.executable_for(None).unwrap(),
+            Path::new("rst19-native-worker")
+        );
+        let pending = json!({"operation":"tool","tool":"rst19-sequence"});
+        assert_eq!(
+            backend.executable_for(Some(&pending)).unwrap(),
+            Path::new("python")
+        );
     }
 
     #[test]

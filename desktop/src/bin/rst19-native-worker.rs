@@ -787,7 +787,32 @@ fn run(request: Value) -> Result<Value, String> {
     Ok(payload)
 }
 
+fn catalog() -> Result<Value, String> {
+    let value: Value = serde_json::from_str(include_str!("../tool_catalog.json"))
+        .map_err(|error| format!("native tool catalog is invalid: {error}"))?;
+    let tools = value
+        .as_array()
+        .ok_or("native tool catalog must be an array")?;
+    let native_count = tools.iter().filter(|tool| tool["native"] == true).count();
+    Ok(json!({
+        "tools":value,
+        "environment":{
+            "runtime":"Rust",
+            "native_tool_count":native_count,
+            "total_tool_count":tools.len()
+        }
+    }))
+}
+
 fn main() {
+    if std::env::args().any(|arg| arg == "--catalog") {
+        let (event, exit_code) = match catalog() {
+            Ok(payload) => (json!({"event":"done","ok":true,"payload":payload}), 0),
+            Err(error) => (json!({"event":"done","ok":false,"error":error}), 1),
+        };
+        println!("{event}");
+        std::process::exit(exit_code);
+    }
     let request = io::stdin()
         .lock()
         .lines()
@@ -806,7 +831,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{output_path, run};
+    use super::{catalog, output_path, run};
     use serde_json::json;
     use std::{
         fs,
@@ -815,6 +840,25 @@ mod tests {
     };
 
     static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn embedded_catalog_marks_rust_and_pending_tools() {
+        let catalog = catalog().unwrap();
+        let tools = catalog["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), catalog["environment"]["total_tool_count"]);
+        assert_eq!(
+            tools.iter().filter(|tool| tool["native"] == true).count(),
+            catalog["environment"]["native_tool_count"]
+                .as_u64()
+                .unwrap() as usize
+        );
+        assert!(tools
+            .iter()
+            .any(|tool| tool["name"] == "rst19-temporal-codes" && tool["native"] == true));
+        assert!(tools
+            .iter()
+            .any(|tool| tool["name"] == "rst19-sequence" && tool["native"] == false));
+    }
 
     #[test]
     fn json_output_path_is_added_or_respected() {

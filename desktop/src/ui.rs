@@ -29,6 +29,8 @@ struct Tool {
     name: String,
     description: String,
     fields: Vec<Field>,
+    #[serde(default)]
+    native: bool,
 }
 
 pub struct Desktop {
@@ -413,18 +415,10 @@ impl Desktop {
                             });
                             self.tools = tools;
                             self.select_tool(0);
+                            let native_count = self.tools.iter().filter(|tool| tool.native).count();
                             self.environment = format!(
-                                "Python {} · NumPy {} · SciPy {} · Pillow {} · {} 个工具 · {}",
-                                p["environment"]["python"],
-                                p["environment"]["numpy"],
-                                p["environment"]["scipy"],
-                                p["environment"]["pillow"],
-                                self.tools.len(),
-                                if p["environment"]["frozen"] == true {
-                                    "内置环境"
-                                } else {
-                                    "开发环境"
-                                }
+                                "Rust UI · Rust 原生 {native_count}/{} 项研究工具，其余待迁移",
+                                self.tools.len()
                             );
                             self.status = "环境已就绪".into();
                             if self.smoke.is_some() {
@@ -892,11 +886,13 @@ impl eframe::App for Desktop {
                                     || t.name.contains(&self.search)
                                     || t.description.contains(&self.search)
                             }) {
+                                let label = format!(
+                                    "{} · {}",
+                                    if tool.native { "Rust" } else { "待迁移" },
+                                    title(&tool.name)
+                                );
                                 if ui
-                                    .selectable_label(
-                                        self.selected_tool == index,
-                                        title(&tool.name),
-                                    )
+                                    .selectable_label(self.selected_tool == index, label)
                                     .on_hover_text(&tool.description)
                                     .clicked()
                                 {
