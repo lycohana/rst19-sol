@@ -2319,7 +2319,7 @@
         "analyze_frame",
         "recalibrate_frame_analysis"
       ],
-      "migration_status": "in_progress"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.plate_solver",
