@@ -69,6 +69,10 @@ name = "rst19-feature-temporal-consistency-audit"
 path = "src/bin/rst19-feature-temporal-consistency-audit.rs"
 
 [[bin]]
+name = "rst19-feature-spatial-context"
+path = "src/bin/rst19-feature-spatial-context.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 

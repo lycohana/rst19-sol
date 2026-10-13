@@ -95,6 +95,9 @@ fn execute(request: Value) -> Result<Value> {
         "audit.feature_temporal_consistency" => {
             rst19_core::feature_temporal_consistency_audit::handle_request(&request)
         }
+        "audit.feature_spatial_context" => {
+            rst19_core::feature_spatial_context::handle_request(&request)
+        }
         "audit.feature_cross_axis" => {
             let path = |name: &str| -> Result<std::path::PathBuf> {
                 request[name]

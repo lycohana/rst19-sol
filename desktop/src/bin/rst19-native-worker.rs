@@ -505,6 +505,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::feature_temporal_consistency_audit::run_desktop(&args);
     }
+    if request["tool"] == "rst19-feature-spatial-context" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::feature_spatial_context::run_desktop(&args);
+    }
     if request["tool"] == "rst19-feature-cross-axis-audit" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -822,6 +844,47 @@ mod tests {
             "feature_temporal_consistency_audit.json",
             "feature_temporal_consistency_sources.csv",
             "feature_temporal_consistency_summary.csv",
+        ] {
+            assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn feature_spatial_context_tool_is_dispatched_to_the_native_audit() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-feature-spatial-context-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let catalog = root.join("catalog.csv");
+        let out_dir = root.join("output");
+        fs::write(
+            &catalog,
+            "detection_id,x,y,feature_class,feature_class_label,quality_passed,flags,flux_snr,filter_snr,peak\n1,20,30,compact_quality,紧凑质量源,False,LOW_FLUX_SNR,12,15,80\n",
+        )
+        .unwrap();
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-feature-spatial-context",
+            "out_dir":out_dir,
+            "args":[
+                catalog.to_string_lossy(),
+                "--image-width=100",
+                "--image-height=100",
+                "--top-n=1"
+            ]
+        }))
+        .unwrap();
+        assert_eq!(result["tool"], "rst19-feature-spatial-context");
+        assert_eq!(result["result"]["summaries"].as_array().unwrap().len(), 1);
+        for artifact in [
+            "request.json",
+            "feature_spatial_context.json",
+            "feature_spatial_context_summary.csv",
+            "feature_spatial_context_hotspots.csv",
+            "feature_spatial_context_targets.csv",
         ] {
             assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
         }

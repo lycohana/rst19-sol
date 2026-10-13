@@ -277,7 +277,7 @@ rst19-feature-gate-temporal-route `
 若要把类别空间分布和截图 pair 的局部邻域一起纳入筛查，可运行：
 
 ```powershell
-rst19-feature-spatial-context `
+cargo run --manifest-path backend/Cargo.toml --bin rst19-feature-spatial-context -- `
   tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
   --target-id 82931 --target-id 82934 `
   --top-n 5 --grid-size 4 --edge-margin-px 16 `
