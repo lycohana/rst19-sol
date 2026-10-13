@@ -5958,6 +5958,19 @@
         "repeat": false
       },
       {
+        "key": "positions",
+        "flag": "--position",
+        "help": "可选固定位置 CELL_ID,X,Y,LOCAL_BACKGROUND,LOCAL_NOISE；可重复传入",
+        "required": false,
+        "default": null,
+        "choices": [],
+        "kind": "value",
+        "nargs": null,
+        "path": false,
+        "toggle_value": null,
+        "repeat": true
+      },
+      {
         "key": "out_dir",
         "flag": "--out-dir",
         "help": "CSV/JSON 输出目录",
@@ -5971,7 +5984,7 @@
         "repeat": false
       }
     ],
-    "native": false
+    "native": true
   },
   {
     "name": "rst19-feature-parameter-sensitivity",

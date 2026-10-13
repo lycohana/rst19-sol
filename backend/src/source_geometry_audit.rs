@@ -287,7 +287,7 @@ fn seed_sequence_pool(seed: u128) -> [u32; 4] {
 }
 
 #[derive(Clone, Debug)]
-struct NumpyPcg64 {
+pub(crate) struct NumpyPcg64 {
     state: u128,
     increment: u128,
     has_uint32: bool,
@@ -295,7 +295,7 @@ struct NumpyPcg64 {
 }
 
 impl NumpyPcg64 {
-    fn new(seed: u128) -> Self {
+    pub(crate) fn new(seed: u128) -> Self {
         let pool = seed_sequence_pool(seed);
         let mut hash_const = 0x8b51_f9dd_u32;
         let mut words = [0_u32; 8];
@@ -420,21 +420,30 @@ impl NumpyPcg64 {
             }
         }
     }
+
+    pub(crate) fn uniform(&mut self, low: f64, high: f64) -> f64 {
+        let fraction = (self.next_u64() >> 11) as f64 * (1.0 / ((1_u64 << 53) as f64));
+        low + fraction * (high - low)
+    }
+
+    pub(crate) fn permutation(&mut self, length: usize) -> Vec<usize> {
+        let mut values = (0..length).collect::<Vec<_>>();
+        if length < 2 {
+            return values;
+        }
+        for index in (1..length).rev() {
+            let selected = self.random_interval(index);
+            values.swap(index, selected);
+        }
+        values
+    }
 }
 
 /// NumPy 1.26 Generator.permutation for an integer range, using the same
 /// PCG64 stream and masked-rejection Fisher-Yates shuffle as `default_rng`.
 pub(crate) fn numpy_default_rng_permutation(seed: u128, length: usize) -> Vec<usize> {
-    let mut values = (0..length).collect::<Vec<_>>();
-    if length < 2 {
-        return values;
-    }
     let mut rng = NumpyPcg64::new(seed);
-    for index in (1..length).rev() {
-        let selected = rng.random_interval(index);
-        values.swap(index, selected);
-    }
-    values
+    rng.permutation(length)
 }
 
 fn choice_indices(population: usize, sample_count: usize, rng: &mut NumpyPcg64) -> Vec<usize> {
@@ -857,5 +866,23 @@ mod tests {
             numpy_default_rng_permutation(0, 15),
             [2, 11, 3, 10, 0, 4, 7, 5, 14, 12, 6, 9, 13, 8, 1]
         );
+    }
+
+    #[test]
+    fn uniform_and_permutation_share_the_numpy_generator_stream() {
+        let mut rng = NumpyPcg64::new(19_019);
+        let values = (0..6).map(|_| rng.uniform(11.0, 21.0)).collect::<Vec<_>>();
+        let expected = [
+            11.16027052396314,
+            11.429121307533523,
+            15.496486290090564,
+            16.942912079970277,
+            13.517063570594686,
+            20.30319289891103,
+        ];
+        for (actual, expected) in values.iter().zip(expected) {
+            assert!((actual - expected).abs() <= 1e-14, "{actual} != {expected}");
+        }
+        assert_eq!(rng.permutation(7), [0, 5, 2, 6, 3, 4, 1]);
     }
 }

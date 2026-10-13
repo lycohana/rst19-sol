@@ -85,7 +85,7 @@
         "run_aperture_sensitivity_audit",
         "write_aperture_sensitivity_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.aperture_sensitivity_cli",
@@ -95,7 +95,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.attitude",
@@ -3186,7 +3186,7 @@
     "rst19-pair-mechanism-sensitivity": "rst19.pair_mechanism_sensitivity_cli:main",
     "rst19-pair-support-audit": "native:rst19-pair-support-audit",
     "rst19-spatial-injection": "rst19.spatial_injection_cli:main",
-    "rst19-aperture-sensitivity": "rst19.aperture_sensitivity_cli:main",
+    "rst19-aperture-sensitivity": "native:rst19-aperture-sensitivity",
     "rst19-feature-parameter-sensitivity": "native:rst19-feature-parameter-sensitivity",
     "rst19-feature-class-context": "rst19.feature_class_context_cli:main",
     "rst19-feature-hard-negative": "rst19.feature_hard_negative_cli:main",
@@ -3262,6 +3262,7 @@
     "pair-mechanism multi-window sensitivity audit with native JSONL and desktop worker routes",
     "pair-pixel raw and special-excluded connected-component topology, local-maximum diagnostics, and Python-byte-identical CSV/JSON/SVG artifacts",
     "aperture-to-peak ratio summaries by feature class and proposal-method group with target percentile context",
+    "empirical-PSF aperture-sensitivity audit with NumPy-compatible PCG64 blank-site selection, paired float32 controls, native injection/recovery measurements, and Python parity fixtures",
     "feature-pair Spearman correlations, tie-aware ranks, first-seen class medians, and within-class correlations",
     "sequence feature transition-flow CSV post-processing with same/cross-class summaries, metadata validation, and Python-byte-identical artifacts",
     "per-source quality-gate route decomposition separating numeric failures from structural flags with class summaries",
@@ -3327,6 +3328,7 @@
     "rst19": "native rst19 executable is the public command; rst19-native alias retained; stdout/json-out/error contracts match across 89 parity invocations; standalone Windows executable opens help with PATH disabled; package build/verification and macOS/Linux package validation pending",
     "rst19-trails": "Rust standalone binary and native desktop worker route run the single-frame FITS audit; frozen Python result fields match for zero-trail and model-rejected line-geometry fixtures; PATH-disabled CLI tests check counts, CSV/PNG artifacts, and unchanged FITS input; Python console entrypoint removed from pyproject.toml; accepted-trail positive fixture, full runtime removal, package and cross-platform acceptance remain pending",
     "rst19-contaminated-pair-class": "Rust standalone CLI and native desktop worker run class-based anchor selection and contaminated-pair injection; full result fields, three class CSVs, injection JSON, and injection CSV values match Python within the established numeric tolerance; Python console entrypoint removed; release-package and macOS/Linux acceptance pending",
+    "rst19-aperture-sensitivity": "Rust standalone CLI and native desktop worker perform empirical-PSF aperture scans, NumPy-compatible seeded blank-site selection, paired float32 controls, and CSV/JSON artifact writing; frozen Python JSON/CSV outputs match for all discrete fields and within 2e-5 absolute plus 2e-6 relative numeric tolerance, with 1.2e-4 absolute plus 2e-6 relative tolerance for float32 SNR fields; PATH-disabled CLI verified and Python console entrypoint removed; release-package and macOS/Linux acceptance pending",
     "rst19-innovation-package": "Rust standalone CLI, JSONL audit.innovation_package operation, and desktop worker accept injection JSON plus optional sequence/feature evidence; package JSON parity and CSV/Markdown artifacts verified; formal evidence gates cannot be lowered by caller options; Python console entrypoint removed; macOS/Linux acceptance pending",
     "rst19-temporal-codes": "Rust standalone CLI, JSONL audit.temporal_codes operation, and desktop worker read integer FITS sequences; 8-connected components and focus series match the Python behavior; CLI and engine pass with PATH disabled; BOM CSV/JSON artifacts verified; Python console entrypoint removed; package and macOS/Linux acceptance pending",
     "rst19-sweep": "Rust standalone CLI and native desktop-worker route implement threshold and PSF-FWHM scans; all numeric result fields match the Python baseline within 1e-10 on a synthetic FITS fixture; BOM CSV and native PNG outputs verified; Python console entrypoint removed; release-package and macOS/Linux validation pending",
