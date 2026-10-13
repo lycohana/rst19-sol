@@ -61,6 +61,10 @@ name = "rst19-pair-response-attribution"
 path = "src/bin/rst19-pair-response-attribution.rs"
 
 [[bin]]
+name = "rst19-pair-covariance-audit"
+path = "src/bin/rst19-pair-covariance-audit.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 
