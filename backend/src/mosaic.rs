@@ -501,7 +501,9 @@ fn lanczos3(distance: f64) -> f64 {
     pix.sin() * (pix / 3.0).sin() / (pix * pix / 3.0)
 }
 
-fn resize_contributions(source_size: usize, target_size: usize) -> Vec<Vec<(usize, f64)>> {
+const LANCZOS_PRECISION_BITS: u32 = 22;
+
+fn resize_contributions(source_size: usize, target_size: usize) -> Vec<Vec<(usize, i64)>> {
     let scale = source_size as f64 / target_size as f64;
     let filter_scale = scale.max(1.0);
     let support = 3.0 * filter_scale;
@@ -525,7 +527,19 @@ fn resize_contributions(source_size: usize, target_size: usize) -> Vec<Vec<(usiz
                     *weight /= sum;
                 }
             }
+            let coefficient_scale = (1_u64 << LANCZOS_PRECISION_BITS) as f64;
             values
+                .into_iter()
+                .map(|(source, weight)| {
+                    let scaled = weight * coefficient_scale;
+                    let fixed = if scaled < 0.0 {
+                        (scaled - 0.5) as i64
+                    } else {
+                        (scaled + 0.5) as i64
+                    };
+                    (source, fixed)
+                })
+                .collect()
         })
         .collect()
 }
@@ -551,18 +565,17 @@ fn resize_rgba_axis(
             let target = if horizontal { x } else { y };
             let output_offset = (y * output_width + x) * 4;
             for channel in 0..4 {
-                let value = contributions[target]
-                    .iter()
-                    .map(|(source, weight)| {
-                        let (source_x, source_y) = if horizontal {
-                            (*source, y)
-                        } else {
-                            (x, *source)
-                        };
-                        input[(source_y * width + source_x) * 4 + channel] as f64 * weight
-                    })
-                    .sum::<f64>();
-                output[output_offset + channel] = value.round().clamp(0.0, 255.0) as u8;
+                let mut value = 1_i64 << (LANCZOS_PRECISION_BITS - 1);
+                for (source, weight) in &contributions[target] {
+                    let (source_x, source_y) = if horizontal {
+                        (*source, y)
+                    } else {
+                        (x, *source)
+                    };
+                    value += input[(source_y * width + source_x) * 4 + channel] as i64 * weight;
+                }
+                output[output_offset + channel] =
+                    (value >> LANCZOS_PRECISION_BITS).clamp(0, 255) as u8;
             }
         }
     }
@@ -584,15 +597,43 @@ fn resize_rgba_lanczos3(
     {
         return Err("invalid RGBA preview dimensions".into());
     }
-    let horizontal = if target_width == width {
-        rgba.to_vec()
-    } else {
-        resize_rgba_axis(rgba, width, height, target_width, true)?
-    };
-    if target_height == height {
-        return Ok(horizontal);
+    // Pillow resamples RGBA through premultiplied-alpha RGBa. This prevents
+    // invisible RGB values outside the mosaic footprint from bleeding into
+    // visible edge pixels.
+    let mut premultiplied = rgba.to_vec();
+    for pixel in premultiplied.chunks_exact_mut(4) {
+        let alpha = u16::from(pixel[3]);
+        for channel in &mut pixel[..3] {
+            *channel = ((u16::from(*channel) * alpha + 127) / 255) as u8;
+        }
     }
-    resize_rgba_axis(&horizontal, target_width, height, target_height, false)
+
+    // Pillow 12.2 applies the horizontal pass before the vertical pass for
+    // all two-axis resizes; the 8-bit intermediate rounding makes order
+    // observable for RGBA previews.
+    let horizontal = if target_width == width {
+        premultiplied
+    } else {
+        resize_rgba_axis(&premultiplied, width, height, target_width, true)?
+    };
+    let resized = if target_height == height {
+        horizontal
+    } else {
+        resize_rgba_axis(&horizontal, target_width, height, target_height, false)?
+    };
+
+    let mut output = resized;
+    for pixel in output.chunks_exact_mut(4) {
+        let alpha = u32::from(pixel[3]);
+        if alpha == 0 {
+            pixel[..3].fill(0);
+        } else {
+            for channel in &mut pixel[..3] {
+                *channel = ((u32::from(*channel) * 255) / alpha).min(255) as u8;
+            }
+        }
+    }
+    Ok(output)
 }
 
 fn write_artifacts(
@@ -1230,6 +1271,65 @@ mod tests {
         assert_eq!(
             resize_rgba_lanczos3(&source, 5, 3, 0, 2).unwrap_err(),
             "invalid RGBA preview dimensions"
+        );
+    }
+
+    #[test]
+    fn lanczos_preview_downscale_matches_frozen_pillow_rgba_pixels() {
+        // Frozen from Pillow 12.2.0 Image.Resampling.LANCZOS on a 7x5 RGBA
+        // image. Preview pixels are part of the Python desktop output contract.
+        let source = (0..5)
+            .flat_map(|y| {
+                (0..7).flat_map(move |x| {
+                    (0..4).map(move |channel| (x * 31 + y * 7 + channel * 53) as u8)
+                })
+            })
+            .collect::<Vec<_>>();
+        let resized = resize_rgba_lanczos3(&source, 7, 5, 4, 3).unwrap();
+        assert_eq!(
+            resized,
+            [
+                15, 69, 121, 177, 67, 120, 175, 208, 117, 167, 188, 61, 183, 247, 17, 71, 32, 85,
+                138, 202, 69, 121, 180, 161, 236, 255, 200, 14, 183, 204, 47, 96, 44, 96, 149, 212,
+                83, 134, 195, 180, 185, 255, 77, 33, 197, 91, 52, 106,
+            ]
+        );
+
+        // The tall anisotropic shape catches Pillow's fixed horizontal-then-
+        // vertical 8-bit intermediate rounding contract.
+        let tall_source = (0..9)
+            .flat_map(|y| {
+                (0..3).flat_map(move |x| {
+                    (0..4).map(move |channel| (x * 47 + y * 23 + channel * 61) as u8)
+                })
+            })
+            .collect::<Vec<_>>();
+        let vertical_only = resize_rgba_lanczos3(&tall_source, 3, 9, 3, 3).unwrap();
+        assert_eq!(
+            vertical_only,
+            [
+                30, 91, 153, 224, 59, 118, 192, 162, 106, 243, 112, 43, 74, 134, 187, 106, 160,
+                255, 37, 54, 207, 142, 49, 113, 185, 247, 3, 70, 205, 92, 70, 138, 171, 51, 121,
+                183,
+            ]
+        );
+        let horizontal_only = resize_rgba_lanczos3(&tall_source, 3, 9, 2, 9).unwrap();
+        assert_eq!(
+            horizontal_only,
+            [
+                20, 81, 142, 214, 60, 120, 181, 97, 43, 104, 164, 237, 87, 148, 208, 120, 45, 106,
+                176, 153, 170, 233, 0, 36, 70, 131, 202, 176, 177, 237, 43, 59, 111, 167, 71, 32,
+                173, 234, 35, 100, 129, 236, 125, 55, 196, 72, 58, 123, 150, 251, 16, 78, 220, 99,
+                85, 146, 174, 126, 40, 101, 242, 37, 108, 169, 228, 152, 63, 124, 87, 59, 131, 192,
+            ]
+        );
+        let tall_resized = resize_rgba_lanczos3(&tall_source, 3, 9, 2, 3).unwrap();
+        assert_eq!(
+            tall_resized,
+            [
+                38, 97, 166, 211, 79, 165, 172, 80, 86, 168, 162, 83, 206, 171, 37, 89, 201, 178,
+                28, 90, 183, 59, 108, 172,
+            ]
         );
     }
 
