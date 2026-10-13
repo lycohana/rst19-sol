@@ -84,6 +84,7 @@ pub mod signed_null_sequence;
 pub mod single_frame_model;
 pub mod single_frame_trail_audit;
 pub mod single_frame_trails;
+pub mod source_artifacts;
 pub mod source_classification;
 pub mod source_geometry_audit;
 pub mod source_group_audit;

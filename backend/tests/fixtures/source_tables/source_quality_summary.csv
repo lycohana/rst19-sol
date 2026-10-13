@@ -1,0 +1,70 @@
+﻿metric,value,definition
+candidate_count,15,NMS 后的候选峰数量
+returned_count,15,已计算源级属性的返回数量
+quality_count,2,通过通量、形状、掩膜和有效性规则的数量
+rejected_count,13,返回但未通过质量规则的数量
+quality_count_support_ge_4,0,诊断口径：质量源中 3×3 PSF 支持像素至少 4 个；不改变 quality_count
+quality_count_support_ge_5,0,诊断口径：质量源中 3×3 PSF 支持像素至少 5 个；不因接近外部数量而自动采用
+background_adu,2.0,全图稳健背景基线
+noise_adu,3.0,全图稳健噪声尺度
+threshold_sigma,,匹配滤波候选阈值
+proposal_mode,,宽筛选提案模式
+proposal_count_gaussian,,Gaussian 算法内 NMS 后提案数
+proposal_count_dog_narrow,,DoG 窄尺度算法内 NMS 后提案数
+proposal_count_dog_broad,,DoG 宽尺度算法内 NMS 后提案数
+proposal_count_starlet_s1,,Starlet 第一尺度算法内 NMS 后提案数
+proposal_count_starlet_s2,,Starlet 第二尺度算法内 NMS 后提案数
+min_distance_px,,候选峰最小间距
+psf_fwhm_px,,Gaussian 匹配滤波 PSF FWHM
+min_flux_snr,,质量层通量 SNR 下限
+negative_overflow_limit,,有符号整型图像测光孔径内的极端负码审计线；不是相机满阱标定
+repeated_high_code_values,,全幅频次异常的高位整型码；只作数据有效性先验，不是饱和标定
+repeated_high_code_min_count,,全幅重复高位码的工程审计最小频次
+close_pair_guarded_source_count,,近邻 Gaussian 双 PSF 证据不足而从质量层降级的源数；候选仍保留
+min_psf_support_pixels,,候选峰中心 3×3 核心中必须超过支持阈值的最少像素数
+truncated,0,是否因显式返回上限截断
+spatial_grid_size,16,空间诊断每轴网格数量
+quality_density_cv,11.269427669584644,16×16 网格质量源计数的变异系数；描述空间不均匀，不等同于灵敏度
+quality_fraction_median,0.125,非空网格中质量通过率中位数
+quality_fraction_min,0.0,非空网格中质量通过率最小值；需结合边缘/掩膜解释
+quality_fraction_max,0.25,非空网格中质量通过率最大值
+feature_class_count,9,互斥首要特征类别数量；类别内仍保留原始重叠 flags
+feature:range_anomaly:candidate_count,2,首要特征类别：数据有效性/范围异常邻域；互斥审计计数
+feature:linear_artifact:candidate_count,1,首要特征类别：线状/拖影候选；互斥审计计数
+feature:masked_or_edge:candidate_count,1,首要特征类别：边缘/掩膜候选；互斥审计计数
+feature:crowded_blend:candidate_count,1,首要特征类别：拥挤/未分辨近邻；互斥审计计数
+feature:spike_or_support:candidate_count,1,首要特征类别：尖峰/PSF 支持不足；互斥审计计数
+feature:weak_or_background:candidate_count,1,首要特征类别：弱通量/背景不确定；互斥审计计数
+feature:shape_outlier:candidate_count,6,首要特征类别：形状异常；互斥审计计数
+feature:compact_quality:candidate_count,1,首要特征类别：质量通过的紧凑候选；互斥审计计数
+feature:other_rejected:candidate_count,1,首要特征类别：其他拒绝候选；互斥审计计数
+feature:range_anomaly:quality_count,0,首要特征类别：数据有效性/范围异常邻域；其中通过质量层的数量
+feature:linear_artifact:quality_count,0,首要特征类别：线状/拖影候选；其中通过质量层的数量
+feature:masked_or_edge:quality_count,0,首要特征类别：边缘/掩膜候选；其中通过质量层的数量
+feature:crowded_blend:quality_count,0,首要特征类别：拥挤/未分辨近邻；其中通过质量层的数量
+feature:spike_or_support:quality_count,0,首要特征类别：尖峰/PSF 支持不足；其中通过质量层的数量
+feature:weak_or_background:quality_count,0,首要特征类别：弱通量/背景不确定；其中通过质量层的数量
+feature:shape_outlier:quality_count,1,首要特征类别：形状异常；其中通过质量层的数量
+feature:compact_quality:quality_count,1,首要特征类别：质量通过的紧凑候选；其中通过质量层的数量
+feature:other_rejected:quality_count,0,首要特征类别：其他拒绝候选；其中通过质量层的数量
+flag:BROAD,5,可重叠的源拒绝/审计标志计数
+flag:CODE_PATTERN,1,可重叠的源拒绝/审计标志计数
+flag:EDGE,1,可重叠的源拒绝/审计标志计数
+flag:INSUFFICIENT_PSF_SUPPORT,1,可重叠的源拒绝/审计标志计数
+flag:LINE_ARTIFACT,2,可重叠的源拒绝/审计标志计数
+flag:LOW_FLUX_SNR,1,可重叠的源拒绝/审计标志计数
+flag:MASKED,1,可重叠的源拒绝/审计标志计数
+flag:NO_SHAPE,1,可重叠的源拒绝/审计标志计数
+flag:SATURATED,2,可重叠的源拒绝/审计标志计数
+flag:SPIKE,1,可重叠的源拒绝/审计标志计数
+flag:UNRESOLVED_BLEND,1,可重叠的源拒绝/审计标志计数
+psf_support_pixels:0,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签
+psf_support_pixels:1,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签
+psf_support_pixels:2,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签
+psf_support_pixels:3,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签
+psf_support_pixels:4,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签
+psf_support_pixels:5,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签
+psf_support_pixels:6,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签
+psf_support_pixels:7,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签
+psf_support_pixels:8,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签
+psf_support_pixels:9,0,质量源的 3×3 PSF 支持像素分布；用于人工抽检，不是独立真值标签

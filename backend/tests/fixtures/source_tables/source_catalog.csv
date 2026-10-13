@@ -1,0 +1,16 @@
+﻿detection_id,x,y,peak_x,peak_y,centroid_shift_px,peak,flux,background,noise,snr,flux_error,flux_snr,filter_snr,proposal_snr,proposal_methods,proposal_scales,nearest_gaussian_px,deblend_delta_bic,deblend_component_snr,repeated_code_count,range_anomaly_pixel_count,repeated_code_values,fwhm,fwhm_x,fwhm_y,ellipticity,sharpness,footprint_pixels,psf_support_pixels,quality_passed,quality_class,feature_class,feature_class_label,flags
+1,1.0,2.0,,,,50.0,100.0,2.0,3.0,10.0,,9.0,,,gaussian,,,,,,,,2.0,,,,,,,False,rejected,range_anomaly,数据有效性/范围异常邻域,SATURATED|LINE_ARTIFACT
+2,2.0,4.0,,,,50.0,100.0,2.0,3.0,6.0,,,,,,,,,,,,,2.0,,,,,,,False,rejected,range_anomaly,数据有效性/范围异常邻域,CODE_PATTERN|SATURATED
+3,3.0,6.0,,,,50.0,100.0,2.0,3.0,3.0,,3.0,,,dog_narrow,,,,,,,,2.0,,,,,,,False,rejected,linear_artifact,线状/拖影候选,LINE_ARTIFACT|MASKED
+4,4.0,8.0,,,,50.0,100.0,2.0,3.0,2.0,,2.0,,,gaussian|dog_narrow|dog_broad,,,,,,,,2.0,,,,,,,False,rejected,masked_or_edge,边缘/掩膜候选,EDGE
+5,5.0,10.0,,,,50.0,100.0,2.0,3.0,8.0,,8.0,,,gaussian,,,,,,,,2.0,,,,,,,False,rejected,crowded_blend,拥挤/未分辨近邻,UNRESOLVED_BLEND
+6,6.0,12.0,,,,50.0,100.0,2.0,3.0,7.0,,7.0,,,dog_narrow,,,,,,,,2.0,,,,,,,False,rejected,spike_or_support,尖峰/PSF 支持不足,SPIKE|INSUFFICIENT_PSF_SUPPORT
+7,7.0,14.0,,,,50.0,100.0,2.0,3.0,5.0,,,,,,,,,,,,,2.0,,,,,,,False,rejected,weak_or_background,弱通量/背景不确定,LOW_FLUX_SNR
+8,8.0,16.0,,,,50.0,100.0,2.0,3.0,20.0,,20.0,,,gaussian,,,,,,,,2.0,,,,,,,True,quality,shape_outlier,形状异常,BROAD
+9,9.0,18.0,,,,50.0,100.0,2.0,3.0,10.0,,10.0,,,gaussian|dog_narrow|dog_broad,,,,,,,,2.0,,,,,,,False,rejected,shape_outlier,形状异常,NO_SHAPE
+10,10.0,20.0,,,,50.0,100.0,2.0,3.0,4.0,,4.0,,,dog_narrow,,,,,,,,2.0,,,,,,,False,rejected,shape_outlier,形状异常,BROAD
+11,11.0,22.0,,,,50.0,100.0,2.0,3.0,8.0,,8.0,,,starlet_s1,,,,,,,,2.0,,,,,,,False,rejected,shape_outlier,形状异常,BROAD
+12,12.0,24.0,,,,50.0,100.0,2.0,3.0,1.0,,,,,,,,,,,,,2.0,,,,,,,False,rejected,shape_outlier,形状异常,BROAD
+13,13.0,26.0,,,,50.0,100.0,2.0,3.0,7.0,,7.0,,,gaussian|dog_narrow,,,,,,,,2.0,,,,,,,False,rejected,shape_outlier,形状异常,BROAD
+14,14.0,28.0,,,,50.0,100.0,2.0,3.0,15.0,,15.0,,,gaussian,,,,,,,,2.0,,,,,,,True,quality,compact_quality,质量通过的紧凑候选,
+15,15.0,30.0,,,,50.0,100.0,2.0,3.0,12.0,,12.0,,,,,,,,,,,2.0,,,,,,,False,rejected,other_rejected,其他拒绝候选,
