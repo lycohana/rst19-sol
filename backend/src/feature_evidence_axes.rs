@@ -534,6 +534,87 @@ pub fn run_desktop(args: &[String], job_dir: &Path) -> Result<Value> {
     }))
 }
 
+pub fn run_cli(args: &[String]) -> Result<()> {
+    if args
+        .iter()
+        .any(|argument| argument == "-h" || argument == "--help")
+    {
+        println!("从 feature_evidence_matrix.csv 汇总候选位置与质量响应的证据轴关系\n\nUsage: rst19-feature-evidence-axes MATRIX [--out-dir DIR]");
+        return Ok(());
+    }
+
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let job_dir = std::env::temp_dir().join(format!(
+        "rst19-feature-evidence-axes-cli-{}-{nonce}",
+        std::process::id()
+    ));
+    let outcome = run_desktop(args, &job_dir);
+    let _ = fs::remove_dir_all(&job_dir);
+    let response = outcome?;
+    let output_dir = response
+        .get("out_dir")
+        .and_then(Value::as_str)
+        .ok_or("native CLI response is missing out_dir")?;
+    let result = response
+        .get("result")
+        .and_then(Value::as_object)
+        .ok_or("native CLI response is missing result")?;
+    let rows = result
+        .get("rows")
+        .and_then(Value::as_array)
+        .ok_or("native CLI response is missing rows")?;
+    let sensitivity_rows = result
+        .get("sensitivity_rows")
+        .and_then(Value::as_array)
+        .ok_or("native CLI response is missing sensitivity_rows")?;
+    let configurations = sensitivity_rows
+        .iter()
+        .filter_map(|row| row.get("configuration").and_then(Value::as_str))
+        .collect::<BTreeSet<_>>();
+    println!("rst19-feature-evidence-axes: 结果已写入 {output_dir}");
+    println!(
+        "rst19-feature-evidence-axes: 敏感性配置 {} 组",
+        configurations.len()
+    );
+    println!(
+        "{}",
+        result
+            .get("conclusion")
+            .and_then(Value::as_str)
+            .ok_or("native CLI response is missing conclusion")?
+    );
+    for row in rows {
+        let feature_class = row
+            .get("feature_class")
+            .and_then(Value::as_str)
+            .ok_or("native CLI row is missing feature_class")?;
+        let pattern = row
+            .get("evidence_axis_pattern")
+            .and_then(Value::as_str)
+            .ok_or("native CLI row is missing evidence_axis_pattern")?;
+        let candidate_count = row
+            .get("candidate_persistent_count")
+            .and_then(Value::as_i64)
+            .ok_or("native CLI row is missing candidate_persistent_count")?;
+        let quality_count = row
+            .get("quality_response_count")
+            .and_then(Value::as_i64)
+            .ok_or("native CLI row is missing quality_response_count")?;
+        let conditional = row
+            .get("quality_response_given_candidate_persistent_fraction")
+            .and_then(Value::as_f64)
+            .map(|value| format!("{value:.4}"))
+            .unwrap_or_else(|| "NA".to_owned());
+        println!(
+            "{feature_class}: pattern={pattern} candidate_persistent={candidate_count} quality_response={quality_count} Q|P={conditional}"
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -577,6 +658,19 @@ mod tests {
         );
         assert_eq!(result.rows.len(), 5);
         assert_eq!(result.sensitivity_rows.len(), 25);
+
+        let cli_output = root.join("cli-output");
+        run_cli(&[
+            matrix.to_string_lossy().into_owned(),
+            "--out-dir".into(),
+            cli_output.to_string_lossy().into_owned(),
+        ])
+        .unwrap();
+        assert!(cli_output.join("feature_evidence_axes.csv").is_file());
+        assert!(cli_output
+            .join("feature_evidence_axes_sensitivity.csv")
+            .is_file());
+        assert!(cli_output.join("feature_evidence_axes.json").is_file());
         let _ = fs::remove_dir_all(root);
     }
 }
