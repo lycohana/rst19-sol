@@ -29,6 +29,10 @@ name = "rst19-gaia-merge"
 path = "src/bin/rst19-gaia-merge.rs"
 
 [[bin]]
+name = "rst19-format-audit"
+path = "src/bin/rst19-format-audit.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 

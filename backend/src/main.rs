@@ -573,6 +573,20 @@ fn execute(request: Value) -> Result<Value> {
                     .as_dict(),
             )
         }
+        "audit.format_paths" => {
+            let input_path = request["input_path"]
+                .as_str()
+                .or_else(|| request["path"].as_str())
+                .ok_or("missing input_path")?;
+            let extreme_fraction = request
+                .get("extreme_fraction")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.9);
+            rst19_core::format_audit::run_format_audit(
+                std::path::Path::new(input_path),
+                extreme_fraction,
+            )
+        }
         "audit.pair_mechanism_context" => {
             let catalog_path = request["catalog_path"]
                 .as_str()

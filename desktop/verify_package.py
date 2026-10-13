@@ -298,6 +298,13 @@ def verify(package: Path, out: Path) -> dict:
     help_result = subprocess.run([str(single_frame_cli), "--help"], capture_output=True, text=True,
                                  encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True)
     assert "Usage: rst19 " in help_result.stdout, help_result.stdout
+    format_audit_cli = package / "runtime" / (
+        "rst19-format-audit.exe" if os.name == "nt" else "rst19-format-audit"
+    )
+    assert format_audit_cli.is_file(), "Rust format audit CLI is missing from the package"
+    format_help = subprocess.run([str(format_audit_cli), "--help"], capture_output=True, text=True,
+                                 encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True)
+    assert "Usage: rst19-format-audit " in format_help.stdout, format_help.stdout
     attitude_cli = package / "runtime" / ("rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit")
     assert attitude_cli.is_file(), "Rust auxiliary attitude audit CLI is missing from the package"
     geometry_cli = package / "runtime" / (

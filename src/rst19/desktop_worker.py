@@ -38,6 +38,9 @@ def registry() -> dict[str, str]:
     # `rst19` is a Rust executable. Keep its parser only as the desktop form
     # schema; the desktop backend dispatches the calculation to Rust.
     entries.setdefault("rst19", "rst19.cli:main")
+    # The format audit is Rust-only. Keep its form contract here until the
+    # remaining Python catalog bootstrap is replaced by native Rust metadata.
+    entries.setdefault("rst19-format-audit", "native:rst19-format-audit")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -46,12 +49,30 @@ def module_for(name: str):
     target = registry().get(name)
     if target is None:
         raise ValueError(f"未知研究工具：{name}")
+    if target.startswith("native:"):
+        raise ValueError(f"{name} 已迁移到 Rust，必须由 native worker 执行")
     return importlib.import_module(target.split(":")[0])
 
 
 def catalog() -> list[dict]:
     tools = []
-    for name in registry():
+    for name, target in registry().items():
+        if target == "native:rst19-format-audit":
+            tools.append({"name": name,
+                          "description": "审计 FITS 尺寸、字节序、特殊值和辅助位置—速度自洽性，不修改检测器",
+                          "fields": [
+                              {"key": "input_path", "flag": "", "help": "单个 FITS 或包含 FITS 的目录",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "extreme_fraction", "flag": "--extreme-fraction",
+                               "help": "统计有符号 16 bit 正负极值的相对阈值，默认 0.9",
+                               "required": False, "default": 0.9, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "out_dir", "flag": "--out-dir", "help": "产物输出目录",
+                               "required": False, "default": "tmp/format-audit", "choices": [],
+                               "kind": "value", "nargs": None, "path": True, "repeat": False},
+                          ]})
+            continue
         module = module_for(name)
         parser = module.build_parser()
         fields = []

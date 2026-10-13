@@ -2,7 +2,7 @@
 
 面向太空天基图像星图识别、星图分析与创新分析赛项的方案仓库。
 
-桌面前端现迁移到 **Rust 原生界面**，科学计算继续复用 Python 算法。`rst19-gui` / `rst19-ui` 启动 Rust 工作台，旧工作台可通过 `rst19-tk` 打开。使用 `python desktop/build.py` 可生成内置 Python、NumPy、SciPy、Pillow 与中文字体的完整运行 ZIP；具体使用、开发及 Windows/macOS/Linux 构建说明见 [Rust 桌面说明](desktop/README.md)。
+桌面前端已使用 **Rust 原生界面**，目标是将全部后端运算也迁入 Rust，并从发布运行时移除 Python。迁移尚未完成：未迁移的工具仍由包内 Python 环境执行。`rst19-gui` / `rst19-ui` 启动 Rust 工作台，旧工作台可通过 `rst19-tk` 打开；进度见 [Rust 迁移清单](backend/migration.json) 与 [桌面说明](desktop/README.md)。
 
 当前仓库已完成比赛规则、数据格式和本地数据集边界整理，并开始落地可离线运行的 Python 基线。本文档和 `doc/` 只把已经从比赛材料、实际 FITS 文件或可复现实验中确认的信息写成事实，不把规划内容写成已完成能力。
 
@@ -151,7 +151,7 @@ rst19-aux-audit doc/00-项目资料/原始数据 --out-dir tmp/auxiliary-attitud
 格式说明与实际 FITS 的只读核验可运行：
 
 ```powershell
-rst19-format-audit doc/00-项目资料/原始数据 --out-dir tmp/format-audit-code-pattern-current-v1
+cargo run --release --manifest-path backend/Cargo.toml --bin rst19-format-audit -- doc/00-项目资料/原始数据 --out-dir tmp/format-audit-code-pattern-current-v1
 ```
 
 该审计确认实际文件的尺寸、文件长度、`BITPIX`/字节序、缩放卡片、`BLANK` 卡片、首行辅助区域和负值/极值统计，并用 `DATE-OBS` 检查位置—速度内部自洽性；它不把 `-1` 或极值自动判为坏像素/饱和，也不改变默认检测读取。当前 15 帧均为合法 `4096×4096`、大端 `>i2`，`BLANK` 为 `0/15`，精确 `-1` 合计 `2,185`。输出为 `tmp/format-audit-code-pattern-current-v1/format_audit_frames.csv`、`format_audit_velocity.csv` 和 `format_audit.json`。

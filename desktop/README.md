@@ -1,6 +1,6 @@
 # RST19 Rust 原生桌面
 
-前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-source-group-audit`、`rst19-source-group-sensitivity`、`rst19-source-separation-audit`、`rst19-source-peak-consistency`、`rst19-source-proposal-peak-audit`、`rst19-source-proposal-temporal-audit`、`rst19-source-geometry-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-wcs-validation`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。独立 `rst19-wcs-validation` 命令也随发布包提供原生 Rust 二进制。
+前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-format-audit`、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-source-group-audit`、`rst19-source-group-sensitivity`、`rst19-source-separation-audit`、`rst19-source-peak-consistency`、`rst19-source-proposal-peak-audit`、`rst19-source-proposal-temporal-audit`、`rst19-source-geometry-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-wcs-validation`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。独立 `rst19-format-audit` 与 `rst19-wcs-validation` 命令也随发布包提供原生 Rust 二进制。
 桌面 Rust worker 还提供人工阈值反馈 JSONL 的追加与读取操作，作为人工复核记录保存。
 光度颜色模型敏感性通过 `photometry.calibration.sensitivity` 原生操作执行；在缺少已声明光度系统/波段时保留 `DIAGNOSTIC_ONLY` 状态，不把诊断提升为标准测光结论。
 完整发布包暂时同时包含 Rust 原生 worker 与 Python/NumPy/SciPy 环境，以及中文字体；使用者无需安装 Python、Rust、Node.js 或浏览器。
@@ -44,7 +44,7 @@ python desktop/build.py
 ```
 
 构建脚本创建专用 `.build-venv`，安装固定版本的科学与打包依赖，构建 Rust release，
-构建 Rust 桌面、原生计算 worker、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-relative-photometry` 和 `rst19-wcs-validation` 命令，使用 PyInstaller onedir 打包尚未迁移的 Python 工具环境，下载可再分发的 Noto 中文字体与许可证，
+构建 Rust 桌面、原生计算 worker、`rst19-format-audit`、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-relative-photometry` 和 `rst19-wcs-validation` 命令，使用 PyInstaller onedir 打包尚未迁移的 Python 工具环境，下载可再分发的 Noto 中文字体与许可证，
 验证全部算法工具能在冻结环境中导入，再输出 `dist/RST19-平台-架构-时间/` 与 ZIP。
 包中包含运行环境版本与逐文件 SHA-256 清单。每次构建使用新目录，不清理旧包或用户数据。
 
@@ -70,7 +70,7 @@ desktop/target/release/rst19-desktop.exe --data-dir "doc/00-项目资料/原始�
 
 截图验证的是界面实际启动、环境就绪和 FITS 预览，不等同于全部科学流程验收。
 添加 `--smoke-analysis` 可让截图检查通过 Rust worker 执行当前目录首帧检测并绘制结果叠加；建议使用小型合成 FITS。
-`verify_package.py` 禁用外部 Python 搜索路径，检查冻结环境的工具导入、Rust 单帧分析／辅助姿态审计／相对测光（含独立 CLI、JSONL 与桌面工具路由）／序列核心 FITS 检测、常规与高速质量点轨迹关联、匹配滤波候选提议状态／静态候选共识轨迹与原图门控／静态质量轨迹相对测光／序列证据简报 JSONL／旗标统计／旗标交互审计／质量门余量审计／效应量审计／类别上下文审计／字段相关性审计／近邻机制上下文、窗口敏感性、像素拓扑、通量/峰值比、跨证据轴、源组、组半径敏感性、质心/峰值最近邻分离、raw FITS 局部峰值一致性、提议器来源峰审计与时序审计、人工反馈 JSONL／预览路由、原图不变与包内 SHA-256。`sequence.analyze_core` 目前包含原生检测、点轨迹、匹配滤波候选关联、原图强制测光/质量/运动门控、重复静态候选共识及其原图门控审计、固定 -1 哨兵影响审计；通过门控的候选仍是图像平面算法证据；可选相对测光从稳定静态质量轨迹生成样本并走原生拟合器，完整多帧结果组装仍需单独验收。
+`verify_package.py` 禁用外部 Python 搜索路径，检查冻结环境的工具导入、Rust 单帧分析／格式与辅助姿态审计 CLI／相对测光（含独立 CLI、JSONL 与桌面工具路由）／序列核心 FITS 检测、常规与高速质量点轨迹关联、匹配滤波候选提议状态／静态候选共识轨迹与原图门控／静态质量轨迹相对测光／序列证据简报 JSONL／旗标统计／旗标交互审计／质量门余量审计／效应量审计／类别上下文审计／字段相关性审计／近邻机制上下文、窗口敏感性、像素拓扑、通量/峰值比、跨证据轴、源组、组半径敏感性、质心/峰值最近邻分离、raw FITS 局部峰值一致性、提议器来源峰审计与时序审计、人工反馈 JSONL／预览路由、原图不变与包内 SHA-256。`sequence.analyze_core` 目前包含原生检测、点轨迹、匹配滤波候选关联、原图强制测光/质量/运动门控、重复静态候选共识及其原图门控审计、固定 -1 哨兵影响审计；通过门控的候选仍是图像平面算法证据；可选相对测光从稳定静态质量轨迹生成样本并走原生拟合器，完整多帧结果组装仍需单独验收。
 平台运行与完整 15 帧分析需要各自的实际验证记录。
 
 库文档：[eframe](https://docs.rs/eframe/0.31.1/eframe/)、[PyInstaller 打包选项](https://pyinstaller.org/en/stable/usage.html)。

@@ -32,6 +32,18 @@ def test_catalog_covers_all_scientific_entry_points():
     assert len(tools) == 78
     assert all("gui" not in target and "launcher" not in target for target in entries.values())
     assert all(tool["fields"] for tool in tools)
+    format_audit = next(tool for tool in tools if tool["name"] == "rst19-format-audit")
+    assert entries["rst19-format-audit"] == "native:rst19-format-audit"
+    assert [field["key"] for field in format_audit["fields"]] == [
+        "input_path", "extreme_fraction", "out_dir"
+    ]
+
+
+def test_format_audit_cannot_fall_back_to_python(tmp_path):
+    request = {"operation": "tool", "tool": "rst19-format-audit", "args": [],
+               "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
 
 
 def test_frame_job_preserves_science_and_raw_data(tmp_path):
