@@ -22,6 +22,7 @@ pub struct Job {
 
 fn uses_native_worker(request: &Value) -> bool {
     request["operation"] == "preview"
+        || request["operation"] == "psf.empirical.estimate"
         || matches!(
             request["operation"].as_str(),
             Some(
@@ -276,6 +277,9 @@ mod tests {
     fn preview_single_frame_and_sequence_core_use_the_native_worker_route() {
         assert!(uses_native_worker(&json!({"operation":"preview"})));
         assert!(uses_native_worker(
+            &json!({"operation":"psf.empirical.estimate"})
+        ));
+        assert!(uses_native_worker(
             &json!({"operation":"feedback.load","path":"feedback.jsonl"})
         ));
         assert!(uses_native_worker(
@@ -442,6 +446,11 @@ mod tests {
         let request = json!({"operation":"tool","tool":"rst19"});
         let error = backend.executable_for(Some(&request)).unwrap_err();
         assert!(error.contains("Rust native worker"));
+        let psf_request = json!({"operation":"psf.empirical.estimate"});
+        assert!(backend
+            .executable_for(Some(&psf_request))
+            .unwrap_err()
+            .contains("Rust native worker"));
         assert!(backend
             .executable_for(None)
             .unwrap_err()

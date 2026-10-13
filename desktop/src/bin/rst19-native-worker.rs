@@ -38,6 +38,9 @@ fn string_args(request: &Value) -> Result<Vec<String>, String> {
 }
 
 fn run(request: Value) -> Result<Value, String> {
+    if request["operation"] == "psf.empirical.estimate" {
+        return rst19_core::empirical_psf::handle_request(&request);
+    }
     if request["operation"] == "feedback.append" {
         let path = PathBuf::from(request["path"].as_str().ok_or("missing path")?);
         let payload = request.get("feedback").ok_or("missing feedback")?;
@@ -104,7 +107,7 @@ fn run(request: Value) -> Result<Value, String> {
     }
     if request["operation"] != "tool" {
         return Err(
-            "Rust desktop worker only accepts preview, sensitivity, feedback, or native tools"
+            "Rust desktop worker only accepts preview, empirical PSF estimation, sensitivity, feedback, or native tools"
                 .into(),
         );
     }
@@ -1018,6 +1021,12 @@ mod tests {
         }))
         .unwrap_err();
         assert_eq!(error, "a FITS input path is required");
+    }
+
+    #[test]
+    fn empirical_psf_operation_is_dispatched_to_rust() {
+        let error = run(json!({"operation":"psf.empirical.estimate"})).unwrap_err();
+        assert_eq!(error, "missing FITS path");
     }
 
     #[test]

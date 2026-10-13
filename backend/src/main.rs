@@ -52,6 +52,7 @@ fn execute(request: Value) -> Result<Value> {
                 .ok_or("missing output_path")?;
             rst19_core::catalog_merge::merge_catalog_csvs(&paths, std::path::Path::new(output_path))
         }
+        "psf.empirical.estimate" => rst19_core::empirical_psf::handle_request(&request),
         "audit.feature_evidence_axes" => {
             let matrix_path = request["matrix_path"]
                 .as_str()
@@ -1648,4 +1649,16 @@ fn main() {
     };
     println!("{event}");
     std::process::exit(code);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::execute;
+    use serde_json::json;
+
+    #[test]
+    fn empirical_psf_request_is_handled_by_the_native_engine() {
+        let error = execute(json!({"operation":"psf.empirical.estimate"})).unwrap_err();
+        assert_eq!(error, "missing FITS path");
+    }
 }
