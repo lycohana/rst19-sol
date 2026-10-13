@@ -792,6 +792,48 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         .and_then(Value::as_f64)
         .unwrap_or_else(|| FastPointOptions::default().min_flux_snr);
     let frame_options = sequence_frame_options(request)?;
+    let temporal_proposal_mode = request
+        .get("temporal_proposal_mode")
+        .and_then(Value::as_str)
+        .unwrap_or("median")
+        .trim()
+        .to_ascii_lowercase();
+    if !matches!(temporal_proposal_mode.as_str(), "median" | "coadd" | "both") {
+        return Err("temporal_proposal_mode must be 'median', 'coadd', or 'both'".into());
+    }
+    let candidate_consensus_min_snr =
+        optional_request_f64(request, "candidate_consensus_min_snr")?.unwrap_or(15.0);
+    let temporal_reference_min_snr = optional_request_f64(request, "temporal_reference_min_snr")?
+        .unwrap_or(candidate_consensus_min_snr);
+    let temporal_candidate_min_snr = optional_request_f64(request, "temporal_candidate_min_snr")?
+        .unwrap_or((0.5 * candidate_consensus_min_snr).max(5.0));
+    if candidate_consensus_min_snr <= 0.0 {
+        return Err("candidate_consensus_min_snr must be positive".into());
+    }
+    if temporal_candidate_min_snr <= 0.0 || temporal_candidate_min_snr > candidate_consensus_min_snr
+    {
+        return Err(
+            "temporal_candidate_min_snr must be positive and no greater than candidate_consensus_min_snr"
+                .into(),
+        );
+    }
+    if temporal_reference_min_snr <= 0.0 || temporal_reference_min_snr > candidate_consensus_min_snr
+    {
+        return Err(
+            "temporal_reference_min_snr must be positive and no greater than candidate_consensus_min_snr"
+                .into(),
+        );
+    }
+    let temporal_multiscale = match request.get("temporal_multiscale") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(enabled)) => *enabled,
+        Some(_) => return Err("temporal_multiscale must be a boolean".into()),
+    };
+    let temporal_min_psf_correlation =
+        optional_request_f64(request, "temporal_min_psf_correlation")?.unwrap_or(0.8);
+    if !(0.0 < temporal_min_psf_correlation && temporal_min_psf_correlation <= 1.0) {
+        return Err("temporal_min_psf_correlation must be between 0 and 1".into());
+    }
     let mut frames = Vec::with_capacity(paths.len());
     let mut frame_analyses = Vec::with_capacity(paths.len());
     let mut frame_analysis_objects = Vec::with_capacity(paths.len());
@@ -869,9 +911,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             .collect::<Vec<_>>();
         quality_frames.push(detections);
         frame_analyses.push(analysis.as_dict());
-        if paths.len() >= 3 {
-            frame_analysis_objects.push(analysis);
-        }
+        frame_analysis_objects.push(analysis);
     }
 
     let mut tracking_options =
@@ -1003,13 +1043,70 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         )?;
         fast_point_tracks.append(&mut measured_candidate_tracks);
     }
+    let shifts: Vec<[f64; 2]> = serde_json::from_value(tracking["cumulative_shifts"].clone())
+        .map_err(|error| error.to_string())?;
+    let mut temporal_candidate_frames = vec![Vec::<[f32; 5]>::new(); paths.len()];
+    let mut temporal_reference_candidate_count = 0usize;
+    let mut temporal_coadd_candidate_count = 0usize;
+    if paths.len() >= 2 {
+        let median_result = crate::sequence_temporal::temporal_reference_candidates_from_analyses(
+            &frame_analysis_objects,
+            &shifts,
+            false,
+            3.0,
+            frame_options.detection.measurement.psf_fwhm,
+            temporal_reference_min_snr,
+            temporal_multiscale,
+        )?;
+        temporal_reference_candidate_count =
+            median_result["candidate_count"].as_u64().unwrap_or(0) as usize;
+        temporal_candidate_frames =
+            serde_json::from_value(median_result["candidate_peak_frames"].clone())
+                .map_err(|error| error.to_string())?;
+        if matches!(temporal_proposal_mode.as_str(), "coadd" | "both") {
+            let coadd_result =
+                crate::sequence_temporal::temporal_reference_candidates_from_analyses(
+                    &frame_analysis_objects,
+                    &shifts,
+                    true,
+                    3.0,
+                    frame_options.detection.measurement.psf_fwhm,
+                    temporal_reference_min_snr,
+                    temporal_multiscale,
+                )?;
+            temporal_coadd_candidate_count =
+                coadd_result["candidate_count"].as_u64().unwrap_or(0) as usize;
+            let coadd_frames: Vec<Vec<[f32; 5]>> =
+                serde_json::from_value(coadd_result["candidate_peak_frames"].clone())
+                    .map_err(|error| error.to_string())?;
+            if temporal_proposal_mode == "coadd" {
+                temporal_candidate_frames = coadd_frames;
+            } else {
+                for (median, coadd) in temporal_candidate_frames.iter_mut().zip(coadd_frames) {
+                    median.extend(coadd);
+                }
+            }
+        }
+    }
+    let candidate_peak_frames = frame_analysis_objects
+        .iter()
+        .zip(&temporal_candidate_frames)
+        .map(|(analysis, temporal_rows)| {
+            let raw_rows = analysis
+                .detection
+                .candidate_peaks
+                .iter()
+                .map(|[x, y, snr]| json!([x, y, snr, 0.0, null]))
+                .collect::<Vec<_>>();
+            let temporal_rows = temporal_rows
+                .iter()
+                .map(|row| json!(row))
+                .collect::<Vec<_>>();
+            let rows: Vec<Value> = raw_rows.into_iter().chain(temporal_rows).collect();
+            json!(rows)
+        })
+        .collect::<Vec<_>>();
     let mut candidate_consensus = if paths.len() >= 3 {
-        let shifts: Vec<[f64; 2]> = serde_json::from_value(tracking["cumulative_shifts"].clone())
-            .map_err(|error| error.to_string())?;
-        let candidate_peak_frames = frame_analysis_objects
-            .iter()
-            .map(|analysis| json!(analysis.detection.candidate_peaks))
-            .collect::<Vec<_>>();
         crate::sequence_consensus::candidate_consensus_from_analyses(
             &candidate_peak_frames,
             &shifts,
@@ -1029,10 +1126,10 @@ pub fn handle_request(request: &Value) -> Result<Value> {
                         .unwrap_or(2.0)
                 }),
             tracking["max_motion_fit_rms_px"].as_f64().unwrap_or(0.75),
-            optional_request_f64(request, "candidate_consensus_min_snr")?.unwrap_or(15.0),
-            optional_request_f64(request, "temporal_candidate_min_snr")?,
-            optional_request_f64(request, "temporal_reference_min_snr")?,
-            optional_request_f64(request, "temporal_min_psf_correlation")?.unwrap_or(0.8),
+            candidate_consensus_min_snr,
+            Some(temporal_candidate_min_snr),
+            Some(temporal_reference_min_snr),
+            temporal_min_psf_correlation,
             &frame_analysis_objects,
         )?
     } else {
@@ -1050,6 +1147,8 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     tracking["candidate_consensus_count"] = json!(candidate_consensus_count);
     tracking["candidate_consensus_audit"] = candidate_consensus["audit"].clone();
     tracking["fast_point_motion_count"] = json!(fast_point_tracks.len());
+    tracking["temporal_reference_candidate_count"] = json!(temporal_reference_candidate_count);
+    tracking["temporal_coadd_candidate_count"] = json!(temporal_coadd_candidate_count);
     let relative_photometry_result = if relative_photometry {
         Some(fit_sequence_relative_photometry(
             &quality_frames,
@@ -1065,12 +1164,15 @@ pub fn handle_request(request: &Value) -> Result<Value> {
 
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
-        "scope":"frame_detection_quality_tracks_fast_point_motion_candidate_proposals_and_candidate_consensus",
+        "scope":"frame_detection_quality_tracks_temporal_reference_candidates_fast_point_motion_candidate_proposals_and_candidate_consensus",
         "frame_analyses":frame_analyses,
         "tracking":tracking,
         "fast_point_tracks":fast_point_tracks,
         "fast_candidate_proposals":fast_candidate_proposals,
         "candidate_consensus":candidate_consensus,
+        "temporal_reference_candidate_count":temporal_reference_candidate_count,
+        "temporal_coadd_candidate_count":temporal_coadd_candidate_count,
+        "temporal_proposal_mode":temporal_proposal_mode,
         "relative_photometry":relative_photometry_result,
         "fixed_sentinel_audit":fixed_sentinel_audit,
         "fixed_sentinel_impact_audit":fixed_sentinel_impact_audit,

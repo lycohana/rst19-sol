@@ -21,6 +21,9 @@ from rst19.detection import _working_mask, build_background_model  # noqa: E402
 from rst19.fits import auxiliary_mask, read_fits  # noqa: E402
 from rst19.pipeline import analyze_frame  # noqa: E402
 from rst19.sequence import (  # noqa: E402
+    _registered_median_reference,
+    _registered_coadd_reference,
+    _temporal_reference_candidate_frames,
     _fit_sequence_relative_photometry,
     _observation_times_seconds,
     _stack_forced_frame_measure_batch,
@@ -361,9 +364,71 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         candidate_python_track_rows,
         "candidate.fast_point_tracks",
     )
+    candidate_temporal_reference = _registered_median_reference(
+        candidate_analyses,
+        candidate_tracking_result.cumulative_shifts,
+    )
+    candidate_temporal_frames, candidate_temporal_count = _temporal_reference_candidate_frames(
+        candidate_analyses,
+        candidate_tracking_result.cumulative_shifts,
+        candidate_temporal_reference,
+        psf_fwhm=3.0,
+        min_candidate_snr=15.0,
+    )
+    candidate_coadd_reference = _registered_coadd_reference(
+        candidate_analyses,
+        candidate_tracking_result.cumulative_shifts,
+    )
+    candidate_coadd_frames, candidate_coadd_count = _temporal_reference_candidate_frames(
+        candidate_analyses,
+        candidate_tracking_result.cumulative_shifts,
+        candidate_coadd_reference,
+        psf_fwhm=3.0,
+        min_candidate_snr=15.0,
+    )
+
+    def merge_candidate_rows(temporal_frames: Any) -> list[np.ndarray]:
+        merged = []
+        for analysis, temporal_rows in zip(candidate_analyses, temporal_frames, strict=True):
+            raw = np.asarray(analysis.detection.candidate_peaks, dtype=np.float32)
+            if raw.size == 0:
+                base_rows = np.empty((0, 3), dtype=np.float32)
+            elif raw.ndim == 2 and raw.shape[1] >= 3:
+                base_rows = raw[:, :3]
+            else:
+                base_rows = np.empty((0, 3), dtype=np.float32)
+            if base_rows.size:
+                base_rows = np.column_stack(
+                    (
+                        base_rows[:, :3],
+                        np.zeros(base_rows.shape[0], dtype=np.float32),
+                        np.full(base_rows.shape[0], np.nan, dtype=np.float32),
+                    )
+                ).astype(np.float32, copy=False)
+            if temporal_rows.size == 0:
+                merged.append(base_rows)
+            elif base_rows.size == 0:
+                merged.append(temporal_rows)
+            else:
+                merged.append(
+                    np.vstack((base_rows, temporal_rows)).astype(np.float32, copy=False)
+                )
+        return merged
+
+    candidate_consensus_frames = merge_candidate_rows(candidate_temporal_frames)
+    compare(
+        candidate_result["temporal_reference_candidate_count"],
+        candidate_temporal_count,
+        "candidate.temporal_reference_candidate_count",
+    )
+    compare(
+        candidate_result["temporal_coadd_candidate_count"],
+        0,
+        "candidate.temporal_coadd_candidate_count",
+    )
     candidate_consensus_audit: dict[str, int] = {}
     candidate_consensus_tracks = _candidate_consensus_tracks(
-        [analysis.detection.candidate_peaks for analysis in candidate_analyses],
+        candidate_consensus_frames,
         candidate_tracking_result.cumulative_shifts,
         candidate_tracking_result.tracks,
         frame_analyses=candidate_analyses,
@@ -410,6 +475,130 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         len(candidate_consensus_rows),
         "candidate.tracking.candidate_consensus_count",
     )
+    for mode, temporal_rows in (
+        ("coadd", candidate_coadd_frames),
+        (
+            "both",
+            tuple(
+                np.vstack((median_rows, coadd_rows)).astype(np.float32, copy=False)
+                if median_rows.size and coadd_rows.size
+                else coadd_rows
+                if coadd_rows.size
+                else median_rows
+                for median_rows, coadd_rows in zip(
+                    candidate_temporal_frames,
+                    candidate_coadd_frames,
+                    strict=True,
+                )
+            ),
+        ),
+    ):
+        mode_result = invoke(engine.resolve(), {**candidate_request, "temporal_proposal_mode": mode})
+        compare(
+            mode_result["temporal_reference_candidate_count"],
+            candidate_temporal_count,
+            f"candidate.{mode}.temporal_reference_candidate_count",
+        )
+        compare(
+            mode_result["temporal_coadd_candidate_count"],
+            candidate_coadd_count,
+            f"candidate.{mode}.temporal_coadd_candidate_count",
+        )
+        expected_mode_audit: dict[str, int] = {}
+        expected_mode_tracks = _candidate_consensus_tracks(
+            merge_candidate_rows(temporal_rows),
+            candidate_tracking_result.cumulative_shifts,
+            candidate_tracking_result.tracks,
+            frame_analyses=candidate_analyses,
+            frame_times=candidate_times,
+            link_radius_px=candidate_tracking_result.link_radius_px,
+            min_presence=candidate_tracking_result.min_presence,
+            persistent_min_presence=candidate_tracking_result.persistent_min_presence,
+            motion_min_displacement_px=(
+                candidate_tracking_result.effective_motion_min_displacement_px or 2.0
+            ),
+            max_motion_fit_rms_px=candidate_tracking_result.max_motion_fit_rms_px,
+            min_candidate_snr=15.0,
+            temporal_candidate_min_snr=7.5,
+            temporal_reference_min_snr=15.0,
+            temporal_min_psf_correlation=0.8,
+            line_artifact_frames=[
+                analysis.detection.line_artifact_coordinates
+                for analysis in candidate_analyses
+            ],
+            audit_sink=expected_mode_audit,
+        )
+        expected_mode_rows = []
+        for index, track in enumerate(expected_mode_tracks):
+            row = track.as_dict()
+            row["track_id"] = (
+                len(candidate_tracking_result.tracks)
+                + len(candidate_quality_fast_tracks)
+                + len(candidate_python_tracks)
+                + index
+            )
+            expected_mode_rows.append(row)
+        actual_mode_rows = mode_result["candidate_consensus"]["tracks"]
+        if mode == "both":
+            actual_without_tie_scores = json.loads(json.dumps(actual_mode_rows))
+            expected_without_tie_scores = json.loads(json.dumps(expected_mode_rows))
+            for track_index, (actual_track, expected_track) in enumerate(
+                zip(actual_without_tie_scores, expected_without_tie_scores, strict=True)
+            ):
+                actual_track.pop("evidence_level", None)
+                expected_track.pop("evidence_level", None)
+                for point_index, (actual_point, expected_point) in enumerate(
+                    zip(actual_track["points"], expected_track["points"], strict=True)
+                ):
+                    actual_point.pop("detection_id", None)
+                    expected_point.pop("detection_id", None)
+                    frame_index = int(actual_point["frame_index"])
+                    x = float(actual_point["x"])
+                    y = float(actual_point["y"])
+                    available_scores = []
+                    raw = np.asarray(
+                        candidate_analyses[frame_index].detection.candidate_peaks,
+                        dtype=np.float64,
+                    )
+                    for rows in (raw, candidate_temporal_frames[frame_index], candidate_coadd_frames[frame_index]):
+                        for row in rows:
+                            if abs(float(row[0]) - x) <= 1e-6 and abs(float(row[1]) - y) <= 1e-6:
+                                available_scores.append(float(row[2]))
+                    actual_score = actual_point.get("candidate_snr")
+                    if actual_score is not None and not any(
+                        math.isclose(float(actual_score), score, rel_tol=5e-7, abs_tol=5e-7)
+                        for score in available_scores
+                    ):
+                        raise AssertionError(
+                            f"candidate.both track {track_index} point {point_index} score does not come from an input candidate"
+                        )
+                    actual_point["candidate_snr"] = None
+                    expected_point["candidate_snr"] = None
+            compare(
+                actual_without_tie_scores,
+                expected_without_tie_scores,
+                "candidate.both.candidate_consensus.tracks_without_duplicate_row_tie_fields",
+            )
+        else:
+            compare(
+                actual_mode_rows,
+                expected_mode_rows,
+                f"candidate.{mode}.candidate_consensus.tracks",
+            )
+        actual_mode_audit = mode_result["candidate_consensus"]["audit"]
+        if mode == "both":
+            if actual_mode_audit.get("accepted") != expected_mode_audit.get("accepted"):
+                raise AssertionError("candidate.both accepted track count differs")
+            actual_mode_audit = dict(actual_mode_audit)
+            expected_mode_audit = dict(expected_mode_audit)
+            for key in ("accepted_candidate_consensus", "accepted_temporal_reference"):
+                actual_mode_audit.pop(key, None)
+                expected_mode_audit.pop(key, None)
+        compare(
+            actual_mode_audit,
+            expected_mode_audit,
+            f"candidate.{mode}.candidate_consensus.audit",
+        )
     for proposal_index, proposal in enumerate(candidate_stage["proposals"]):
         for observation_index, observation in enumerate(proposal["observations"]):
             frame_index = observation["frame_index"]
@@ -480,6 +669,8 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         "fast_candidate_original_pixel_measurement_and_quality_gates_verified": True,
         "fast_candidate_tracks_match_python_fields": True,
         "candidate_consensus_tracks_and_audit_match_python": True,
+        "temporal_reference_candidate_recovery_matches_python": True,
+        "both_mode_duplicate_row_tie_note": "SciPy and Rust may select different source rows for exact-coordinate raw/temporal duplicates; track positions and classifications match, while evidence labels, synthetic detection IDs, per-point scores, and acceptance-channel counts can differ; every Rust score is checked against an input candidate row",
         "candidate_consensus_count": len(candidate_consensus_rows),
         "fast_candidate_proposal_count": candidate_stage["proposal_count"],
         "fast_candidate_accepted_track_count": candidate_stage["accepted_track_count"],
@@ -487,7 +678,7 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         "relative_photometry_status": candidate_result["relative_photometry"]["status"],
         "fixed_sentinel_and_impact_audits_match_python": True,
         "observation_times_seconds": frame_times,
-        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, matched-filter candidate association with original-pixel forced measurement and quality gates, raw-image-gated static candidate consensus, optional relative-photometry orchestration, and fixed-sentinel impact audits; temporal-reference recovery, trail auditing, and stack recovery remain outside this core operation",
+        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, registered temporal-reference candidate recovery, matched-filter candidate association with original-pixel forced measurement and quality gates, raw-image-gated static candidate consensus, optional relative-photometry orchestration, and fixed-sentinel impact audits; trail auditing and stack recovery remain outside this core operation",
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report

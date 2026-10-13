@@ -1,5 +1,6 @@
 //! Temporal-reference candidate proposals before ordinary frame consensus.
 use crate::{filtering32, statistics32, Result};
+use crate::{models::PixelData, pipeline::FrameAnalysis};
 use serde_json::{json, Value};
 
 #[derive(Debug, Clone)]
@@ -10,12 +11,48 @@ struct Plane {
 }
 
 #[derive(Debug, Clone)]
-struct Frame {
-    image: Plane,
+enum FrameImage<'a> {
+    Owned(Plane),
+    Borrowed {
+        pixels: &'a PixelData,
+        height: usize,
+        width: usize,
+    },
+}
+
+impl FrameImage<'_> {
+    fn height(&self) -> usize {
+        match self {
+            Self::Owned(plane) => plane.height,
+            Self::Borrowed { height, .. } => *height,
+        }
+    }
+
+    fn width(&self) -> usize {
+        match self {
+            Self::Owned(plane) => plane.width,
+            Self::Borrowed { width, .. } => *width,
+        }
+    }
+
+    fn value(&self, index: usize) -> Option<f32> {
+        match self {
+            Self::Owned(plane) => plane.values.get(index).copied(),
+            Self::Borrowed { pixels, .. } => {
+                (index < pixels.len()).then(|| pixels.value(index) as f32)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Frame<'a> {
+    image: FrameImage<'a>,
     background: f32,
     noise: f32,
     mask_zero_pixels: bool,
     saturation_level: f32,
+    min_psf_support_pixels: usize,
 }
 
 fn numeric(value: &Value) -> Option<f64> {
@@ -66,7 +103,7 @@ fn parse_plane(value: &Value, label: &str) -> Result<Plane> {
     })
 }
 
-fn parse_frame(value: &Value) -> Result<Frame> {
+fn parse_frame(value: &Value) -> Result<Frame<'static>> {
     let image = parse_plane(
         value
             .get("image")
@@ -86,7 +123,7 @@ fn parse_frame(value: &Value) -> Result<Frame> {
     }
     let parameters = value.get("parameters").unwrap_or(&Value::Null);
     Ok(Frame {
-        image,
+        image: FrameImage::Owned(image),
         background,
         noise: noise.max(f32::EPSILON),
         mask_zero_pixels: numeric_flag(parameters.get("mask_zero_pixels")),
@@ -94,7 +131,45 @@ fn parse_frame(value: &Value) -> Result<Frame> {
             .get("saturation_level")
             .and_then(numeric)
             .unwrap_or(-1.0) as f32,
+        min_psf_support_pixels: parameters
+            .get("min_psf_support_pixels")
+            .and_then(Value::as_u64)
+            .unwrap_or(3)
+            .max(3) as usize,
     })
+}
+
+fn frames_from_analyses(analyses: &[FrameAnalysis]) -> Result<Vec<Frame<'_>>> {
+    analyses
+        .iter()
+        .map(|analysis| {
+            let height = analysis.frame.height;
+            let width = analysis.frame.width;
+            if width.checked_mul(height) != Some(analysis.frame.data.len()) {
+                return Err("FITS image dimensions do not match pixel data".into());
+            }
+            let parameters = &analysis.detection.parameters;
+            Ok(Frame {
+                image: FrameImage::Borrowed {
+                    pixels: &analysis.frame.data,
+                    height,
+                    width,
+                },
+                background: analysis.detection.background as f32,
+                noise: (analysis.detection.noise as f32).max(f32::EPSILON),
+                mask_zero_pixels: numeric_flag(parameters.get("mask_zero_pixels")),
+                saturation_level: parameters
+                    .get("saturation_level")
+                    .and_then(numeric)
+                    .unwrap_or(-1.0) as f32,
+                min_psf_support_pixels: parameters
+                    .get("min_psf_support_pixels")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(3)
+                    .max(3) as usize,
+            })
+        })
+        .collect()
 }
 
 fn empty_result(frame_count: usize) -> Value {
@@ -117,32 +192,34 @@ fn temporal_fwhms(psf_fwhm: f64, multiscale: bool) -> Vec<f64> {
     values
 }
 
-fn pixel_valid(frame: &Frame, x: isize, y: isize) -> bool {
+fn pixel_valid(frame: &Frame<'_>, x: isize, y: isize) -> bool {
     if x < 0
         || y < 0
-        || x >= frame.image.width as isize
-        || y >= frame.image.height as isize
+        || x >= frame.image.width() as isize
+        || y >= frame.image.height() as isize
         || (y == 0 && x < 104)
     {
         return false;
     }
     let Some(value) = frame
         .image
-        .values
-        .get(y as usize * frame.image.width + x as usize)
+        .value(y as usize * frame.image.width() + x as usize)
     else {
         return false;
     };
     value.is_finite()
-        && (!frame.mask_zero_pixels || *value != 0.0)
-        && (frame.saturation_level <= 0.0 || *value < frame.saturation_level)
+        && (!frame.mask_zero_pixels || value != 0.0)
+        && (frame.saturation_level <= 0.0 || value < frame.saturation_level)
 }
 
-fn pixel(frame: &Frame, x: isize, y: isize) -> f32 {
-    if x < 0 || y < 0 || x >= frame.image.width as isize || y >= frame.image.height as isize {
+fn pixel(frame: &Frame<'_>, x: isize, y: isize) -> f32 {
+    if x < 0 || y < 0 || x >= frame.image.width() as isize || y >= frame.image.height() as isize {
         return f32::NAN;
     }
-    frame.image.values[y as usize * frame.image.width + x as usize]
+    frame
+        .image
+        .value(y as usize * frame.image.width() + x as usize)
+        .unwrap_or(f32::NAN)
 }
 
 fn reference_shape_supported(
@@ -244,7 +321,7 @@ struct ForcedResponse<'a> {
 }
 
 fn propose_frame_rows(
-    frame: &Frame,
+    frame: &Frame<'_>,
     shifts: [f64; 2],
     config: &ForcedResponse<'_>,
 ) -> Vec<[f32; 5]> {
@@ -256,9 +333,9 @@ fn propose_frame_rows(
         let x_base = (reference_point[0] + shifts[0] as f32).round_ties_even() as isize;
         let y_base = (reference_point[1] + shifts[1] as f32).round_ties_even() as isize;
         if x_base < patch_radius
-            || x_base >= frame.image.width as isize - patch_radius
+            || x_base >= frame.image.width() as isize - patch_radius
             || y_base < patch_radius
-            || y_base >= frame.image.height as isize - patch_radius
+            || y_base >= frame.image.height() as isize - patch_radius
         {
             continue;
         }
@@ -385,6 +462,19 @@ pub fn temporal_reference_candidates(request: &Value) -> Result<Value> {
     }
     let reference = parse_plane(&request["reference"], "reference")?;
     let options = request.get("options").unwrap_or(&Value::Null);
+    temporal_candidates_from_frames(&reference, &frames, &cumulative_shifts, options)
+}
+
+fn temporal_candidates_from_frames(
+    reference: &Plane,
+    frames: &[Frame<'_>],
+    cumulative_shifts: &[[f64; 2]],
+    options: &Value,
+) -> Result<Value> {
+    let empty = empty_result(frames.len());
+    if frames.len() < 2 || cumulative_shifts.len() != frames.len() {
+        return Ok(empty);
+    }
     let psf_fwhm = options.get("psf_fwhm").and_then(numeric).unwrap_or(3.0);
     let min_candidate_snr = options
         .get("min_candidate_snr")
@@ -492,16 +582,9 @@ pub fn temporal_reference_candidates(request: &Value) -> Result<Value> {
     if candidates.is_empty() {
         return Ok(empty);
     }
-    let first_parameters = frames
+    let required_support = frames
         .first()
-        .and_then(|_| raw_frames.first())
-        .and_then(|frame| frame.get("parameters"))
-        .unwrap_or(&Value::Null);
-    let required_support = first_parameters
-        .get("min_psf_support_pixels")
-        .and_then(Value::as_u64)
-        .unwrap_or(3)
-        .max(3) as usize;
+        .map_or(3, |frame| frame.min_psf_support_pixels);
     let shape_radius = (3.5 * temporal_sigmas.iter().copied().fold(0.0, f64::max))
         .ceil()
         .max(4.0) as usize;
@@ -509,7 +592,7 @@ pub fn temporal_reference_candidates(request: &Value) -> Result<Value> {
         .iter()
         .filter(|point| {
             reference_shape_supported(
-                &reference,
+                reference,
                 background,
                 noise,
                 point[0] as usize,
@@ -547,13 +630,44 @@ pub fn temporal_reference_candidates(request: &Value) -> Result<Value> {
     };
     let candidate_peak_frames = frames
         .iter()
-        .zip(&cumulative_shifts)
+        .zip(cumulative_shifts.iter())
         .map(|(frame, shift)| propose_frame_rows(frame, *shift, &forced_response))
         .collect::<Vec<_>>();
     Ok(json!({
         "candidate_peak_frames":candidate_peak_frames,
         "candidate_count":reference_points.len()
     }))
+}
+
+/// Build temporal-reference candidate proposals directly from analyzed FITS frames.
+/// Pixel buffers remain borrowed and are never expanded into JSON arrays.
+pub fn temporal_reference_candidates_from_analyses(
+    analyses: &[FrameAnalysis],
+    cumulative_shifts: &[[f64; 2]],
+    coadd: bool,
+    clip_sigma: f64,
+    psf_fwhm: f64,
+    min_candidate_snr: f64,
+    multiscale: bool,
+) -> Result<Value> {
+    let frames = frames_from_analyses(analyses)?;
+    if frames.len() < 2 {
+        return Ok(empty_result(frames.len()));
+    }
+    if coadd && clip_sigma <= 0.0 {
+        return Err("clip_sigma must be positive".into());
+    }
+    let Some(reference) =
+        build_registered_reference(&frames, cumulative_shifts, coadd, clip_sigma)?
+    else {
+        return Ok(empty_result(frames.len()));
+    };
+    let options = json!({
+        "psf_fwhm":psf_fwhm,
+        "min_candidate_snr":min_candidate_snr,
+        "temporal_multiscale":multiscale,
+    });
+    temporal_candidates_from_frames(&reference, &frames, cumulative_shifts, &options)
 }
 
 fn parse_shifts(value: &Value, frame_count: usize) -> Result<Vec<[f64; 2]>> {
@@ -581,28 +695,45 @@ fn parse_shifts(value: &Value, frame_count: usize) -> Result<Vec<[f64; 2]>> {
         .collect()
 }
 
-fn bilinear_sample(plane: &Plane, x: f32, y: f32) -> f32 {
+fn valid_reference_pixel(frame: &Frame<'_>, x: usize, y: usize) -> Option<f32> {
+    if y == 0 && x < 104 {
+        return None;
+    }
+    let value = frame.image.value(y * frame.image.width() + x)?;
+    (value.is_finite()
+        && (!frame.mask_zero_pixels || value != 0.0)
+        && (frame.saturation_level <= 0.0 || value < frame.saturation_level))
+        .then_some(value)
+}
+
+fn bilinear_sample_frame(frame: &Frame<'_>, x: f32, y: f32) -> f32 {
+    let width = frame.image.width();
+    let height = frame.image.height();
     if !x.is_finite()
         || !y.is_finite()
         || x < 0.0
         || y < 0.0
-        || x > (plane.width - 1) as f32
-        || y > (plane.height - 1) as f32
+        || x > (width - 1) as f32
+        || y > (height - 1) as f32
     {
         return f32::NAN;
     }
     let x0 = x.floor() as usize;
     let y0 = y.floor() as usize;
-    let x1 = (x0 + 1).min(plane.width - 1);
-    let y1 = (y0 + 1).min(plane.height - 1);
+    let x1 = (x0 + 1).min(width - 1);
+    let y1 = (y0 + 1).min(height - 1);
+    let (Some(a), Some(b), Some(c), Some(d)) = (
+        valid_reference_pixel(frame, x0, y0),
+        valid_reference_pixel(frame, x1, y0),
+        valid_reference_pixel(frame, x0, y1),
+        valid_reference_pixel(frame, x1, y1),
+    ) else {
+        return f32::NAN;
+    };
     let dx = (x - x0 as f32) as f64;
     let dy = (y - y0 as f32) as f64;
-    let a = plane.values[y0 * plane.width + x0] as f64;
-    let b = plane.values[y0 * plane.width + x1] as f64;
-    let c = plane.values[y1 * plane.width + x0] as f64;
-    let d = plane.values[y1 * plane.width + x1] as f64;
-    let top = a + (b - a) * dx;
-    let bottom = c + (d - c) * dx;
+    let top = a as f64 + (b as f64 - a as f64) * dx;
+    let bottom = c as f64 + (d as f64 - c as f64) * dx;
     (top + (bottom - top) * dy) as f32
 }
 
@@ -616,30 +747,24 @@ fn median_f32(values: &mut [f32]) -> f32 {
     }
 }
 
-fn reference_rows(request: &Value, coadd: bool) -> Result<Value> {
-    let raw_frames = request["frames"]
-        .as_array()
-        .ok_or_else(|| "frames must be an array".to_owned())?;
-    if raw_frames.len() < 2 {
-        return Ok(json!({"reference":null}));
+fn build_registered_reference(
+    frames: &[Frame<'_>],
+    shifts: &[[f64; 2]],
+    coadd: bool,
+    clip_sigma: f64,
+) -> Result<Option<Plane>> {
+    if frames.len() < 2 || shifts.len() != frames.len() {
+        return Ok(None);
     }
-    let shifts = parse_shifts(&request["cumulative_shifts"], raw_frames.len())?;
-    let options = request.get("options").unwrap_or(&Value::Null);
-    let clip_sigma = options.get("clip_sigma").and_then(numeric).unwrap_or(3.0);
-    if coadd && clip_sigma <= 0.0 {
-        return Err("clip_sigma must be positive".into());
-    }
-    let frames = raw_frames
-        .iter()
-        .map(parse_frame)
-        .collect::<Result<Vec<_>>>()?;
-    let height = frames[0].image.height;
-    let width = frames[0].image.width;
-    if frames
-        .iter()
-        .any(|frame| frame.image.height != height || frame.image.width != width)
+    let height = frames[0].image.height();
+    let width = frames[0].image.width();
+    if width == 0
+        || height == 0
+        || frames
+            .iter()
+            .any(|frame| frame.image.height() != height || frame.image.width() != width)
     {
-        return Ok(json!({"reference":null}));
+        return Ok(None);
     }
     let direct_reference = shifts
         .iter()
@@ -647,39 +772,17 @@ fn reference_rows(request: &Value, coadd: bool) -> Result<Value> {
         .map(|value| value.abs())
         .fold(0.0f64, f64::max)
         <= 0.75;
-    let mut planes = Vec::with_capacity(frames.len());
-    for frame in &frames {
-        let mut values = frame.image.values.clone();
-        for y in 0..height {
-            for x in 0..width {
-                let index = y * width + x;
-                let value = values[index];
-                if (y == 0 && x < 104)
-                    || !value.is_finite()
-                    || (frame.mask_zero_pixels && value == 0.0)
-                    || (frame.saturation_level > 0.0 && value >= frame.saturation_level)
-                {
-                    values[index] = f32::NAN;
-                }
-            }
-        }
-        planes.push(Plane {
-            values,
-            height,
-            width,
-        });
-    }
     let mut output = vec![f32::NAN; height * width];
     let mut samples = Vec::with_capacity(frames.len());
     for y in 0..height {
         for x in 0..width {
             samples.clear();
-            for (frame_index, plane) in planes.iter().enumerate() {
+            for (frame_index, frame) in frames.iter().enumerate() {
                 let value = if direct_reference {
-                    plane.values[y * width + x]
+                    valid_reference_pixel(frame, x, y).unwrap_or(f32::NAN)
                 } else {
-                    bilinear_sample(
-                        plane,
+                    bilinear_sample_frame(
+                        frame,
                         x as f32 + shifts[frame_index][0] as f32,
                         y as f32 + shifts[frame_index][1] as f32,
                     )
@@ -717,8 +820,17 @@ fn reference_rows(request: &Value, coadd: bool) -> Result<Value> {
             }
         }
     }
-    let rows = output
-        .chunks_exact(width)
+    Ok(Some(Plane {
+        values: output,
+        height,
+        width,
+    }))
+}
+
+fn reference_value(reference: &Plane) -> Value {
+    let rows = reference
+        .values
+        .chunks_exact(reference.width)
         .map(|row| {
             row.iter()
                 .map(|value| {
@@ -731,7 +843,28 @@ fn reference_rows(request: &Value, coadd: bool) -> Result<Value> {
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    Ok(json!({"reference":rows}))
+    json!(rows)
+}
+
+fn reference_rows(request: &Value, coadd: bool) -> Result<Value> {
+    let raw_frames = request["frames"]
+        .as_array()
+        .ok_or_else(|| "frames must be an array".to_owned())?;
+    if raw_frames.len() < 2 {
+        return Ok(json!({"reference":null}));
+    }
+    let shifts = parse_shifts(&request["cumulative_shifts"], raw_frames.len())?;
+    let options = request.get("options").unwrap_or(&Value::Null);
+    let clip_sigma = options.get("clip_sigma").and_then(numeric).unwrap_or(3.0);
+    if coadd && clip_sigma <= 0.0 {
+        return Err("clip_sigma must be positive".into());
+    }
+    let frames = raw_frames
+        .iter()
+        .map(parse_frame)
+        .collect::<Result<Vec<_>>>()?;
+    let reference = build_registered_reference(&frames, &shifts, coadd, clip_sigma)?;
+    Ok(json!({"reference":reference.as_ref().map(reference_value)}))
 }
 
 /// Build the registered, pixel-wise temporal median reference.
