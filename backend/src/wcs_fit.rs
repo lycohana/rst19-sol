@@ -51,6 +51,28 @@ impl AffineWcsCalibration {
             offset_px: self.offset_px,
         }
     }
+    pub fn refined_wcs(&self) -> TangentPlaneWcs {
+        TangentPlaneWcs {
+            center_ra_deg: self.center_ra_deg,
+            center_dec_deg: self.center_dec_deg,
+            pixel_scale_arcsec: self.plate_scale_arcsec_per_pixel,
+            crpix_x: self.offset_px[0],
+            crpix_y: self.offset_px[1],
+            rotation_deg: self.rotation_deg,
+            parity: self.parity,
+        }
+    }
+    pub fn world_to_pixel(&self, ra_deg: f64, dec_deg: f64) -> Result<(f64, f64)> {
+        self.projection().world_to_pixel(ra_deg, dec_deg)
+    }
+    pub fn pixel_velocity_to_tangent_arcsec(&self, dx_px: f64, dy_px: f64) -> Result<(f64, f64)> {
+        self.projection()
+            .pixel_velocity_to_tangent_arcsec(dx_px, dy_px)
+    }
+    pub fn angular_speed_arcsec_per_s(&self, dx_px_per_s: f64, dy_px_per_s: f64) -> Result<f64> {
+        self.projection()
+            .angular_speed_arcsec_per_s(dx_px_per_s, dy_px_per_s)
+    }
     pub fn as_dict(&self) -> Value {
         json!({
             "center_ra_deg":self.center_ra_deg,

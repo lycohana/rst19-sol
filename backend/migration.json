@@ -3118,7 +3118,7 @@
         "AffineWCSCalibration.as_dict",
         "fit_affine_wcs_from_matches"
       ],
-      "migration_status": "in_progress"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.wcs_validation",
@@ -3515,5 +3515,6 @@
   "native_calibration_sensitivity": "zero/linear/quadratic color-model refits reuse the native photometric calibration quality gates; per-source calibrated magnitudes, spread, faintest-source ranking, model usability and claim boundaries match Python fields within 2e-10 relative and 2e-11 absolute tolerance; JSONL engine and desktop worker routes verified; Windows package route verified without external Python",
   "native_sequence_brief": "sequence.brief returns field-identical structured findings and Chinese display text through the Rust engine and desktop worker; three timestamp, regression, fallback, candidate, mosaic and empty-result scenarios match Python at 5e-7 tolerance; Windows package worker passes with external Python search disabled; macOS/Linux acceptance pending",
   "native_sequence_core": "sequence.analyze_core is available in the Rust JSONL engine and desktop worker; three synthetic timestamped FITS frames match Python FrameAnalysis fields, time axis, and selected track/registration fields at 5e-7; registered temporal-reference median/coadd candidate recovery is integrated from borrowed Rust FITS pixel buffers and parity-checked in median, coadd, and both modes; exact-coordinate raw/temporal duplicate rows can select different non-semantic provenance fields and per-point candidate scores because SciPy and Rust nearest-neighbor tie resolution differs, while track positions/classifications and score membership are verified; a max_sources-truncated moving source passes matched-filter, raw-image measurement, shape/quality, and motion gates; fixed-sentinel impact audits and optional stable-static-track relative photometry match Python; trail/stack orchestration and public rst19-sequence compatibility remain pending, so the public rst19-sequence tool still uses Python",
+  "native_wcs_model": "TangentPlaneWcs TAN projection and AffineWcsCalibration fitting, projection, refined TAN compatibility model, velocity conversion, angular speed and serialized fields are implemented in Rust; direct Rust worker operation wcs.affine.refined is routed by the desktop backend; WCS fit and sequence validation fixtures match Python",
   "native_wcs_validation": "rst19-wcs-validation desktop worker and packaged standalone Rust CLI execute FITS detection, offline catalog matching, per-frame affine WCS validation, and JSON/CSV/PNG artifact generation; worker and CLI artifacts match byte-for-byte; Windows package route is verified without external Python"
 }

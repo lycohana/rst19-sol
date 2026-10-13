@@ -67,10 +67,43 @@ fn affine_wcs_fit_and_rejection_match_python_reference() {
                 case["label"]
             );
         } else {
+            let calibration = actual.unwrap();
             compare(
-                &actual.unwrap().as_dict(),
+                &calibration.as_dict(),
                 &case["expected"],
                 case["label"].as_str().unwrap(),
+            );
+            let refined = calibration.refined_wcs().validated().unwrap();
+            compare(
+                &serde_json::to_value(refined).unwrap(),
+                &serde_json::json!({
+                    "center_ra_deg":case["expected"]["center_ra_deg"],
+                    "center_dec_deg":case["expected"]["center_dec_deg"],
+                    "pixel_scale_arcsec":case["expected"]["plate_scale_arcsec_per_pixel"],
+                    "crpix_x":case["expected"]["offset_px"][0],
+                    "crpix_y":case["expected"]["offset_px"][1],
+                    "rotation_deg":case["expected"]["rotation_deg"],
+                    "parity":case["expected"]["parity"],
+                }),
+                "refined_wcs",
+            );
+            let projection = calibration.projection();
+            let center = (reference.center_ra_deg, reference.center_dec_deg);
+            assert_eq!(
+                calibration.world_to_pixel(center.0, center.1).unwrap(),
+                projection.world_to_pixel(center.0, center.1).unwrap()
+            );
+            assert_eq!(
+                calibration
+                    .pixel_velocity_to_tangent_arcsec(0.4, -0.1)
+                    .unwrap(),
+                projection
+                    .pixel_velocity_to_tangent_arcsec(0.4, -0.1)
+                    .unwrap()
+            );
+            assert_eq!(
+                calibration.angular_speed_arcsec_per_s(0.4, -0.1).unwrap(),
+                projection.angular_speed_arcsec_per_s(0.4, -0.1).unwrap()
             );
         }
     }

@@ -1007,6 +1007,12 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "wcs.affine.refined" => {
+            let calibration: rst19_core::wcs_fit::AffineWcsCalibration =
+                serde_json::from_value(request["calibration"].clone())
+                    .map_err(|e| e.to_string())?;
+            Ok(json!({"wcs":calibration.refined_wcs().validated()?}))
+        }
         "wcs.validate.matches" => {
             let frame_matches: Vec<Vec<rst19_core::matching::CatalogMatch>> =
                 serde_json::from_value(request["frame_matches"].clone())

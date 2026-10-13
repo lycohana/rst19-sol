@@ -32,6 +32,7 @@ fn uses_native_worker(request: &Value) -> bool {
                     | "sequence.brief"
                     | "sequence.analyze_core"
                     | "sequence.stack_forced_measure_batch"
+                    | "wcs.affine.refined"
             )
         )
         || (request["operation"] == "tool"
@@ -266,6 +267,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"sequence.stack_forced_measure_batch"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"wcs.affine.refined"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19"})
