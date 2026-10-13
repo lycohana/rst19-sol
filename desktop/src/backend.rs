@@ -30,6 +30,7 @@ fn uses_native_worker(request: &Value) -> bool {
                     | "photometry.calibration.sensitivity"
                     | "photometry.relative.fit"
                     | "sequence.brief"
+                    | "sequence.analyze_core"
                     | "sequence.stack_forced_measure_batch"
             )
         )
@@ -240,7 +241,7 @@ impl Drop for Job {
 mod tests {
     use super::*;
     #[test]
-    fn preview_and_single_frame_analysis_use_the_native_worker_route() {
+    fn preview_single_frame_and_sequence_core_use_the_native_worker_route() {
         assert!(uses_native_worker(&json!({"operation":"preview"})));
         assert!(uses_native_worker(
             &json!({"operation":"feedback.load","path":"feedback.jsonl"})
@@ -255,6 +256,9 @@ mod tests {
             &json!({"operation":"photometry.relative.fit"})
         ));
         assert!(uses_native_worker(&json!({"operation":"sequence.brief"})));
+        assert!(uses_native_worker(
+            &json!({"operation":"sequence.analyze_core"})
+        ));
         assert!(uses_native_worker(
             &json!({"operation":"sequence.stack_forced_measure_batch"})
         ));

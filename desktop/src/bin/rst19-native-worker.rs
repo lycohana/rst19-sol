@@ -86,6 +86,9 @@ fn run(request: Value) -> Result<Value, String> {
     if request["operation"] == "sequence.brief" {
         return rst19_core::sequence_brief::handle_request(&request);
     }
+    if request["operation"] == "sequence.analyze_core" {
+        return rst19_core::sequence_pipeline::handle_request(&request);
+    }
     if request["operation"] != "tool" {
         return Err(
             "Rust desktop worker only accepts preview, sensitivity, feedback, or native tools"

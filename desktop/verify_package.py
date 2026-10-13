@@ -443,6 +443,22 @@ def verify(package: Path, out: Path) -> dict:
     assert sequence_brief["brief"]["duration_s"] == 2.0
     assert "没有形成运动候选" in sequence_brief["brief"]["headline"]
     assert "图像几何" in sequence_brief["text"]
+    sequence_core_request = {
+        "operation": "sequence.analyze_core",
+        "paths": [str(frame.resolve()), str(frame.resolve())],
+    }
+    sequence_core_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(sequence_core_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=120, check=True,
+    )
+    sequence_core_events = [json.loads(line) for line in sequence_core_response.stdout.splitlines()]
+    assert len(sequence_core_events) == 1 and sequence_core_events[0]["ok"]
+    sequence_core = sequence_core_events[0]["payload"]
+    assert sequence_core["schema"] == "rst19.sequence.core.v1"
+    assert sequence_core["shared_background_model"] is True
+    assert sequence_core["tracking"]["frame_count"] == 2
+    assert len(sequence_core["frame_analyses"]) == 2
     catalog = out / "source catalog.csv"
     make_feature_catalog(catalog)
 
@@ -1309,6 +1325,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-proposal-temporal-audit",
                   "rst19-source-geometry-audit",
                   "rst19-relative-photometry",
+                  "sequence core FITS detection/tracking",
                   "sequence evidence brief JSONL",
                   "manual threshold feedback JSONL",
               ],
@@ -1346,6 +1363,12 @@ def verify(package: Path, out: Path) -> dict:
         "native_worker_operation_verified": True,
         "timestamp_duration_and_empty_candidate_summary_verified": True,
         "external_python_search_disabled": True,
+    }
+    report["sequence_core"] = {
+        "native_worker_operation_verified": True,
+        "shared_background_and_two_frame_tracking_verified": True,
+        "external_python_search_disabled": True,
+        "scope": "frame detection and quality-track association only",
     }
     report["source_geometry_audit"] = {
         "packaged_native_binary": geometry_cli.name,

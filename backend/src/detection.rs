@@ -279,6 +279,79 @@ pub fn detect_sources(
         detect_typed::<f64>(data, provided, height, width, options, background_model)
     }
 }
+
+/// Build the same reusable local background model used by the sequence fast
+/// path without running detection. The pilot model is intentionally based on
+/// the first frame only and is consumed by later per-frame analyses.
+pub fn build_background_model(
+    data: &PixelData,
+    provided: Option<&[bool]>,
+    height: usize,
+    width: usize,
+    options: &DetectionOptions,
+) -> Result<(Vec<f64>, Vec<f64>)> {
+    if height.checked_mul(width) != Some(data.len())
+        || height == 0
+        || width == 0
+        || provided.is_some_and(|mask| mask.len() != data.len())
+    {
+        return Err("invalid background-model image or mask shape".into());
+    }
+    if options.use_float32 && !matches!(data, PixelData::F64(_)) {
+        build_background_typed::<f32>(data, provided, height, width, options)
+    } else {
+        build_background_typed::<f64>(data, provided, height, width, options)
+    }
+}
+
+fn build_background_typed<T: Calculation>(
+    data: &PixelData,
+    provided: Option<&[bool]>,
+    height: usize,
+    width: usize,
+    options: &DetectionOptions,
+) -> Result<(Vec<f64>, Vec<f64>)> {
+    validate(options)?;
+    let numeric: Vec<T> = (0..data.len())
+        .map(|index| T::from_f64(data.value(index)))
+        .collect();
+    let base_mask: Vec<_> = numeric
+        .iter()
+        .enumerate()
+        .map(|(index, value)| !value.finite() || provided.is_some_and(|mask| mask[index]))
+        .collect();
+    let (global_background, _) = T::stats(&numeric, Some(&base_mask), 3.0, 4, 1_000_000)?;
+    let (effective, _, _) = working_mask_typed(
+        data,
+        &numeric,
+        provided,
+        global_background,
+        options.mask_zero_pixels,
+        options.measurement.saturation_level,
+    )?;
+    let (background, noise) = T::stats(&numeric, Some(&effective), 3.0, 4, 1_000_000)?;
+    let (background_map, noise_map) = T::background(
+        &numeric,
+        &effective,
+        height,
+        width,
+        BackgroundOptions {
+            box_size: options.background_box_size,
+            fallback: Some((background, noise)),
+            iterations: if options.measurement.refine_local_background {
+                4
+            } else {
+                2
+            },
+            sample_limit: options.background_sample_limit,
+        },
+    )?;
+    Ok((
+        background_map.into_iter().map(T::to_f64).collect(),
+        noise_map.into_iter().map(T::to_f64).collect(),
+    ))
+}
+
 fn detect_typed<T: Calculation>(
     data: &PixelData,
     provided: Option<&[bool]>,
