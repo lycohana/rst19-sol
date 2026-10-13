@@ -74,6 +74,7 @@ def build() -> None:
               "--bin", "rst19-pair-pixel-topology",
               "--bin", "rst19-photometric-report",
               "--bin", "rst19-pair-support-audit",
+              "--bin", "rst19-feature-parameter-sensitivity",
               "--bin", "rst19-signed-null-audit", "--bin", "rst19-signed-null-sequence"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
@@ -129,6 +130,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / photometric_report, package / "runtime" / photometric_report)
     pair_support_audit = "rst19-pair-support-audit.exe" if os.name == "nt" else "rst19-pair-support-audit"
     shutil.copy2(ROOT / "backend/target/release" / pair_support_audit, package / "runtime" / pair_support_audit)
+    feature_parameter_sensitivity = "rst19-feature-parameter-sensitivity.exe" if os.name == "nt" else "rst19-feature-parameter-sensitivity"
+    shutil.copy2(ROOT / "backend/target/release" / feature_parameter_sensitivity, package / "runtime" / feature_parameter_sensitivity)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"

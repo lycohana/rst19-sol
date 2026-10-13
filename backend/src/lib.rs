@@ -26,6 +26,7 @@ pub mod feature_gate_margin;
 pub mod feature_gate_route;
 pub mod feature_gate_temporal_route;
 pub mod feature_hard_negative;
+pub mod feature_parameter_sensitivity;
 pub mod feature_psf_leaveout;
 pub mod feature_raw_evidence_audit;
 pub mod feature_spatial_context;

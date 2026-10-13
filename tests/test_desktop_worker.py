@@ -84,6 +84,12 @@ def test_catalog_covers_all_scientific_entry_points():
                                      "match_radius_px", "threshold_sigma", "min_distance", "psf_fwhm",
                                      "background_box_size", "min_flux_snr", "min_psf_support_pixels",
                                      "proposal_mode", "keep_linear_artifacts", "out_dir"],
+        "rst19-feature-parameter-sensitivity": ["path", "threshold_levels", "flux_snr_levels",
+                                                "baseline_threshold_sigma", "baseline_min_flux_snr",
+                                                "min_distance", "aperture_radius", "psf_fwhm",
+                                                "background_box_size", "background_sample_limit",
+                                                "min_psf_support_pixels", "proposal_mode", "max_sources",
+                                                "association_radius_px", "out_dir"],
     }
     for tool_name, expected_fields in migrated_tools.items():
         tool = next(item for item in tools if item["name"] == tool_name)
@@ -114,6 +120,13 @@ def test_photometric_report_cannot_fall_back_to_python(tmp_path):
 
 def test_pair_support_audit_cannot_fall_back_to_python(tmp_path):
     request = {"operation": "tool", "tool": "rst19-pair-support-audit", "args": [],
+               "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+def test_feature_parameter_sensitivity_cannot_fall_back_to_python(tmp_path):
+    request = {"operation": "tool", "tool": "rst19-feature-parameter-sensitivity", "args": [],
                "out_dir": str(tmp_path)}
     with pytest.raises(ValueError, match="必须由 native worker 执行"):
         run(request)

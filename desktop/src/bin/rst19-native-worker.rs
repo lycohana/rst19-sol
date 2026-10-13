@@ -239,6 +239,28 @@ fn run(request: Value) -> Result<Value, String> {
         output_path(&mut args, &out_dir);
         return rst19_core::pair_support_audit::run_desktop(&args);
     }
+    if request["tool"] == "rst19-feature-parameter-sensitivity" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::feature_parameter_sensitivity::run_desktop(&args);
+    }
     if request["tool"] == "rst19-aperture-peak-ratio" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -927,6 +949,12 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| { tool["name"] == "rst19-pair-support-audit" && tool["native"] == true }));
+        assert!(tools.iter().any(|tool| {
+            tool["name"] == "rst19-feature-parameter-sensitivity" && tool["native"] == true
+        }));
+        assert!(tools.iter().any(|tool| {
+            tool["name"] == "rst19-feature-audit-replicates" && tool["native"] == false
+        }));
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-sequence" && tool["native"] == false));
@@ -966,6 +994,23 @@ mod tests {
         }))
         .unwrap_err();
         assert_eq!(error, "data_dir is required");
+        let _ = fs::remove_dir_all(out_dir);
+    }
+
+    #[test]
+    fn feature_parameter_sensitivity_is_dispatched_to_rust() {
+        let out_dir = std::env::temp_dir().join(format!(
+            "rst19-feature-parameter-sensitivity-empty-{}",
+            std::process::id()
+        ));
+        let error = run(json!({
+            "operation":"tool",
+            "tool":"rst19-feature-parameter-sensitivity",
+            "args":[],
+            "out_dir":out_dir
+        }))
+        .unwrap_err();
+        assert_eq!(error, "a FITS input path is required");
         let _ = fs::remove_dir_all(out_dir);
     }
 

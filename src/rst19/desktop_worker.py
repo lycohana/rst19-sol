@@ -55,6 +55,7 @@ def registry() -> dict[str, str]:
     entries.setdefault("rst19-temporal-codes", "native:rst19-temporal-codes")
     entries.setdefault("rst19-photometric-report", "native:rst19-photometric-report")
     entries.setdefault("rst19-pair-support-audit", "native:rst19-pair-support-audit")
+    entries.setdefault("rst19-feature-parameter-sensitivity", "native:rst19-feature-parameter-sensitivity")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -464,6 +465,32 @@ def catalog() -> list[dict]:
                               {"key": key, "flag": flag, "help": "", "required": required,
                                "default": default, "choices": choices, "kind": kind, "nargs": 0 if kind == "bool" else None,
                                "path": is_path, "toggle_value": True if kind == "bool" else None, "repeat": False}
+                              for key, flag, required, default, is_path, kind, choices in definitions
+                          ]})
+            continue
+        if target == "native:rst19-feature-parameter-sensitivity":
+            definitions = [
+                ("path", "", True, None, True, "value", []),
+                ("threshold_levels", "--threshold-levels", False, [4.0, 5.0, 6.0, 8.0], False, "value", []),
+                ("flux_snr_levels", "--flux-snr-levels", False, [3.0, 5.0, 7.0, 9.0], False, "value", []),
+                ("baseline_threshold_sigma", "--baseline-threshold-sigma", False, 4.0, False, "value", []),
+                ("baseline_min_flux_snr", "--baseline-min-flux-snr", False, 5.0, False, "value", []),
+                ("min_distance", "--min-distance", False, 4, False, "value", []),
+                ("aperture_radius", "--aperture-radius", False, 4, False, "value", []),
+                ("psf_fwhm", "--psf-fwhm", False, 2.0, False, "value", []),
+                ("background_box_size", "--background-box-size", False, 128, False, "value", []),
+                ("background_sample_limit", "--background-sample-limit", False, 100000, False, "value", []),
+                ("min_psf_support_pixels", "--min-psf-support-pixels", False, 3, False, "value", []),
+                ("proposal_mode", "--proposal-mode", False, "hybrid", False, "value", ["gaussian", "hybrid", "ensemble"]),
+                ("max_sources", "--max-sources", False, None, False, "value", []),
+                ("association_radius_px", "--association-radius-px", False, 1.5, False, "value", []),
+                ("out_dir", "--out-dir", False, "tmp/feature-parameter-sensitivity-current", True, "value", []),
+            ]
+            tools.append({"name": name, "description": "固定同一真实 FITS，扫描候选阈值/flux SNR 并追踪各类候选稳定性",
+                          "fields": [
+                              {"key": key, "flag": flag, "help": "", "required": required,
+                               "default": default, "choices": choices, "kind": kind, "nargs": None,
+                               "path": is_path, "toggle_value": None, "repeat": False}
                               for key, flag, required, default, is_path, kind, choices in definitions
                           ]})
             continue

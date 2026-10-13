@@ -454,6 +454,56 @@ def verify(package: Path, out: Path) -> dict:
     )
     pair_support_cli_payload = json.loads(pair_support_cli_run.stdout)["result"]
     assert pair_support_cli_payload == pair_support_payload
+    feature_parameter_cli = out / "runtime" / (
+        "rst19-feature-parameter-sensitivity.exe"
+        if os.name == "nt"
+        else "rst19-feature-parameter-sensitivity"
+    )
+    assert feature_parameter_cli.is_file(), "Rust feature parameter sensitivity CLI is missing from the package"
+    feature_parameter_help = subprocess.run(
+        [str(feature_parameter_cli), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
+    )
+    assert "Usage: rst19-feature-parameter-sensitivity" in feature_parameter_help.stdout
+    feature_parameter_args = [
+        str(frame.resolve()), "--threshold-levels", "4,6", "--flux-snr-levels", "3,7",
+        "--baseline-threshold-sigma", "4", "--baseline-min-flux-snr", "5",
+        "--min-distance", "4", "--aperture-radius", "4", "--psf-fwhm", "2",
+        "--background-box-size", "16", "--background-sample-limit", "100000",
+        "--min-psf-support-pixels", "3", "--proposal-mode", "gaussian",
+        "--association-radius-px", "1.5",
+    ]
+    feature_parameter_cli_out = out / "feature-parameter-cli"
+    feature_parameter_cli_run = subprocess.run(
+        [str(feature_parameter_cli), *feature_parameter_args, "--out-dir", str(feature_parameter_cli_out.resolve())],
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out,
+        timeout=120, check=True,
+    )
+    assert "baseline candidates=" in feature_parameter_cli_run.stdout
+    feature_parameter_out = out / "feature-parameter-job"
+    feature_parameter_request = {
+        "operation": "tool", "tool": "rst19-feature-parameter-sensitivity",
+        "args": feature_parameter_args, "out_dir": str(feature_parameter_out.resolve()),
+    }
+    feature_parameter_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(feature_parameter_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out,
+        timeout=120, check=True,
+    )
+    feature_parameter_events = [json.loads(line) for line in feature_parameter_response.stdout.splitlines()]
+    assert len(feature_parameter_events) == 1 and feature_parameter_events[0]["ok"]
+    feature_parameter_payload = feature_parameter_events[0]["payload"]["result"]
+    assert feature_parameter_payload == json.loads(
+        (feature_parameter_cli_out / "feature_parameter_sensitivity.json").read_text(encoding="utf-8")
+    )
+    assert len(feature_parameter_payload["runs"]) == 4
+    for artifact in (
+        "feature_parameter_runs.csv",
+        "feature_parameter_profiles.csv",
+        "feature_parameter_transitions.csv",
+        "feature_parameter_sensitivity.json",
+    ):
+        assert (feature_parameter_out / artifact).is_file(), artifact
     request = {"operation": "tool", "tool": "rst19", "args": [str(frame.resolve())], "out_dir": str((out / "job").resolve())}
     response = subprocess.run([str(native_worker)], input=json.dumps(request, ensure_ascii=False), capture_output=True,
                               text=True, encoding="utf-8", env=environment, cwd=out, timeout=60, check=True)

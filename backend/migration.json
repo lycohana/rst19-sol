@@ -1129,7 +1129,7 @@
         "run_feature_parameter_sensitivity",
         "write_feature_parameter_sensitivity_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_parameter_sensitivity_cli",
@@ -1140,7 +1140,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_psf_leaveout",
@@ -3187,7 +3187,7 @@
     "rst19-pair-support-audit": "native:rst19-pair-support-audit",
     "rst19-spatial-injection": "rst19.spatial_injection_cli:main",
     "rst19-aperture-sensitivity": "rst19.aperture_sensitivity_cli:main",
-    "rst19-feature-parameter-sensitivity": "rst19.feature_parameter_sensitivity_cli:main",
+    "rst19-feature-parameter-sensitivity": "native:rst19-feature-parameter-sensitivity",
     "rst19-feature-class-context": "rst19.feature_class_context_cli:main",
     "rst19-feature-hard-negative": "rst19.feature_hard_negative_cli:main",
     "rst19-feature-transition-flow": "rst19.feature_transition_flow_cli:main",
@@ -3550,7 +3550,7 @@
     "remaining sequence work: full multi-scale/raw/temporal candidate assembly and verification, motion/trail and stack-faint orchestration, full relative-photometry configuration/output compatibility, full SequenceResult assembly/output compatibility, and exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-innovation-package, rst19-temporal-codes, rst19-sweep, rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology/support, photometric report, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-innovation-package, rst19-temporal-codes, rst19-sweep, rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology/support, photometric report, feature parameter sensitivity, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
@@ -3563,6 +3563,7 @@
   "native_pair_mechanism_context": "pair geometry, class/quality summaries, target-pair context, and Python-byte-identical CSV/JSON artifacts",
   "native_pair_mechanism_sensitivity": "predeclared centroid/peak windows with descriptive count changes and no physical-probability interpretation",
   "native_pair_pixel_topology": "raw and special-excluded 8-connected patch components, peak membership, and local maxima; diagnostics describe image pixels and are not physical-source identity",
+  "native_feature_parameter_sensitivity": "same-frame Rust detection scans threshold_sigma and min_flux_snr configurations; reciprocal nearest same-position matching, priority feature classes, candidate/quality and transition layers; package and cross-platform verification pending",
   "native_pair_support_audit": "local Rust detector re-runs across seven holdout masks; one-to-one source assignment, shared/exclusive/partition aperture flux and SNR, source-catalog provenance, JSON and BOM CSV artifacts; synthetic FITS/catalog outputs match the Python reference within 1e-12, and standalone CLI plus desktop worker pass with PATH empty; packaged and cross-platform verification pending",
   "native_photometric_report": "Rust JSONL, standalone CLI, and desktop worker calculate magnitude observability, false-valid violations, provenance/error summaries, and strict absolute-distance/extinction eligibility from JSON; all four observability levels match a frozen Python baseline; production tool entry is Rust-only",
   "native_pair_repair_counterfactual": "simultaneous local median replacement for repeated-code and negative-anomaly pixels; four variants rerun the same Rust detector on the same cropped FITS pixels; Python result-field parity fixture, CLI, JSONL engine, desktop worker, BOM CSV headers, and PATH-disabled execution verified",

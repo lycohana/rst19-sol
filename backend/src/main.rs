@@ -112,6 +112,13 @@ fn execute(request: Value) -> Result<Value> {
         "audit.feature_gate_temporal_route" => {
             rst19_core::feature_gate_temporal_route::handle_request(&request)
         }
+        "audit.feature_parameter_sensitivity" => {
+            let args = serde_json::from_value::<Vec<String>>(
+                request.get("args").cloned().unwrap_or(json!([])),
+            )
+            .map_err(|error| error.to_string())?;
+            rst19_core::feature_parameter_sensitivity::run_desktop(&args)
+        }
         "audit.innovation_package" => rst19_core::innovation_package::handle_request(&request),
         "audit.temporal_codes" => rst19_core::temporal_code::handle_request(&request),
         "audit.feature_cross_axis" => {
