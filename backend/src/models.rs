@@ -49,6 +49,13 @@ pub struct AuxiliaryData {
     pub values: [f64; 26],
 }
 impl AuxiliaryData {
+    pub fn from_values(values: &[f64]) -> crate::Result<Self> {
+        let values: [f64; 26] = values
+            .try_into()
+            .map_err(|_| format!("expected 26 auxiliary values, got {}", values.len()))?;
+        Ok(Self { values })
+    }
+
     pub fn as_dict(&self) -> Map<String, Value> {
         AUXILIARY_FIELDS
             .iter()
@@ -132,4 +139,29 @@ pub struct FitsFrame {
     pub data_offset: usize,
     pub width: usize,
     pub height: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auxiliary_data_matches_python_model_shape_and_named_accessors() {
+        let values = (0..26).map(f64::from).collect::<Vec<_>>();
+        let auxiliary = AuxiliaryData::from_values(&values).unwrap();
+        assert_eq!(auxiliary.values.len(), 26);
+        assert_eq!(auxiliary.ra_deg(), 2.0);
+        assert_eq!(auxiliary.dec_deg(), 3.0);
+        let fields = auxiliary.as_dict();
+        assert_eq!(fields["p_az"], 0.0);
+        assert_eq!(fields["wgs84_zv"], 25.0);
+    }
+
+    #[test]
+    fn auxiliary_data_rejects_wrong_value_count() {
+        assert_eq!(
+            AuxiliaryData::from_values(&[0.0; 25]).unwrap_err(),
+            "expected 26 auxiliary values, got 25"
+        );
+    }
 }
