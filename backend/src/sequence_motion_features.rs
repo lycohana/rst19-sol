@@ -36,6 +36,7 @@ struct Options {
     min_axis_ratio: f64,
     bridge_gaps: bool,
     short_min_pixels: usize,
+    fit_line_model: bool,
 }
 
 fn field_number(request: &Value, key: &str) -> Result<f64> {
@@ -163,6 +164,10 @@ fn options(request: &Value) -> Result<Options> {
         min_axis_ratio: field_number(request, "min_axis_ratio")?,
         bridge_gaps,
         short_min_pixels: field_usize(request, "short_min_pixels")?,
+        fit_line_model: request
+            .get("fit_line_model")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 
@@ -363,7 +368,7 @@ fn motion_profile_point(
         angle_deg,
         options.threshold,
     );
-    let point = json!({
+    let mut point = json!({
         "frame_index": options.frame_index,
         "x": center_x,
         "y": center_y,
@@ -388,6 +393,26 @@ fn motion_profile_point(
         "single_frame_model_margin_bic": null,
         "observation_source": "detected"
     });
+    if options.fit_line_model {
+        let evidence = crate::single_frame_model::evaluate(
+            residual,
+            valid,
+            center_x,
+            center_y,
+            length_px,
+            width_px,
+            angle_deg,
+            options.psf_fwhm,
+            options.residual_noise,
+        );
+        if let (Some(point), Some(fields)) = (point.as_object_mut(), evidence.as_object()) {
+            point.extend(
+                fields
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.clone())),
+            );
+        }
+    }
     Ok((
         Some(point),
         ComponentOutcome {
@@ -543,6 +568,85 @@ fn motion_feature_frame_components_for_planes(
             "short_min_pixels": options.short_min_pixels
         }
     }))
+}
+
+/// Analyze one already-detected raw frame with the same connected-component
+/// and local-model review stages used by the Python single-frame trail audit.
+/// This typed entry point avoids expanding a full FITS image into JSON.
+pub fn single_frame_components_from_analysis(
+    analysis: &FrameAnalysis,
+    psf_fwhm: f64,
+    residual_sigma: f64,
+    min_residual_adu: f64,
+    min_feature_area: usize,
+    min_axis_ratio: f64,
+) -> Result<Value> {
+    if !psf_fwhm.is_finite()
+        || psf_fwhm <= 0.0
+        || !residual_sigma.is_finite()
+        || residual_sigma <= 0.0
+        || !min_residual_adu.is_finite()
+        || min_residual_adu <= 0.0
+        || min_feature_area < 3
+        || !min_axis_ratio.is_finite()
+        || min_axis_ratio <= 0.0
+    {
+        return Err("single-frame trail parameters must be finite and positive".into());
+    }
+    let height = analysis.frame.height;
+    let width = analysis.frame.width;
+    if height == 0 || width == 0 || analysis.frame.data.len() != height.saturating_mul(width) {
+        return Err("single-frame trail pixels do not match image shape".into());
+    }
+    let auxiliary = fits::auxiliary_mask(height, width)?;
+    let mask_zero = enabled_parameter(&analysis.detection.parameters, "mask_zero_pixels");
+    let saturation_level =
+        numeric_parameter(&analysis.detection.parameters, "saturation_level", -1.0);
+    let noise = analysis.detection.noise.max(f64::from(f32::EPSILON));
+    let threshold = min_residual_adu.max(residual_sigma * noise);
+    let background = analysis.detection.background;
+    let mut residual = vec![vec![0.0_f32; width]; height];
+    let mut valid = vec![vec![false; width]; height];
+    let mut line_artifact_mask = vec![vec![false; width]; height];
+    for &[x, y] in &analysis.detection.line_artifact_coordinates {
+        if x < width && y < height {
+            line_artifact_mask[y][x] = true;
+        }
+    }
+    for y in 0..height {
+        for x in 0..width {
+            let index = y * width + x;
+            let value = analysis.frame.data.value(index) as f32;
+            let is_valid = value.is_finite()
+                && !auxiliary[index]
+                && (!mask_zero || value != 0.0)
+                && (saturation_level <= 0.0 || f64::from(value) < saturation_level);
+            valid[y][x] = is_valid;
+            if is_valid {
+                residual[y][x] = (f64::from(value) - background) as f32;
+            }
+        }
+    }
+    let short_min_pixels = 20usize.max((2.0 * psf_fwhm * psf_fwhm).ceil() as usize);
+    motion_feature_frame_components_for_planes(
+        &residual,
+        &valid,
+        &line_artifact_mask,
+        Options {
+            frame_index: 0,
+            shift_x: 0.0,
+            shift_y: 0.0,
+            threshold,
+            residual_noise: noise,
+            psf_fwhm,
+            min_length: 8.0f64.max(3.0 * psf_fwhm),
+            min_feature_area: min_feature_area as i64,
+            min_axis_ratio,
+            bridge_gaps: false,
+            short_min_pixels,
+            fit_line_model: true,
+        },
+    )
 }
 
 fn sample_registered_reference(reference: &RegisteredReference, x: f64, y: f64) -> Option<f32> {
@@ -754,6 +858,7 @@ pub fn motion_frame_components_from_analyses(
                 min_axis_ratio,
                 bridge_gaps,
                 short_min_pixels,
+                fit_line_model: false,
             },
         )?;
         frame_results.push(result);

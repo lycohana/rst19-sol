@@ -114,6 +114,28 @@ fn run(request: Value) -> Result<Value, String> {
     if request["tool"] == "rst19-photometric-report" {
         return rst19_core::photometric_report::run_desktop(&string_args(&request)?);
     }
+    if request["tool"] == "rst19-trails" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::single_frame_trail_audit::run_desktop(&args);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -987,6 +1009,49 @@ mod tests {
     };
 
     static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn rst19_trails_runs_through_the_native_worker_and_writes_artifacts() {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let fits_path = workspace
+            .join("backend")
+            .join("tests")
+            .join("fixtures")
+            .join("contaminated_pair_injection_parity.fits");
+        assert!(
+            fits_path.is_file(),
+            "missing fixture: {}",
+            fits_path.display()
+        );
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-trails-dispatch-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        let out_dir = root.join("output");
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-trails",
+            "args":[fits_path.to_string_lossy()],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+
+        assert_eq!(result["frames"].as_array().unwrap().len(), 1);
+        let frame = &result["frames"][0];
+        assert_eq!(frame["candidate_count"], 21);
+        assert_eq!(frame["quality_count"], 3);
+        assert_eq!(frame["trail_count"], 0);
+        for artifact in [
+            "request.json",
+            "single_frame_trails.csv",
+            "single_frame_trail_counts.png",
+            "single_frame_trail_lengths.png",
+        ] {
+            assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
 
     fn fits_card(key: &str, value: &str) -> [u8; 80] {
         let mut card = [b' '; 80];
