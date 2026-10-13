@@ -192,7 +192,7 @@
         "CatalogSource.as_dict",
         "load_catalog_csv"
       ],
-      "migration_status": "in_progress"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.catalog_merge",
