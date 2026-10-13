@@ -46,6 +46,11 @@ def registry() -> dict[str, str]:
     entries.setdefault("rst19-signed-null-overlap", "native:rst19-signed-null-overlap")
     entries.setdefault("rst19-signed-null-audit", "native:rst19-signed-null-audit")
     entries.setdefault("rst19-signed-null-sequence", "native:rst19-signed-null-sequence")
+    entries.setdefault("rst19-gaia-merge", "native:rst19-gaia-merge")
+    entries.setdefault("rst19-relative-photometry", "native:rst19-relative-photometry")
+    entries.setdefault("rst19-wcs-validation", "native:rst19-wcs-validation")
+    entries.setdefault("rst19-aux-audit", "native:rst19-aux-audit")
+    entries.setdefault("rst19-source-geometry-audit", "native:rst19-source-geometry-audit")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -241,6 +246,112 @@ def catalog() -> list[dict]:
                                "repeat": False},
                               {"key": "out_dir", "flag": "--out-dir", "help": "JSON/CSV 输出目录",
                                "required": False, "default": "tmp/signed-null-sequence", "choices": [],
+                               "kind": "value", "nargs": None, "path": True, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-gaia-merge":
+            tools.append({"name": name, "description": "合并分层 Gaia DR3 CSV，并继承输入完整性审计",
+                          "fields": [
+                              {"key": "catalogs", "flag": "", "help": "至少两份 CSV；通常一份亮星定标层、一份深星层",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": "+", "path": True, "repeat": False},
+                              {"key": "out", "flag": "--out", "help": "合并后的 CatalogSource 兼容 CSV",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-relative-photometry":
+            tools.append({"name": name, "description": "对观测行拟合相对星等标尺，不联网、不产生绝对星等",
+                          "fields": [
+                              {"key": "input", "flag": "", "help": "JSON 数组，或包含 observations/rows/items 的 JSON",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "out", "flag": "--out", "help": "可选结果 JSON；不提供时输出到 stdout",
+                               "required": False, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "spatial_order", "flag": "--spatial-order", "help": "空间响应项阶数",
+                               "required": False, "default": 0, "choices": [0, 1, 2], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "validation_fraction", "flag": "--validation-fraction", "help": "源分块留出比例，默认 0.2",
+                               "required": False, "default": 0.2, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "random_state", "flag": "--random-state", "help": "留出分块随机种子",
+                               "required": False, "default": 0, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "mad_threshold", "flag": "--mad-threshold", "help": "迭代 MAD 剔除阈值",
+                               "required": False, "default": 5.0, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-wcs-validation":
+            fields = [
+                ("data_dir", "", "包含 FITS 序列的目录", True, None, [], True, False),
+                ("catalog_csv", "", "用户提供的离线 CSV 星表", True, None, [], True, False),
+                ("center_ra", "--center-ra", "先验光轴 RA / deg", True, None, [], False, False),
+                ("center_dec", "--center-dec", "先验光轴 DEC / deg", True, None, [], False, False),
+                ("pixel_scale", "--pixel-scale", "先验像元角尺度 / arcsec px^-1", True, None, [], False, False),
+                ("crpix_x", "--crpix-x", "先验 CRPIX X，默认按 4096 图像中心", False, 2048.0, [], False, False),
+                ("crpix_y", "--crpix-y", "先验 CRPIX Y，默认按 4096 图像中心", False, 2048.0, [], False, False),
+                ("rotation", "--rotation", "先验旋转 / deg", False, 0.0, [], False, False),
+                ("parity", "--parity", "RA 轴奇偶性", False, 1, [-1, 1], False, False),
+                ("match_radius", "--match-radius", "先验 WCS 匹配半径 / px", False, 3.0, [], False, False),
+                ("min_matches", "--min-matches", "每帧最少唯一匹配点数", False, 6, [], False, False),
+                ("epoch", "--epoch", "星表传播目标历元，Julian year", False, None, [], False, False),
+                ("threshold_sigma", "--threshold-sigma", "匹配滤波候选阈值 sigma", False, 4.0, [], False, False),
+                ("min_distance", "--min-distance", "候选峰最小间距 pixel", False, 4, [], False, False),
+                ("aperture_radius", "--aperture-radius", "孔径测光半径 pixel", False, 4, [], False, False),
+                ("psf_fwhm", "--psf-fwhm", "Gaussian 匹配滤波 FWHM pixel", False, 3.0, [], False, False),
+                ("background_box_size", "--background-box-size", "局部背景/RMS 网格大小 pixel", False, 128, [], False, False),
+                ("min_flux_snr", "--min-flux-snr", "质量层通量 SNR 下限", False, 5.0, [], False, False),
+                ("max_sources", "--max-sources", "可选返回源上限；留空表示全量", False, None, [], False, False),
+            ]
+            schema = [{"key": key, "flag": flag, "help": help_text, "required": required,
+                       "default": default, "choices": choices, "kind": "value", "nargs": None,
+                       "path": is_path, "repeat": repeat}
+                      for key, flag, help_text, required, default, choices, is_path, repeat in fields]
+            schema.extend([
+                {"key": "keep_linear_artifacts", "flag": "--keep-linear-artifacts",
+                 "help": "不标记线状结构为 LINE_ARTIFACT", "required": False,
+                 "default": False, "choices": [], "kind": "bool", "nargs": 0,
+                 "path": False, "toggle_value": True, "repeat": False},
+                {"key": "out_dir", "flag": "--out-dir", "help": "CSV/JSON/PNG 输出目录",
+                 "required": False, "default": "tmp/wcs-validation", "choices": [],
+                 "kind": "value", "nargs": None, "path": True, "repeat": False},
+            ])
+            tools.append({"name": name, "description": "使用离线星表，对 FITS 序列做逐帧局部 WCS 验证",
+                          "fields": schema})
+            continue
+        if target == "native:rst19-aux-audit":
+            tools.append({"name": name, "description": "审计 FITS 辅助姿态四元数与 ra/dec 光轴的一致性",
+                          "fields": [
+                              {"key": "input_path", "flag": "", "help": "单个 FITS 或包含 FITS 的目录",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "out_dir", "flag": "--out-dir", "help": "CSV/JSON 输出目录",
+                               "required": False, "default": "tmp/auxiliary-attitude-audit", "choices": [],
+                               "kind": "value", "nargs": None, "path": True, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-source-geometry-audit":
+            tools.append({"name": name, "description": "只读取 source_catalog，审计各特征类别的 detector 坐标细长性",
+                          "fields": [
+                              {"key": "catalog", "flag": "", "help": "rst19-sources 导出的 source_catalog.csv",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "target_class", "flag": "--target-class", "help": "需要审计的 feature_class；可重复传入，默认审计全部类别",
+                               "required": False, "default": [], "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": True},
+                              {"key": "control_class", "flag": "--control-class", "help": "等样本量抽样对照类别，默认 compact_quality",
+                               "required": False, "default": "compact_quality", "choices": [],
+                               "kind": "value", "nargs": None, "path": False, "repeat": False},
+                              {"key": "trials", "flag": "--trials", "help": "每个类别的对照抽样次数",
+                               "required": False, "default": 5000, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "seed", "flag": "--seed", "help": "对照抽样随机种子",
+                               "required": False, "default": 1909, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "out_dir", "flag": "--out-dir", "help": "CSV/JSON 输出目录",
+                               "required": False, "default": "tmp/source-geometry-audit", "choices": [],
                                "kind": "value", "nargs": None, "path": True, "repeat": False},
                           ]})
             continue

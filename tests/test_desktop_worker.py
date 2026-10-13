@@ -69,6 +69,21 @@ def test_catalog_covers_all_scientific_entry_points():
         "keep_linear_artifacts", "snr_thresholds", "out_dir",
     ]
     assert signed_null_sequence["fields"][0]["nargs"] == "+"
+    migrated_tools = {
+        "rst19-gaia-merge": ["catalogs", "out"],
+        "rst19-relative-photometry": ["input", "out", "spatial_order", "validation_fraction", "random_state", "mad_threshold"],
+        "rst19-wcs-validation": ["data_dir", "catalog_csv", "center_ra", "center_dec", "pixel_scale",
+                                  "crpix_x", "crpix_y", "rotation", "parity", "match_radius",
+                                  "min_matches", "epoch", "threshold_sigma", "min_distance",
+                                  "aperture_radius", "psf_fwhm", "background_box_size", "min_flux_snr",
+                                  "max_sources", "keep_linear_artifacts", "out_dir"],
+        "rst19-aux-audit": ["input_path", "out_dir"],
+        "rst19-source-geometry-audit": ["catalog", "target_class", "control_class", "trials", "seed", "out_dir"],
+    }
+    for tool_name, expected_fields in migrated_tools.items():
+        tool = next(item for item in tools if item["name"] == tool_name)
+        assert entries[tool_name] == f"native:{tool_name}"
+        assert [field["key"] for field in tool["fields"]] == expected_fields
 
 
 def test_format_audit_cannot_fall_back_to_python(tmp_path):
@@ -109,6 +124,16 @@ def test_signed_null_audit_cannot_fall_back_to_python(tmp_path):
 def test_signed_null_sequence_cannot_fall_back_to_python(tmp_path):
     request = {"operation": "tool", "tool": "rst19-signed-null-sequence", "args": [],
                "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+@pytest.mark.parametrize("tool_name", [
+    "rst19-gaia-merge", "rst19-relative-photometry", "rst19-wcs-validation",
+    "rst19-aux-audit", "rst19-source-geometry-audit",
+])
+def test_rust_migrated_entrypoints_cannot_fall_back_to_python(tool_name, tmp_path):
+    request = {"operation": "tool", "tool": tool_name, "args": [], "out_dir": str(tmp_path)}
     with pytest.raises(ValueError, match="必须由 native worker 执行"):
         run(request)
 

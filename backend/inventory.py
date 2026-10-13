@@ -33,7 +33,9 @@ if __name__=="__main__":
                              "feature_raw_evidence_audit","feature_raw_evidence_audit_cli",
                              "signed_null_forward_overlap","signed_null_forward_overlap_cli",
                              "signed_null","signed_null_cli",
-                             "signed_null_sequence","signed_null_sequence_cli"}
+                             "signed_null_sequence","signed_null_sequence_cli",
+                             "catalog_merge_cli","relative_photometry_cli","wcs_validation_cli",
+                             "attitude_cli","source_geometry_audit_cli"}
     tools={name:target for name,target in scripts.items() if target not in ("rst19.gui:main","rst19.desktop_launcher:main")}
     tools["rst19"]="native Rust executable; Python CLI parser retained only for desktop form metadata"
     tools["rst19-format-audit"]="native Rust executable and desktop worker route; Python entrypoint/module import removed; static desktop schema remains"
@@ -42,6 +44,11 @@ if __name__=="__main__":
     tools["rst19-signed-null-overlap"]="native Rust FITS detection, local spatial audit, standalone executable, and desktop worker route; Python CLI entrypoint removed"
     tools["rst19-signed-null-audit"]="native Rust single-frame signed-null detector audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate"
     tools["rst19-signed-null-sequence"]="native Rust multi-frame signed-null aggregation, recurrence audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate"
+    tools["rst19-gaia-merge"]="native Rust layered Gaia CSV merge, standalone executable, and desktop worker route; Python console entrypoint removed"
+    tools["rst19-relative-photometry"]="native Rust relative photometry JSON CLI and desktop worker route; Python console entrypoint removed"
+    tools["rst19-wcs-validation"]="native Rust FITS/catalog local WCS validation, artifact generation, standalone executable, and desktop worker route; Python console entrypoint removed"
+    tools["rst19-aux-audit"]="native Rust FITS auxiliary attitude audit, standalone executable, and desktop worker route; Python console entrypoint removed"
+    tools["rst19-source-geometry-audit"]="native Rust source-catalog geometry audit, standalone executable, and desktop worker route; Python console entrypoint removed"
     administrative={"gui.py","desktop_worker.py","desktop_launcher.py","__init__.py","__main__.py"}
     modules=[]
     for path in sorted((ROOT/"src/rst19").glob("*.py")):
@@ -126,6 +133,11 @@ if __name__=="__main__":
     contracts["rst19-signed-null-overlap"]="reads FITS frames and reverse-quality CSV, runs the native detector, and writes local candidate/quality overlap evidence; parser, Rust unit, Python baseline, package and cross-platform acceptance pending"
     contracts["rst19-signed-null-audit"]="reads one FITS frame, performs positive and sign-flipped detections, source feature summaries, SNR-threshold leakage counts, and raw aperture evidence in Rust; synthetic parity passed at 1e-10 numeric tolerance; package and cross-platform acceptance pending"
     contracts["rst19-signed-null-sequence"]="aggregates per-frame signed-null results, pooled and frame-level ratios, source recurrence groups, and five CSV/JSON artifacts in Rust; two-frame positive/negative FITS parity had zero JSON field differences at 1e-10 tolerance, max absolute numeric difference 1.71e-13, threshold CSV bytes identical, float-bearing CSV text differs at last digits; CLI and desktop worker pass with PATH disabled; package and cross-platform acceptance pending"
+    contracts["rst19-gaia-merge"]="Rust standalone CLI and desktop worker merge layered Gaia CSV and preserve integrity audit behavior; Python console entrypoint removed"
+    contracts["rst19-relative-photometry"]="Rust standalone CLI and desktop worker fit relative photometry from JSON observation rows; Python console entrypoint removed"
+    contracts["rst19-wcs-validation"]="Rust standalone CLI and desktop worker perform per-frame FITS detection, offline catalog matching, WCS validation, and artifact generation; Python console entrypoint removed"
+    contracts["rst19-aux-audit"]="Rust standalone CLI and desktop worker inspect FITS auxiliary attitude fields and produce CSV/JSON; Python console entrypoint removed"
+    contracts["rst19-source-geometry-audit"]="Rust standalone CLI and desktop worker audit source-catalog detector-coordinate geometry with NumPy-compatible sampling; Python console entrypoint removed"
     payload["native_cli_contracts"]=contracts
     payload["native_format_audit_execution"]=generated["native_format_audit_execution"]
     payload["native_sequence_feature_comparison_execution"]=generated["native_sequence_feature_comparison_execution"]
