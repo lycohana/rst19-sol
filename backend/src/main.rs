@@ -105,6 +105,7 @@ fn execute(request: Value) -> Result<Value> {
             rst19_core::feature_gate_temporal_route::handle_request(&request)
         }
         "audit.innovation_package" => rst19_core::innovation_package::handle_request(&request),
+        "audit.temporal_codes" => rst19_core::temporal_code::handle_request(&request),
         "audit.feature_cross_axis" => {
             let path = |name: &str| -> Result<std::path::PathBuf> {
                 request[name]

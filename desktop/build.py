@@ -68,6 +68,8 @@ def build() -> None:
              "--bin", "rst19", "--bin", "rst19-format-audit", "--bin", "rst19-feature-sequence-compare", "--bin", "rst19-feature-raw-evidence-audit", "--bin", "rst19-signed-null-overlap", "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit", "--bin", "rst19-source-geometry-audit",
               "--bin", "rst19-relative-photometry", "--bin", "rst19-wcs-validation",
               "--bin", "rst19-innovation-package",
+              "--bin", "rst19-temporal-codes",
+              "--bin", "rst19-temporal-codes",
               "--bin", "rst19-signed-null-audit", "--bin", "rst19-signed-null-sequence"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
@@ -111,6 +113,10 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / wcs_validation, package / "runtime" / wcs_validation)
     innovation_package = "rst19-innovation-package.exe" if os.name == "nt" else "rst19-innovation-package"
     shutil.copy2(ROOT / "backend/target/release" / innovation_package, package / "runtime" / innovation_package)
+    temporal_codes = "rst19-temporal-codes.exe" if os.name == "nt" else "rst19-temporal-codes"
+    shutil.copy2(ROOT / "backend/target/release" / temporal_codes, package / "runtime" / temporal_codes)
+    temporal_codes = "rst19-temporal-codes.exe" if os.name == "nt" else "rst19-temporal-codes"
+    shutil.copy2(ROOT / "backend/target/release" / temporal_codes, package / "runtime" / temporal_codes)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"
@@ -154,8 +160,15 @@ def build() -> None:
     result = subprocess.run([str(worker), "--catalog"], capture_output=True, text=True, encoding="utf-8",
                             check=True, cwd=package, env=verification_env)
     catalog = json.loads(result.stdout)
-    if not catalog.get("ok") or len(catalog["payload"]["tools"]) != len(modules):
-        raise RuntimeError(f"Frozen environment verification failed: {result.stdout}")
+    expected_tools = {name for name, target in entries.items()
+                      if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
+    expected_tools.add("rst19")
+    catalog_tools = {tool["name"] for tool in catalog.get("payload", {}).get("tools", [])}
+    missing_tools = expected_tools - catalog_tools
+    if not catalog.get("ok") or missing_tools:
+        raise RuntimeError(
+            f"Frozen environment verification failed; missing tools {sorted(missing_tools)}: {result.stdout}"
+        )
     (package / "environment.json").write_text(json.dumps(catalog["payload"]["environment"], indent=2), encoding="utf-8")
     archive = finalize(package)
     print(f"\n完整运行包：{package}\n分发 ZIP：{archive}")

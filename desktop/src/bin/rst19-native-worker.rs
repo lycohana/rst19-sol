@@ -593,6 +593,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::innovation_package::run_desktop(&args);
     }
+    if request["tool"] == "rst19-temporal-codes" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::temporal_code::run_desktop(&args);
+    }
     if request["tool"] == "rst19-feature-cross-axis-audit" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1071,6 +1093,56 @@ mod tests {
         assert!(out_dir.join("innovation_package.json").is_file());
         assert!(out_dir.join("innovation_delivery.csv").is_file());
         assert!(out_dir.join("innovation_delivery.md").is_file());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn temporal_code_tool_is_dispatched_to_native_audit() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-temporal-code-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        let input_dir = root.join("frames");
+        let out_dir = root.join("output");
+        fs::create_dir_all(&input_dir).unwrap();
+        let mut bytes = Vec::new();
+        for (key, value) in [
+            ("SIMPLE", "T"),
+            ("BITPIX", "16"),
+            ("NAXIS", "2"),
+            ("NAXIS1", "2"),
+            ("NAXIS2", "2"),
+        ] {
+            let mut card = [b' '; 80];
+            let content = format!("{key:<8}= {value:>20}");
+            card[..content.len()].copy_from_slice(content.as_bytes());
+            bytes.extend_from_slice(&card);
+        }
+        let mut end = [b' '; 80];
+        end[..3].copy_from_slice(b"END");
+        bytes.extend_from_slice(&end);
+        bytes.resize(bytes.len().div_ceil(2880) * 2880, b' ');
+        for value in [0_i16, 3991, 3992, -1] {
+            bytes.extend_from_slice(&value.to_be_bytes());
+        }
+        bytes.resize(bytes.len().div_ceil(2880) * 2880, 0);
+        fs::write(input_dir.join("frame.fits"), bytes).unwrap();
+
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-temporal-codes",
+            "out_dir":out_dir,
+            "args":[input_dir.to_string_lossy()]
+        }))
+        .unwrap();
+        assert_eq!(result["tool"], "rst19-temporal-codes");
+        assert_eq!(result["result"]["frame_count"], 1);
+        assert_eq!(result["result"]["exact_stable_pixel_count"], 4);
+        assert!(out_dir.join("request.json").is_file());
+        assert!(out_dir.join("temporal_code_audit.json").is_file());
+        assert!(out_dir.join("temporal_code_focus_series.csv").is_file());
+        assert!(out_dir.join("temporal_code_components.csv").is_file());
         fs::remove_dir_all(root).unwrap();
     }
 }

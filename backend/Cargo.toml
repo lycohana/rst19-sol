@@ -85,6 +85,10 @@ name = "rst19-innovation-package"
 path = "src/bin/rst19-innovation-package.rs"
 
 [[bin]]
+name = "rst19-temporal-codes"
+path = "src/bin/rst19-temporal-codes.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 

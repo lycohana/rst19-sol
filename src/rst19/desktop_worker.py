@@ -51,6 +51,8 @@ def registry() -> dict[str, str]:
     entries.setdefault("rst19-wcs-validation", "native:rst19-wcs-validation")
     entries.setdefault("rst19-aux-audit", "native:rst19-aux-audit")
     entries.setdefault("rst19-source-geometry-audit", "native:rst19-source-geometry-audit")
+    entries.setdefault("rst19-innovation-package", "native:rst19-innovation-package")
+    entries.setdefault("rst19-temporal-codes", "native:rst19-temporal-codes")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -352,6 +354,61 @@ def catalog() -> list[dict]:
                                "nargs": None, "path": False, "repeat": False},
                               {"key": "out_dir", "flag": "--out-dir", "help": "CSV/JSON 输出目录",
                                "required": False, "default": "tmp/source-geometry-audit", "choices": [],
+                               "kind": "value", "nargs": None, "path": True, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-innovation-package":
+            tools.append({"name": name,
+                          "description": "从真实背景分层注入证据生成条件化创新交付包",
+                          "fields": [
+                              {"key": "injection_artifact", "flag": "", "help": "分层注入结果 JSON 或 CSV",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "sequence_report", "flag": "--sequence-report", "help": "可选序列报告 JSON",
+                               "required": False, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "feature_matrix", "flag": "--feature-matrix", "help": "可选特征证据矩阵 JSON",
+                               "required": False, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "out_dir", "flag": "--out-dir", "help": "JSON/CSV/Markdown 输出目录",
+                               "required": False, "default": "tmp/innovation-package", "choices": [],
+                               "kind": "value", "nargs": None, "path": True, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-temporal-codes":
+            tools.append({"name": name,
+                          "description": "逐帧比较 FITS detector 固定值、低变化结构和指定焦点坐标",
+                          "fields": [
+                              {"key": "data_dir", "flag": "", "help": "包含 FITS 序列的目录",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "low_variation_span_adu", "flag": "--low-variation-span-adu",
+                               "help": "低变化像素允许的跨帧最大范围（ADU）", "required": False,
+                               "default": 2, "choices": [], "kind": "value", "nargs": None,
+                               "path": False, "repeat": False},
+                              {"key": "code_min_adu", "flag": "--code-min-adu", "help": "低变化正码候选下限",
+                               "required": False, "default": 3990, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "code_max_adu", "flag": "--code-max-adu", "help": "低变化正码候选上限",
+                               "required": False, "default": 3993, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "sentinel_value", "flag": "--sentinel-value", "help": "固定 sentinel 值",
+                               "required": False, "default": -1, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "focus_x", "flag": "--focus-x", "help": "正码候选关注坐标 X",
+                               "required": False, "default": 1274, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "focus_y", "flag": "--focus-y", "help": "正码候选关注坐标 Y",
+                               "required": False, "default": 3466, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "sentinel_focus_x", "flag": "--sentinel-focus-x", "help": "sentinel 关注坐标 X",
+                               "required": False, "default": 1271, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "sentinel_focus_y", "flag": "--sentinel-focus-y", "help": "sentinel 关注坐标 Y",
+                               "required": False, "default": 3465, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "out_dir", "flag": "--out-dir", "help": "JSON/CSV 输出目录",
+                               "required": False, "default": "tmp/temporal-code-audit", "choices": [],
                                "kind": "value", "nargs": None, "path": True, "repeat": False},
                           ]})
             continue

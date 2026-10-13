@@ -80,6 +80,7 @@ pub mod source_separation_audit;
 pub mod spatial;
 pub mod statistics;
 pub mod statistics32;
+pub mod temporal_code;
 pub mod wcs_fit;
 pub mod wcs_validation;
 

@@ -713,7 +713,7 @@ rst19-pair-audit doc/00-项目资料/原始数据 `
 对 15 帧做 detector 固定码和低变化值审计：
 
 ```powershell
-rst19-temporal-codes doc/00-项目资料/原始数据 `
+cargo run --manifest-path backend/Cargo.toml --bin rst19-temporal-codes -- doc/00-项目资料/原始数据 `
   --low-variation-span-adu 2 `
   --code-min-adu 3990 --code-max-adu 3993 `
   --sentinel-value -1 `
