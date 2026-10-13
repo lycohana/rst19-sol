@@ -1548,6 +1548,24 @@
         "repeat": false
       },
       {
+        "key": "interpolation_order",
+        "flag": "--interpolation-order",
+        "help": "配准采样阶数（0、1、2 或 3）",
+        "required": false,
+        "default": 1,
+        "choices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "kind": "value",
+        "nargs": null,
+        "path": false,
+        "toggle_value": null,
+        "repeat": false
+      },
+      {
         "key": "tile_rows",
         "flag": "--tile-rows",
         "help": "分块高度，控制内存峰值",

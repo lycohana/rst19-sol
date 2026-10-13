@@ -38,6 +38,7 @@ struct Mosaic {
     frame_paths: Vec<String>,
     mode: String,
     clip_sigma: f64,
+    interpolation_order: usize,
     frame_valid_counts: Vec<u64>,
 }
 
@@ -53,7 +54,62 @@ fn median(values: &mut [f32]) -> f32 {
     }
 }
 
-fn sample(frame: &Frame, width: usize, height: usize, x: f32, y: f32) -> Option<f32> {
+fn axis_samples(coordinate: f32, order: usize) -> ([(isize, f32); 4], usize) {
+    let floor = coordinate.floor() as isize;
+    match order {
+        0 => {
+            let index = (coordinate + 0.5).floor() as isize;
+            ([(index, 1.0), (0, 0.0), (0, 0.0), (0, 0.0)], 1)
+        }
+        1 => {
+            let fraction = coordinate - floor as f32;
+            (
+                [
+                    (floor, 1.0 - fraction),
+                    (floor + 1, fraction),
+                    (0, 0.0),
+                    (0, 0.0),
+                ],
+                2,
+            )
+        }
+        2 | 3 => {
+            let count = if order == 2 { 3 } else { 4 };
+            let first = floor - 1;
+            let mut samples = [(0, 0.0); 4];
+            for (slot, index) in (first..first + count as isize).enumerate() {
+                let distance = (coordinate - index as f32).abs();
+                let weight = if order == 2 {
+                    if distance < 0.5 {
+                        0.75 - distance * distance
+                    } else if distance < 1.5 {
+                        0.5 * (1.5 - distance).powi(2)
+                    } else {
+                        0.0
+                    }
+                } else if distance < 1.0 {
+                    2.0 / 3.0 - distance * distance + 0.5 * distance.powi(3)
+                } else if distance < 2.0 {
+                    (2.0 - distance).powi(3) / 6.0
+                } else {
+                    0.0
+                };
+                samples[slot] = (index, weight);
+            }
+            (samples, count)
+        }
+        _ => unreachable!("interpolation order is validated before sampling"),
+    }
+}
+
+fn sample(
+    frame: &Frame,
+    width: usize,
+    height: usize,
+    x: f32,
+    y: f32,
+    interpolation_order: usize,
+) -> Option<f32> {
     // scipy.ndimage.map_coordinates(mode="constant") rejects coordinates
     // outside the image instead of partially extrapolating at its boundary.
     if !x.is_finite()
@@ -65,28 +121,24 @@ fn sample(frame: &Frame, width: usize, height: usize, x: f32, y: f32) -> Option<
     {
         return None;
     }
-    let x0 = x.floor() as usize;
-    let y0 = y.floor() as usize;
-    let x1 = (x0 + 1).min(width - 1);
-    let y1 = (y0 + 1).min(height - 1);
-    let dx = x - x0 as f32;
-    let dy = y - y0 as f32;
-    let neighbors = [
-        (x0, y0, (1.0 - dx) * (1.0 - dy)),
-        (x1, y0, dx * (1.0 - dy)),
-        (x0, y1, (1.0 - dx) * dy),
-        (x1, y1, dx * dy),
-    ];
+    let (x_samples, x_count) = axis_samples(x, interpolation_order);
+    let (y_samples, y_count) = axis_samples(y, interpolation_order);
     let mut weighted = 0.0f32;
     let mut weight = 0.0f32;
-    for (px, py, w) in neighbors {
-        if w <= 0.0 {
+    for (py, wy) in y_samples.iter().take(y_count) {
+        if *wy == 0.0 || *py < 0 || *py >= height as isize {
             continue;
         }
-        let value = frame.values[py * width + px];
-        if value.is_finite() {
-            weighted += value * w;
-            weight += w;
+        for (px, wx) in x_samples.iter().take(x_count) {
+            let sample_weight = wx * wy;
+            if sample_weight == 0.0 || *px < 0 || *px >= width as isize {
+                continue;
+            }
+            let value = frame.values[*py as usize * width + *px as usize];
+            if value.is_finite() {
+                weighted += value * sample_weight;
+                weight += sample_weight;
+            }
         }
     }
     (weight > 1.0e-6).then_some(weighted / weight)
@@ -142,6 +194,7 @@ fn build_with_shape(
     shifts: Vec<[f64; 2]>,
     mode: &str,
     clip_sigma: f64,
+    interpolation_order: usize,
 ) -> Result<Mosaic> {
     if frames.is_empty() {
         return Err("at least one frame is required".into());
@@ -157,6 +210,9 @@ fn build_with_shape(
     }
     if !clip_sigma.is_finite() || clip_sigma <= 0.0 {
         return Err("clip_sigma must be positive".into());
+    }
+    if interpolation_order > 3 {
+        return Err("interpolation_order must be between 0 and 3".into());
     }
     if shifts.iter().flatten().any(|value| !value.is_finite()) {
         return Err("cumulative_shifts must be finite (frame_count, 2) values".into());
@@ -191,7 +247,14 @@ fn build_with_shape(
             for (frame_index, (frame, shift)) in frames.iter().zip(&shifts).enumerate() {
                 let raw_x = common_x + shift[0] as f32;
                 let raw_y = common_y + shift[1] as f32;
-                if let Some(value) = sample(frame, source_width, source_height, raw_x, raw_y) {
+                if let Some(value) = sample(
+                    frame,
+                    source_width,
+                    source_height,
+                    raw_x,
+                    raw_y,
+                    interpolation_order,
+                ) {
                     samples.push(value);
                     frame_valid_counts[frame_index] += 1;
                 }
@@ -240,6 +303,7 @@ fn build_with_shape(
         shifts,
         mode: mode.to_owned(),
         clip_sigma,
+        interpolation_order,
         frame_valid_counts,
     })
 }
@@ -284,7 +348,7 @@ fn metadata(mosaic: &Mosaic) -> Value {
         "frame_paths": mosaic.frame_paths,
         "combine_mode": mosaic.mode,
         "clip_sigma": mosaic.clip_sigma,
-        "interpolation_order": 1,
+        "interpolation_order": mosaic.interpolation_order,
         "masked_zero_pixels": true,
         "masked_auxiliary_pixels": true,
         "frame_valid_pixel_counts": mosaic.frame_valid_counts,
@@ -539,6 +603,7 @@ fn run_paths(
     shifts: Vec<[f64; 2]>,
     mode: &str,
     clip_sigma: f64,
+    interpolation_order: usize,
     raw_preview: bool,
     out_dir: &Path,
 ) -> Result<Value> {
@@ -584,7 +649,15 @@ fn run_paths(
         });
     }
     let (height, width) = shape.ok_or("at least one frame is required")?;
-    let mosaic = build_with_shape(frames, height, width, shifts, mode, clip_sigma)?;
+    let mosaic = build_with_shape(
+        frames,
+        height,
+        width,
+        shifts,
+        mode,
+        clip_sigma,
+        interpolation_order,
+    )?;
     let summary = metadata(&mosaic);
     write_artifacts(out_dir, &mosaic, &summary, raw_preview)?;
     Ok(json!({
@@ -595,12 +668,14 @@ fn run_paths(
     }))
 }
 
+#[derive(Debug)]
 struct Cli {
     data_dir: PathBuf,
     sequence_json: Option<PathBuf>,
     out_dir: PathBuf,
     mode: String,
     clip_sigma: f64,
+    interpolation_order: usize,
     raw_preview: bool,
 }
 
@@ -610,6 +685,7 @@ fn parse_args(args: &[String]) -> Result<Cli> {
     let mut out_dir = PathBuf::from("tmp/registered-mosaic");
     let mut mode = "robust_mean".to_owned();
     let mut clip_sigma = 3.0;
+    let mut interpolation_order = 1;
     let mut raw_preview = false;
     let mut index = 0;
     while index < args.len() {
@@ -622,6 +698,14 @@ fn parse_args(args: &[String]) -> Result<Cli> {
             if data_dir.replace(PathBuf::from(arg)).is_some() {
                 return Err("only one FITS directory is accepted".into());
             }
+            index += 1;
+            continue;
+        }
+        if name == "raw-preview" {
+            if inline.is_some() {
+                return Err("--raw-preview does not take a value".into());
+            }
+            raw_preview = true;
             index += 1;
             continue;
         }
@@ -640,10 +724,17 @@ fn parse_args(args: &[String]) -> Result<Cli> {
             "clip-sigma" => {
                 clip_sigma = value.parse().map_err(|_| "clip_sigma must be positive")?
             }
+            "interpolation-order" => {
+                interpolation_order = value
+                    .parse()
+                    .map_err(|_| "interpolation_order must be between 0 and 3")?;
+                if interpolation_order > 3 {
+                    return Err("interpolation_order must be between 0 and 3".into());
+                }
+            }
             "tile-rows" => {
                 let _: usize = value.parse().map_err(|_| "tile_rows must be positive")?;
             }
-            "raw-preview" => raw_preview = true,
             _ => return Err(format!("unknown option --{name}")),
         }
         index += 1;
@@ -654,6 +745,7 @@ fn parse_args(args: &[String]) -> Result<Cli> {
         out_dir,
         mode,
         clip_sigma,
+        interpolation_order,
         raw_preview,
     })
 }
@@ -676,6 +768,7 @@ pub fn run_desktop(args: &[String]) -> Result<Value> {
         shifts,
         &cli.mode,
         cli.clip_sigma,
+        cli.interpolation_order,
         cli.raw_preview,
         &cli.out_dir,
     )
@@ -683,7 +776,7 @@ pub fn run_desktop(args: &[String]) -> Result<Value> {
 
 pub fn run_cli(args: &[String]) -> Result<()> {
     if args.iter().any(|arg| arg == "-h" || arg == "--help") {
-        println!("Usage: rst19-mosaic DATA_DIR --sequence-json FILE [OPTIONS]\n\n--out-dir DIR --mode robust_mean|median --clip-sigma N --tile-rows N --raw-preview");
+        println!("Usage: rst19-mosaic DATA_DIR --sequence-json FILE [OPTIONS]\n\n--out-dir DIR --mode robust_mean|median --clip-sigma N --interpolation-order 0|1|2|3 --tile-rows N --raw-preview");
         return Ok(());
     }
     let result = run_desktop(args)?;
@@ -779,6 +872,7 @@ mod tests {
             vec![[0.0, 0.0], [1.0, 0.0]],
             "median",
             3.0,
+            1,
         )
         .unwrap();
         assert_eq!((result.output_height, result.output_width), (3, 5));
@@ -800,11 +894,38 @@ mod tests {
             vec![[0.0, 0.0]],
             "median",
             3.0,
+            1,
         )
         .unwrap();
         assert_eq!(result.coverage, vec![1, 0, 1, 1]);
         assert!(result.image[1].is_nan());
         assert_eq!(result.image[0], 10.0);
+    }
+
+    #[test]
+    fn scipy_spline_orders_zero_through_three_are_available() {
+        let values: Vec<_> = (0..4)
+            .flat_map(|y| (0..4).map(move |x| ((y * 10 + x) as f32).powi(2)))
+            .collect();
+        let input = frame(&values, "spline.fits");
+        let sampled: Vec<_> = (0..=3)
+            .map(|order| sample(&input, 4, 4, 1.3, 1.7, order).unwrap())
+            .collect();
+
+        assert_eq!(sampled[0], 441.0);
+        assert!((sampled[1] - 356.1).abs() < 1e-3);
+        assert!(sampled.iter().all(|value| value.is_finite()));
+        assert_ne!(sampled[2], sampled[1]);
+        assert_ne!(sampled[3], sampled[1]);
+
+        let mut args = vec!["frames".into(), "--interpolation-order".into(), "3".into()];
+        args.extend(["--sequence-json".into(), "sequence.json".into()]);
+        assert_eq!(parse_args(&args).unwrap().interpolation_order, 3);
+        args[2] = "4".into();
+        assert_eq!(
+            parse_args(&args).unwrap_err(),
+            "interpolation_order must be between 0 and 3"
+        );
     }
 
     #[test]
@@ -820,6 +941,7 @@ mod tests {
             vec![[0.0, 0.0]; 3],
             "robust_mean",
             1.0,
+            1,
         )
         .unwrap();
         assert_eq!(result.image, vec![10.5]);
@@ -834,6 +956,14 @@ mod tests {
         );
         let parsed = parse_args(&["frames".into()]).unwrap();
         assert!(parsed.sequence_json.is_none());
+        let parsed = parse_args(&[
+            "frames".into(),
+            "--sequence-json".into(),
+            "sequence.json".into(),
+            "--raw-preview".into(),
+        ])
+        .unwrap();
+        assert!(parsed.raw_preview);
     }
 
     #[test]
