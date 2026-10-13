@@ -7,6 +7,7 @@
 本节覆盖最新工作区代码；后文保留此前验证记录，不能视为当前全部测试通过。
 
 - `sequence.analyze_core` 现在在 Rust 中直接读取 FITS，按序列默认值建立可复用的首帧 float32 局部背景，逐帧运行原生检测，解析 `DATE-OBS`，并执行常规质量轨迹及补充高速点源关联。三帧合成序列的每帧 `FrameAnalysis`、质量轨迹字段、时间轴及高速点源轨迹与 Python 组件基线逐字段一致（数值容差 `5e-7`）；本次报告 `tmp/verify-sequence-core-v7/verification.json`，包含 engine、输入 FITS 和 Python 基线源码 SHA-256，观测时间为 0、2、4 秒，默认关联返回 1 条轨迹，显式关闭后返回空列表。完整 `cargo test --locked`（backend 与 desktop）、两端 Clippy `-D warnings` 和格式检查均通过。Windows 包 `dist/RST19-Windows-AMD64-20261013-021503-093851/` 在禁用外部 Python 搜索后通过原生 worker 路由，并验证关联关闭开关；冻结环境为 Python 3.11.9、NumPy 1.26.4、SciPy 1.17.1、Pillow 12.2.0；78 个工具与 203 个 SHA-256 文件校验通过，报告 `tmp/package-verification-sequence-core-v5/verification.json`。这仍只是 Rust 核心入口；完整 `analyze_sequence` 的时间候选恢复、拖影审计、叠加暗源恢复、相对测光编排和 `SequenceResult` 兼容仍待迁移，macOS/Linux 尚未实际构建验收。
+- `rst19-wcs-validation` 的桌面 worker 现由 Rust 读取 FITS 与离线 CSV 星表，完成检测、逐帧仿射 WCS 验证，并写出带标题/图例的 CSV、JSON、PNG 图表。`backend/verify_wcs_sequence.py` 的 23 个原生请求全字段对照通过，含两帧 FITS 文件级验证，报告 `tmp/verify-wcs-validation-v3/verification.json`；engine SHA-256 为 `646a872d5e72cbb0c9ee0a5e8977e9b662efda1647be97f73fddd35901099357`。Backend 55 个单测及 parity 集、desktop 5 个测试、两端 Clippy `-D warnings` 与格式检查通过。Windows 包 `dist/RST19-Windows-AMD64-20261013-023838-938869/` 的 native worker 在禁用外部 Python 搜索后同时验证星表不足的 `insufficient` 路径和三源匹配的 `validated` 路径；CSV/JSON/PNG 均生成，78 个工具、203 个 SHA-256 文件校验通过，冻结环境为 Python 3.11.9、NumPy 1.26.4、SciPy 1.17.1、Pillow 12.2.0。报告 `tmp/package-verification-wcs-validation-v4/verification.json`。已目视检查残差图标题、图例、刻度、单帧横轴及数据点。独立 Python CLI 仍保留，故 `rst19.wcs_validation` 仍标记迁移中，内置 Python 运行时也继续供其他未迁移工具使用。
 - `sequence.brief` 已迁入 Rust JSONL 引擎和桌面 worker，完整返回结构化简报及显示文本。带时区时间戳、运动回归、无效时间回退、点/线候选排序、合成图和空结果 3 个场景与 Python 全字段匹配，容差 `5e-7`；Python 简报测试 3 项通过，Rust 后端 50 项单测及 parity 集成组、桌面端 5 项测试与两端 Clippy 均通过。验证报告 `tmp/native-sequence-brief-package-v1/verification.json`。Windows 包 `dist/RST19-Windows-AMD64-20261013-015043-005526/` 的 worker 在外部 Python 搜索禁用后通过简报路由验收；完整包 78 个工具、203 个 SHA-256 项核验通过，报告 `tmp/package-verification-sequence-brief-v1/verification.json`。macOS/Linux 尚未验收；高层 `analyze_sequence` 仍待迁移。
 - 相对测光已迁入 `photometry.relative.fit`、桌面 native worker 和独立 `rst19-relative-photometry` Rust CLI。七个场景覆盖带噪源块留出、质量/运动/变量剔除与 MAD 离群点、线性和二次空间项、退化设计、零自由度及 Python 可迭代映射输入；四条入口与 Python 字段按 `5e-7` 容差一致，seed 0/12 的 NumPy 1.26.4 permutation 固定向量也通过单测。对照报告为 `tmp/native-relative-photometry-package-v4/verification.json`，Python 回归 `tests/test_relative_photometry.py` 为 8 项通过。Windows 包 `dist/RST19-Windows-AMD64-20261013-012801-543166/`（内置 Python 3.11.9、NumPy 1.26.4、SciPy 1.17.1、Pillow 12.2.0）在外部 Python 搜索路径禁用后通过 JSONL、桌面工具和独立 CLI 路由；78 个工具与 203 个 SHA-256 项通过核验，报告为 `tmp/package-verification-relative-photometry-v3/verification.json`。macOS/Linux 尚未构建验收，其他仍未迁移模块仍需要包内 Python 环境。
 - `rst19-source-geometry-audit` 已实现 Rust JSONL、桌面 worker 与独立 CLI 路由。NumPy 1.26.4 PCG64 原始流以及 Floyd／大样本尾部洗牌索引与固定向量一致；4 组正常输入（含全量抽样、最大 64 位种子）和 4 种输入错误均通过 Python 对照，CSV/JSON 数值容差为 `2e-12`，输入 CSV 未改变。报告 `tmp/native-source-geometry-audit-v8/verification.json`。
@@ -88,7 +89,7 @@
 - `attitude.audit.frames`、`attitude.audit.paths` 和 `rst19-aux-audit` 的 4 个原生进程场景逐字段通过，覆盖辅助块缺失、RA 跨零、替代相机轴、FITS 路径读取及产物写入；CSV 与 Python 参考文件逐字节一致，JSON 全字段一致。报告 `tmp/native-attitude-verification-20261013-v6/verification.json`；本次 engine / CLI SHA-256 分别为 `4fadbba6875a72450d1e6e925c68b4e2cb7b33972b5c46ef4231a365912e3c23` 和 `559fad77ade73ace5ae412320a51a5ed303e400e9c87c9bc839b89296fdb21ca`。此处核验辅助字段之间的一致性，不是完整 WCS 或物理指向确认。
 - 此前一次完整 backend `cargo test --locked` 的 56 项测试通过；本轮最新 backend 与 desktop 完整测试、两端 `cargo clippy --all-targets -- -D warnings` 和格式检查记录见本节第一条。完全重合 PSF 的不确定系数分支已替换为明确的不可辨识判断。
 - float32 路径已经实现；后文“仍返回未迁移错误”、16 个源测量案例和 57 个检测案例的描述属于较早版本，当前数量分别为 32 和 138。
-- 后端全量迁移未完成：158 个登记 Python 模块中，32 个已标记为 Rust 迁移完成、11 个仍在迁移、115 个待迁移；桌面单帧、辅助姿态审计、Gaia 合并、特征证据轴、直接近邻审计、其他特征审计、近邻审计及通量/峰值比工具已走 Rust worker，其余工具仍调用原 Python worker。Windows 完整环境包仍携带 Python 运行时供未迁移工具使用；macOS/Linux 构建及运行尚未验证。
+- 后端全量迁移未完成：158 个登记 Python 模块中，55 个标记为 Rust 迁移完成、11 个进行中、92 个待迁移；桌面单帧、辅助姿态审计、Gaia 合并、特征证据轴、WCS 验证、序列核心及其他工具已走 Rust worker，其余工具仍调用原 Python worker。Windows 完整环境包仍携带 Python 运行时供未迁移工具使用；macOS/Linux 构建及运行尚未验证。
 
 ## 此前已验证记录
 
@@ -135,7 +136,7 @@
 
 ## 尚未完成
 
-当前已有 32 个 Python 模块标记为 Rust 迁移完成，11 个在迁移中，115 个待迁；桌面主入口、Gaia 分层合并、特征证据轴、直接近邻、其他特征与近邻审计及若干序列/测光/姿态功能已由 Rust 执行。完整生产运算链尚未切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
+当前已有 55 个 Python 模块标记为 Rust 迁移完成，11 个在迁移中，92 个待迁；桌面主入口、Gaia 分层合并、特征证据轴、WCS 验证、直接近邻、其他特征与近邻审计及若干序列/测光/姿态功能已由 Rust 执行。完整生产运算链尚未切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍由内置 Python 环境运行。
 
 检测对照已覆盖 float64 与 float32 固定样例和 ROI，以及首帧 float64 全幅；float32 全幅验收、WCS 拟合与天测流程、序列运动、合成、全部审计／实验及剩余 CLI 契约仍需继续移植和对照。Windows 完整桌面包已构建验收，macOS/Linux 还未实际构建或运行；打包流程仍保留 Python 环境供剩余工具使用。
 

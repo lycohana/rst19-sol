@@ -49,6 +49,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-pair-mechanism-sensitivity"
                         | "rst19-pair-pixel-topology"
                         | "rst19-aperture-peak-ratio"
+                        | "rst19-wcs-validation"
                         | "rst19-feature-correlation"
                         | "rst19-feature-transition-flow"
                         | "rst19-feature-gate-route"
@@ -294,6 +295,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-aperture-peak-ratio"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-wcs-validation"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-correlation"})

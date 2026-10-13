@@ -29,6 +29,29 @@ def make_fits(path: Path) -> None:
     path.write_bytes(header + struct.pack(f">{len(pixels)}h", *pixels))
 
 
+def make_wcs_catalog(path: Path) -> None:
+    center_ra = math.radians(10.0)
+    center_dec = math.radians(20.0)
+    scale_rad = math.radians(1.0 / 3600.0)
+    rows = ["source_id,ra_deg,dec_deg"]
+    for index, (x, y) in enumerate(((30.0, 40.0), (70.0, 80.0), (98.0, 50.0))):
+        xi = (x - 64.0) * scale_rad
+        eta = (y - 64.0) * scale_rad
+        rho = math.hypot(xi, eta)
+        distance = math.atan(rho)
+        dec = math.asin(
+            math.cos(distance) * math.sin(center_dec)
+            + eta * math.sin(distance) * math.cos(center_dec) / rho
+        )
+        ra = center_ra + math.atan2(
+            xi * math.sin(distance),
+            rho * math.cos(center_dec) * math.cos(distance)
+            - eta * math.sin(center_dec) * math.sin(distance),
+        )
+        rows.append(f"source-{index},{math.degrees(ra) % 360.0:.12f},{math.degrees(dec):.12f}")
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
 def make_feature_catalog(path: Path) -> None:
     path.write_bytes(
         b"\xef\xbb\xbf"
@@ -474,6 +497,75 @@ def verify(package: Path, out: Path) -> dict:
     sequence_core_disabled = sequence_core_disabled_events[0]["payload"]
     assert sequence_core_disabled["fast_point_tracks"] == []
     assert sequence_core_disabled["tracking"]["fast_point_motion_count"] == 0
+    wcs_data_dir = out / "WCS observations"
+    wcs_data_dir.mkdir(parents=True)
+    make_fits(wcs_data_dir / "frame.fits")
+    wcs_catalog = wcs_data_dir / "offline catalog.csv"
+    wcs_catalog.write_text("source_id,ra_deg,dec_deg\nreference,10,20\n", encoding="utf-8")
+    wcs_output = out / "WCS validation products"
+    wcs_request = {
+        "operation": "tool",
+        "tool": "rst19-wcs-validation",
+        "args": [
+            str(wcs_data_dir.resolve()),
+            str(wcs_catalog.resolve()),
+            "--center-ra", "10",
+            "--center-dec", "20",
+            "--pixel-scale", "1",
+            "--crpix-x", "64",
+            "--crpix-y", "64",
+            "--out-dir", str(wcs_output.resolve()),
+        ],
+        "out_dir": str(out.resolve()),
+    }
+    wcs_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(wcs_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=120, check=False,
+    )
+    assert wcs_response.returncode == 0, (
+        f"Rust WCS validation worker failed: {wcs_response.stdout}\n{wcs_response.stderr}"
+    )
+    wcs_events = [json.loads(line) for line in wcs_response.stdout.splitlines()]
+    assert len(wcs_events) == 1 and wcs_events[0]["ok"]
+    wcs_result = wcs_events[0]["payload"]
+    assert wcs_result["tool"] == "rst19-wcs-validation"
+    assert wcs_result["result"]["frame_count"] == 1
+    assert wcs_result["result"]["frames"][0]["status"] == "insufficient"
+    assert (wcs_output / "wcs_frame_validation.csv").is_file()
+    assert (wcs_output / "wcs_validation_report.json").is_file()
+    assert (wcs_output / "wcs_validation_residual.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert (wcs_output / "wcs_validation_scale.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    matched_catalog = out / "matched offline catalog.csv"
+    make_wcs_catalog(matched_catalog)
+    matched_output = out / "WCS matched validation products"
+    matched_request = {
+        **wcs_request,
+        "args": [
+            str(wcs_data_dir.resolve()),
+            str(matched_catalog.resolve()),
+            "--center-ra", "10",
+            "--center-dec", "20",
+            "--pixel-scale", "1",
+            "--crpix-x", "64",
+            "--crpix-y", "64",
+            "--min-matches", "3",
+            "--out-dir", str(matched_output.resolve()),
+        ],
+    }
+    matched_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(matched_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=120, check=False,
+    )
+    assert matched_response.returncode == 0, (
+        f"Rust WCS validation worker failed on matched catalog: "
+        f"{matched_response.stdout}\n{matched_response.stderr}"
+    )
+    matched_events = [json.loads(line) for line in matched_response.stdout.splitlines()]
+    assert len(matched_events) == 1 and matched_events[0]["ok"]
+    matched_result = matched_events[0]["payload"]
+    assert matched_result["result"]["frames"][0]["status"] == "validated", matched_result
     catalog = out / "source catalog.csv"
     make_feature_catalog(catalog)
 
@@ -1323,6 +1415,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-pair-mechanism-sensitivity",
                   "rst19-pair-pixel-topology",
                   "rst19-aperture-peak-ratio",
+                  "rst19-wcs-validation",
                   "rst19-feature-correlation",
                   "rst19-feature-transition-flow",
                   "rst19-feature-gate-route",
@@ -1385,6 +1478,17 @@ def verify(package: Path, out: Path) -> dict:
         "fast_point_motion_disable_verified": True,
         "external_python_search_disabled": True,
         "scope": "frame detection, ordinary quality-track association, and supplemental fast-point motion only",
+    }
+    report["wcs_validation"] = {
+        "native_worker_tool_route_verified": True,
+        "frame_count": 1,
+        "per_frame_status": {
+            "insufficient_catalog": "insufficient",
+            "matched_catalog": "validated",
+        },
+        "csv_json_and_png_artifacts_written": True,
+        "external_python_search_disabled": True,
+        "scope": "offline catalog matching, frame detection, affine WCS validation, and artifact writing",
     }
     report["source_geometry_audit"] = {
         "packaged_native_binary": geometry_cli.name,

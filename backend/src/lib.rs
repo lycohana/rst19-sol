@@ -66,5 +66,6 @@ pub mod spatial;
 pub mod statistics;
 pub mod statistics32;
 pub mod wcs_fit;
+pub mod wcs_validation;
 
 pub type Result<T> = std::result::Result<T, String>;
