@@ -2217,7 +2217,7 @@
         "build_report",
         "build_photometric_quality_report"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.photometric_report_cli",
@@ -2228,7 +2228,7 @@
         "_photometry_input",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.photometric_workflow",
@@ -3157,7 +3157,7 @@
     "rst19-gaia-frame": "rst19.gaia_frame_cli:main",
     "rst19-photometric-auto": "rst19.photometric_workflow_cli:main",
     "rst19-plate-solver": "rst19.plate_solver_cli:main",
-    "rst19-photometric-report": "rst19.photometric_report_cli:main",
+    "rst19-photometric-report": "Rust standalone CLI, JSONL photometry.report operation, and desktop worker; full JSON output matches the frozen Python reference for all four observability levels; strict absolute-distance and extinction gates, error/provenance summaries, CLI flags, and PATH-disabled execution verified; Python console entry removed; package and macOS/Linux acceptance pending",
     "rst19-sequence": "rst19.sequence_cli:main",
     "rst19-mosaic": "rst19.mosaic_cli:main",
     "rst19-innovation": "rst19.innovation_cli:main",
@@ -3340,6 +3340,7 @@
     "rst19-pair-mechanism-context": "geometry-conditioned candidate-pair background; result and all three CSV artifacts match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending",
     "rst19-pair-mechanism-sensitivity": "predeclared multi-window candidate-pair sensitivity; result and CSV artifact match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending",
     "rst19-pair-pixel-topology": "Rust standalone CLI, JSONL operation, and native desktop worker perform the raw/special-excluded 8-connected pixel topology and local-maximum audit; result, CSV, JSON, and SVG match Python byte-for-byte where applicable; Python console entrypoint removed; Windows route verified; macOS/Linux validation pending",
+    "rst19-photometric-report": "Rust standalone CLI, JSONL photometry.report operation, and desktop worker; full JSON output matches the frozen Python reference for all four observability levels; strict absolute-distance and extinction gates, error/provenance summaries, CLI flags, and PATH-disabled execution verified; Python console entry removed; package and macOS/Linux acceptance pending",
     "rst19-aperture-peak-ratio": "finite flux/positive peak summaries by feature class and proposal-method group with target class percentiles; result JSON and all three CSV artifacts match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending",
     "rst19-feature-correlation": "pairwise Spearman correlations with average tied ranks, first-seen class medians, and within-class pairwise correlations; full result and three CSV artifacts match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux validation pending",
     "rst19-feature-transition-flow": "reads sequence_feature_class_transition.csv without FITS access; full result JSON and CSV artifact match Python; native JSONL and desktop worker routes verified; Windows package route verified; macOS/Linux package validation pending",
@@ -3378,6 +3379,9 @@
     "tests/assignment_parity.rs",
     "tests/matching_parity.rs",
     "tests/photometry_parity.rs",
+    "tests/photometric_report_parity.rs",
+    "tests/fixtures/photometric_report_four_levels_input.json",
+    "tests/fixtures/photometric_report_four_levels_expected.json",
     "tests/calibration_parity.rs",
     "tests/source_photometry_parity.rs",
     "tests/pipeline_parity.rs",
@@ -3546,7 +3550,7 @@
     "remaining sequence work: full multi-scale/raw/temporal candidate assembly and verification, motion/trail and stack-faint orchestration, full relative-photometry configuration/output compatibility, full SequenceResult assembly/output compatibility, and exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-innovation-package, rst19-temporal-codes, rst19-sweep, rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-innovation-package, rst19-temporal-codes, rst19-sweep, rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, photometric report, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
@@ -3559,6 +3563,7 @@
   "native_pair_mechanism_context": "pair geometry, class/quality summaries, target-pair context, and Python-byte-identical CSV/JSON artifacts",
   "native_pair_mechanism_sensitivity": "predeclared centroid/peak windows with descriptive count changes and no physical-probability interpretation",
   "native_pair_pixel_topology": "raw and special-excluded 8-connected patch components, peak membership, and local maxima; diagnostics describe image pixels and are not physical-source identity",
+  "native_photometric_report": "Rust JSONL, standalone CLI, and desktop worker calculate magnitude observability, false-valid violations, provenance/error summaries, and strict absolute-distance/extinction eligibility from JSON; all four observability levels match a frozen Python baseline; production tool entry is Rust-only",
   "native_pair_repair_counterfactual": "simultaneous local median replacement for repeated-code and negative-anomaly pixels; four variants rerun the same Rust detector on the same cropped FITS pixels; Python result-field parity fixture, CLI, JSONL engine, desktop worker, BOM CSV headers, and PATH-disabled execution verified",
   "native_pair_response_attribution": "masked Gaussian response and valid-weight normalization, ordered local-maxima ranking, repeated-code/negative-anomaly classification, signed 4-sigma kernel attribution, Python result-field parity fixture, CLI, JSONL engine, desktop worker, BOM CSV headers, and PATH-disabled execution verified",
   "native_pair_flux_covariance": "forced-stability CSV loading; tie-aware Pearson/Spearman, same-frame median normalization, pair-total fraction shifts, complete control-pair distributions and upper tails; Python result-field parity fixture, CLI, JSONL engine, desktop worker, BOM CSV and JSON artifacts, and PATH-disabled execution verified",

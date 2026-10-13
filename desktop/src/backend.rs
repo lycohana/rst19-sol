@@ -29,6 +29,7 @@ fn uses_native_worker(request: &Value) -> bool {
                     | "feedback.load"
                     | "photometry.calibration.sensitivity"
                     | "photometry.relative.fit"
+                    | "photometry.report"
                     | "sequence.brief"
                     | "sequence.analyze_core"
                     | "sequence.stack_forced_measure_batch"
@@ -77,6 +78,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-sweep"
                         | "rst19-feature-psf-leaveout"
                         | "rst19-relative-photometry"
+                        | "rst19-photometric-report"
                 )
             ))
 }
@@ -280,6 +282,9 @@ mod tests {
         assert!(uses_native_worker(
             &json!({"operation":"photometry.relative.fit"})
         ));
+        assert!(uses_native_worker(
+            &json!({"operation":"photometry.report"})
+        ));
         assert!(uses_native_worker(&json!({"operation":"sequence.brief"})));
         assert!(uses_native_worker(
             &json!({"operation":"sequence.analyze_core"})
@@ -388,6 +393,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-relative-photometry"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-photometric-report"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-innovation-package"})

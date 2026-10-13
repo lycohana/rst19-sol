@@ -83,6 +83,12 @@ fn run(request: Value) -> Result<Value, String> {
     if request["operation"] == "photometry.relative.fit" {
         return rst19_core::relative_photometry::handle_request(&request);
     }
+    if request["operation"] == "photometry.report" {
+        return rst19_core::photometric_report::build_photometric_report(
+            request.get("input").unwrap_or(&Value::Null),
+            request.get("options").unwrap_or(&Value::Null),
+        );
+    }
     if request["operation"] == "sequence.brief" {
         return rst19_core::sequence_brief::handle_request(&request);
     }
@@ -94,6 +100,9 @@ fn run(request: Value) -> Result<Value, String> {
             "Rust desktop worker only accepts preview, sensitivity, feedback, or native tools"
                 .into(),
         );
+    }
+    if request["tool"] == "rst19-photometric-report" {
+        return rst19_core::photometric_report::run_desktop(&string_args(&request)?);
     }
     if request["tool"] == "rst19-feature-flag-profile" {
         let out_dir = PathBuf::from(
@@ -891,6 +900,9 @@ mod tests {
             .any(|tool| { tool["name"] == "rst19-pair-pixel-topology" && tool["native"] == true }));
         assert!(tools
             .iter()
+            .any(|tool| { tool["name"] == "rst19-photometric-report" && tool["native"] == true }));
+        assert!(tools
+            .iter()
             .any(|tool| tool["name"] == "rst19-sequence" && tool["native"] == false));
     }
 
@@ -903,6 +915,17 @@ mod tests {
         }))
         .unwrap_err();
         assert_eq!(error, "a FITS input path is required");
+    }
+
+    #[test]
+    fn photometric_report_is_dispatched_to_rust() {
+        let error = run(json!({
+            "operation":"tool",
+            "tool":"rst19-photometric-report",
+            "args":[]
+        }))
+        .unwrap_err();
+        assert_eq!(error, "missing photometry JSON input path");
     }
 
     #[test]

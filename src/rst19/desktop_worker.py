@@ -53,6 +53,7 @@ def registry() -> dict[str, str]:
     entries.setdefault("rst19-source-geometry-audit", "native:rst19-source-geometry-audit")
     entries.setdefault("rst19-innovation-package", "native:rst19-innovation-package")
     entries.setdefault("rst19-temporal-codes", "native:rst19-temporal-codes")
+    entries.setdefault("rst19-photometric-report", "native:rst19-photometric-report")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -410,6 +411,27 @@ def catalog() -> list[dict]:
                               {"key": "out_dir", "flag": "--out-dir", "help": "JSON/CSV 输出目录",
                                "required": False, "default": "tmp/temporal-code-audit", "choices": [],
                                "kind": "value", "nargs": None, "path": True, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-photometric-report":
+            tools.append({"name": name,
+                          "description": "审计 rst19 星等 JSON：区分仪器、相对、表观和绝对星等证据",
+                          "fields": [
+                              {"key": "input", "flag": "", "help": "rst19 JSON 结果或包含 source_rows/frame_rows 的 JSON",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "out", "flag": "--out", "help": "可选审计报告 JSON；不提供时输出到 stdout",
+                               "required": False, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "require_wcs", "flag": "--require-wcs", "help": "把 WCS 作为强制几何条件",
+                               "required": False, "default": False, "choices": [], "kind": "bool",
+                               "nargs": 0, "path": False, "toggle_value": True, "repeat": False},
+                              {"key": "no_require_wcs", "flag": "--no-require-wcs", "help": "不把 WCS 作为强制几何条件",
+                               "required": False, "default": False, "choices": [], "kind": "bool",
+                               "nargs": 0, "path": False, "toggle_value": True, "repeat": False},
+                              {"key": "strict", "flag": "--strict", "help": "发现 false-valid 矛盾时返回失败",
+                               "required": False, "default": False, "choices": [], "kind": "bool",
+                               "nargs": 0, "path": False, "toggle_value": True, "repeat": False},
                           ]})
             continue
         module = module_for(name)

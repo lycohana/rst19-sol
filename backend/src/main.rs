@@ -884,6 +884,10 @@ fn execute(request: Value) -> Result<Value> {
         }
         "sequence.brief" => rst19_core::sequence_brief::handle_request(&request),
         "photometry.relative.fit" => rst19_core::relative_photometry::handle_request(&request),
+        "photometry.report" => rst19_core::photometric_report::build_photometric_report(
+            request.get("input").unwrap_or(&Value::Null),
+            request.get("options").unwrap_or(&Value::Null),
+        ),
         "sequence.temporal_reference_candidates" => {
             rst19_core::sequence_temporal::temporal_reference_candidates(&request)
         }

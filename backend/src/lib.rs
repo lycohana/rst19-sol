@@ -47,6 +47,7 @@ pub mod pair_pixel_topology;
 pub mod pair_repair_counterfactual;
 pub mod pair_response_attribution;
 pub mod photometric_calibration;
+pub mod photometric_report;
 pub mod photometry;
 pub mod pipeline;
 pub mod precision;

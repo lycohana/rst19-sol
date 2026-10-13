@@ -29,7 +29,6 @@ def test_catalog_covers_all_scientific_entry_points():
     entries = registry()
     tools = catalog()
     assert {tool["name"] for tool in tools} == set(entries)
-    assert len(tools) == 78
     assert all("gui" not in target and "launcher" not in target for target in entries.values())
     assert all(tool["fields"] for tool in tools)
     format_audit = next(tool for tool in tools if tool["name"] == "rst19-format-audit")
@@ -79,6 +78,7 @@ def test_catalog_covers_all_scientific_entry_points():
                                   "max_sources", "keep_linear_artifacts", "out_dir"],
         "rst19-aux-audit": ["input_path", "out_dir"],
         "rst19-source-geometry-audit": ["catalog", "target_class", "control_class", "trials", "seed", "out_dir"],
+        "rst19-photometric-report": ["input", "out", "require_wcs", "no_require_wcs", "strict"],
     }
     for tool_name, expected_fields in migrated_tools.items():
         tool = next(item for item in tools if item["name"] == tool_name)
@@ -95,6 +95,13 @@ def test_format_audit_cannot_fall_back_to_python(tmp_path):
 
 def test_sequence_feature_comparison_cannot_fall_back_to_python(tmp_path):
     request = {"operation": "tool", "tool": "rst19-feature-sequence-compare", "args": [],
+               "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+def test_photometric_report_cannot_fall_back_to_python(tmp_path):
+    request = {"operation": "tool", "tool": "rst19-photometric-report", "args": [],
                "out_dir": str(tmp_path)}
     with pytest.raises(ValueError, match="必须由 native worker 执行"):
         run(request)

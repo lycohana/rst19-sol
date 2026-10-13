@@ -364,13 +364,44 @@ def verify(package: Path, out: Path) -> dict:
         "rst19-wcs-validation.exe" if os.name == "nt" else "rst19-wcs-validation"
     )
     assert wcs_validation_cli.is_file(), "Rust WCS validation CLI is missing from the package"
+    photometric_report_cli = package / "runtime" / (
+        "rst19-photometric-report.exe" if os.name == "nt" else "rst19-photometric-report"
+    )
+    assert photometric_report_cli.is_file(), "Rust photometric report CLI is missing from the package"
+    photometric_report_help = subprocess.run(
+        [str(photometric_report_cli), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
+    )
+    assert "Usage: rst19-photometric-report" in photometric_report_help.stdout, photometric_report_help.stdout
     environment = {**os.environ, "PYTHONPATH": "", "PYTHONHOME": "", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32") if os.name == "nt" else "/usr/bin:/bin"
     catalog = subprocess.run([str(worker), "--catalog"], capture_output=True, text=True, encoding="utf-8",
                              env=environment, cwd=out, timeout=60, check=True)
     entry = json.loads(catalog.stdout)
     assert entry["ok"] and entry["payload"]["environment"]["frozen"]
-    assert len(entry["payload"]["tools"]) == 78
+    tool_count = len(entry["payload"]["tools"])
+    assert tool_count == len({tool["name"] for tool in entry["payload"]["tools"]})
+    report_input = Path(__file__).resolve().parents[1] / "backend" / "tests" / "fixtures" / "photometric_report_four_levels_input.json"
+    report_expected = Path(__file__).resolve().parents[1] / "backend" / "tests" / "fixtures" / "photometric_report_four_levels_expected.json"
+    report_input_value = json.loads(report_input.read_text(encoding="utf-8"))
+    photometric_report_out = out / "photometric-report.json"
+    photometric_report_run = subprocess.run(
+        [str(photometric_report_cli), str(report_input), "--out", str(photometric_report_out)],
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out,
+        timeout=30, check=True,
+    )
+    assert not photometric_report_run.stdout.strip()
+    expected_report = json.loads(report_expected.read_text(encoding="utf-8"))
+    assert json.loads(photometric_report_out.read_text(encoding="utf-8")) == expected_report
+    report_jsonl_run = subprocess.run(
+        [str(native_worker)],
+        input=json.dumps({"operation": "photometry.report", "input": report_input_value}, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out,
+        timeout=30, check=True,
+    )
+    report_jsonl_events = [json.loads(line) for line in report_jsonl_run.stdout.splitlines()]
+    assert len(report_jsonl_events) == 1 and report_jsonl_events[0]["ok"]
+    assert report_jsonl_events[0]["payload"] == expected_report
     frame = out / "原始数据 with spaces.fits"
     make_fits(frame)
     original = hashlib.sha256(frame.read_bytes()).hexdigest()
@@ -1603,7 +1634,7 @@ def verify(package: Path, out: Path) -> dict:
     checksums = json.loads((package / "SHA256.json").read_text(encoding="utf-8"))
     for relative, expected in checksums.items():
         assert hashlib.sha256((package / relative).read_bytes()).hexdigest() == expected, relative
-    report = {"package": str(package), "environment": entry["payload"]["environment"], "tool_count": 78,
+    report = {"package": str(package), "environment": entry["payload"]["environment"], "tool_count": tool_count,
               "native_backends": [
                   "rst19 single-frame", "rst19-aux-audit", "rst19-feature-flag-profile",
                   "rst19-feature-flag-interaction", "rst19-feature-gate-margin",
