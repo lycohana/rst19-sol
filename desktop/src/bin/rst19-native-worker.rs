@@ -95,6 +95,13 @@ fn run(request: Value) -> Result<Value, String> {
     if request["operation"] == "sequence.analyze_core" {
         return rst19_core::sequence_pipeline::handle_request(&request);
     }
+    if request["operation"] == "mosaic.build" {
+        let args = serde_json::from_value::<Vec<String>>(
+            request.get("args").cloned().unwrap_or(json!([])),
+        )
+        .map_err(|error| error.to_string())?;
+        return rst19_core::mosaic::run_desktop(&args);
+    }
     if request["operation"] != "tool" {
         return Err(
             "Rust desktop worker only accepts preview, sensitivity, feedback, or native tools"
@@ -103,6 +110,20 @@ fn run(request: Value) -> Result<Value, String> {
     }
     if request["tool"] == "rst19-photometric-report" {
         return rst19_core::photometric_report::run_desktop(&string_args(&request)?);
+    }
+    if request["tool"] == "rst19-mosaic" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        return rst19_core::mosaic::run_desktop(&string_args(&request)?);
     }
     if request["tool"] == "rst19-feature-flag-profile" {
         let out_dir = PathBuf::from(
@@ -977,6 +998,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-feature-cross" && tool["native"] == true));
+        assert!(tools
+            .iter()
+            .any(|tool| tool["name"] == "rst19-mosaic" && tool["native"] == true));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-feature-audit-replicates" && tool["native"] == false
         }));
@@ -994,6 +1018,27 @@ mod tests {
         }))
         .unwrap_err();
         assert_eq!(error, "a FITS input path is required");
+    }
+
+    #[test]
+    fn mosaic_tool_is_dispatched_to_rust() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let out_dir = std::env::temp_dir().join(format!(
+            "rst19-mosaic-dispatch-{}-{nonce}",
+            std::process::id()
+        ));
+        let error = run(json!({
+            "operation":"tool",
+            "tool":"rst19-mosaic",
+            "args":[],
+            "out_dir":out_dir
+        }))
+        .unwrap_err();
+        assert_eq!(error, "a FITS directory is required");
+        let _ = fs::remove_dir_all(out_dir);
     }
 
     #[test]
@@ -1041,10 +1086,8 @@ mod tests {
 
     #[test]
     fn feature_cross_is_dispatched_to_rust() {
-        let out_dir = std::env::temp_dir().join(format!(
-            "rst19-feature-cross-empty-{}",
-            std::process::id()
-        ));
+        let out_dir =
+            std::env::temp_dir().join(format!("rst19-feature-cross-empty-{}", std::process::id()));
         let error = run(json!({
             "operation":"tool",
             "tool":"rst19-feature-cross",

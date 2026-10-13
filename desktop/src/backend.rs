@@ -32,6 +32,7 @@ fn uses_native_worker(request: &Value) -> bool {
                     | "photometry.report"
                     | "sequence.brief"
                     | "sequence.analyze_core"
+                    | "mosaic.build"
                     | "sequence.stack_forced_measure_batch"
                     | "wcs.affine.refined"
             )
@@ -82,6 +83,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-feature-psf-leaveout"
                         | "rst19-relative-photometry"
                         | "rst19-photometric-report"
+                        | "rst19-mosaic"
                 )
             ))
 }
@@ -424,7 +426,7 @@ mod tests {
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})
         ));
-        assert!(!uses_native_worker(
+        assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-mosaic"})
         ));
     }

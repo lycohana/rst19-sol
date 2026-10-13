@@ -786,6 +786,13 @@ fn execute(request: Value) -> Result<Value> {
             rst19_core::sequence::track_detections(&frames, &options)
         }
         "sequence.analyze_core" => rst19_core::sequence_pipeline::handle_request(&request),
+        "mosaic.build" => {
+            let args = serde_json::from_value::<Vec<String>>(
+                request.get("args").cloned().unwrap_or(json!([])),
+            )
+            .map_err(|error| error.to_string())?;
+            rst19_core::mosaic::run_desktop(&args)
+        }
         "sequence.fast_point_movers" => {
             let frames: Vec<Vec<rst19_core::measurement::Detection>> =
                 serde_json::from_value(request["frames"].clone()).map_err(|e| e.to_string())?;

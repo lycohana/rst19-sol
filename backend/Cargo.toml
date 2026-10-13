@@ -124,6 +124,10 @@ path = "src/bin/rst19-relative-photometry.rs"
 name = "rst19-wcs-validation"
 path = "src/bin/rst19-wcs-validation.rs"
 
+[[bin]]
+name = "rst19-mosaic"
+path = "src/bin/rst19-mosaic.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
