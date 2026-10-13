@@ -587,6 +587,12 @@ fn execute(request: Value) -> Result<Value> {
                 extreme_fraction,
             )
         }
+        "sequence.feature_parameter_compare" => {
+            let runs: Vec<rst19_core::sequence_feature_comparison::RunPath> =
+                serde_json::from_value(request.get("runs").cloned().ok_or("missing runs")?)
+                    .map_err(|error| error.to_string())?;
+            rst19_core::sequence_feature_comparison::compare(&runs)
+        }
         "audit.pair_mechanism_context" => {
             let catalog_path = request["catalog_path"]
                 .as_str()

@@ -305,6 +305,15 @@ def verify(package: Path, out: Path) -> dict:
     format_help = subprocess.run([str(format_audit_cli), "--help"], capture_output=True, text=True,
                                  encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True)
     assert "Usage: rst19-format-audit " in format_help.stdout, format_help.stdout
+    sequence_feature_compare = package / "runtime" / (
+        "rst19-feature-sequence-compare.exe" if os.name == "nt" else "rst19-feature-sequence-compare"
+    )
+    assert sequence_feature_compare.is_file(), "Rust sequence feature comparison CLI is missing from the package"
+    sequence_compare_help = subprocess.run(
+        [str(sequence_feature_compare), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
+    )
+    assert "Usage: rst19-feature-sequence-compare" in sequence_compare_help.stdout, sequence_compare_help.stdout
     attitude_cli = package / "runtime" / ("rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit")
     assert attitude_cli.is_file(), "Rust auxiliary attitude audit CLI is missing from the package"
     geometry_cli = package / "runtime" / (

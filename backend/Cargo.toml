@@ -33,6 +33,10 @@ name = "rst19-format-audit"
 path = "src/bin/rst19-format-audit.rs"
 
 [[bin]]
+name = "rst19-feature-sequence-compare"
+path = "src/bin/rst19-feature-sequence-compare.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 

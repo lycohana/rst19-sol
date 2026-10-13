@@ -41,6 +41,7 @@ def registry() -> dict[str, str]:
     # The format audit is Rust-only. Keep its form contract here until the
     # remaining Python catalog bootstrap is replaced by native Rust metadata.
     entries.setdefault("rst19-format-audit", "native:rst19-format-audit")
+    entries.setdefault("rst19-feature-sequence-compare", "native:rst19-feature-sequence-compare")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -71,6 +72,19 @@ def catalog() -> list[dict]:
                               {"key": "out_dir", "flag": "--out-dir", "help": "产物输出目录",
                                "required": False, "default": "tmp/format-audit", "choices": [],
                                "kind": "value", "nargs": None, "path": True, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-feature-sequence-compare":
+            tools.append({"name": name,
+                          "description": "比较多组已生成的序列特征持久性 JSON，不重新运行 FITS 检测",
+                          "fields": [
+                              {"key": "run", "flag": "--run", "help": "运行标签和 JSON 路径，NAME=JSON；至少两组",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": True},
+                              {"key": "out_dir", "flag": "--out-dir", "help": "比较表输出目录",
+                               "required": False, "default": "tmp/sequence-feature-parameter-comparison",
+                               "choices": [], "kind": "value", "nargs": None, "path": True,
+                               "repeat": False},
                           ]})
             continue
         module = module_for(name)
