@@ -21,6 +21,7 @@ from rst19.detection import _working_mask, build_background_model  # noqa: E402
 from rst19.fits import auxiliary_mask, read_fits  # noqa: E402
 from rst19.pipeline import analyze_frame  # noqa: E402
 from rst19.sequence import (  # noqa: E402
+    _fit_sequence_relative_photometry,
     _observation_times_seconds,
     _stack_forced_frame_measure_batch,
     _track_fast_candidate_movers,
@@ -115,14 +116,18 @@ def compare(actual: Any, expected: Any, path: str = "result") -> None:
             actual, expected, rel_tol=5e-7, abs_tol=5e-7
         ):
             raise AssertionError(f"{path}: Rust returned {actual!r}; Python returned {expected!r}")
-    elif isinstance(expected, list):
+    elif isinstance(expected, (list, tuple)):
         if not isinstance(actual, list) or len(actual) != len(expected):
             raise AssertionError(f"{path}: list length or type differs")
         for index, (got, wanted) in enumerate(zip(actual, expected)):
             compare(got, wanted, f"{path}[{index}]")
     elif isinstance(expected, dict):
         if not isinstance(actual, dict) or actual.keys() != expected.keys():
-            raise AssertionError(f"{path}: object keys differ")
+            if isinstance(actual, dict):
+                detail = f"actual-only={sorted(actual.keys() - expected.keys())}; expected-only={sorted(expected.keys() - actual.keys())}"
+            else:
+                detail = f"actual type={type(actual).__name__}"
+            raise AssertionError(f"{path}: object keys differ ({detail})")
         for key in expected:
             compare(actual[key], expected[key], f"{path}.{key}")
     else:
@@ -223,6 +228,9 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         "operation": "sequence.analyze_core",
         "paths": [str(path) for path in candidate_paths],
         "frame_options": {**FRAME_OPTIONS, "max_sources": 2},
+        "relative_photometry": True,
+        "relative_photometry_max_sources": 2,
+        "relative_photometry_validation_fraction": 0.0,
     }
     candidate_result = invoke(engine.resolve(), candidate_request)
     candidate_stage = candidate_result["fast_candidate_proposals"]
@@ -272,6 +280,19 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         [analysis.detection.quality_sources for analysis in candidate_analyses],
         frame_names=[str(path) for path in candidate_paths],
         frame_times=candidate_times,
+    )
+    python_relative_photometry = _fit_sequence_relative_photometry(
+        candidate_analyses,
+        candidate_tracking_result.tracks,
+        min_presence=candidate_tracking_result.min_presence,
+        max_sources=2,
+        spatial_order=0,
+        validation_fraction=0.0,
+    )
+    compare(
+        candidate_result["relative_photometry"],
+        json.loads(json.dumps(asdict(python_relative_photometry), allow_nan=False)),
+        "candidate.relative_photometry",
     )
     candidate_quality_fast_tracks = track_fast_point_movers(
         [analysis.detection.quality_sources for analysis in candidate_analyses],
@@ -390,8 +411,10 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         "fast_candidate_tracks_match_python_fields": True,
         "fast_candidate_proposal_count": candidate_stage["proposal_count"],
         "fast_candidate_accepted_track_count": candidate_stage["accepted_track_count"],
+        "relative_photometry_orchestration_matches_python": True,
+        "relative_photometry_status": candidate_result["relative_photometry"]["status"],
         "observation_times_seconds": frame_times,
-        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, and matched-filter candidate association with original-pixel forced measurement and quality gates; temporal recovery, trail auditing, stack recovery, and relative photometry remain outside this core operation",
+        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, matched-filter candidate association with original-pixel forced measurement and quality gates, and optional relative-photometry orchestration; temporal-reference recovery, trail auditing, and stack recovery remain outside this core operation",
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report

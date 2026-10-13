@@ -628,6 +628,125 @@ fn verify_fast_candidate_proposals(
     Ok(accepted_tracks)
 }
 
+fn fit_sequence_relative_photometry(
+    quality_frames: &[Vec<crate::measurement::Detection>],
+    headers: &[Value],
+    tracking: &Value,
+    min_presence: usize,
+    request: &Value,
+) -> Result<Value> {
+    if quality_frames.len() != headers.len() {
+        return Err("relative photometry frame data is misaligned".into());
+    }
+    let max_sources = request
+        .get("relative_photometry_max_sources")
+        .map(|value| serde_json::from_value::<usize>(value.clone()))
+        .transpose()
+        .map_err(|_| "relative_photometry_max_sources must be a positive integer")?
+        .unwrap_or(400);
+    if max_sources == 0 {
+        return Err("relative_photometry_max_sources must be a positive integer".into());
+    }
+
+    let mut eligible = Vec::<(f64, usize)>::new();
+    let mut track_by_observation = HashMap::<(usize, i64), usize>::new();
+    for track in tracking["tracks"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+    {
+        if track["classification"].as_str() != Some("static")
+            || track["presence"].as_u64().unwrap_or(0) < min_presence as u64
+        {
+            continue;
+        }
+        let Some(track_id) = track["track_id"].as_u64().map(|value| value as usize) else {
+            continue;
+        };
+        let points = track["points"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+        let mut snr_values = points
+            .iter()
+            .filter_map(|point| point["flux_snr"].as_f64())
+            .filter(|value| value.is_finite() && *value > 0.0)
+            .collect::<Vec<_>>();
+        if snr_values.is_empty() {
+            continue;
+        }
+        snr_values.sort_by(f64::total_cmp);
+        let middle = snr_values.len() / 2;
+        let median_snr = if snr_values.len().is_multiple_of(2) {
+            (snr_values[middle - 1] + snr_values[middle]) * 0.5
+        } else {
+            snr_values[middle]
+        };
+        eligible.push((median_snr, track_id));
+        for point in points {
+            let (Some(frame_index), Some(detection_id)) = (
+                point["frame_index"].as_u64().map(|value| value as usize),
+                point["detection_id"].as_i64(),
+            ) else {
+                continue;
+            };
+            track_by_observation.insert((frame_index, detection_id), track_id);
+        }
+    }
+    eligible.sort_by(|left, right| {
+        right
+            .0
+            .total_cmp(&left.0)
+            .then_with(|| left.1.cmp(&right.1))
+    });
+    let selected = eligible
+        .into_iter()
+        .take(max_sources)
+        .map(|(_, track_id)| track_id)
+        .collect::<std::collections::HashSet<_>>();
+
+    let mut observations = Vec::new();
+    for (frame_index, detections) in quality_frames.iter().enumerate() {
+        let header = headers[frame_index]
+            .as_object()
+            .ok_or("relative photometry frame header is invalid")?;
+        let exposure = fits::exposure_seconds(header, 1.0)?;
+        for source in detections {
+            let Some(track_id) = track_by_observation
+                .get(&(frame_index, source.detection_id))
+                .filter(|track_id| selected.contains(track_id))
+            else {
+                continue;
+            };
+            let Some(magnitude) = crate::photometry::instrumental_magnitude(source.flux, exposure)?
+            else {
+                continue;
+            };
+            let signal_snr = source.flux_snr.unwrap_or(source.snr);
+            if !signal_snr.is_finite() || signal_snr <= 0.0 {
+                continue;
+            }
+            observations.push(json!({
+                "frame_id":frame_index,
+                "source_id":format!("track:{track_id}"),
+                "instrumental_magnitude":magnitude,
+                "magnitude_error":1.0857362047581296 / signal_snr,
+                "x":source.x,
+                "y":source.y,
+                "quality_passed":true,
+                "is_moving":false,
+            }));
+        }
+    }
+    crate::relative_photometry::fit(
+        &json!(observations),
+        &json!({
+            "spatial_order":request.get("relative_photometry_spatial_order").cloned().unwrap_or(json!(0)),
+            "validation_fraction":request.get("relative_photometry_validation_fraction").cloned().unwrap_or(json!(0.2)),
+            "random_state":0,
+            "min_sources":2,
+            "min_frames":2,
+        }),
+    )
+}
+
 /// Handle `sequence.analyze_core` JSONL requests.
 pub fn handle_request(request: &Value) -> Result<Value> {
     let paths: Vec<PathBuf> = serde_json::from_value(
@@ -644,6 +763,11 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         None | Some(Value::Null) => true,
         Some(Value::Bool(enabled)) => *enabled,
         Some(_) => return Err("fast_point_motion must be a boolean".into()),
+    };
+    let relative_photometry = match request.get("relative_photometry") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(enabled)) => *enabled,
+        Some(_) => return Err("relative_photometry must be a boolean".into()),
     };
     let candidate_limit = match request.get("fast_point_candidate_limit") {
         None | Some(Value::Null) => DEFAULT_FAST_POINT_CANDIDATE_WORKING_LIMIT,
@@ -853,6 +977,17 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         fast_point_tracks.append(&mut measured_candidate_tracks);
     }
     tracking["fast_point_motion_count"] = json!(fast_point_tracks.len());
+    let relative_photometry_result = if relative_photometry {
+        Some(fit_sequence_relative_photometry(
+            &quality_frames,
+            &headers,
+            &tracking,
+            tracking["min_presence"].as_u64().unwrap_or(3) as usize,
+            request,
+        )?)
+    } else {
+        None
+    };
 
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
@@ -861,6 +996,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "tracking":tracking,
         "fast_point_tracks":fast_point_tracks,
         "fast_candidate_proposals":fast_candidate_proposals,
+        "relative_photometry":relative_photometry_result,
         "observation_time_axis":time_axis,
         "detector_options":serde_json::to_value(&frame_options.detection).map_err(|error| error.to_string())?,
         "shared_background_model":shared_background.is_some(),
