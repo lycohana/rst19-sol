@@ -63,7 +63,6 @@ rst19-feature-gate-route = "rst19.feature_gate_route_cli:main"
 rst19-feature-cross-axis-audit = "rst19.feature_cross_axis_audit_cli:main"
 rst19-ablation = "rst19.ablation_cli:main"
 rst19-motion-ablation = "rst19.motion_ablation_cli:main"
-rst19-motion-crossing-ablation = "rst19.motion_crossing_ablation_cli:main"
 rst19-motion-proposal-ablation = "rst19.motion_proposal_ablation_cli:main"
 rst19-crowded-ablation = "rst19.crowded_ablation_cli:main"
 

@@ -150,6 +150,29 @@ fn run(request: Value) -> Result<Value, String> {
         .map_err(|error| error.to_string())?;
         return rst19_core::mosaic::run_desktop(&string_args(&request)?);
     }
+    if request["tool"] == "rst19-motion-crossing-ablation" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        let result = rst19_core::motion_crossing_ablation::run_desktop(&args)?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        return Ok(result);
+    }
     if request["tool"] == "rst19-feature-flag-profile" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1048,7 +1071,7 @@ mod tests {
     use serde_json::json;
     use std::{
         fs,
-        path::Path,
+        path::{Path, PathBuf},
         sync::atomic::{AtomicUsize, Ordering},
     };
 
@@ -1219,6 +1242,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-mosaic" && tool["native"] == true));
+        assert!(tools.iter().any(|tool| {
+            tool["name"] == "rst19-motion-crossing-ablation" && tool["native"] == true
+        }));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-feature-audit-replicates" && tool["native"] == false
         }));
@@ -1404,6 +1430,32 @@ mod tests {
         .unwrap_err();
         assert_eq!(error, "a FITS directory is required");
         let _ = fs::remove_dir_all(out_dir);
+    }
+
+    #[test]
+    fn motion_crossing_ablation_is_dispatched_to_rust() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let out_dir = std::env::temp_dir().join(format!(
+            "rst19-crossing-dispatch-{}-{nonce}",
+            std::process::id()
+        ));
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-motion-crossing-ablation",
+            "args":[],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+        assert_eq!(result["status"], "completed");
+        let run_dir = PathBuf::from(result["run_dir"].as_str().unwrap());
+        for artifact in ["manifest.json", "summary.csv", "track_points.csv"] {
+            assert!(run_dir.join(artifact).is_file(), "missing {artifact}");
+        }
+        assert!(out_dir.join("request.json").is_file());
+        fs::remove_dir_all(out_dir).unwrap();
     }
 
     #[test]

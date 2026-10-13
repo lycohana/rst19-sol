@@ -146,16 +146,159 @@ fn median(values: &mut [f64]) -> Option<f64> {
     })
 }
 
-fn deterministic_index(state: &mut u64, upper: usize) -> usize {
-    // SplitMix64 supplies a stable, platform-independent RANSAC stream. The
-    // source implementation uses NumPy PCG64; the geometric scoring and
-    // refinement are identical while the sample stream is intentionally local.
-    *state = state.wrapping_add(0x9e3779b97f4a7c15);
-    let mut value = *state;
-    value = (value ^ (value >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-    value = (value ^ (value >> 27)).wrapping_mul(0x94d049bb133111eb);
-    value ^= value >> 31;
-    (value as usize) % upper
+/// NumPy's legacy PCG64 stream and `Generator.choice(..., replace=False)`
+/// sampler, kept local so sequence registration is reproducible without a
+/// Python runtime or platform-specific random-number library.
+struct NumpyPcg64 {
+    state: u128,
+    increment: u128,
+    has_u32: bool,
+    cached_u32: u32,
+}
+
+impl NumpyPcg64 {
+    fn new(seed: u64) -> Self {
+        const INIT_A: u32 = 0x43b0_d7e5;
+        const MULT_A: u32 = 0x931e_8875;
+        const INIT_B: u32 = 0x8b51_f9dd;
+        const MULT_B: u32 = 0x58f3_8ded;
+        const MIX_MULT_L: u32 = 0xca01_f9dd;
+        const MIX_MULT_R: u32 = 0x4973_f715;
+
+        fn hashmix(mut value: u32, hash: &mut u32) -> u32 {
+            value ^= *hash;
+            *hash = hash.wrapping_mul(MULT_A);
+            value = value.wrapping_mul(*hash);
+            value ^ (value >> 16)
+        }
+
+        fn mix(x: u32, y: u32) -> u32 {
+            let value = MIX_MULT_L
+                .wrapping_mul(x)
+                .wrapping_sub(MIX_MULT_R.wrapping_mul(y));
+            value ^ (value >> 16)
+        }
+
+        let mut entropy = vec![seed as u32];
+        if seed >> 32 != 0 {
+            entropy.push((seed >> 32) as u32);
+        }
+        let mut pool = [0_u32; 4];
+        let mut hash = INIT_A;
+        for (index, value) in pool.iter_mut().enumerate() {
+            *value = hashmix(entropy.get(index).copied().unwrap_or_default(), &mut hash);
+        }
+        let mut source = 0;
+        while source < pool.len() {
+            let source_value = pool[source];
+            let mut destination = 0;
+            while destination < pool.len() {
+                if source != destination {
+                    let mixed = hashmix(source_value, &mut hash);
+                    pool[destination] = mix(pool[destination], mixed);
+                }
+                destination += 1;
+            }
+            source += 1;
+        }
+        for value in entropy.iter().skip(pool.len()) {
+            for destination in &mut pool {
+                let mixed = hashmix(*value, &mut hash);
+                *destination = mix(*destination, mixed);
+            }
+        }
+
+        let mut state_words = [0_u64; 4];
+        let mut hash = INIT_B;
+        for index in 0..state_words.len() * 2 {
+            let mut value = pool[index % pool.len()] ^ hash;
+            hash = hash.wrapping_mul(MULT_B);
+            value = value.wrapping_mul(hash);
+            value ^= value >> 16;
+            let word = index / 2;
+            if index.is_multiple_of(2) {
+                state_words[word] = value as u64;
+            } else {
+                state_words[word] |= (value as u64) << 32;
+            }
+        }
+
+        let init_state = ((state_words[0] as u128) << 64) | state_words[1] as u128;
+        let init_sequence = ((state_words[2] as u128) << 64) | state_words[3] as u128;
+        let mut generator = Self {
+            state: 0,
+            increment: (init_sequence << 1) | 1,
+            has_u32: false,
+            cached_u32: 0,
+        };
+        generator.advance();
+        generator.state = generator.state.wrapping_add(init_state);
+        generator.advance();
+        generator
+    }
+
+    fn advance(&mut self) {
+        const PCG64_MULTIPLIER: u128 =
+            ((2549297995355413924_u128) << 64) | 4865540595714422341_u128;
+        self.state = self
+            .state
+            .wrapping_mul(PCG64_MULTIPLIER)
+            .wrapping_add(self.increment);
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        self.advance();
+        let state = self.state;
+        let value = ((state >> 64) as u64) ^ (state as u64);
+        value.rotate_right((state >> 122) as u32)
+    }
+
+    fn next_u32(&mut self) -> u32 {
+        if self.has_u32 {
+            self.has_u32 = false;
+            return self.cached_u32;
+        }
+        let value = self.next_u64();
+        self.has_u32 = true;
+        self.cached_u32 = (value >> 32) as u32;
+        value as u32
+    }
+
+    fn bounded_inclusive(&mut self, maximum: usize) -> usize {
+        if maximum == 0 {
+            return 0;
+        }
+        let range = maximum as u32 + 1;
+        loop {
+            let product = (self.next_u32() as u64) * (range as u64);
+            let leftover = product as u32;
+            if leftover < range {
+                let threshold = (u32::MAX - maximum as u32) % range;
+                if leftover < threshold {
+                    continue;
+                }
+            }
+            return (product >> 32) as usize;
+        }
+    }
+
+    fn choice_without_replacement(&mut self, population: usize, count: usize) -> Vec<usize> {
+        let mut chosen = Vec::with_capacity(count);
+        for upper in population - count..population {
+            let value = self.bounded_inclusive(upper);
+            let selected = if chosen.contains(&value) {
+                upper
+            } else {
+                value
+            };
+            chosen.push(selected);
+        }
+        for index in (1..count).rev() {
+            let other = self.bounded_inclusive(index);
+            chosen.swap(index, other);
+        }
+        chosen
+    }
 }
 
 fn fit_affine_ransac(
@@ -169,18 +312,10 @@ fn fit_affine_ransac(
     let mut best_mask: Option<Vec<bool>> = None;
     let mut best_count = 0usize;
     let mut best_median = f64::INFINITY;
-    let mut state = seed;
+    let mut rng = NumpyPcg64::new(seed);
     for _ in 0..AFFINE_RANSAC_TRIALS {
-        let first = deterministic_index(&mut state, reference.len());
-        let mut second = deterministic_index(&mut state, reference.len());
-        while second == first {
-            second = deterministic_index(&mut state, reference.len());
-        }
-        let mut third = deterministic_index(&mut state, reference.len());
-        while third == first || third == second {
-            third = deterministic_index(&mut state, reference.len());
-        }
-        let sample = [first, second, third];
+        let sample = rng.choice_without_replacement(reference.len(), 3);
+        let [first, second, third] = [sample[0], sample[1], sample[2]];
         let a = reference[first];
         let b = reference[second];
         let c = reference[third];
@@ -643,4 +778,31 @@ pub fn track_detections(
         "motion_features":[],
         "motion_evidence_links":[],
     }))
+}
+
+#[cfg(test)]
+mod numpy_rng_tests {
+    use super::NumpyPcg64;
+
+    #[test]
+    fn pcg64_raw_stream_matches_numpy() {
+        let mut rng = NumpyPcg64::new(20_260_914);
+        let raw = (0..5).map(|_| rng.next_u64()).collect::<Vec<_>>();
+        assert_eq!(
+            raw,
+            [
+                3_830_804_745_680_267_115,
+                8_470_884_136_868_310_837,
+                14_068_450_233_165_282_280,
+                16_984_099_281_438_361_369,
+                11_701_897_475_996_835_555,
+            ]
+        );
+    }
+
+    #[test]
+    fn choice_without_replacement_matches_numpy() {
+        let mut rng = NumpyPcg64::new(20_260_914);
+        assert_eq!(rng.choice_without_replacement(26, 3), [23, 15, 5]);
+    }
 }

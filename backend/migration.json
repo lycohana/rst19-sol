@@ -1829,7 +1829,7 @@
         "_save_crossing_plot",
         "run_motion_crossing_ablation"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.motion_crossing_ablation_cli",
@@ -1840,7 +1840,7 @@
         "_sha256",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.motion_proposal_ablation",
@@ -3203,7 +3203,7 @@
     "rst19-contaminated-pair-class": "native:rst19-contaminated-pair-class",
     "rst19-ablation": "rst19.ablation_cli:main",
     "rst19-motion-ablation": "rst19.motion_ablation_cli:main",
-    "rst19-motion-crossing-ablation": "rst19.motion_crossing_ablation_cli:main",
+    "rst19-motion-crossing-ablation": "native:rst19-motion-crossing-ablation",
     "rst19-motion-proposal-ablation": "rst19.motion_proposal_ablation_cli:main",
     "rst19-crowded-ablation": "rst19.crowded_ablation_cli:main",
     "rst19": "native Rust executable; Python CLI parser retained only for desktop form metadata",
@@ -3554,7 +3554,7 @@
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",
     "blind plate solving and remaining astrometric workflows",
-    "remaining sequence work: full multi-scale/raw/temporal candidate assembly and verification, motion/trail orchestration and complete stack-faint parity/assembly, full relative-photometry configuration/output compatibility, full SequenceResult assembly/output compatibility, and exact NumPy PCG64 RANSAC sampling parity",
+    "remaining sequence work: full multi-scale/raw/temporal candidate assembly and verification, motion/trail orchestration and complete stack-faint parity/assembly, full relative-photometry configuration/output compatibility, and full SequenceResult assembly/output compatibility",
     "all scientific audits and experiments",
     "mosaic still needs field-level parity verification for interpolation orders 0-3 and Pillow Lanczos preview scaling, Rust cache APIs, and removal of the legacy Tkinter call path",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
@@ -3607,6 +3607,7 @@
   "native_innovation_package": "builds conditional detection/quality recall profiles, Wilson intervals, source evidence, optional sequence/feature-matrix context, and claim boundaries from injection evidence; emits parity-checked JSON, BOM CSV artifacts, and Markdown; exposed through native CLI, JSONL engine, and desktop worker; Python console entry removed; cross-platform acceptance pending",
   "native_temporal_code_audit": "compares raw integer FITS pixels across frames, reports exact/low-variation masks, deterministic 8-connected components, focus time series, and BOM CSV/JSON outputs; CLI and JSONL engine verified without Python in PATH; interpretation remains detector-level evidence",
   "native_mosaic": "Rust JSONL engine, standalone rst19-mosaic CLI, and desktop native worker now read registered FITS frames, perform valid-weight normalized interpolation for orders 0-3, median/MAD robust fusion, and write NPY arrays, grayscale footprint PNG, RGBA previews with Lanczos3 large-image resampling, and metadata; fixed Rust fixtures reproduce the existing Python mosaic contract for union bounds, coverage, masks, median and clipping; field-level SciPy interpolation and Pillow resize parity, mosaic cache APIs, and legacy Tkinter integration remain pending",
+  "native_motion_crossing_ablation": "Rust standalone CLI and desktop native worker generate frozen synthetic slow and fast crossing sequences, run base association plus the fast-point supplement, and write Python-parity truth, summary, track, target, and point CSVs with deterministic gzip inputs and PNG/manifest artifacts; the Rust sequence RANSAC reproduces NumPy PCG64 and no-replacement sampling, verified against frozen Python rows; package and macOS/Linux acceptance pending",
   "native_empirical_psf": "peak-normalized median PSF extraction from raw FITS and quality detections, including full-frame isolation pool, excluded template IDs, auxiliary masking, subpixel bilinear alignment, median FWHM/ellipticity, and full kernel output; exposed as psf.empirical.estimate through the Rust JSONL engine and desktop native worker; synthetic Python-reference kernel and similarity metrics match within tolerance; shared rst19.experiments consumers and remaining Python workflows are still pending",
   "native_single_frame_command": "rst19 FITS detection and optional offline-catalog/WCS matching execute through the Rust CLI and desktop native worker; Python desktop-worker fallback is disabled and the tool catalog identifies the route as native; worker end-to-end result equals the Rust pipeline result, while pipeline fixtures cover numerical parity with the Python reference"
 }

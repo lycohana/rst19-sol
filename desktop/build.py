@@ -78,7 +78,7 @@ def build() -> None:
               "--bin", "rst19-feature-cross",
               "--bin", "rst19-signed-null-audit", "--bin", "rst19-signed-null-sequence",
               "--bin", "rst19-contaminated-pair-injection", "--bin", "rst19-contaminated-pair-class",
-              "--bin", "rst19-aperture-sensitivity"])
+              "--bin", "rst19-aperture-sensitivity", "--bin", "rst19-motion-crossing-ablation"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
@@ -143,6 +143,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / contaminated_pair_class, package / "runtime" / contaminated_pair_class)
     aperture_sensitivity = "rst19-aperture-sensitivity.exe" if os.name == "nt" else "rst19-aperture-sensitivity"
     shutil.copy2(ROOT / "backend/target/release" / aperture_sensitivity, package / "runtime" / aperture_sensitivity)
+    motion_crossing_ablation = "rst19-motion-crossing-ablation.exe" if os.name == "nt" else "rst19-motion-crossing-ablation"
+    shutil.copy2(ROOT / "backend/target/release" / motion_crossing_ablation, package / "runtime" / motion_crossing_ablation)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"

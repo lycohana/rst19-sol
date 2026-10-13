@@ -336,6 +336,7 @@ name = "rst19-core"
 version = "0.1.0"
 dependencies = [
  "csv",
+ "flate2",
  "nalgebra",
  "png",
  "regex",

@@ -149,6 +149,10 @@ name = "rst19-aperture-sensitivity"
 path = "src/bin/rst19-aperture-sensitivity.rs"
 
 [[bin]]
+name = "rst19-motion-crossing-ablation"
+path = "src/bin/rst19-motion-crossing-ablation.rs"
+
+[[bin]]
 name = "rst19-feature-evidence-axes"
 path = "src/bin/rst19-feature-evidence-axes.rs"
 
@@ -161,6 +165,7 @@ unicode-casefold = "0.2"
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 sha2 = "0.10"
 png = "0.18"
+flate2 = "1"
 
 [profile.release]
 lto = "thin"
