@@ -1,0 +1,293 @@
+{
+  "expected": {
+    "candidates": [
+      {
+        "detection_id": 0,
+        "distance_to_primary_px": 0.0008179337979356245,
+        "distance_to_secondary_px": 10.197379452760192,
+        "filter_snr": 453.9461166453481,
+        "flags": "",
+        "flux_snr": 489.59025503423914,
+        "nearest_target": "primary",
+        "peak": 901.0,
+        "peak_x": 40.0,
+        "peak_y": 40.0,
+        "quality_passed": true,
+        "variant": "raw",
+        "x": 40.00074163783995,
+        "y": 39.999655052160236
+      },
+      {
+        "detection_id": 1,
+        "distance_to_primary_px": 4.119774452123067,
+        "distance_to_secondary_px": 6.086149617992886,
+        "filter_snr": 195.64077678333283,
+        "flags": "ELONGATED|INSUFFICIENT_PSF_SUPPORT",
+        "flux_snr": 81.06108634752214,
+        "nearest_target": "primary",
+        "peak": 900.0,
+        "peak_x": 44.0,
+        "peak_y": 41.0,
+        "quality_passed": false,
+        "variant": "raw",
+        "x": 43.99656621818855,
+        "y": 41.0
+      },
+      {
+        "detection_id": 2,
+        "distance_to_primary_px": 10.199093222579082,
+        "distance_to_secondary_px": 0.0012141502224673967,
+        "filter_snr": 386.9539423935576,
+        "flags": "",
+        "flux_snr": 466.7467139790871,
+        "nearest_target": "secondary",
+        "peak": 819.5,
+        "peak_x": 50.0,
+        "peak_y": 42.0,
+        "quality_passed": true,
+        "variant": "raw",
+        "x": 50.00115184403738,
+        "y": 41.999616051987545
+      },
+      {
+        "detection_id": 0,
+        "distance_to_primary_px": 0.0008179337979356245,
+        "distance_to_secondary_px": 10.197379452760192,
+        "filter_snr": 455.2319792656401,
+        "flags": "",
+        "flux_snr": 489.59025503423914,
+        "nearest_target": "primary",
+        "peak": 901.0,
+        "peak_x": 40.0,
+        "peak_y": 40.0,
+        "quality_passed": true,
+        "variant": "repair_repeated_code",
+        "x": 40.00074163783995,
+        "y": 39.999655052160236
+      },
+      {
+        "detection_id": 1,
+        "distance_to_primary_px": 10.19909322258189,
+        "distance_to_secondary_px": 0.0012141502257052277,
+        "filter_snr": 389.9538714288189,
+        "flags": "",
+        "flux_snr": 466.74634649953106,
+        "nearest_target": "secondary",
+        "peak": 819.5,
+        "peak_x": 50.0,
+        "peak_y": 42.0,
+        "quality_passed": true,
+        "variant": "repair_repeated_code",
+        "x": 50.00115184404045,
+        "y": 41.999616051986514
+      },
+      {
+        "detection_id": 0,
+        "distance_to_primary_px": 0.0008179269570606069,
+        "distance_to_secondary_px": 10.197379458276519,
+        "filter_snr": 452.85598732663306,
+        "flags": "",
+        "flux_snr": 492.59174968089746,
+        "nearest_target": "primary",
+        "peak": 901.0,
+        "peak_x": 40.0,
+        "peak_y": 40.0,
+        "quality_passed": true,
+        "variant": "repair_negative_anomaly",
+        "x": 40.00074163163718,
+        "y": 39.99965505504524
+      },
+      {
+        "detection_id": 1,
+        "distance_to_primary_px": 4.119774452123067,
+        "distance_to_secondary_px": 6.086149617992886,
+        "filter_snr": 195.1242060222816,
+        "flags": "ELONGATED|INSUFFICIENT_PSF_SUPPORT",
+        "flux_snr": 118.67154789642528,
+        "nearest_target": "primary",
+        "peak": 900.0,
+        "peak_x": 44.0,
+        "peak_y": 41.0,
+        "quality_passed": false,
+        "variant": "repair_negative_anomaly",
+        "x": 43.99656621818855,
+        "y": 41.0
+      },
+      {
+        "detection_id": 2,
+        "distance_to_primary_px": 10.199093222579082,
+        "distance_to_secondary_px": 0.0012141502224673967,
+        "filter_snr": 384.22725016823773,
+        "flags": "",
+        "flux_snr": 466.7467139790871,
+        "nearest_target": "secondary",
+        "peak": 819.5,
+        "peak_x": 50.0,
+        "peak_y": 42.0,
+        "quality_passed": true,
+        "variant": "repair_negative_anomaly",
+        "x": 50.00115184403738,
+        "y": 41.999616051987545
+      },
+      {
+        "detection_id": 0,
+        "distance_to_primary_px": 0.0008179269570606069,
+        "distance_to_secondary_px": 10.197379458276519,
+        "filter_snr": 455.22175280782386,
+        "flags": "",
+        "flux_snr": 492.59174968089746,
+        "nearest_target": "primary",
+        "peak": 901.0,
+        "peak_x": 40.0,
+        "peak_y": 40.0,
+        "quality_passed": true,
+        "variant": "repair_both",
+        "x": 40.00074163163718,
+        "y": 39.99965505504524
+      },
+      {
+        "detection_id": 1,
+        "distance_to_primary_px": 10.19909322258189,
+        "distance_to_secondary_px": 0.0012141502257052277,
+        "filter_snr": 392.72177153583704,
+        "flags": "",
+        "flux_snr": 466.74634649953106,
+        "nearest_target": "secondary",
+        "peak": 819.5,
+        "peak_x": 50.0,
+        "peak_y": 42.0,
+        "quality_passed": true,
+        "variant": "repair_both",
+        "x": 50.00115184404045,
+        "y": 41.999616051986514
+      }
+    ],
+    "conclusion": "局部异常值修复反事实完成：raw 目标窗口候选 3 个，修复负异常后 3 个，同时修复两类后 2 个。若只修复重复码仍保留双响应、而修复负异常使目标窗口收缩为单主响应，则负值缺口是当前双峰分裂的主要形状触发，重复码更像值域有效性/锚点问题；该方向仍是局部 detector-level 反事实，不是硬件机理或物理星数结论。",
+    "interpretation_guardrails": [
+      "邻域补值是反事实敏感性控制，不是坏像素校准或物理真值重建。",
+      "候选数量变化不等于物理星数变化；修复后的 detector 仍需 PSF/WCS/注入核验。",
+      "局部窗口重跑的 detection_id 只在变体内部有意义，不能与首帧全图 ID 直接比较。",
+      "补值结果只能说明当前响应对该类值域的敏感性，不提供噪点概率或伪影率。"
+    ],
+    "negative_anomaly_threshold_adu": -200.0,
+    "parameters": {
+      "aperture_radius": 3,
+      "background_box_size": 16,
+      "interpretation_boundary": "local repair counterfactual; no calibration, truth, FDR, precision, or physical artifact rate",
+      "min_distance": 4,
+      "min_flux_snr": 5.0,
+      "min_psf_support_pixels": 3,
+      "proposal_mode": "hybrid",
+      "psf_fwhm": 2.0,
+      "replacement_rule": "simultaneous local median within square neighborhood after excluding all known special pixels",
+      "target_window_rule": "measured centroid distance to either target <= target_match_radius_px",
+      "threshold_sigma": 4.0
+    },
+    "patch_bounds": [
+      22,
+      22,
+      69,
+      61
+    ],
+    "primary_detection_id": 1,
+    "primary_target": [
+      40.0,
+      40.0
+    ],
+    "repeated_code_values": [
+      900
+    ],
+    "replacement_radius_px": 1,
+    "replacements": [
+      {
+        "original_value_adu": 900.0,
+        "pixel_class": "repeated_code",
+        "replacement_value_adu": 99.88111498984654,
+        "variant": "repair_repeated_code",
+        "x": 44,
+        "y": 41
+      },
+      {
+        "original_value_adu": -250.0,
+        "pixel_class": "negative_anomaly",
+        "replacement_value_adu": 100.50583648718029,
+        "variant": "repair_negative_anomaly",
+        "x": 46,
+        "y": 43
+      },
+      {
+        "original_value_adu": 900.0,
+        "pixel_class": "both",
+        "replacement_value_adu": 99.88111498984654,
+        "variant": "repair_both",
+        "x": 44,
+        "y": 41
+      },
+      {
+        "original_value_adu": -250.0,
+        "pixel_class": "both",
+        "replacement_value_adu": 100.50583648718029,
+        "variant": "repair_both",
+        "x": 46,
+        "y": 43
+      }
+    ],
+    "secondary_detection_id": 2,
+    "secondary_target": [
+      50.0,
+      42.0
+    ],
+    "source_path": "<FRAME>",
+    "summaries": [
+      {
+        "candidate_count": 3,
+        "primary_window_candidate_count": 2,
+        "quality_count": 2,
+        "repaired_pixel_count": 0,
+        "returned_count": 3,
+        "secondary_window_candidate_count": 1,
+        "target_window_candidate_count": 3,
+        "target_window_quality_count": 2,
+        "variant": "raw"
+      },
+      {
+        "candidate_count": 2,
+        "primary_window_candidate_count": 1,
+        "quality_count": 2,
+        "repaired_pixel_count": 1,
+        "returned_count": 2,
+        "secondary_window_candidate_count": 1,
+        "target_window_candidate_count": 2,
+        "target_window_quality_count": 2,
+        "variant": "repair_repeated_code"
+      },
+      {
+        "candidate_count": 3,
+        "primary_window_candidate_count": 2,
+        "quality_count": 2,
+        "repaired_pixel_count": 1,
+        "returned_count": 3,
+        "secondary_window_candidate_count": 1,
+        "target_window_candidate_count": 3,
+        "target_window_quality_count": 2,
+        "variant": "repair_negative_anomaly"
+      },
+      {
+        "candidate_count": 2,
+        "primary_window_candidate_count": 1,
+        "quality_count": 2,
+        "repaired_pixel_count": 2,
+        "returned_count": 2,
+        "secondary_window_candidate_count": 1,
+        "target_window_candidate_count": 2,
+        "target_window_quality_count": 2,
+        "variant": "repair_both"
+      }
+    ],
+    "target_match_radius_px": 5.0
+  },
+  "source_hashes": {
+    "detection.py": "5dc3982d9e67cdfe7661935bd97e6dc4cfc157fc7d4e2f7f06c3ea3f1af38ab1",
+    "pair_repair_counterfactual.py": "b55131139d66e1f1584c485ac05d2ae371a421a13435360f42b9481bde452c73"
+  }
+}

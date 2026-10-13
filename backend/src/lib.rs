@@ -36,6 +36,8 @@ pub mod models;
 pub mod pair_mechanism_context;
 pub mod pair_mechanism_sensitivity;
 pub mod pair_pixel_topology;
+pub mod pair_repair_counterfactual;
+pub mod pair_response_attribution;
 pub mod photometric_calibration;
 pub mod photometry;
 pub mod pipeline;

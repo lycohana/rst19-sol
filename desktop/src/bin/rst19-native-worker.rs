@@ -417,6 +417,50 @@ fn run(request: Value) -> Result<Value, String> {
         .map_err(|error| error.to_string())?;
         return rst19_core::direct_neighbor_audit::run_desktop(&string_args(&request)?);
     }
+    if request["tool"] == "rst19-pair-repair-counterfactual" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::pair_repair_counterfactual::run_desktop(&args);
+    }
+    if request["tool"] == "rst19-pair-response-attribution" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::pair_response_attribution::run_desktop(&args);
+    }
     if request["tool"] == "rst19-feature-cross-axis-audit" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -608,8 +652,15 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::output_path;
-    use std::path::Path;
+    use super::{output_path, run};
+    use serde_json::json;
+    use std::{
+        fs,
+        path::Path,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
     #[test]
     fn json_output_path_is_added_or_respected() {
@@ -629,5 +680,41 @@ mod tests {
             output_path(&mut args, Path::new("job")),
             Path::new("custom.json")
         );
+    }
+
+    #[test]
+    fn pair_repair_tool_is_dispatched_to_the_native_audit() {
+        let out_dir = std::env::temp_dir().join(format!(
+            "rst19-native-pair-repair-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        let error = run(json!({
+            "operation":"tool",
+            "tool":"rst19-pair-repair-counterfactual",
+            "out_dir":out_dir,
+            "args":[]
+        }))
+        .unwrap_err();
+        assert!(error.contains("an input FITS frame is required"), "{error}");
+        fs::remove_dir_all(out_dir).unwrap();
+    }
+
+    #[test]
+    fn pair_response_tool_is_dispatched_to_the_native_audit() {
+        let out_dir = std::env::temp_dir().join(format!(
+            "rst19-native-pair-response-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        let error = run(json!({
+            "operation":"tool",
+            "tool":"rst19-pair-response-attribution",
+            "out_dir":out_dir,
+            "args":[]
+        }))
+        .unwrap_err();
+        assert!(error.contains("an input FITS frame is required"), "{error}");
+        fs::remove_dir_all(out_dir).unwrap();
     }
 }

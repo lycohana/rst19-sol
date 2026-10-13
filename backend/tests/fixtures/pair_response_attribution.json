@@ -1,0 +1,740 @@
+{
+  "expected": {
+    "common_background_adu": 10.0,
+    "common_noise_adu": 2.0,
+    "conclusion": "局部 Gaussian 响应归因完成：raw、重复码留出和负异常留出分别改变了目标位置的有效性与局部极大值结构。主/副 raw 响应为 34.944/-7.822 ADU；重复码留出后主位置有效=False，负异常留出后副位置局部极大=False。这支持‘共享亮斑被值域缺口和匹配滤波重塑为两个响应’的优先解释，但不单独给出物理源数或噪点概率。",
+    "contribution_rows": [
+      {
+        "detection_id": 1,
+        "kernel_weight_fraction": 0.7655752832791013,
+        "pixel_class": "ordinary",
+        "pixel_count": 79,
+        "signed_response_contribution_adu": 16.54762748584571,
+        "target_label": "primary"
+      },
+      {
+        "detection_id": 1,
+        "kernel_weight_fraction": 0.22063502612578242,
+        "pixel_class": "repeated_code",
+        "pixel_count": 1,
+        "signed_response_contribution_adu": 19.636517325194635,
+        "target_label": "primary"
+      },
+      {
+        "detection_id": 1,
+        "kernel_weight_fraction": 0.01378969059511709,
+        "pixel_class": "negative_anomaly",
+        "pixel_count": 1,
+        "signed_response_contribution_adu": -1.241072153560538,
+        "target_label": "primary"
+      },
+      {
+        "detection_id": 2,
+        "kernel_weight_fraction": 0.8892515561243809,
+        "pixel_class": "ordinary",
+        "pixel_count": 79,
+        "signed_response_contribution_adu": 2.068453600234482,
+        "target_label": "secondary"
+      },
+      {
+        "detection_id": 2,
+        "kernel_weight_fraction": 0.0004309278882167787,
+        "pixel_class": "repeated_code",
+        "pixel_count": 1,
+        "signed_response_contribution_adu": 0.038352582051293306,
+        "target_label": "secondary"
+      },
+      {
+        "detection_id": 2,
+        "kernel_weight_fraction": 0.11031751598740247,
+        "pixel_class": "negative_anomaly",
+        "pixel_count": 1,
+        "signed_response_contribution_adu": -9.928576438866223,
+        "target_label": "secondary"
+      }
+    ],
+    "interpretation_guardrails": [
+      "Gaussian 响应是 detector-level 匹配响应，不是物理源数或星等真值。",
+      "屏蔽后某个响应消失只说明该响应依赖当前值域/候选有效性，不单独证明噪点。",
+      "像素贡献是带符号的局部核归因，不是因果概率或伪影率。",
+      "普通像素、重复码和负异常的分类依赖当前阈值与原始存储语义。"
+    ],
+    "maximum_rows": [
+      {
+        "gaussian_response_adu": 34.94407447334168,
+        "is_primary_target": true,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 1,
+        "raw_value_adu": 99.0,
+        "valid_weight": 1.0,
+        "x": 31,
+        "y": 30
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 2,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 38
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 3,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 37
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 4,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 36
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 5,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 35
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 6,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 34
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 7,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 33
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 8,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 32
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 9,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 31
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 10,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 30
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 11,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 29
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "raw",
+        "rank": 12,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 28
+      },
+      {
+        "gaussian_response_adu": 26.040103765830228,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 1,
+        "raw_value_adu": 130.0,
+        "valid_weight": 0.8896793212158269,
+        "x": 30,
+        "y": 30
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 2,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 38
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 3,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 37
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 4,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 36
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 5,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 35
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 6,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 34
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 7,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 33
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 8,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 32
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 9,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 31
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 10,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 30
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 11,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 29
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "repeated_code_masked",
+        "rank": 12,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 28
+      },
+      {
+        "gaussian_response_adu": 48.236192886324105,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 1,
+        "raw_value_adu": 130.0,
+        "valid_weight": 0.8896793212158269,
+        "x": 30,
+        "y": 30
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 2,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 38
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 3,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 37
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 4,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 36
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 5,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 35
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 6,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 34
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 7,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 33
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 8,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 32
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 9,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 31
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 10,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 30
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 11,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 29
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "negative_anomaly_masked",
+        "rank": 12,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 28
+      },
+      {
+        "gaussian_response_adu": 42.465947166617205,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 1,
+        "raw_value_adu": 130.0,
+        "valid_weight": 0.7793586424316538,
+        "x": 30,
+        "y": 30
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 2,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 38
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 3,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 37
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 4,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 36
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 5,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 35
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 6,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 34
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 7,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 33
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 8,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 32
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 9,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 31
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 10,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 30
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 11,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 29
+      },
+      {
+        "gaussian_response_adu": 0.0,
+        "is_primary_target": false,
+        "is_secondary_target": false,
+        "mask_mode": "both_masked",
+        "rank": 12,
+        "raw_value_adu": 10.0,
+        "valid_weight": 1.0,
+        "x": 39,
+        "y": 28
+      }
+    ],
+    "negative_anomaly_threshold_adu": -50.0,
+    "parameters": {
+      "contribution_definition": "discrete Gaussian weights within 4 sigma; signed raw ADU excess by mutually exclusive pixel class",
+      "gaussian_sigma_px": 0.8493218165295011,
+      "interpretation_boundary": "local response attribution; not source truth, FDR, precision, or physical artifact rate",
+      "mask_modes": [
+        "raw",
+        "repeated_code_masked",
+        "negative_anomaly_masked",
+        "both_masked"
+      ],
+      "maximum_count": 12,
+      "maximum_neighborhood_px": 3,
+      "patch_padding_px": 8,
+      "response_definition": "masked Gaussian convolution of (raw - common background), normalized by valid Gaussian weight"
+    },
+    "patch_bounds": [
+      20,
+      22,
+      40,
+      39
+    ],
+    "primary_detection_id": 1,
+    "primary_peak": [
+      31,
+      30
+    ],
+    "psf_fwhm_px": 2.0,
+    "repeated_code_values": [
+      99
+    ],
+    "secondary_detection_id": 2,
+    "secondary_peak": [
+      28,
+      30
+    ],
+    "source_path": "<FRAME>",
+    "target_rows": [
+      {
+        "detection_id": 1,
+        "gaussian_response_adu": 34.94407447334168,
+        "local_maximum_rank": 1,
+        "mask_mode": "raw",
+        "peak_x": 31,
+        "peak_y": 30,
+        "raw_value_adu": 99.0,
+        "response_local_maximum": true,
+        "target_label": "primary",
+        "valid_at_target": true,
+        "valid_weight": 1.0
+      },
+      {
+        "detection_id": 2,
+        "gaussian_response_adu": -7.8219945062790295,
+        "local_maximum_rank": null,
+        "mask_mode": "raw",
+        "peak_x": 28,
+        "peak_y": 30,
+        "raw_value_adu": 10.0,
+        "response_local_maximum": false,
+        "target_label": "secondary",
+        "valid_at_target": true,
+        "valid_weight": 1.0
+      },
+      {
+        "detection_id": 1,
+        "gaussian_response_adu": 19.640500819618637,
+        "local_maximum_rank": null,
+        "mask_mode": "repeated_code_masked",
+        "peak_x": 31,
+        "peak_y": 30,
+        "raw_value_adu": 99.0,
+        "response_local_maximum": false,
+        "target_label": "primary",
+        "valid_at_target": false,
+        "valid_weight": 0.7793586482808441
+      },
+      {
+        "detection_id": 2,
+        "gaussian_response_adu": -7.863736988624555,
+        "local_maximum_rank": null,
+        "mask_mode": "repeated_code_masked",
+        "peak_x": 28,
+        "peak_y": 30,
+        "raw_value_adu": 10.0,
+        "response_local_maximum": false,
+        "target_label": "secondary",
+        "valid_at_target": true,
+        "valid_weight": 0.9995690597571059
+      },
+      {
+        "detection_id": 1,
+        "gaussian_response_adu": 36.69115640865616,
+        "local_maximum_rank": null,
+        "mask_mode": "negative_anomaly_masked",
+        "peak_x": 31,
+        "peak_y": 30,
+        "raw_value_adu": 99.0,
+        "response_local_maximum": false,
+        "target_label": "primary",
+        "valid_at_target": true,
+        "valid_weight": 0.9862099140552552
+      },
+      {
+        "detection_id": 2,
+        "gaussian_response_adu": 2.3681190897157545,
+        "local_maximum_rank": null,
+        "mask_mode": "negative_anomaly_masked",
+        "peak_x": 28,
+        "peak_y": 30,
+        "raw_value_adu": 10.0,
+        "response_local_maximum": false,
+        "target_label": "secondary",
+        "valid_at_target": true,
+        "valid_weight": 0.8896793212158269
+      },
+      {
+        "detection_id": 1,
+        "gaussian_response_adu": 21.615440758000844,
+        "local_maximum_rank": null,
+        "mask_mode": "both_masked",
+        "peak_x": 31,
+        "peak_y": 30,
+        "raw_value_adu": 99.0,
+        "response_local_maximum": false,
+        "target_label": "primary",
+        "valid_at_target": false,
+        "valid_weight": 0.7655685623360993
+      },
+      {
+        "detection_id": 2,
+        "gaussian_response_adu": 2.326136259495676,
+        "local_maximum_rank": null,
+        "mask_mode": "both_masked",
+        "peak_x": 28,
+        "peak_y": 30,
+        "raw_value_adu": 10.0,
+        "response_local_maximum": false,
+        "target_label": "secondary",
+        "valid_at_target": true,
+        "valid_weight": 0.8892483809729326
+      }
+    ]
+  },
+  "source_hashes": {
+    "detection.py": "5dc3982d9e67cdfe7661935bd97e6dc4cfc157fc7d4e2f7f06c3ea3f1af38ab1",
+    "pair_response_attribution.py": "3beda2ef71328991fe7791b8f99c5de7d86c3fdfdb78ae93465e7c46467d7b3b"
+  }
+}

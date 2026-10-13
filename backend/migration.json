@@ -2043,7 +2043,7 @@
         "_write_rows",
         "write_pair_repair_counterfactual_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_repair_counterfactual_cli",
@@ -2054,7 +2054,7 @@
         "_load_codes",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_response_attribution",
@@ -2079,7 +2079,7 @@
         "_write_rows",
         "write_pair_response_attribution_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_response_attribution_cli",
@@ -2090,7 +2090,7 @@
         "_load_codes",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_support_audit",
@@ -3189,8 +3189,6 @@
     "rst19-source-group-audit": "rst19.source_group_audit_cli:main",
     "rst19-source-group-sensitivity": "rst19.source_group_sensitivity_cli:main",
     "rst19-direct-neighbor-audit": "rst19.direct_neighbor_audit_cli:main",
-    "rst19-pair-response-attribution": "rst19.pair_response_attribution_cli:main",
-    "rst19-pair-repair-counterfactual": "rst19.pair_repair_counterfactual_cli:main",
     "rst19-pair-mechanism-context": "rst19.pair_mechanism_context_cli:main",
     "rst19-pair-mechanism-sensitivity": "rst19.pair_mechanism_sensitivity_cli:main",
     "rst19-pair-support-audit": "rst19.pair_support_audit_cli:main",
@@ -3292,7 +3290,9 @@
     "raw local-evidence audit joined to source catalogs by detection_id with finite-value filtering and linear quantiles",
     "signed-null reverse-quality source overlap against native forward FITS detections with KD-tree radius and nearest queries and feature classification",
     "single-frame signed-null source audit with sign-flipped detection, quality leakage thresholds, feature classification, range-transfer exclusion, and raw aperture evidence",
-    "multi-frame signed-null aggregation with pooled/frame ratios, SNR thresholds, feature/source rows, and connected-component recurrence diagnostics"
+    "multi-frame signed-null aggregation with pooled/frame ratios, SNR thresholds, feature/source rows, and connected-component recurrence diagnostics",
+    "local pair-repair counterfactual with simultaneous median replacement, native FITS re-detection, four repair variants, and detector-level interpretation limits",
+    "local pair-response attribution with normalized Gaussian response, repeated-code/negative-anomaly masks, ranked local maxima, signed pixel-class contributions, and detector-level interpretation limits"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3358,7 +3358,9 @@
     "rst19-signed-null-overlap": "reads FITS frames and reverse-quality CSV, runs the native detector, and writes local candidate/quality overlap evidence; parser, Rust unit, Python baseline, package and cross-platform acceptance pending",
     "rst19-signed-null-audit": "reads one FITS frame, performs positive and sign-flipped detections, source feature summaries, SNR-threshold leakage counts, and raw aperture evidence in Rust; synthetic parity passed at 1e-10 numeric tolerance; package and cross-platform acceptance pending",
     "rst19-signed-null-sequence": "aggregates per-frame signed-null results, pooled and frame-level ratios, source recurrence groups, and five CSV/JSON artifacts in Rust; two-frame positive/negative FITS parity had zero JSON field differences at 1e-10 tolerance, max absolute numeric difference 1.71e-13, threshold CSV bytes identical, float-bearing CSV text differs at last digits; CLI and desktop worker pass with PATH disabled; package and cross-platform acceptance pending",
-    "rst19-wcs-validation": "Rust standalone CLI and desktop worker perform per-frame FITS detection, offline catalog matching, WCS validation, and artifact generation; Python console entrypoint removed"
+    "rst19-wcs-validation": "Rust standalone CLI and desktop worker perform per-frame FITS detection, offline catalog matching, WCS validation, and artifact generation; Python console entrypoint removed",
+    "rst19-pair-repair-counterfactual": "Rust standalone CLI, JSONL engine, and desktop worker read FITS plus source_catalog CSV; four repair variants rerun the native detector; Python result fields match within 2e-7 absolute plus 2e-8 relative tolerance; BOM CSV/JSON output and CLI pass with PATH disabled; packaged and macOS/Linux validation pending; Python console entrypoint removed",
+    "rst19-pair-response-attribution": "Rust standalone CLI, JSONL engine, and desktop worker read FITS plus source_catalog CSV; masked Gaussian response, local maximum ranks, and signed pixel-class contributions match all Python result fields within 2e-7 absolute plus 2e-8 relative tolerance; BOM CSV/JSON output and CLI pass with PATH disabled; packaged and macOS/Linux validation pending; Python console entrypoint removed"
   },
   "verification": [
     "tests/parity.rs",
@@ -3429,6 +3431,10 @@
     "verify_collinear_motion_rescue.py",
     "verify_coherent_raw_motion_points.py",
     "verify_local_pixel_trail_proposals.py",
+    "tests/pair_repair_counterfactual_parity.rs",
+    "generate_pair_repair_reference.py",
+    "tests/pair_response_attribution_parity.rs",
+    "generate_pair_response_reference.py",
     "verify_sequence_chain.py",
     "verify_attitude.py",
     "verify_feature_flag_profile.py",
@@ -3520,6 +3526,8 @@
   "native_pair_mechanism_context": "pair geometry, class/quality summaries, target-pair context, and Python-byte-identical CSV/JSON artifacts",
   "native_pair_mechanism_sensitivity": "predeclared centroid/peak windows with descriptive count changes and no physical-probability interpretation",
   "native_pair_pixel_topology": "raw and special-excluded 8-connected patch components, peak membership, and local maxima; diagnostics describe image pixels and are not physical-source identity",
+  "native_pair_repair_counterfactual": "simultaneous local median replacement for repeated-code and negative-anomaly pixels; four variants rerun the same Rust detector on the same cropped FITS pixels; Python result-field parity fixture, CLI, JSONL engine, desktop worker, BOM CSV headers, and PATH-disabled execution verified",
+  "native_pair_response_attribution": "masked Gaussian response and valid-weight normalization, ordered local-maxima ranking, repeated-code/negative-anomaly classification, signed 4-sigma kernel attribution, Python result-field parity fixture, CLI, JSONL engine, desktop worker, BOM CSV headers, and PATH-disabled execution verified",
   "native_aperture_peak_ratio": "feature-class and proposal-method linear quantile summaries, strict ratio exceedance counts, and requested target percentiles; descriptive aperture/PSF contamination context only",
   "native_feature_correlation": "average-tie Spearman rank correlation, pairwise finite row selection, first-seen class order and labels, class medians, and within-class correlations; descriptive field-dependence audit only",
   "native_feature_transition_flow": "same-class and cross-class sequence transition summaries with deterministic layer/class ordering, input consistency checks, BOM CSV/JSON artifacts, and no FITS dependency; descriptive algorithm-category evidence only",

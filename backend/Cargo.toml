@@ -53,6 +53,14 @@ name = "rst19-signed-null-sequence"
 path = "src/bin/rst19-signed-null-sequence.rs"
 
 [[bin]]
+name = "rst19-pair-repair-counterfactual"
+path = "src/bin/rst19-pair-repair-counterfactual.rs"
+
+[[bin]]
+name = "rst19-pair-response-attribution"
+path = "src/bin/rst19-pair-response-attribution.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 

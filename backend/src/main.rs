@@ -85,6 +85,12 @@ fn execute(request: Value) -> Result<Value> {
             )?
             .as_dict())
         }
+        "audit.pair_repair_counterfactual" => {
+            rst19_core::pair_repair_counterfactual::handle_request(&request)
+        }
+        "audit.pair_response_attribution" => {
+            rst19_core::pair_response_attribution::handle_request(&request)
+        }
         "audit.feature_cross_axis" => {
             let path = |name: &str| -> Result<std::path::PathBuf> {
                 request[name]
