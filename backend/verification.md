@@ -150,7 +150,9 @@
 
 `sequence.analyze_core` 现已增加逐帧注册时间残差连通分量与形态审计：复用内存中的注册中值参考，在 Rust 帧像素缓冲上生成组件点和审计数据。`verify_sequence_core.py` 对 3 帧合成 FITS 将状态、时间元数据支持标志、最短长度以及每帧 points/audit 与 Python 阶段对照，全部一致；release engine SHA-256 为 `969a5b165388c0e9ddf672baaa728ea568f160df9f1fd86f8298b86cfba324ae`，报告 `tmp/native-sequence-core-motion-components-20261014-v3/verification.json`。这只覆盖提案组件阶段，不代表完整拖线/运动模型复核、跨帧形态/连续性/曝光门控或完整 `SequenceResult` 已迁移；公开桌面序列工具仍走 Python。
 
-独立单帧拖影提案器新增 Rust `trails.single_frame_proposals`：完成旋转多方向/多长度响应、原图坐标局部复核、点源/双星负例门控及几何去重；与原有 `trails.local_pixel_proposals` 一起由 Rust JSONL engine 暴露。固定 Python fixture 覆盖斜线、短/长线、多尺度默认长度库、点源/双星负例、空间变化背景/噪声、无效像素掩膜及输入错误；debug/release Rust 对照和 PATH 清空后的 engine 路由测试通过。release engine SHA-256 为 `63034190410db7aafc07be570b15c9306e6ba4a648291cdfcd484e4fb73263259`，fixture SHA-256 为 `f48dbb27b25a68ae0532d234e6089c80b057bebecfcb848880133e6e1579bd9a`。`rst19.single_frame_trails` 仍为迁移中：2026-10-14 已将单帧 FITS 审计、残差连通域分析、线/点/双源/椭圆模型门和 CSV/PNG 产物接入 Rust 桌面 worker，目录元数据也标为 native；worker fixture 测试核对候选数、质量源数、拖影数和产物存在。Rust 独立二进制 `rst19-trails` 已新增，Python console entrypoint 已从 `pyproject.toml` 移除；独立 CLI 集成测试验证固定 FITS 的摘要与 CSV/PNG 产物。`rst19.single_frame_trails` 的完整算法 parity、发布包及 macOS/Linux 验收仍未完成，Python runtime 仍供其他工具使用。
+独立单帧拖影提案器的 Python `rst19.single_frame_trails` 模块现已全量对应到 Rust `trails.single_frame_proposals` 与 `trails.local_pixel_proposals`：前者实现几何长度库、多方向旋转有限线响应、原图局部复核及点源/双星负例控制；后者实现掩膜白化、局部种子扫描和短线复核。固定 Python 基线 fixture 在 24 个有效输入和 20 个错误输入上逐字段对照通过；两份 fixture 的源 SHA-256 都是 `172c8852496fb0ea3cb0176d3726e28921366f912932f9e45f024fe6486841e5`。这完成的是可复用提案器模块；多帧序列编排及单帧 FITS 审计 CLI 的高层算法 parity 仍在迁移。
+
+单帧 FITS 审计已接入 Rust：读取 FITS、运行原生检测、残差连通域分析、线/点/双源/椭圆模型门并生成 CSV/PNG。Rust 独立二进制 `rst19-trails` 已新增，Python console entrypoint 已从 `pyproject.toml` 移除；worker 与 CLI 集成测试验证固定 FITS 的计数摘要及 CSV/PNG 产物。与 Python 旧审计的冻结结果全字段 parity、发布包及 macOS/Linux 验收仍未完成，其他工具仍需 Python runtime。
 
 `rst19-aperture-peak-ratio` 的 flux/peak 类别和 proposal-method 统计已由 Rust 模块实现，之前通过 Python console entrypoint 启动；现已添加 Rust 独立二进制并移除该 Python entrypoint。Rust CLI 复用已做 Python parity 的 JSONL/worker 计算和 CSV/JSON 写出逻辑，集成测试覆盖参数、摘要和四个产物；跨平台包验收仍待完成。
 

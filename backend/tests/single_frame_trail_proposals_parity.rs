@@ -34,6 +34,10 @@ fn compare(actual: &Value, expected: &Value, path: &str) {
 fn single_frame_trail_proposals_match_python_reference() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/single_frame_trail_proposals.json")).unwrap();
+    assert_eq!(
+        fixture["source_sha256"],
+        "172c8852496fb0ea3cb0176d3726e28921366f912932f9e45f024fe6486841e5"
+    );
     for case in fixture["cases"].as_array().unwrap() {
         let label = case["label"].as_str().unwrap();
         let actual = single_frame_trail_proposals(&case["request"]).unwrap();
@@ -50,6 +54,10 @@ fn single_frame_trail_proposals_match_python_reference() {
 fn single_frame_trail_proposals_are_available_through_jsonl_engine() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/single_frame_trail_proposals.json")).unwrap();
+    assert_eq!(
+        fixture["source_sha256"],
+        "172c8852496fb0ea3cb0176d3726e28921366f912932f9e45f024fe6486841e5"
+    );
     let case = &fixture["cases"][0];
     let mut request = case["request"].clone();
     request["operation"] = Value::String("trails.single_frame_proposals".into());

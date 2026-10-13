@@ -32,6 +32,10 @@ fn compare(actual: &Value, expected: &Value, path: &str) {
 fn local_pixel_trail_proposals_match_python() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/local_pixel_trail_proposals.json")).unwrap();
+    assert_eq!(
+        fixture["source_hashes"]["single_frame_trails.py"],
+        "172c8852496fb0ea3cb0176d3726e28921366f912932f9e45f024fe6486841e5"
+    );
     for case in fixture["cases"].as_array().unwrap() {
         let label = case["label"].as_str().unwrap();
         let actual = local_pixel_trail_proposals(&case["request"]).unwrap();
