@@ -400,6 +400,7 @@ const CHART_LEFT: isize = 90;
 const CHART_TOP: isize = 75;
 const CHART_RIGHT: isize = 45;
 const CHART_BOTTOM: isize = 110;
+type ChartSeries<'a> = (&'a str, [u8; 3], fn(&AuditRow) -> f64);
 
 fn set_pixel(pixels: &mut [u8], x: isize, y: isize, color: [u8; 3]) {
     if x < 0 || y < 0 || x >= CHART_WIDTH as isize || y >= CHART_HEIGHT as isize {
@@ -504,10 +505,10 @@ fn write_chart(
     title: &str,
     y_label: &str,
     x_label: &str,
-    series: &[(&str, [u8; 3], fn(&AuditRow) -> f64)],
+    series: &[ChartSeries<'_>],
 ) -> Result<()> {
     let mut pixels = vec![0_u8; CHART_WIDTH * CHART_HEIGHT * 3];
-    for pixel in pixels.chunks_exact_mut(3) {
+    for pixel in pixels.as_chunks_mut::<3>().0 {
         pixel.copy_from_slice(&[244, 240, 231]);
     }
     let left = CHART_LEFT;
@@ -624,18 +625,25 @@ fn write_artifacts(rows: &[AuditRow], out_dir: &Path) -> Result<()> {
 
 fn run_audit(options: &CliOptions) -> Result<Vec<AuditRow>> {
     let paths = frame_paths(&options.input_path)?;
-    let mut frame_options = FrameOptions::default();
-    frame_options.detection = DetectionOptions {
+    let detector_defaults = DetectionOptions::default();
+    let detection = DetectionOptions {
+        measurement: crate::measurement::MeasurementOptions {
+            aperture_radius: options.aperture_radius,
+            psf_fwhm: options.psf_fwhm,
+            min_flux_snr: options.min_flux_snr,
+            ..detector_defaults.measurement
+        },
         threshold_sigma: options.threshold_sigma,
         min_distance: options.min_distance,
         max_sources: options.max_sources,
         background_box_size: options.background_box_size,
         reject_linear_artifacts: true,
-        ..DetectionOptions::default()
+        ..detector_defaults
     };
-    frame_options.detection.measurement.aperture_radius = options.aperture_radius;
-    frame_options.detection.measurement.psf_fwhm = options.psf_fwhm;
-    frame_options.detection.measurement.min_flux_snr = options.min_flux_snr;
+    let frame_options = FrameOptions {
+        detection,
+        ..FrameOptions::default()
+    };
     let mut rows = Vec::with_capacity(paths.len());
     for (offset, path) in paths.iter().enumerate() {
         let frame = fits::read_fits(path, false)?;
@@ -669,6 +677,45 @@ pub fn run_desktop(args: &[String]) -> Result<Value> {
     }))
 }
 
+const CLI_HELP: &str = "逐张 FITS 审计单图长线候选并写出表格/曲线\n\nUsage: rst19-trails <FITS_FILE_OR_DIR> [OPTIONS]\n\nOptions:\n  --threshold-sigma N\n  --min-distance PIXELS\n  --aperture-radius PIXELS\n  --psf-fwhm PIXELS\n  --background-box-size PIXELS\n  --min-flux-snr N\n  --max-sources N\n  --residual-sigma N\n  --min-residual-adu ADU\n  --min-feature-area PIXELS\n  --min-axis-ratio N\n  --out-dir DIR\n  -h, --help\n";
+
+/// Run the standalone Rust command while preserving the existing CLI's text
+/// summary and exit-code contract.
+pub fn run_cli(args: &[String]) -> i32 {
+    if args
+        .iter()
+        .any(|arg| matches!(arg.as_str(), "-h" | "--help"))
+    {
+        println!("{CLI_HELP}");
+        return 0;
+    }
+    let result = match run_desktop(args) {
+        Ok(result) => result,
+        Err(error) => {
+            eprintln!("rst19-trails: {error}");
+            return 2;
+        }
+    };
+    let output = result["output"].as_str().unwrap_or_default();
+    let display_output = fs::canonicalize(output)
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| output.to_owned());
+    println!("single-frame trail audit: {display_output}");
+    if let Some(frames) = result["frames"].as_array() {
+        for frame in frames {
+            let frame_number = frame["frame_number"].as_u64().unwrap_or_default();
+            let trails = frame["trail_count"].as_u64().unwrap_or_default();
+            let edge = frame["edge_trail_count"].as_u64().unwrap_or_default();
+            let length = frame["max_length_px"]
+                .as_f64()
+                .map(|value| format!("{value:.1}px"))
+                .unwrap_or_else(|| "—".to_owned());
+            println!("frame={frame_number:02} trails={trails} max_length={length} edge={edge}");
+        }
+    }
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -680,6 +727,19 @@ mod tests {
         assert_eq!(parsed.min_distance, 6);
         assert_eq!(parsed.threshold_sigma, 4.0);
         assert_eq!(parsed.residual_sigma, 15.0);
+    }
+
+    #[test]
+    fn standalone_cli_help_documents_the_rust_command_and_controls() {
+        assert!(CLI_HELP.contains("Usage: rst19-trails"));
+        for option in [
+            "--threshold-sigma",
+            "--max-sources",
+            "--min-axis-ratio",
+            "--out-dir",
+        ] {
+            assert!(CLI_HELP.contains(option), "missing {option} in help");
+        }
     }
 
     #[test]

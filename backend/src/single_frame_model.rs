@@ -27,6 +27,8 @@ struct Fit {
     first_template_snr: f64,
 }
 
+type ActiveFit = (f64, Vec<usize>, Vec<f64>, DMatrix<f64>);
+
 #[derive(Clone, Copy, Debug)]
 struct Evidence {
     line_template_snr: Option<f64>,
@@ -113,7 +115,7 @@ fn fit_template(samples: &[Sample], templates: &[Vec<f64>], noise: f64) -> Optio
     }
     let safe_noise = noise.max(f64::EPSILON);
     let template_count = templates.len();
-    let mut best: Option<(f64, Vec<usize>, Vec<f64>, DMatrix<f64>)> = None;
+    let mut best: Option<ActiveFit> = None;
 
     // Enumerate active sets so negative template amplitudes are rejected and
     // the remaining background/template coefficients are re-fitted.
@@ -236,6 +238,7 @@ fn normalize_template(mut values: Vec<f64>) -> Vec<f64> {
     values
 }
 
+#[allow(clippy::too_many_arguments)]
 fn samples_in_patch(
     residual: &[Vec<f32>],
     valid: &[Vec<bool>],
@@ -270,6 +273,7 @@ fn empty_patch() -> Evidence {
     Evidence::not_fit()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn long_line_profile(
     residual: &[Vec<f32>],
     valid: &[Vec<bool>],
@@ -285,7 +289,7 @@ fn long_line_profile(
         return empty_patch();
     };
     let psf_sigma = (psf_fwhm / 2.354_820_045).max(0.45);
-    let transverse_sigma = psf_sigma.max((width / 4.0).max(0.45).min(8.0));
+    let transverse_sigma = psf_sigma.max((width / 4.0).clamp(0.45, 8.0));
     let half_length = 0.5 * length;
     let angle = angle_deg.to_radians();
     let cosine = angle.cos();
@@ -349,6 +353,7 @@ fn long_line_profile(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn local_model(
     residual: &[Vec<f32>],
     valid: &[Vec<bool>],
@@ -510,6 +515,7 @@ fn local_model(
 
 /// Compare the current-frame residual cutout against the same fixed local
 /// line, single PSF, double PSF, static ellipse, and background alternatives.
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate(
     residual: &[Vec<f32>],
     valid: &[Vec<bool>],

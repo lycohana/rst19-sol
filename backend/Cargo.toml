@@ -133,6 +133,10 @@ name = "rst19-mosaic"
 path = "src/bin/rst19-mosaic.rs"
 
 [[bin]]
+name = "rst19-trails"
+path = "src/bin/rst19-trails.rs"
+
+[[bin]]
 name = "rst19-feature-evidence-axes"
 path = "src/bin/rst19-feature-evidence-axes.rs"
 
