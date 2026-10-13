@@ -77,6 +77,9 @@ fn run(request: Value) -> Result<Value, String> {
                 .map_err(|e| e.to_string())?;
         return rst19_core::calibration_sensitivity::run(&matches, &detections, &catalog, &options);
     }
+    if request["operation"] == "sequence.stack_forced_measure_batch" {
+        return rst19_core::sequence_photometry::handle_request(&request);
+    }
     if request["operation"] != "tool" {
         return Err(
             "Rust desktop worker only accepts preview, sensitivity, feedback, or native tools"

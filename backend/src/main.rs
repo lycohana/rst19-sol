@@ -806,6 +806,9 @@ fn execute(request: Value) -> Result<Value> {
                 request.get("image_support"),
             )
         }
+        "sequence.stack_forced_measure_batch" => {
+            rst19_core::sequence_photometry::handle_request(&request)
+        }
         "sequence.temporal_reference_candidates" => {
             rst19_core::sequence_temporal::temporal_reference_candidates(&request)
         }
