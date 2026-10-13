@@ -323,6 +323,15 @@ def verify(package: Path, out: Path) -> dict:
         encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
     )
     assert "Usage: rst19-feature-raw-evidence-audit" in raw_evidence_help.stdout, raw_evidence_help.stdout
+    signed_null_overlap = package / "runtime" / (
+        "rst19-signed-null-overlap.exe" if os.name == "nt" else "rst19-signed-null-overlap"
+    )
+    assert signed_null_overlap.is_file(), "Rust signed-null overlap CLI is missing from the package"
+    signed_null_help = subprocess.run(
+        [str(signed_null_overlap), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
+    )
+    assert "Usage: rst19-signed-null-overlap" in signed_null_help.stdout, signed_null_help.stdout
     attitude_cli = package / "runtime" / ("rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit")
     assert attitude_cli.is_file(), "Rust auxiliary attitude audit CLI is missing from the package"
     geometry_cli = package / "runtime" / (

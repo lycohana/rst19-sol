@@ -46,6 +46,14 @@ def test_catalog_covers_all_scientific_entry_points():
         "catalog", "raw_summary", "feature_class", "out_dir"
     ]
     assert raw_evidence["fields"][2]["repeat"] is True
+    signed_null = next(tool for tool in tools if tool["name"] == "rst19-signed-null-overlap")
+    assert entries["rst19-signed-null-overlap"] == "native:rst19-signed-null-overlap"
+    assert [field["key"] for field in signed_null["fields"]] == [
+        "inputs", "reverse_source_csv", "threshold_sigma", "min_distance",
+        "aperture_radius", "psf_fwhm", "background_box_size",
+        "background_sample_limit", "min_flux_snr", "min_psf_support_pixels",
+        "proposal_mode", "out_dir",
+    ]
 
 
 def test_format_audit_cannot_fall_back_to_python(tmp_path):
@@ -64,6 +72,13 @@ def test_sequence_feature_comparison_cannot_fall_back_to_python(tmp_path):
 
 def test_feature_raw_evidence_audit_cannot_fall_back_to_python(tmp_path):
     request = {"operation": "tool", "tool": "rst19-feature-raw-evidence-audit", "args": [],
+               "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+def test_signed_null_overlap_cannot_fall_back_to_python(tmp_path):
+    request = {"operation": "tool", "tool": "rst19-signed-null-overlap", "args": [],
                "out_dir": str(tmp_path)}
     with pytest.raises(ValueError, match="必须由 native worker 执行"):
         run(request)

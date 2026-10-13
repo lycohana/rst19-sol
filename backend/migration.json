@@ -2685,7 +2685,7 @@
         "run_signed_null_forward_overlap",
         "write_signed_null_forward_overlap_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.signed_null_forward_overlap_cli",
@@ -2696,7 +2696,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.signed_null_sequence",
@@ -3191,7 +3191,6 @@
     "rst19-feature-audit-replicates": "rst19.feature_audit_replicates_cli:main",
     "rst19-signed-null-audit": "rst19.signed_null_cli:main",
     "rst19-signed-null-sequence": "rst19.signed_null_sequence_cli:main",
-    "rst19-signed-null-overlap": "rst19.signed_null_forward_overlap_cli:main",
     "rst19-source-separation-audit": "rst19.source_separation_audit_cli:main",
     "rst19-source-group-audit": "rst19.source_group_audit_cli:main",
     "rst19-source-group-sensitivity": "rst19.source_group_sensitivity_cli:main",
@@ -3229,7 +3228,8 @@
     "rst19": "native Rust executable; Python CLI parser retained only for desktop form metadata",
     "rst19-format-audit": "native Rust executable and desktop worker route; Python entrypoint/module import removed; static desktop schema remains",
     "rst19-feature-sequence-compare": "native Rust JSONL operation, standalone executable, and desktop worker route; Python console entrypoint removed; comparison module retained as a parity baseline and shared class-order source",
-    "rst19-feature-raw-evidence-audit": "native Rust JSONL operation, standalone executable, and desktop worker route; Python console entrypoint removed; CSV join and statistical summaries match the Python baseline"
+    "rst19-feature-raw-evidence-audit": "native Rust JSONL operation, standalone executable, and desktop worker route; Python console entrypoint removed; CSV join and statistical summaries match the Python baseline",
+    "rst19-signed-null-overlap": "native Rust FITS detection, local spatial audit, standalone executable, and desktop worker route; Python CLI entrypoint removed"
   },
   "native_implemented": [
     "fits raw typed primary-HDU reader",
@@ -3289,7 +3289,8 @@
     "robust relative photometry with weighted least squares, iterative MAD rejection, optional spatial terms, independent source-block validation, NumPy-compatible seeded holdout, Rust JSONL/desktop routes, and standalone CLI",
     "sequence evidence brief with image-plane motion regression, local-naive timestamp duration and interval summaries, deterministic candidate ordering, scientific boundary text, and mosaic coverage interpretation",
     "sequence FITS detection orchestration, shared pilot background, observation time axis, quality-track and fast-point motion association",
-    "raw local-evidence audit joined to source catalogs by detection_id with finite-value filtering and linear quantiles"
+    "raw local-evidence audit joined to source catalogs by detection_id with finite-value filtering and linear quantiles",
+    "signed-null reverse-quality source overlap against native forward FITS detections with KD-tree radius and nearest queries and feature classification"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3351,7 +3352,8 @@
     "rst19-source-group-sensitivity": "same source catalog and evidence thresholds across ordered radius scans; result and both CSV plus JSON artifacts match Python across default and custom parallel runs; duplicate/nonpositive radius, nonpositive worker, and missing-target errors match; JSONL engine and desktop worker routes verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending",
     "rst19-source-separation-audit": "source_catalog CSV input; centroid/peak nearest-other spacing, threshold and class summaries, optional target lookup, three CSV plus JSON outputs; JSONL engine and Rust desktop worker routes verified; Windows package verified with external Python search disabled; SciPy may return any of several equally distant IDs, while Rust deterministically chooses the lowest CSV row index; macOS/Linux package validation pending",
     "rst19-source-geometry-audit": "source_catalog CSV; per-class PCA axis ratio/orientation/residuals and equal-size compact_quality controls; NumPy 1.26.4 sampling compatibility for unsigned 64-bit seeds; Rust engine and desktop worker match Python fields and artifacts within 2e-12 numeric tolerance; Windows package worker and standalone CLI verified with external Python search disabled; macOS/Linux package validation pending",
-    "rst19-feature-raw-evidence-audit": "joins existing source_catalog and stratified raw-summary CSV; JSONL engine, standalone CLI, and desktop worker match Python fields and CSV bytes for default/custom classes and metrics; package build and cross-platform acceptance pending"
+    "rst19-feature-raw-evidence-audit": "joins existing source_catalog and stratified raw-summary CSV; JSONL engine, standalone CLI, and desktop worker match Python fields and CSV bytes for default/custom classes and metrics; package build and cross-platform acceptance pending",
+    "rst19-signed-null-overlap": "reads FITS frames and reverse-quality CSV, runs the native detector, and writes local candidate/quality overlap evidence; parser, Rust unit, Python baseline, package and cross-platform acceptance pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3485,7 +3487,9 @@
     "backend/verify_sequence_core.py",
     "verify_format_audit.py",
     "verify_sequence_feature_comparison.py",
-    "verify_feature_raw_evidence_audit.py"
+    "verify_feature_raw_evidence_audit.py",
+    "cargo test --lib signed_null_forward_overlap",
+    "tests/test_signed_null_forward_overlap.py"
   ],
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",

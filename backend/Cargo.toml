@@ -41,6 +41,10 @@ name = "rst19-feature-raw-evidence-audit"
 path = "src/bin/rst19-feature-raw-evidence-audit.rs"
 
 [[bin]]
+name = "rst19-signed-null-overlap"
+path = "src/bin/rst19-signed-null-overlap.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 

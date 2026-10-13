@@ -43,6 +43,7 @@ def registry() -> dict[str, str]:
     entries.setdefault("rst19-format-audit", "native:rst19-format-audit")
     entries.setdefault("rst19-feature-sequence-compare", "native:rst19-feature-sequence-compare")
     entries.setdefault("rst19-feature-raw-evidence-audit", "native:rst19-feature-raw-evidence-audit")
+    entries.setdefault("rst19-signed-null-overlap", "native:rst19-signed-null-overlap")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -106,6 +107,49 @@ def catalog() -> list[dict]:
                                "required": False, "default": "tmp/feature-raw-evidence-audit",
                                "choices": [], "kind": "value", "nargs": None, "path": True,
                                "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-signed-null-overlap":
+            tools.append({"name": name,
+                          "description": "逐帧查找符号反相质量源在原图正向检测中的局部近邻",
+                          "fields": [
+                              {"key": "inputs", "flag": "", "help": "FITS 文件或包含 FITS 的目录",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": "+", "path": True, "repeat": False},
+                              {"key": "reverse_source_csv", "flag": "--reverse-source-csv",
+                               "help": "signed_null_sequence_quality_sources.csv",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "threshold_sigma", "flag": "--threshold-sigma", "help": "检测阈值 sigma",
+                               "required": False, "default": 4.0, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "min_distance", "flag": "--min-distance", "help": "候选峰最小间距",
+                               "required": False, "default": 4, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "aperture_radius", "flag": "--aperture-radius", "help": "测光孔径半径",
+                               "required": False, "default": 4, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "psf_fwhm", "flag": "--psf-fwhm", "help": "检测器 PSF FWHM",
+                               "required": False, "default": 2.0, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "background_box_size", "flag": "--background-box-size", "help": "背景块尺寸",
+                               "required": False, "default": 128, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "background_sample_limit", "flag": "--background-sample-limit", "help": "背景采样上限",
+                               "required": False, "default": 100000, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "min_flux_snr", "flag": "--min-flux-snr", "help": "质量层最低孔径通量 SNR",
+                               "required": False, "default": 5.0, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "min_psf_support_pixels", "flag": "--min-psf-support-pixels", "help": "最低 PSF 支持像素数",
+                               "required": False, "default": 3, "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": False},
+                              {"key": "proposal_mode", "flag": "--proposal-mode", "help": "候选提议方式",
+                               "required": False, "default": "hybrid", "choices": ["gaussian", "hybrid", "ensemble"],
+                               "kind": "value", "nargs": None, "path": False, "repeat": False},
+                              {"key": "out_dir", "flag": "--out-dir", "help": "CSV/JSON 输出目录",
+                               "required": False, "default": "tmp/signed-null-positive-overlap", "choices": [],
+                               "kind": "value", "nargs": None, "path": True, "repeat": False},
                           ]})
             continue
         module = module_for(name)

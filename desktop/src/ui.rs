@@ -490,6 +490,8 @@ impl Desktop {
                 )
                 .on_hover_text(&field.help);
             } else {
+                let multiple = field.repeat
+                    || (!field.nargs.is_null() && field.nargs != "?" && field.nargs != 1);
                 ui.label(
                     egui::RichText::new(format!(
                         "{}{}",
@@ -519,28 +521,34 @@ impl Desktop {
                         ui.add(
                             egui::TextEdit::singleline(value)
                                 .desired_width(if field.path { 230.0 } else { 280.0 })
-                                .hint_text(
-                                    if field.repeat
-                                        || (!field.nargs.is_null()
-                                            && field.nargs != "?"
-                                            && field.nargs != 1)
-                                    {
-                                        "JSON 数组"
-                                    } else {
-                                        "留空使用算法默认值"
-                                    },
-                                ),
+                                .hint_text(if multiple {
+                                    "JSON 数组"
+                                } else {
+                                    "留空使用算法默认值"
+                                }),
                         );
                         if field.path && ui.small_button("…").clicked() {
-                            let picked = if field.key.ends_with("dir") {
-                                rfd::FileDialog::new().pick_folder()
-                            } else if field.key == "out" || field.key.ends_with("_out") {
-                                rfd::FileDialog::new().save_file()
+                            if multiple {
+                                if let Some(paths) = rfd::FileDialog::new().pick_files() {
+                                    if !paths.is_empty() {
+                                        let paths = paths
+                                            .iter()
+                                            .map(|path| path.to_string_lossy().into_owned())
+                                            .collect::<Vec<_>>();
+                                        *value = serde_json::to_string(&paths).unwrap_or_default();
+                                    }
+                                }
                             } else {
-                                rfd::FileDialog::new().pick_file()
-                            };
-                            if let Some(path) = picked {
-                                *value = path.to_string_lossy().into_owned();
+                                let picked = if field.key.ends_with("dir") {
+                                    rfd::FileDialog::new().pick_folder()
+                                } else if field.key == "out" || field.key.ends_with("_out") {
+                                    rfd::FileDialog::new().save_file()
+                                } else {
+                                    rfd::FileDialog::new().pick_file()
+                                };
+                                if let Some(path) = picked {
+                                    *value = path.to_string_lossy().into_owned();
+                                }
                             }
                         }
                     });
