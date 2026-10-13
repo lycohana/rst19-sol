@@ -447,6 +447,123 @@ fn write_png_gray(path: &Path, width: usize, height: usize, gray: &[u8]) -> Resu
         .map_err(|error| error.to_string())
 }
 
+fn preview_dimensions(width: usize, height: usize, max_side: usize) -> (usize, usize) {
+    let limit = max_side.max(64);
+    let scale = (limit as f64 / width as f64)
+        .min(limit as f64 / height as f64)
+        .min(1.0);
+    (
+        ((width as f64 * scale).round() as usize).max(1),
+        ((height as f64 * scale).round() as usize).max(1),
+    )
+}
+
+fn lanczos3(distance: f64) -> f64 {
+    let x = distance.abs();
+    if x == 0.0 {
+        return 1.0;
+    }
+    if x >= 3.0 {
+        return 0.0;
+    }
+    let pix = std::f64::consts::PI * x;
+    pix.sin() * (pix / 3.0).sin() / (pix * pix / 3.0)
+}
+
+fn resize_contributions(source_size: usize, target_size: usize) -> Vec<Vec<(usize, f64)>> {
+    let scale = source_size as f64 / target_size as f64;
+    let filter_scale = scale.max(1.0);
+    let support = 3.0 * filter_scale;
+    (0..target_size)
+        .map(|target| {
+            let center = (target as f64 + 0.5) * scale;
+            let start = (center - support + 0.5).floor() as isize;
+            let stop = (center + support + 0.5).floor() as isize;
+            let mut values = (start.max(0)..stop.min(source_size as isize))
+                .map(|source| {
+                    (
+                        source as usize,
+                        lanczos3((source as f64 + 0.5 - center) / filter_scale),
+                    )
+                })
+                .filter(|(_, weight)| *weight != 0.0)
+                .collect::<Vec<_>>();
+            let sum = values.iter().map(|(_, weight)| weight).sum::<f64>();
+            if sum.abs() > f64::EPSILON {
+                for (_, weight) in &mut values {
+                    *weight /= sum;
+                }
+            }
+            values
+        })
+        .collect()
+}
+
+fn resize_rgba_axis(
+    input: &[u8],
+    width: usize,
+    height: usize,
+    target_size: usize,
+    horizontal: bool,
+) -> Result<Vec<u8>> {
+    let source_size = if horizontal { width } else { height };
+    let contributions = resize_contributions(source_size, target_size);
+    let output_width = if horizontal { target_size } else { width };
+    let output_height = if horizontal { height } else { target_size };
+    let output_len = output_width
+        .checked_mul(output_height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or("preview dimensions overflow")?;
+    let mut output = vec![0u8; output_len];
+    for y in 0..output_height {
+        for x in 0..output_width {
+            let target = if horizontal { x } else { y };
+            let output_offset = (y * output_width + x) * 4;
+            for channel in 0..4 {
+                let value = contributions[target]
+                    .iter()
+                    .map(|(source, weight)| {
+                        let (source_x, source_y) = if horizontal {
+                            (*source, y)
+                        } else {
+                            (x, *source)
+                        };
+                        input[(source_y * width + source_x) * 4 + channel] as f64 * weight
+                    })
+                    .sum::<f64>();
+                output[output_offset + channel] = value.round().clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
+    Ok(output)
+}
+
+fn resize_rgba_lanczos3(
+    rgba: &[u8],
+    width: usize,
+    height: usize,
+    target_width: usize,
+    target_height: usize,
+) -> Result<Vec<u8>> {
+    if width == 0
+        || height == 0
+        || target_width == 0
+        || target_height == 0
+        || rgba.len() != width.saturating_mul(height).saturating_mul(4)
+    {
+        return Err("invalid RGBA preview dimensions".into());
+    }
+    let horizontal = if target_width == width {
+        rgba.to_vec()
+    } else {
+        resize_rgba_axis(rgba, width, height, target_width, true)?
+    };
+    if target_height == height {
+        return Ok(horizontal);
+    }
+    resize_rgba_axis(&horizontal, target_width, height, target_height, false)
+}
+
 fn write_artifacts(
     out_dir: &Path,
     mosaic: &Mosaic,
@@ -537,19 +654,53 @@ fn write_artifacts(
         mosaic.output_height,
         &footprint,
     )?;
-    write_png_rgba(
-        &out_dir.join("registered_mosaic_preview.png"),
-        mosaic.output_width,
-        mosaic.output_height,
-        &rgba,
-    )?;
-    if let Some(raw_rgba) = raw_rgba {
+    let (preview_width, preview_height) =
+        preview_dimensions(mosaic.output_width, mosaic.output_height, 4096);
+    if preview_width == mosaic.output_width && preview_height == mosaic.output_height {
         write_png_rgba(
-            &out_dir.join("registered_mosaic_raw_preview.png"),
+            &out_dir.join("registered_mosaic_preview.png"),
+            preview_width,
+            preview_height,
+            &rgba,
+        )?;
+    } else {
+        let preview = resize_rgba_lanczos3(
+            &rgba,
             mosaic.output_width,
             mosaic.output_height,
-            &raw_rgba,
+            preview_width,
+            preview_height,
         )?;
+        write_png_rgba(
+            &out_dir.join("registered_mosaic_preview.png"),
+            preview_width,
+            preview_height,
+            &preview,
+        )?;
+    }
+    if let Some(raw_rgba) = raw_rgba {
+        if preview_width == mosaic.output_width && preview_height == mosaic.output_height {
+            write_png_rgba(
+                &out_dir.join("registered_mosaic_raw_preview.png"),
+                preview_width,
+                preview_height,
+                &raw_rgba,
+            )?;
+        } else {
+            let preview = resize_rgba_lanczos3(
+                &raw_rgba,
+                mosaic.output_width,
+                mosaic.output_height,
+                preview_width,
+                preview_height,
+            )?;
+            write_png_rgba(
+                &out_dir.join("registered_mosaic_raw_preview.png"),
+                preview_width,
+                preview_height,
+                &preview,
+            )?;
+        }
     }
     Ok(())
 }
@@ -926,6 +1077,67 @@ mod tests {
             parse_args(&args).unwrap_err(),
             "interpolation_order must be between 0 and 3"
         );
+    }
+
+    #[test]
+    fn lanczos_preview_resize_preserves_constant_rgba_and_aspect_ratio() {
+        assert_eq!(preview_dimensions(8192, 4096, 4096), (4096, 2048));
+        assert_eq!(preview_dimensions(320, 240, 12), (64, 48));
+
+        let source = vec![48, 96, 144, 255].repeat(5 * 3);
+        let resized = resize_rgba_lanczos3(&source, 5, 3, 3, 2).unwrap();
+        assert_eq!(resized.len(), 3 * 2 * 4);
+        assert!(resized
+            .chunks_exact(4)
+            .all(|pixel| pixel == [48, 96, 144, 255]));
+        assert_eq!(
+            resize_rgba_lanczos3(&source, 5, 3, 0, 2).unwrap_err(),
+            "invalid RGBA preview dimensions"
+        );
+    }
+
+    #[test]
+    fn large_preview_artifacts_are_downsampled_without_resizing_science_arrays() {
+        let sequence = NEXT_TEST_DIR.fetch_add(1, Ordering::Relaxed);
+        let output = std::env::temp_dir().join(format!(
+            "rst19-mosaic-large-preview-{}-{sequence}",
+            std::process::id()
+        ));
+        let width = 4097;
+        let mosaic = Mosaic {
+            image: vec![32.0; width],
+            coverage: vec![1; width],
+            scatter: vec![0.0; width],
+            source_height: 1,
+            source_width: width,
+            output_height: 1,
+            output_width: width,
+            origin_x: 0.0,
+            origin_y: 0.0,
+            frame_origins: vec![[0.0, 0.0]],
+            shifts: vec![[0.0, 0.0]],
+            frame_paths: vec!["synthetic.fits".into()],
+            mode: "median".into(),
+            clip_sigma: 3.0,
+            interpolation_order: 1,
+            frame_valid_counts: vec![width as u64],
+        };
+
+        write_artifacts(&output, &mosaic, &metadata(&mosaic), true).unwrap();
+        let preview = fs::read(output.join("registered_mosaic_preview.png")).unwrap();
+        let raw = fs::read(output.join("registered_mosaic_raw_preview.png")).unwrap();
+        assert_eq!(
+            u32::from_be_bytes(preview[16..20].try_into().unwrap()),
+            4096
+        );
+        assert_eq!(u32::from_be_bytes(preview[20..24].try_into().unwrap()), 1);
+        assert_eq!(u32::from_be_bytes(raw[16..20].try_into().unwrap()), 4096);
+        assert_eq!(
+            mosaic.image.len(),
+            width,
+            "science array dimensions stay intact"
+        );
+        fs::remove_dir_all(output).unwrap();
     }
 
     #[test]
