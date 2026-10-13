@@ -5397,7 +5397,7 @@
         "repeat": false
       }
     ],
-    "native": false
+    "native": true
   },
   {
     "name": "rst19-spatial-injection",

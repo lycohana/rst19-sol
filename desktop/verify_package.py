@@ -29,6 +29,15 @@ def make_fits(path: Path) -> None:
     path.write_bytes(header + struct.pack(f">{len(pixels)}h", *pixels))
 
 
+def make_pair_support_catalog(path: Path) -> None:
+    path.write_text(
+        "\ufeffdetection_id,x,y,peak,flux,background,noise,snr,fwhm,flags,quality_passed,repeated_code_values\n"
+        "1,30,40,1000,500,100,8,30,2,,True,\n"
+        "2,33,40,900,450,100,8,28,2,UNRESOLVED_BLEND,False,\n",
+        encoding="utf-8",
+    )
+
+
 def make_sequence_candidate_fits(path: Path, frame_index: int) -> None:
     def card(key: str, value: str) -> bytes:
         return f"{key:<8}= {value:>20}".ljust(80).encode("ascii")
@@ -373,6 +382,15 @@ def verify(package: Path, out: Path) -> dict:
         encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
     )
     assert "Usage: rst19-photometric-report" in photometric_report_help.stdout, photometric_report_help.stdout
+    pair_support_cli = package / "runtime" / (
+        "rst19-pair-support-audit.exe" if os.name == "nt" else "rst19-pair-support-audit"
+    )
+    assert pair_support_cli.is_file(), "Rust pair support audit CLI is missing from the package"
+    pair_support_help = subprocess.run(
+        [str(pair_support_cli), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
+    )
+    assert "Usage: rst19-pair-support-audit" in pair_support_help.stdout, pair_support_help.stdout
     environment = {**os.environ, "PYTHONPATH": "", "PYTHONHOME": "", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32") if os.name == "nt" else "/usr/bin:/bin"
     catalog = subprocess.run([str(worker), "--catalog"], capture_output=True, text=True, encoding="utf-8",
@@ -405,6 +423,37 @@ def verify(package: Path, out: Path) -> dict:
     frame = out / "原始数据 with spaces.fits"
     make_fits(frame)
     original = hashlib.sha256(frame.read_bytes()).hexdigest()
+    pair_support_catalog = out / "pair-support-source-catalog.csv"
+    make_pair_support_catalog(pair_support_catalog)
+    pair_support_args = [
+        str(out), "--source-catalog", str(pair_support_catalog), "--primary-id", "1",
+        "--secondary-id", "2", "--mask-modes", "raw,shared_aperture_masked",
+        "--crop-padding-px", "12", "--aperture-radius", "4", "--threshold-sigma", "3",
+        "--background-box-size", "16", "--proposal-mode", "gaussian",
+    ]
+    pair_support_out = out / "pair-support-job"
+    pair_support_request = {
+        "operation": "tool", "tool": "rst19-pair-support-audit", "args": pair_support_args,
+        "out_dir": str(pair_support_out.resolve()),
+    }
+    pair_support_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(pair_support_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out, timeout=120, check=True,
+    )
+    pair_support_events = [json.loads(line) for line in pair_support_response.stdout.splitlines()]
+    assert len(pair_support_events) == 1 and pair_support_events[0]["ok"]
+    pair_support_payload = pair_support_events[0]["payload"]["result"]
+    assert pair_support_payload["frame_count"] == 1
+    assert [row["mask_mode"] for row in pair_support_payload["rows"]] == ["raw", "shared_aperture_masked"]
+    for artifact in ("pair_support_audit.csv", "pair_support_summary.csv", "pair_support_audit.json"):
+        assert (pair_support_out / artifact).is_file(), artifact
+    pair_support_cli_out = out / "pair-support-cli"
+    pair_support_cli_run = subprocess.run(
+        [str(pair_support_cli), *pair_support_args, "--out-dir", str(pair_support_cli_out.resolve())],
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out, timeout=120, check=True,
+    )
+    pair_support_cli_payload = json.loads(pair_support_cli_run.stdout)["result"]
+    assert pair_support_cli_payload == pair_support_payload
     request = {"operation": "tool", "tool": "rst19", "args": [str(frame.resolve())], "out_dir": str((out / "job").resolve())}
     response = subprocess.run([str(native_worker)], input=json.dumps(request, ensure_ascii=False), capture_output=True,
                               text=True, encoding="utf-8", env=environment, cwd=out, timeout=60, check=True)

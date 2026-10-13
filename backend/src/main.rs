@@ -88,6 +88,13 @@ fn execute(request: Value) -> Result<Value> {
         "audit.pair_repair_counterfactual" => {
             rst19_core::pair_repair_counterfactual::handle_request(&request)
         }
+        "audit.pair_support" => {
+            let args = serde_json::from_value::<Vec<String>>(
+                request.get("args").cloned().unwrap_or(json!([])),
+            )
+            .map_err(|error| error.to_string())?;
+            rst19_core::pair_support_audit::run_desktop(&args)
+        }
         "audit.pair_response_attribution" => {
             rst19_core::pair_response_attribution::handle_request(&request)
         }

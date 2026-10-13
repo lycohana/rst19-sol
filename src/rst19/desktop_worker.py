@@ -54,6 +54,7 @@ def registry() -> dict[str, str]:
     entries.setdefault("rst19-innovation-package", "native:rst19-innovation-package")
     entries.setdefault("rst19-temporal-codes", "native:rst19-temporal-codes")
     entries.setdefault("rst19-photometric-report", "native:rst19-photometric-report")
+    entries.setdefault("rst19-pair-support-audit", "native:rst19-pair-support-audit")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -432,6 +433,38 @@ def catalog() -> list[dict]:
                               {"key": "strict", "flag": "--strict", "help": "发现 false-valid 矛盾时返回失败",
                                "required": False, "default": False, "choices": [], "kind": "bool",
                                "nargs": 0, "path": False, "toggle_value": True, "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-pair-support-audit":
+            definitions = [
+                ("data_dir", "", True, None, True, "value", []),
+                ("source_catalog", "--source-catalog", True, None, True, "value", []),
+                ("primary_id", "--primary-id", True, None, False, "value", []),
+                ("secondary_id", "--secondary-id", True, None, False, "value", []),
+                ("mask_modes", "--mask-modes", False,
+                 "raw,range_masked,repeated_code_masked,local_anomaly_masked,local_anomaly_repeated_code_masked,shared_aperture_masked,shared_local_anomaly_repeated_code_masked",
+                 False, "value", []),
+                ("repeated_code_values", "--repeated-code-values", False, None, False, "value", []),
+                ("shifts_json", "--shifts-json", False, None, True, "value", []),
+                ("crop_padding_px", "--crop-padding-px", False, 128.0, False, "value", []),
+                ("aperture_radius", "--aperture-radius", False, 4, False, "value", []),
+                ("match_radius_px", "--match-radius-px", False, 2.0, False, "value", []),
+                ("threshold_sigma", "--threshold-sigma", False, 4.0, False, "value", []),
+                ("min_distance", "--min-distance", False, 4, False, "value", []),
+                ("psf_fwhm", "--psf-fwhm", False, 2.0, False, "value", []),
+                ("background_box_size", "--background-box-size", False, 128, False, "value", []),
+                ("min_flux_snr", "--min-flux-snr", False, 5.0, False, "value", []),
+                ("min_psf_support_pixels", "--min-psf-support-pixels", False, 3, False, "value", []),
+                ("proposal_mode", "--proposal-mode", False, "hybrid", False, "value", ["gaussian", "hybrid", "ensemble"]),
+                ("keep_linear_artifacts", "--keep-linear-artifacts", False, False, False, "bool", []),
+                ("out_dir", "--out-dir", False, "tmp/pair-support-audit", True, "value", []),
+            ]
+            tools.append({"name": name, "description": "在局部裁剪和留出掩膜下审计近邻双候选的独立像素支持",
+                          "fields": [
+                              {"key": key, "flag": flag, "help": "", "required": required,
+                               "default": default, "choices": choices, "kind": kind, "nargs": 0 if kind == "bool" else None,
+                               "path": is_path, "toggle_value": True if kind == "bool" else None, "repeat": False}
+                              for key, flag, required, default, is_path, kind, choices in definitions
                           ]})
             continue
         module = module_for(name)

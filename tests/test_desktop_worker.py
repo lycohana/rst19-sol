@@ -79,6 +79,11 @@ def test_catalog_covers_all_scientific_entry_points():
         "rst19-aux-audit": ["input_path", "out_dir"],
         "rst19-source-geometry-audit": ["catalog", "target_class", "control_class", "trials", "seed", "out_dir"],
         "rst19-photometric-report": ["input", "out", "require_wcs", "no_require_wcs", "strict"],
+        "rst19-pair-support-audit": ["data_dir", "source_catalog", "primary_id", "secondary_id", "mask_modes",
+                                     "repeated_code_values", "shifts_json", "crop_padding_px", "aperture_radius",
+                                     "match_radius_px", "threshold_sigma", "min_distance", "psf_fwhm",
+                                     "background_box_size", "min_flux_snr", "min_psf_support_pixels",
+                                     "proposal_mode", "keep_linear_artifacts", "out_dir"],
     }
     for tool_name, expected_fields in migrated_tools.items():
         tool = next(item for item in tools if item["name"] == tool_name)
@@ -102,6 +107,13 @@ def test_sequence_feature_comparison_cannot_fall_back_to_python(tmp_path):
 
 def test_photometric_report_cannot_fall_back_to_python(tmp_path):
     request = {"operation": "tool", "tool": "rst19-photometric-report", "args": [],
+               "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+def test_pair_support_audit_cannot_fall_back_to_python(tmp_path):
+    request = {"operation": "tool", "tool": "rst19-pair-support-audit", "args": [],
                "out_dir": str(tmp_path)}
     with pytest.raises(ValueError, match="必须由 native worker 执行"):
         run(request)
