@@ -66,7 +66,8 @@ def build() -> None:
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(DESKTOP / "Cargo.toml"), "--bins"])
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(ROOT / "backend/Cargo.toml"),
              "--bin", "rst19", "--bin", "rst19-format-audit", "--bin", "rst19-feature-sequence-compare", "--bin", "rst19-feature-raw-evidence-audit", "--bin", "rst19-signed-null-overlap", "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit", "--bin", "rst19-source-geometry-audit",
-              "--bin", "rst19-relative-photometry", "--bin", "rst19-wcs-validation"])
+              "--bin", "rst19-relative-photometry", "--bin", "rst19-wcs-validation",
+              "--bin", "rst19-signed-null-audit"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
@@ -93,6 +94,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / raw_evidence_audit, package / "runtime" / raw_evidence_audit)
     signed_null_overlap = "rst19-signed-null-overlap.exe" if os.name == "nt" else "rst19-signed-null-overlap"
     shutil.copy2(ROOT / "backend/target/release" / signed_null_overlap, package / "runtime" / signed_null_overlap)
+    signed_null_audit = "rst19-signed-null-audit.exe" if os.name == "nt" else "rst19-signed-null-audit"
+    shutil.copy2(ROOT / "backend/target/release" / signed_null_audit, package / "runtime" / signed_null_audit)
     gaia_merge = "rst19-gaia-merge.exe" if os.name == "nt" else "rst19-gaia-merge"
     shutil.copy2(ROOT / "backend/target/release" / gaia_merge, package / "runtime" / gaia_merge)
     auxiliary_audit = "rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit"

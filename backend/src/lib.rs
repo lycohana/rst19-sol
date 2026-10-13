@@ -57,6 +57,7 @@ pub mod sequence_registration;
 pub mod sequence_sentinel;
 pub mod sequence_temporal;
 pub mod sequence_trails;
+pub mod signed_null;
 pub mod signed_null_forward_overlap;
 pub mod single_frame_trails;
 pub mod source_geometry_audit;

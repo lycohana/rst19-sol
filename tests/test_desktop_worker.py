@@ -54,6 +54,13 @@ def test_catalog_covers_all_scientific_entry_points():
         "background_sample_limit", "min_flux_snr", "min_psf_support_pixels",
         "proposal_mode", "out_dir",
     ]
+    signed_null_audit = next(tool for tool in tools if tool["name"] == "rst19-signed-null-audit")
+    assert entries["rst19-signed-null-audit"] == "native:rst19-signed-null-audit"
+    assert [field["key"] for field in signed_null_audit["fields"]] == [
+        "fits_path", "threshold_sigma", "min_distance", "aperture_radius", "psf_fwhm",
+        "proposal_mode", "background_box_size", "min_flux_snr", "min_psf_support_pixels",
+        "keep_linear_artifacts", "snr_thresholds", "out_dir",
+    ]
 
 
 def test_format_audit_cannot_fall_back_to_python(tmp_path):
@@ -79,6 +86,13 @@ def test_feature_raw_evidence_audit_cannot_fall_back_to_python(tmp_path):
 
 def test_signed_null_overlap_cannot_fall_back_to_python(tmp_path):
     request = {"operation": "tool", "tool": "rst19-signed-null-overlap", "args": [],
+               "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+def test_signed_null_audit_cannot_fall_back_to_python(tmp_path):
+    request = {"operation": "tool", "tool": "rst19-signed-null-audit", "args": [],
                "out_dir": str(tmp_path)}
     with pytest.raises(ValueError, match="必须由 native worker 执行"):
         run(request)
