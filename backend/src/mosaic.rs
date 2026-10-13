@@ -75,7 +75,11 @@ fn axis_samples(coordinate: f32, order: usize) -> ([(isize, f32); 4], usize) {
         }
         2 | 3 => {
             let count = if order == 2 { 3 } else { 4 };
-            let first = floor - 1;
+            // SciPy's cardinal B-spline support moves when a fractional
+            // coordinate crosses a half-pixel boundary. This matters for the
+            // quadratic (odd-width) kernel; anchoring it at floor(x) shifts
+            // one tap for coordinates such as 0.6.
+            let first = (coordinate - count as f32 * 0.5).floor() as isize + 1;
             let mut samples = [(0, 0.0); 4];
             for (slot, index) in (first..first + count as isize).enumerate() {
                 let distance = (coordinate - index as f32).abs();
@@ -99,6 +103,19 @@ fn axis_samples(coordinate: f32, order: usize) -> ([(isize, f32); 4], usize) {
             (samples, count)
         }
         _ => unreachable!("interpolation order is validated before sampling"),
+    }
+}
+
+fn mirror_index(index: isize, length: usize) -> usize {
+    if length <= 1 {
+        return 0;
+    }
+    let period = 2 * (length as isize - 1);
+    let reflected = index.rem_euclid(period);
+    if reflected < length as isize {
+        reflected as usize
+    } else {
+        (period - reflected) as usize
     }
 }
 
@@ -126,15 +143,29 @@ fn sample(
     let mut weighted = 0.0f32;
     let mut weight = 0.0f32;
     for (py, wy) in y_samples.iter().take(y_count) {
-        if *wy == 0.0 || *py < 0 || *py >= height as isize {
+        if *wy == 0.0 {
             continue;
         }
+        let py = if interpolation_order >= 2 {
+            mirror_index(*py, height)
+        } else if *py >= 0 && *py < height as isize {
+            *py as usize
+        } else {
+            continue;
+        };
         for (px, wx) in x_samples.iter().take(x_count) {
             let sample_weight = wx * wy;
-            if sample_weight == 0.0 || *px < 0 || *px >= width as isize {
+            if sample_weight == 0.0 {
                 continue;
             }
-            let value = frame.values[*py as usize * width + *px as usize];
+            let px = if interpolation_order >= 2 {
+                mirror_index(*px, width)
+            } else if *px >= 0 && *px < width as isize {
+                *px as usize
+            } else {
+                continue;
+            };
+            let value = frame.values[py * width + px];
             if value.is_finite() {
                 weighted += value * sample_weight;
                 weight += sample_weight;
@@ -1034,6 +1065,112 @@ mod tests {
         assert_eq!(summary["overlap_pixel_count"], 6);
         assert_eq!(summary["covered_bbox_xy"], json!([0, 1, 4, 2]));
         assert_eq!(summary["uncovered_pixel_count"], 5);
+    }
+
+    #[test]
+    fn all_interpolation_orders_and_combine_modes_match_frozen_python_arrays() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/mosaic_parity.json")).unwrap();
+        let frame_rows = fixture["frames"].as_array().unwrap();
+        let source_height = frame_rows[0].as_array().unwrap().len();
+        let source_width = frame_rows[0].as_array().unwrap()[0]
+            .as_array()
+            .unwrap()
+            .len();
+        let frames: Vec<Vec<f32>> = frame_rows
+            .iter()
+            .map(|frame| {
+                frame
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .flat_map(|row| row.as_array().unwrap())
+                    .map(|value| value.as_f64().unwrap() as f32)
+                    .collect()
+            })
+            .collect();
+        let shifts: Vec<[f64; 2]> = fixture["shifts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|shift| {
+                let values = shift.as_array().unwrap();
+                [values[0].as_f64().unwrap(), values[1].as_f64().unwrap()]
+            })
+            .collect();
+
+        for case in fixture["cases"].as_array().unwrap() {
+            let mode = case["mode"].as_str().unwrap();
+            let interpolation_order = case["interpolation_order"].as_u64().unwrap() as usize;
+            let actual = build_with_shape(
+                frames.iter().map(|values| frame(values, "")).collect(),
+                source_height,
+                source_width,
+                shifts.clone(),
+                mode,
+                fixture["clip_sigma"].as_f64().unwrap(),
+                interpolation_order,
+            )
+            .unwrap();
+
+            let expected_image: Vec<f32> = case["image"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|row| row.as_array().unwrap())
+                .map(|value| value.as_f64().map_or(f32::NAN, |value| value as f32))
+                .collect();
+            let expected_coverage: Vec<u16> = case["coverage"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|row| row.as_array().unwrap())
+                .map(|value| value.as_u64().unwrap() as u16)
+                .collect();
+            let expected_scatter: Vec<f32> = case["scatter"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|row| row.as_array().unwrap())
+                .map(|value| value.as_f64().map_or(f32::NAN, |value| value as f32))
+                .collect();
+
+            assert_eq!(
+                actual.coverage, expected_coverage,
+                "{mode}, order {interpolation_order}"
+            );
+            assert_eq!(actual.image.len(), expected_image.len());
+            for (index, (actual, expected)) in actual.image.iter().zip(expected_image).enumerate() {
+                if expected.is_nan() {
+                    assert!(
+                        actual.is_nan(),
+                        "{mode}, order {interpolation_order}, image {index}"
+                    );
+                } else {
+                    let tolerance = 2.0e-5 + 2.0e-6 * expected.abs();
+                    assert!(
+                        (actual - expected).abs() <= tolerance,
+                        "{mode}, order {interpolation_order}, image {index}: Rust={actual}, Python={expected}"
+                    );
+                }
+            }
+            for (index, (actual, expected)) in
+                actual.scatter.iter().zip(expected_scatter).enumerate()
+            {
+                if expected.is_nan() {
+                    assert!(
+                        actual.is_nan(),
+                        "{mode}, order {interpolation_order}, scatter {index}"
+                    );
+                } else {
+                    let tolerance = 2.0e-5 + 2.0e-6 * expected.abs();
+                    assert!(
+                        (actual - expected).abs() <= tolerance,
+                        "{mode}, order {interpolation_order}, scatter {index}: Rust={actual}, Python={expected}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

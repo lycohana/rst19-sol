@@ -1,0 +1,1661 @@
+{
+  "baseline_source_sha256": "2c5caa83ae30fa413f823f43ed11b47652e98389df5da3ac097e1a2865a83d9a",
+  "baseline_versions": {
+    "numpy": "1.26.4"
+  },
+  "frames": [
+    [
+      [
+        10.0,
+        12.0,
+        15.0,
+        19.0
+      ],
+      [
+        11.0,
+        13.0,
+        18.0,
+        23.0
+      ],
+      [
+        9.0,
+        14.0,
+        17.0,
+        21.0
+      ]
+    ],
+    [
+      [
+        10.5,
+        12.5,
+        15.5,
+        19.5
+      ],
+      [
+        11.5,
+        13.5,
+        18.5,
+        23.5
+      ],
+      [
+        9.5,
+        14.5,
+        17.5,
+        21.5
+      ]
+    ],
+    [
+      [
+        9.5,
+        11.5,
+        14.5,
+        18.5
+      ],
+      [
+        10.5,
+        12.5,
+        17.5,
+        22.5
+      ],
+      [
+        8.5,
+        13.5,
+        16.5,
+        20.5
+      ]
+    ]
+  ],
+  "shifts": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.25,
+      -0.25
+    ],
+    [
+      -0.4,
+      0.5
+    ]
+  ],
+  "clip_sigma": 1.25,
+  "cases": [
+    {
+      "mode": "median",
+      "interpolation_order": 0,
+      "metadata": {
+        "mosaic_cache_version": 1,
+        "frame_count": 3,
+        "source_shape": [
+          3,
+          4
+        ],
+        "output_shape": [
+          5,
+          6
+        ],
+        "common_origin_xy": [
+          -1.0,
+          -1.0
+        ],
+        "frame_origins_xy": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.75,
+            1.25
+          ],
+          [
+            1.4,
+            0.5
+          ]
+        ],
+        "cumulative_shifts": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.25,
+            -0.25
+          ],
+          [
+            -0.4,
+            0.5
+          ]
+        ],
+        "frame_paths": [],
+        "combine_mode": "median",
+        "clip_sigma": 1.25,
+        "interpolation_order": 0,
+        "masked_zero_pixels": false,
+        "masked_auxiliary_pixels": false,
+        "frame_valid_pixel_counts": [
+          12,
+          6,
+          6
+        ],
+        "covered_pixel_count": 12,
+        "overlap_pixel_count": 10,
+        "max_coverage": 3,
+        "mean_coverage": 2.0,
+        "covered_bbox_xy": [
+          1,
+          1,
+          4,
+          3
+        ],
+        "uncovered_pixel_count": 18,
+        "union_area_ratio": 1.0
+      },
+      "image": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          10.0,
+          12.25,
+          16.25,
+          20.75,
+          null
+        ],
+        [
+          null,
+          11.25,
+          13.5,
+          18.0,
+          21.75,
+          null
+        ],
+        [
+          null,
+          9.25,
+          14.25,
+          17.25,
+          21.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "coverage": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          3,
+          3,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "scatter": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0.0,
+          0.3706499934196472,
+          1.8532500267028809,
+          2.5945498943328857,
+          null
+        ],
+        [
+          null,
+          0.3706499934196472,
+          0.0,
+          0.7412999868392944,
+          1.8532500267028809,
+          null
+        ],
+        [
+          null,
+          0.3706499934196472,
+          0.3706499934196472,
+          0.3706499934196472,
+          0.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ]
+    },
+    {
+      "mode": "median",
+      "interpolation_order": 1,
+      "metadata": {
+        "mosaic_cache_version": 1,
+        "frame_count": 3,
+        "source_shape": [
+          3,
+          4
+        ],
+        "output_shape": [
+          5,
+          6
+        ],
+        "common_origin_xy": [
+          -1.0,
+          -1.0
+        ],
+        "frame_origins_xy": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.75,
+            1.25
+          ],
+          [
+            1.4,
+            0.5
+          ]
+        ],
+        "cumulative_shifts": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.25,
+            -0.25
+          ],
+          [
+            -0.4,
+            0.5
+          ]
+        ],
+        "frame_paths": [],
+        "combine_mode": "median",
+        "clip_sigma": 1.25,
+        "interpolation_order": 1,
+        "masked_zero_pixels": false,
+        "masked_auxiliary_pixels": false,
+        "frame_valid_pixel_counts": [
+          12,
+          6,
+          6
+        ],
+        "covered_pixel_count": 12,
+        "overlap_pixel_count": 10,
+        "max_coverage": 3,
+        "mean_coverage": 2.0,
+        "covered_bbox_xy": [
+          1,
+          1,
+          4,
+          3
+        ],
+        "uncovered_pixel_count": 18,
+        "union_area_ratio": 1.0
+      },
+      "image": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          10.0,
+          11.600000381469727,
+          14.699999809265137,
+          18.849998474121094,
+          null
+        ],
+        [
+          null,
+          11.375,
+          13.0,
+          18.0,
+          21.349998474121094,
+          null
+        ],
+        [
+          null,
+          10.03125,
+          14.5625,
+          17.90625,
+          21.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "coverage": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          3,
+          3,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "scatter": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0.0,
+          0.5930401086807251,
+          0.44478026032447815,
+          0.22239084541797638,
+          null
+        ],
+        [
+          null,
+          0.5559749603271484,
+          2.0385749340057373,
+          1.3899375200271606,
+          2.4462907314300537,
+          null
+        ],
+        [
+          null,
+          1.5289312601089478,
+          0.8339625000953674,
+          1.3436062335968018,
+          0.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ]
+    },
+    {
+      "mode": "median",
+      "interpolation_order": 2,
+      "metadata": {
+        "mosaic_cache_version": 1,
+        "frame_count": 3,
+        "source_shape": [
+          3,
+          4
+        ],
+        "output_shape": [
+          5,
+          6
+        ],
+        "common_origin_xy": [
+          -1.0,
+          -1.0
+        ],
+        "frame_origins_xy": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.75,
+            1.25
+          ],
+          [
+            1.4,
+            0.5
+          ]
+        ],
+        "cumulative_shifts": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.25,
+            -0.25
+          ],
+          [
+            -0.4,
+            0.5
+          ]
+        ],
+        "frame_paths": [],
+        "combine_mode": "median",
+        "clip_sigma": 1.25,
+        "interpolation_order": 2,
+        "masked_zero_pixels": false,
+        "masked_auxiliary_pixels": false,
+        "frame_valid_pixel_counts": [
+          12,
+          6,
+          6
+        ],
+        "covered_pixel_count": 12,
+        "overlap_pixel_count": 10,
+        "max_coverage": 3,
+        "mean_coverage": 2.0,
+        "covered_bbox_xy": [
+          1,
+          1,
+          4,
+          3
+        ],
+        "uncovered_pixel_count": 18,
+        "union_area_ratio": 1.0
+      },
+      "image": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          10.75,
+          11.823749542236328,
+          15.123125076293945,
+          18.796249389648438,
+          null
+        ],
+        [
+          null,
+          11.5146484375,
+          13.265625,
+          17.53125,
+          20.358749389648438,
+          null
+        ],
+        [
+          null,
+          10.978515625,
+          14.3681640625,
+          18.1279296875,
+          20.4375,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "coverage": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          3,
+          3,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "scatter": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0.0,
+          0.9099457263946533,
+          1.0683984756469727,
+          0.2094181478023529,
+          null
+        ],
+        [
+          null,
+          0.43869900703430176,
+          1.7041212320327759,
+          1.8908940553665161,
+          1.043380618095398,
+          null
+        ],
+        [
+          null,
+          0.6167847514152527,
+          1.0554838180541992,
+          1.1626248359680176,
+          0.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ]
+    },
+    {
+      "mode": "median",
+      "interpolation_order": 3,
+      "metadata": {
+        "mosaic_cache_version": 1,
+        "frame_count": 3,
+        "source_shape": [
+          3,
+          4
+        ],
+        "output_shape": [
+          5,
+          6
+        ],
+        "common_origin_xy": [
+          -1.0,
+          -1.0
+        ],
+        "frame_origins_xy": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.75,
+            1.25
+          ],
+          [
+            1.4,
+            0.5
+          ]
+        ],
+        "cumulative_shifts": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.25,
+            -0.25
+          ],
+          [
+            -0.4,
+            0.5
+          ]
+        ],
+        "frame_paths": [],
+        "combine_mode": "median",
+        "clip_sigma": 1.25,
+        "interpolation_order": 3,
+        "masked_zero_pixels": false,
+        "masked_auxiliary_pixels": false,
+        "frame_valid_pixel_counts": [
+          12,
+          6,
+          6
+        ],
+        "covered_pixel_count": 12,
+        "overlap_pixel_count": 10,
+        "max_coverage": 3,
+        "mean_coverage": 2.0,
+        "covered_bbox_xy": [
+          1,
+          1,
+          4,
+          3
+        ],
+        "uncovered_pixel_count": 18,
+        "union_area_ratio": 1.0
+      },
+      "image": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          11.0,
+          11.97076416015625,
+          15.295722007751465,
+          18.65594482421875,
+          null
+        ],
+        [
+          null,
+          11.623252868652344,
+          13.30555534362793,
+          17.38888931274414,
+          19.89205551147461,
+          null
+        ],
+        [
+          null,
+          11.38584041595459,
+          14.330108642578125,
+          18.22068977355957,
+          20.22222137451172,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "coverage": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          3,
+          3,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "scatter": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0.0,
+          0.9493784308433533,
+          1.208895206451416,
+          0.3453634977340698,
+          null
+        ],
+        [
+          null,
+          0.42983588576316833,
+          1.7047744989395142,
+          1.856507658958435,
+          0.818972110748291,
+          null
+        ],
+        [
+          null,
+          0.5720469951629639,
+          1.0659863948822021,
+          1.1508610248565674,
+          0.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ]
+    },
+    {
+      "mode": "robust_mean",
+      "interpolation_order": 0,
+      "metadata": {
+        "mosaic_cache_version": 1,
+        "frame_count": 3,
+        "source_shape": [
+          3,
+          4
+        ],
+        "output_shape": [
+          5,
+          6
+        ],
+        "common_origin_xy": [
+          -1.0,
+          -1.0
+        ],
+        "frame_origins_xy": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.75,
+            1.25
+          ],
+          [
+            1.4,
+            0.5
+          ]
+        ],
+        "cumulative_shifts": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.25,
+            -0.25
+          ],
+          [
+            -0.4,
+            0.5
+          ]
+        ],
+        "frame_paths": [],
+        "combine_mode": "robust_mean",
+        "clip_sigma": 1.25,
+        "interpolation_order": 0,
+        "masked_zero_pixels": false,
+        "masked_auxiliary_pixels": false,
+        "frame_valid_pixel_counts": [
+          12,
+          6,
+          6
+        ],
+        "covered_pixel_count": 12,
+        "overlap_pixel_count": 10,
+        "max_coverage": 3,
+        "mean_coverage": 2.0,
+        "covered_bbox_xy": [
+          1,
+          1,
+          4,
+          3
+        ],
+        "uncovered_pixel_count": 18,
+        "union_area_ratio": 1.0
+      },
+      "image": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          10.0,
+          12.25,
+          16.25,
+          20.75,
+          null
+        ],
+        [
+          null,
+          11.25,
+          13.5,
+          18.25,
+          21.75,
+          null
+        ],
+        [
+          null,
+          9.25,
+          14.25,
+          17.25,
+          21.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "coverage": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          3,
+          3,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "scatter": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0.0,
+          0.3706499934196472,
+          1.8532500267028809,
+          2.5945498943328857,
+          null
+        ],
+        [
+          null,
+          0.3706499934196472,
+          0.0,
+          0.7412999868392944,
+          1.8532500267028809,
+          null
+        ],
+        [
+          null,
+          0.3706499934196472,
+          0.3706499934196472,
+          0.3706499934196472,
+          0.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ]
+    },
+    {
+      "mode": "robust_mean",
+      "interpolation_order": 1,
+      "metadata": {
+        "mosaic_cache_version": 1,
+        "frame_count": 3,
+        "source_shape": [
+          3,
+          4
+        ],
+        "output_shape": [
+          5,
+          6
+        ],
+        "common_origin_xy": [
+          -1.0,
+          -1.0
+        ],
+        "frame_origins_xy": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.75,
+            1.25
+          ],
+          [
+            1.4,
+            0.5
+          ]
+        ],
+        "cumulative_shifts": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.25,
+            -0.25
+          ],
+          [
+            -0.4,
+            0.5
+          ]
+        ],
+        "frame_paths": [],
+        "combine_mode": "robust_mean",
+        "clip_sigma": 1.25,
+        "interpolation_order": 1,
+        "masked_zero_pixels": false,
+        "masked_auxiliary_pixels": false,
+        "frame_valid_pixel_counts": [
+          12,
+          6,
+          6
+        ],
+        "covered_pixel_count": 12,
+        "overlap_pixel_count": 10,
+        "max_coverage": 3,
+        "mean_coverage": 2.0,
+        "covered_bbox_xy": [
+          1,
+          1,
+          4,
+          3
+        ],
+        "uncovered_pixel_count": 18,
+        "union_area_ratio": 1.0
+      },
+      "image": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          10.0,
+          11.600000381469727,
+          14.699999809265137,
+          18.849998474121094,
+          null
+        ],
+        [
+          null,
+          11.375,
+          12.991665840148926,
+          18.46875,
+          21.349998474121094,
+          null
+        ],
+        [
+          null,
+          10.03125,
+          14.5625,
+          17.90625,
+          21.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "coverage": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          3,
+          3,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "scatter": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0.0,
+          0.5930401086807251,
+          0.44478026032447815,
+          0.22239084541797638,
+          null
+        ],
+        [
+          null,
+          0.5559749603271484,
+          2.0385749340057373,
+          1.3899375200271606,
+          2.4462907314300537,
+          null
+        ],
+        [
+          null,
+          1.5289312601089478,
+          0.8339625000953674,
+          1.3436062335968018,
+          0.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ]
+    },
+    {
+      "mode": "robust_mean",
+      "interpolation_order": 2,
+      "metadata": {
+        "mosaic_cache_version": 1,
+        "frame_count": 3,
+        "source_shape": [
+          3,
+          4
+        ],
+        "output_shape": [
+          5,
+          6
+        ],
+        "common_origin_xy": [
+          -1.0,
+          -1.0
+        ],
+        "frame_origins_xy": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.75,
+            1.25
+          ],
+          [
+            1.4,
+            0.5
+          ]
+        ],
+        "cumulative_shifts": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.25,
+            -0.25
+          ],
+          [
+            -0.4,
+            0.5
+          ]
+        ],
+        "frame_paths": [],
+        "combine_mode": "robust_mean",
+        "clip_sigma": 1.25,
+        "interpolation_order": 2,
+        "masked_zero_pixels": false,
+        "masked_auxiliary_pixels": false,
+        "frame_valid_pixel_counts": [
+          12,
+          6,
+          6
+        ],
+        "covered_pixel_count": 12,
+        "overlap_pixel_count": 10,
+        "max_coverage": 3,
+        "mean_coverage": 2.0,
+        "covered_bbox_xy": [
+          1,
+          1,
+          4,
+          3
+        ],
+        "uncovered_pixel_count": 18,
+        "union_area_ratio": 1.0
+      },
+      "image": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          10.75,
+          11.823749542236328,
+          15.123125076293945,
+          18.796249389648438,
+          null
+        ],
+        [
+          null,
+          11.5146484375,
+          13.094388008117676,
+          17.246797561645508,
+          20.358749389648438,
+          null
+        ],
+        [
+          null,
+          10.978515625,
+          14.3681640625,
+          18.1279296875,
+          20.4375,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "coverage": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          3,
+          3,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "scatter": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0.0,
+          0.9099457263946533,
+          1.0683984756469727,
+          0.2094181478023529,
+          null
+        ],
+        [
+          null,
+          0.43869900703430176,
+          1.7041212320327759,
+          1.8908940553665161,
+          1.043380618095398,
+          null
+        ],
+        [
+          null,
+          0.6167847514152527,
+          1.0554838180541992,
+          1.1626248359680176,
+          0.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ]
+    },
+    {
+      "mode": "robust_mean",
+      "interpolation_order": 3,
+      "metadata": {
+        "mosaic_cache_version": 1,
+        "frame_count": 3,
+        "source_shape": [
+          3,
+          4
+        ],
+        "output_shape": [
+          5,
+          6
+        ],
+        "common_origin_xy": [
+          -1.0,
+          -1.0
+        ],
+        "frame_origins_xy": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            0.75,
+            1.25
+          ],
+          [
+            1.4,
+            0.5
+          ]
+        ],
+        "cumulative_shifts": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.25,
+            -0.25
+          ],
+          [
+            -0.4,
+            0.5
+          ]
+        ],
+        "frame_paths": [],
+        "combine_mode": "robust_mean",
+        "clip_sigma": 1.25,
+        "interpolation_order": 3,
+        "masked_zero_pixels": false,
+        "masked_auxiliary_pixels": false,
+        "frame_valid_pixel_counts": [
+          12,
+          6,
+          6
+        ],
+        "covered_pixel_count": 12,
+        "overlap_pixel_count": 10,
+        "max_coverage": 3,
+        "mean_coverage": 2.0,
+        "covered_bbox_xy": [
+          1,
+          1,
+          4,
+          3
+        ],
+        "uncovered_pixel_count": 18,
+        "union_area_ratio": 1.0
+      },
+      "image": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          11.0,
+          11.97076416015625,
+          15.295722007751465,
+          18.65594482421875,
+          null
+        ],
+        [
+          null,
+          11.623252868652344,
+          13.145960807800293,
+          17.137435913085938,
+          19.89205551147461,
+          null
+        ],
+        [
+          null,
+          11.38584041595459,
+          14.330108642578125,
+          18.22068977355957,
+          20.22222137451172,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "coverage": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          3,
+          3,
+          2,
+          0
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "scatter": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0.0,
+          0.9493784308433533,
+          1.208895206451416,
+          0.3453634977340698,
+          null
+        ],
+        [
+          null,
+          0.42983588576316833,
+          1.7047744989395142,
+          1.856507658958435,
+          0.818972110748291,
+          null
+        ],
+        [
+          null,
+          0.5720469951629639,
+          1.0659863948822021,
+          1.1508610248565674,
+          0.0,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ]
+    }
+  ]
+}
