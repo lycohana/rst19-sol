@@ -15,16 +15,18 @@ from rst19.fits import read_fits,auxiliary_mask
 from rst19.detection import detect_sources
 
 
-def compare(actual,expected,path="result"):
+def compare(actual,expected,path="result",float32=False):
     if isinstance(expected,dict):
         assert isinstance(actual,dict) and actual.keys()==expected.keys(),(path,"keys")
-        for key,value in expected.items():compare(actual[key],value,f"{path}.{key}")
+        for key,value in expected.items():compare(actual[key],value,f"{path}.{key}",float32)
     elif isinstance(expected,list):
         assert isinstance(actual,list) and len(actual)==len(expected),(path,"length",len(actual),len(expected))
-        for index,(a,b) in enumerate(zip(actual,expected)):compare(a,b,f"{path}[{index}]")
-    elif isinstance(expected,(int,float)) and not isinstance(expected,bool):
+        for index,(a,b) in enumerate(zip(actual,expected)):compare(a,b,f"{path}[{index}]",float32)
+    elif isinstance(expected,int) and not isinstance(expected,bool):
+        assert actual==expected,(path,actual,expected)
+    elif isinstance(expected,float):
         assert isinstance(actual,(int,float)) and not isinstance(actual,bool),(path,"type")
-        tolerance=(2e-6+abs(expected)*2e-7) if "deblend_" in path else (2e-9+abs(expected)*2e-11)
+        tolerance=(5e-5+abs(expected)*2e-7) if float32 else (2e-6+abs(expected)*2e-7) if "deblend_" in path else (2e-9+abs(expected)*2e-11)
         assert abs(actual-expected)<=tolerance,(path,actual,expected,tolerance)
     else:assert actual==expected,(path,actual,expected)
 
@@ -36,12 +38,12 @@ def check(engine,path,image,mask,options):
     native_seconds=time.perf_counter()-started
     events=[json.loads(line) for line in response.stdout.splitlines()]
     assert response.returncode==0 and len(events)==1 and events[0]["ok"],(response.returncode,response.stdout,response.stderr)
-    actual=events[0]["payload"];compare(actual,expected)
+    actual=events[0]["payload"];compare(actual,expected,float32=bool(options.get("use_float32")) and str(image.dtype)!="float64")
     record={"image":path,"shape":list(image.shape),"options":options,"candidate_count":actual["candidate_count"],"returned_count":actual["returned_count"],"quality_count":actual["quality_count"],"all_fields_compared":True,"python_seconds":python_seconds,"native_seconds_including_startup_and_json":native_seconds}
     return record
 
 
-def check_full_fits(engine,path,frame,options,out):
+def check_full_fits(engine,path,frame,options,out,float32=False):
     print(f"Python full-frame baseline: {path.name}",flush=True)
     started=time.perf_counter();expected=detect_sources(frame.data,mask=auxiliary_mask(frame.data.shape),**options).as_dict();python_seconds=time.perf_counter()-started
     print(f"Native full-frame: {path.name}; Python took {python_seconds:.2f}s",flush=True)
@@ -59,7 +61,7 @@ def check_full_fits(engine,path,frame,options,out):
             differences.append({"native":a,"python":b})
     diagnostic={"native_counts":{k:actual[k] for k in ["candidate_count","returned_count","quality_count"]},"python_counts":{k:expected[k] for k in ["candidate_count","returned_count","quality_count"]},"quality_differences":differences,"python_seconds":python_seconds,"native_seconds":native_seconds}
     (out/"full-differences.json").write_text(json.dumps(diagnostic,ensure_ascii=False,indent=2),encoding="utf-8")
-    compare(actual,expected)
+    compare(actual,expected,float32=float32)
     return {"image":path.name,"shape":list(frame.data.shape),"options":options,"candidate_count":actual["candidate_count"],"returned_count":actual["returned_count"],"quality_count":actual["quality_count"],"all_fields_compared":True,"python_seconds":python_seconds,"native_seconds_including_startup_and_json":native_seconds,"native_input":"original FITS path; no pixel transfer through Python"}
 
 

@@ -277,7 +277,7 @@ pub fn resolve_supplemental_blends_typed(
             continue;
         }
         let (index, _) = tree
-            .nearest(source.peak_position())
+            .nearest_lexicographic(source.peak_position())
             .ok_or("missing Gaussian neighbor")?;
         let (delta, snr) = pair_psf_evidence_typed(
             image,

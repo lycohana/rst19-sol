@@ -27,7 +27,56 @@ def emit(kind: str, **fields: object) -> None:
     PROTOCOL.flush()
 
 
-def registry() -> dict[str, str]:
+NATIVE_TOOL_NAMES = frozenset(
+    {
+        "rst19",
+        "rst19-format-audit",
+        "rst19-feature-sequence-compare",
+        "rst19-feature-raw-evidence-audit",
+        "rst19-signed-null-overlap",
+        "rst19-signed-null-audit",
+        "rst19-signed-null-sequence",
+        "rst19-aux-audit",
+        "rst19-feature-flag-profile",
+        "rst19-feature-flag-interaction",
+        "rst19-feature-gate-margin",
+        "rst19-feature-effect-size",
+        "rst19-feature-class-context",
+        "rst19-pair-mechanism-context",
+        "rst19-pair-mechanism-sensitivity",
+        "rst19-pair-pixel-topology",
+        "rst19-pair-support-audit",
+        "rst19-aperture-peak-ratio",
+        "rst19-wcs-validation",
+        "rst19-feature-correlation",
+        "rst19-feature-transition-flow",
+        "rst19-feature-gate-route",
+        "rst19-feature-parameter-sensitivity",
+        "rst19-feature-cross",
+        "rst19-feature-hard-negative",
+        "rst19-gaia-merge",
+        "rst19-feature-evidence-axes",
+        "rst19-direct-neighbor-audit",
+        "rst19-feature-cross-axis-audit",
+        "rst19-source-group-audit",
+        "rst19-source-group-sensitivity",
+        "rst19-source-separation-audit",
+        "rst19-source-peak-consistency",
+        "rst19-source-proposal-peak-audit",
+        "rst19-source-proposal-temporal-audit",
+        "rst19-source-geometry-audit",
+        "rst19-innovation-package",
+        "rst19-temporal-codes",
+        "rst19-sweep",
+        "rst19-feature-psf-leaveout",
+        "rst19-relative-photometry",
+        "rst19-photometric-report",
+        "rst19-mosaic",
+    }
+)
+
+
+def _schema_registry() -> dict[str, str]:
     root = Path(__file__).resolve().parents[2]
     if (root / "pyproject.toml").is_file():
         import tomllib
@@ -35,9 +84,11 @@ def registry() -> dict[str, str]:
     else:
         entries = {ep.name: ep.value for ep in importlib.metadata.distribution("rst19-sol").entry_points
                    if ep.group == "console_scripts"}
-    # `rst19` is a Rust executable. Keep its parser only as the desktop form
-    # schema; the desktop backend dispatches the calculation to Rust.
+    # Keep the public argparse schema available for the native CLI's desktop
+    # form while the actual calculation stays in Rust.
     entries.setdefault("rst19", "rst19.cli:main")
+    # `rst19` is a Rust executable. The Python parser is only used below to
+    # describe its desktop form; Python worker execution is refused.
     # The format audit is Rust-only. Keep its form contract here until the
     # remaining Python catalog bootstrap is replaced by native Rust metadata.
     entries.setdefault("rst19-format-audit", "native:rst19-format-audit")
@@ -61,6 +112,13 @@ def registry() -> dict[str, str]:
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
 
+def registry() -> dict[str, str]:
+    entries = _schema_registry()
+    for name in NATIVE_TOOL_NAMES:
+        entries[name] = f"native:{name}"
+    return entries
+
+
 def module_for(name: str):
     target = registry().get(name)
     if target is None:
@@ -72,7 +130,9 @@ def module_for(name: str):
 
 def catalog() -> list[dict]:
     tools = []
-    for name, target in registry().items():
+    schema_entries = _schema_registry()
+    entries = registry()
+    for name, target in entries.items():
         if target == "native:rst19-format-audit":
             tools.append({"name": name,
                           "description": "审计 FITS 尺寸、字节序、特殊值和辅助位置—速度自洽性，不修改检测器",
@@ -511,7 +571,20 @@ def catalog() -> list[dict]:
                               for key, flag, required, default, is_path, kind, choices in definitions
                           ]})
             continue
-        module = module_for(name)
+        # Rust-only commands without a Python parser are described by the
+        # compiled native catalog; do not synthesize or dispatch them here.
+        if target.startswith("native:") and schema_entries.get(name) is None:
+            continue
+        # The Rust single-frame command reuses argparse's field schema only;
+        # the native worker runs the scientific calculation.
+        schema_target = schema_entries.get(name)
+        module = (
+            importlib.import_module(schema_target.split(":")[0])
+            if target.startswith("native:")
+            and schema_target is not None
+            and not schema_target.startswith("native:")
+            else module_for(name)
+        )
         parser = module.build_parser()
         fields = []
         for action in parser._actions:
@@ -529,6 +602,8 @@ def catalog() -> list[dict]:
                 "repeat": isinstance(action, (argparse._AppendAction, argparse._AppendConstAction)),
             })
         tools.append({"name": name, "description": parser.description or name, "fields": fields})
+    for tool in tools:
+        tool["native"] = entries[tool["name"]].startswith("native:")
     return tools
 
 

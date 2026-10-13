@@ -221,6 +221,15 @@ impl CompatibleKdTree {
         })
     }
     pub fn nearest(&self, point: [f64; 2]) -> Option<(usize, f64)> {
+        self.nearest_impl(point, false)
+    }
+    /// Return the nearest point, resolving exact-distance ties by x, then y,
+    /// then original index. This is useful when scientific evidence depends
+    /// on a selected neighbor and must not depend on tree traversal order.
+    pub fn nearest_lexicographic(&self, point: [f64; 2]) -> Option<(usize, f64)> {
+        self.nearest_impl(point, true)
+    }
+    fn nearest_impl(&self, point: [f64; 2], lexicographic_ties: bool) -> Option<(usize, f64)> {
         if point.iter().any(|v| !v.is_finite()) {
             return None;
         }
@@ -240,7 +249,7 @@ impl CompatibleKdTree {
             sides,
         };
         let mut heap = Vec::new();
-        let mut best = None;
+        let mut best: Option<usize> = None;
         let mut upper = f64::INFINITY;
         loop {
             match current.node {
@@ -248,7 +257,19 @@ impl CompatibleKdTree {
                     for index in rows {
                         let p = self.points[*index];
                         let d = (p[0] - point[0]).powi(2) + (p[1] - point[1]).powi(2);
-                        if d < upper {
+                        let replace = match best {
+                            None => true,
+                            Some(_) if d < upper => true,
+                            Some(previous) if lexicographic_ties && d == upper => {
+                                let old = self.points[previous];
+                                p[0].total_cmp(&old[0])
+                                    .then(p[1].total_cmp(&old[1]))
+                                    .then(index.cmp(&previous))
+                                    .is_lt()
+                            }
+                            _ => false,
+                        };
+                        if replace {
                             upper = d;
                             best = Some(*index);
                         }
@@ -291,5 +312,22 @@ impl CompatibleKdTree {
             }
         }
         best.map(|index| (index, upper.sqrt()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CompatibleKdTree;
+
+    #[test]
+    fn nearest_tie_can_use_canonical_coordinate_order() {
+        let points = [[1904.0, 47.0], [1899.0, 52.0]];
+        let tree = CompatibleKdTree::new(&points).unwrap();
+
+        assert_eq!(tree.nearest([1900.0, 48.0]), Some((0, 17.0_f64.sqrt())));
+        assert_eq!(
+            tree.nearest_lexicographic([1900.0, 48.0]),
+            Some((1, 17.0_f64.sqrt()))
+        );
     }
 }

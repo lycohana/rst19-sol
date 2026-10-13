@@ -1,36 +1,36 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 
-import numpy as np
 import pytest
 
-from rst19.desktop_worker import catalog, preview, registry, run
-
-
-def make_frame(path: Path) -> None:
-    def card(key: str, value: str) -> bytes:
-        return f"{key:<8}= {value:>20}".ljust(80).encode("ascii")
-    header = b"".join([card("SIMPLE", "T"), card("BITPIX", "16"), card("NAXIS", "2"),
-                       card("NAXIS1", "128"), card("NAXIS2", "128"), b"END".ljust(80)]).ljust(2880, b" ")
-    rng = np.random.default_rng(19)
-    data = rng.normal(1000, 8, (128, 128))
-    y, x = np.indices(data.shape)
-    for px, py in [(30, 40), (70, 80), (98, 50)]:
-        data += 1000 * np.exp(-((x - px) ** 2 + (y - py) ** 2) / (2 * 1.4 ** 2))
-    path.write_bytes(header + np.rint(data).astype(">i2").tobytes())
+from rst19.desktop_worker import NATIVE_TOOL_NAMES, _schema_registry, catalog, registry, run
 
 
 def test_catalog_covers_all_scientific_entry_points():
     entries = registry()
+    schema_entries = _schema_registry()
     tools = catalog()
-    assert {tool["name"] for tool in tools} == set(entries)
+    # The Rust worker owns the complete UI catalog. The Python compatibility
+    # catalog exposes only commands with a Python parser/schema.
+    assert {tool["name"] for tool in tools} == set(entries) & set(schema_entries)
     assert all("gui" not in target and "launcher" not in target for target in entries.values())
     assert all(tool["fields"] for tool in tools)
+    root = Path(__file__).resolve().parents[1]
+    static_catalog = json.loads((root / "desktop/src/tool_catalog.json").read_text(encoding="utf-8"))
+    static_native = {tool["name"] for tool in static_catalog if tool["native"]}
+    assert static_native == NATIVE_TOOL_NAMES
+    backend_source = (root / "desktop/src/backend.rs").read_text(encoding="utf-8").split("\nimpl Backend")[0]
+    routed_native = set(re.findall(r'"(rst19(?:-[a-z0-9-]+)?)"', backend_source))
+    assert routed_native == static_native
+    single_frame = next(tool for tool in tools if tool["name"] == "rst19")
+    assert entries["rst19"] == "native:rst19"
+    assert single_frame["native"] is True
+    assert [field["key"] for field in single_frame["fields"]][0] == "fits_path"
     format_audit = next(tool for tool in tools if tool["name"] == "rst19-format-audit")
     assert entries["rst19-format-audit"] == "native:rst19-format-audit"
     assert [field["key"] for field in format_audit["fields"]] == [
@@ -179,27 +179,26 @@ def test_rust_migrated_entrypoints_cannot_fall_back_to_python(tool_name, tmp_pat
         run(request)
 
 
-def test_frame_job_preserves_science_and_raw_data(tmp_path):
-    path = tmp_path / "星图 with spaces.fits"
-    make_frame(path)
-    before = hashlib.sha256(path.read_bytes()).hexdigest()
-    result = run({"operation": "tool", "tool": "rst19", "args": [str(path)], "out_dir": str(tmp_path / "job")})
-    from rst19.pipeline import analyze_frame
-    expected = analyze_frame(path, proposal_mode="hybrid").as_dict()
-    assert result["result"] == expected
-    assert result["result"]["detection"]["quality_count"] >= 3
-    assert Path(result["preview"]).is_file()
-    assert json.loads(Path(result["result_path"]).read_text(encoding="utf-8")) == expected
-    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
-    for mode in ["raw", "noise", "enhanced"]:
-        output = tmp_path / mode
-        output.mkdir()
-        assert preview(str(path), output, mode)["width"] == 128
-    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
+def test_single_frame_tool_cannot_fall_back_to_python(tmp_path):
+    request = {
+        "operation": "tool",
+        "tool": "rst19",
+        "args": [str(tmp_path / "not-opened.fits")],
+        "out_dir": str(tmp_path / "job"),
+    }
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+@pytest.mark.parametrize("tool_name", sorted(NATIVE_TOOL_NAMES))
+def test_every_native_catalog_tool_refuses_python_fallback(tool_name, tmp_path):
+    request = {"operation": "tool", "tool": tool_name, "args": [], "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
 
 
 def test_worker_has_exactly_one_terminal_event_for_errors(tmp_path):
-    request = {"operation": "tool", "tool": "rst19", "args": [str(tmp_path / "missing.fits")], "out_dir": str(tmp_path / "failed")}
+    request = {"operation": "tool", "tool": "rst19", "args": [], "out_dir": str(tmp_path / "failed")}
     result = subprocess.run([sys.executable, "-m", "rst19.desktop_worker"], input=json.dumps(request),
                             capture_output=True, text=True, encoding="utf-8")
     events = [json.loads(line) for line in result.stdout.splitlines()]
@@ -207,7 +206,7 @@ def test_worker_has_exactly_one_terminal_event_for_errors(tmp_path):
     assert result.returncode != 0
     assert len(terminal) == 1
     assert terminal[0]["ok"] is False
-    assert "2" in terminal[0]["error"]
+    assert "native worker" in terminal[0]["error"]
 
 
 def test_worker_does_not_allow_arbitrary_imports(tmp_path):

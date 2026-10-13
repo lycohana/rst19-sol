@@ -966,6 +966,49 @@ mod tests {
 
     static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
+    fn fits_card(key: &str, value: &str) -> [u8; 80] {
+        let mut card = [b' '; 80];
+        let text = format!("{key:<8}= {value:>20}");
+        card[..text.len()].copy_from_slice(text.as_bytes());
+        card
+    }
+
+    fn write_single_frame_test_fits(path: &Path) {
+        const WIDTH: usize = 128;
+        const HEIGHT: usize = 128;
+        let mut bytes = Vec::new();
+        for (key, value) in [
+            ("SIMPLE", "T".to_owned()),
+            ("BITPIX", "16".to_owned()),
+            ("NAXIS", "2".to_owned()),
+            ("NAXIS1", WIDTH.to_string()),
+            ("NAXIS2", HEIGHT.to_string()),
+        ] {
+            bytes.extend_from_slice(&fits_card(key, &value));
+        }
+        let mut end = [b' '; 80];
+        end[..3].copy_from_slice(b"END");
+        bytes.extend_from_slice(&end);
+        bytes.resize(bytes.len().div_ceil(2880) * 2880, b' ');
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                let mut value = 1000.0 + ((x * 17 + y * 31) % 9) as f64 * 2.0 - 8.0;
+                for (cx, cy, amplitude) in [
+                    (30.0, 40.0, 1000.0),
+                    (70.0, 80.0, 900.0),
+                    (98.0, 50.0, 1100.0),
+                ] {
+                    let dx = x as f64 - cx;
+                    let dy = y as f64 - cy;
+                    value += amplitude * (-0.5 * (dx * dx + dy * dy) / 1.4_f64.powi(2)).exp();
+                }
+                bytes.extend_from_slice(&(value.round() as i16).to_be_bytes());
+            }
+        }
+        bytes.resize(bytes.len().div_ceil(2880) * 2880, 0);
+        fs::write(path, bytes).unwrap();
+    }
+
     #[test]
     fn embedded_catalog_marks_rust_and_pending_tools() {
         let catalog = catalog().unwrap();
@@ -983,6 +1026,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-sweep" && tool["native"] == true));
+        assert!(tools
+            .iter()
+            .any(|tool| tool["name"] == "rst19" && tool["native"] == true));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-feature-psf-leaveout" && tool["native"] == true
         }));
@@ -1027,6 +1073,44 @@ mod tests {
     fn empirical_psf_operation_is_dispatched_to_rust() {
         let error = run(json!({"operation":"psf.empirical.estimate"})).unwrap_err();
         assert_eq!(error, "missing FITS path");
+    }
+
+    #[test]
+    fn single_frame_tool_runs_through_the_native_cli_with_python_absent() {
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-single-frame-{}-{sequence}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let fits_path = root.join("single frame.fits");
+        let out_dir = root.join("job output");
+        write_single_frame_test_fits(&fits_path);
+        let source_bytes = fs::read(&fits_path).unwrap();
+
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19",
+            "args":[fits_path.to_string_lossy()],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+        let frame = rst19_core::fits::read_fits(&fits_path, false).unwrap();
+        let options: rst19_core::pipeline::FrameOptions =
+            serde_json::from_value(json!({"proposal_mode":"hybrid"})).unwrap();
+        let expected = rst19_core::pipeline::analyze_frame(frame, None, None, &options, None)
+            .unwrap()
+            .as_dict();
+        assert_eq!(result["result"], expected);
+        assert!(
+            result["result"]["detection"]["quality_count"]
+                .as_u64()
+                .unwrap()
+                >= 3
+        );
+        assert!(Path::new(result["preview"].as_str().unwrap()).is_file());
+        assert_eq!(fs::read(&fits_path).unwrap(), source_bytes);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

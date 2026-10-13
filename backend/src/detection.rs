@@ -680,10 +680,24 @@ fn detect_typed<T: Calculation>(
             width,
             pair_options,
         )?;
-    sources.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x)));
-    for (i, s) in sources.iter_mut().enumerate() {
-        s.detection_id = i as i64;
+    // Stable identifiers follow integer proposal peaks rather than subpixel
+    // centroids, whose float32 rounding can swap nearly tied sources. Keep
+    // the established centroid-sorted row order for API compatibility.
+    let mut id_order: Vec<_> = (0..sources.len()).collect();
+    id_order.sort_by(|left, right| {
+        let a = &sources[*left];
+        let b = &sources[*right];
+        a.peak_y
+            .unwrap_or(a.y)
+            .total_cmp(&b.peak_y.unwrap_or(b.y))
+            .then(a.peak_x.unwrap_or(a.x).total_cmp(&b.peak_x.unwrap_or(b.x)))
+            .then(a.y.total_cmp(&b.y))
+            .then(a.x.total_cmp(&b.x))
+    });
+    for (detection_id, source_index) in id_order.into_iter().enumerate() {
+        sources[source_index].detection_id = detection_id as i64;
     }
+    sources.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x)));
     let quality_count = sources.iter().filter(|s| s.quality_passed).count();
     let mut parameters = json!({"threshold_sigma":options.threshold_sigma,"min_distance":options.min_distance,"aperture_radius":measurement.aperture_radius,"max_sources":options.max_sources.map(|v|v as i64).unwrap_or(-1),"psf_fwhm":measurement.psf_fwhm,"background_box_size":options.background_box_size,"background_sample_limit":options.background_sample_limit,"statistics_sample_limit":1_000_000,"min_flux_snr":measurement.min_flux_snr,"min_fwhm":measurement.min_fwhm,"max_fwhm":measurement.max_fwhm,"max_ellipticity":measurement.max_ellipticity,"min_sharpness":measurement.min_sharpness,"max_sharpness":measurement.max_sharpness,"min_footprint_pixels":measurement.min_footprint_pixels,"min_psf_support_pixels":measurement.min_psf_support_pixels,"gain_e_per_adu":measurement.gain_e_per_adu.unwrap_or(-1.0),"read_noise_adu":measurement.read_noise_adu,"mask_zero_pixels":used_zero as u8,"allow_partial_zero_mask":measurement.allow_partial_zero_mask as u8,"partial_mask_policy":if measurement.allow_partial_zero_mask{"exact_zero_center_valid_aperture_ge_80pct"}else{"disabled"},"reject_linear_artifacts":options.reject_linear_artifacts as u8,"proposal_mode":mode,"dog_threshold_sigma":dog_threshold,"dog_min_peak_sigma":options.dog_min_peak_sigma,"dog_blend_radius_factor":options.dog_blend_radius_factor,"dog_blend_radius_px":measurement.dog_blend_radius_px,"dog_narrow_factor":options.dog_scale_factors[0],"dog_broad_factor":options.dog_scale_factors[1],"starlet_threshold_sigma":starlet_threshold,"starlet_min_peak_sigma":options.starlet_min_peak_sigma,"deblend_delta_bic_min":options.deblend_delta_bic_min,"deblend_component_snr_min":options.deblend_component_snr_min,"deblend_primary_snr_min":options.deblend_primary_snr_min,"deblend_min_residual_sigma":options.deblend_min_residual_sigma,"deblend_search_radius_factor":options.deblend_search_radius_factor,"enable_local_deblend":options.enable_local_deblend as u8,"repeated_high_code_values":repeated,"repeated_high_code_min_count":128,"code_pattern_negative_limit_adu":-1000.0,"close_pair_guard_radius_px":pair_radius,"close_pair_guard_tested_count":pair_tested,"close_pair_guarded_source_count":pair_guarded,"proposal_count_deblend_local":deblend_proposals.len(),"proposal_count_gaussian":gaussian.len(),"proposal_count_dog_narrow":dog_narrow,"proposal_count_dog_broad":dog_broad,"proposal_count_starlet_s1":starlet1,"proposal_count_starlet_s2":starlet2,"proposal_count_merged":candidate_count,"refine_local_background":measurement.refine_local_background as u8,"background_clip_iterations":if measurement.refine_local_background{4}else{2},"fast_sequence":options.fast_sequence as u8,"masked_filter_mode":filter_mode,"background_stats_mode":if T::FLOAT32&&!measurement.refine_local_background{"sampled_grid_4096"}else{"full_grid"},"background_model_mode":background_mode,"use_float32":T::FLOAT32 as u8,"line_artifact_pixels":line.as_ref().map(|m|m.iter().filter(|v|**v).count()).unwrap_or(0)});
     let metadata = parameters.as_object_mut().unwrap();

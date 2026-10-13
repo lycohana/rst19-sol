@@ -3,10 +3,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from scipy import ndimage
+from scipy.spatial import cKDTree
 
 from rst19.detection import (
     Detection,
     _pair_psf_evidence,
+    _canonical_nearest_index,
     _guard_unresolved_gaussian_pairs,
     _repeated_high_code_values,
     _source_from_peak,
@@ -17,6 +19,13 @@ from rst19.detection import (
     sigma_clipped_stats,
 )
 from rst19.fits import auxiliary_mask
+
+
+def test_tied_gaussian_neighbor_uses_coordinate_order() -> None:
+    coordinates = np.asarray([(1904.0, 47.0), (1899.0, 52.0)], dtype=np.float64)
+    tree = cKDTree(coordinates)
+
+    assert _canonical_nearest_index(tree, coordinates, (1900.0, 48.0)) == 1
 
 
 def _add_gaussian(image: np.ndarray, x0: float, y0: float, amplitude: float, sigma: float) -> None:

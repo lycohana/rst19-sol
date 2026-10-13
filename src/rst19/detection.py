@@ -1435,6 +1435,32 @@ def _source_measurement_position(source: Detection) -> tuple[float, float]:
     return float(source.x), float(source.y)
 
 
+def _canonical_nearest_index(
+    tree: cKDTree,
+    coordinates: np.ndarray,
+    point: tuple[float, float],
+) -> int:
+    """选择最近邻；等距时按坐标固定次序，避免 KD 树遍历顺序影响证据。"""
+
+    distance, nearest_index = tree.query(np.asarray(point, dtype=np.float64), k=1)
+    tied_indices = tree.query_ball_point(
+        np.asarray(point, dtype=np.float64),
+        np.nextafter(float(distance), np.inf),
+    )
+    if len(tied_indices) < 2:
+        return int(nearest_index)
+    px, py = point
+    return min(
+        (int(index) for index in tied_indices),
+        key=lambda index: (
+            (float(coordinates[index, 0]) - px) ** 2 + (float(coordinates[index, 1]) - py) ** 2,
+            float(coordinates[index, 0]),
+            float(coordinates[index, 1]),
+            index,
+        ),
+    )
+
+
 _PAIR_AUDIT_FLAGS = frozenset({"CODE_PATTERN", "NEGATIVE_OVERFLOW", "MASKED", "SATURATED"})
 
 
@@ -2135,18 +2161,17 @@ def detect_sources(
     # 幅度显著，才解除 UNRESOLVED_BLEND。其他质量旗标原样保留。
     gaussian_sources = [source for source in sources if "gaussian" in source.proposal_methods]
     if gaussian_sources:
-        gaussian_tree = cKDTree(
-            np.asarray(
-                [
-                    (
-                        source.peak_x if source.peak_x is not None else source.x,
-                        source.peak_y if source.peak_y is not None else source.y,
-                    )
-                    for source in gaussian_sources
-                ],
-                dtype=np.float64,
-            )
+        gaussian_coordinates = np.asarray(
+            [
+                (
+                    source.peak_x if source.peak_x is not None else source.x,
+                    source.peak_y if source.peak_y is not None else source.y,
+                )
+                for source in gaussian_sources
+            ],
+            dtype=np.float64,
         )
+        gaussian_tree = cKDTree(gaussian_coordinates)
         resolved_sources: list[Detection] = []
         for source in sources:
             if "UNRESOLVED_BLEND" not in source.flags:
@@ -2156,8 +2181,8 @@ def detect_sources(
                 float(source.peak_x if source.peak_x is not None else source.x),
                 float(source.peak_y if source.peak_y is not None else source.y),
             )
-            _distance, neighbor_index = gaussian_tree.query(np.asarray(secondary_xy), k=1)
-            neighbor = gaussian_sources[int(neighbor_index)]
+            neighbor_index = _canonical_nearest_index(gaussian_tree, gaussian_coordinates, secondary_xy)
+            neighbor = gaussian_sources[neighbor_index]
             primary_xy = (
                 float(neighbor.peak_x if neighbor.peak_x is not None else neighbor.x),
                 float(neighbor.peak_y if neighbor.peak_y is not None else neighbor.y),
@@ -2198,11 +2223,24 @@ def detect_sources(
         delta_bic_min=float(deblend_delta_bic_min),
         component_snr_min=float(deblend_component_snr_min),
     )
+    # Keep the established row order, but assign IDs from integer proposal
+    # peaks so float32 centroid rounding cannot swap near-tied IDs.
     sources.sort(key=lambda source: (source.y, source.x))
+    id_order = sorted(
+        range(len(sources)),
+        key=lambda index: (
+            *_source_peak_position(sources[index])[::-1],
+            sources[index].y,
+            sources[index].x,
+        ),
+    )
+    detection_ids = [0] * len(sources)
+    for detection_id, source_index in enumerate(id_order):
+        detection_ids[source_index] = detection_id
     report(98.0, "整理质量标记")
     numbered = [
         Detection(
-            detection_id=index,
+            detection_id=detection_ids[index],
             x=source.x,
             y=source.y,
             peak=source.peak,
