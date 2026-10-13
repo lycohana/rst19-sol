@@ -66,7 +66,7 @@ def build() -> None:
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(DESKTOP / "Cargo.toml"), "--bins"])
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(ROOT / "backend/Cargo.toml"),
              "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit", "--bin", "rst19-source-geometry-audit",
-             "--bin", "rst19-relative-photometry"])
+              "--bin", "rst19-relative-photometry", "--bin", "rst19-wcs-validation"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")})
@@ -90,6 +90,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / geometry_audit, package / "runtime" / geometry_audit)
     relative_photometry = "rst19-relative-photometry.exe" if os.name == "nt" else "rst19-relative-photometry"
     shutil.copy2(ROOT / "backend/target/release" / relative_photometry, package / "runtime" / relative_photometry)
+    wcs_validation = "rst19-wcs-validation.exe" if os.name == "nt" else "rst19-wcs-validation"
+    shutil.copy2(ROOT / "backend/target/release" / wcs_validation, package / "runtime" / wcs_validation)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"

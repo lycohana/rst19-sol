@@ -532,6 +532,39 @@ pub fn run_desktop(args: &[String], default_out_dir: &Path) -> Result<Value> {
     }))
 }
 
+const CLI_HELP: &str = "使用用户提供的离线星表，对一组 FITS 做逐帧局部 WCS 验证\n\nUsage: rst19-wcs-validation DATA_DIR CATALOG_CSV --center-ra RA --center-dec DEC --pixel-scale SCALE [OPTIONS]\n\nOptions: --crpix-x PX --crpix-y PX --rotation DEG --parity -1|1 --match-radius PX --min-matches N --epoch YEAR --threshold-sigma N --min-distance PX --aperture-radius PX --psf-fwhm PX --background-box-size PX --min-flux-snr N --max-sources N --keep-linear-artifacts --out-dir DIR\n";
+
+pub fn run_cli(args: &[String]) -> i32 {
+    if args
+        .iter()
+        .any(|arg| matches!(arg.as_str(), "-h" | "--help"))
+    {
+        print!("{CLI_HELP}");
+        return 0;
+    }
+    match run_desktop(args, &PathBuf::from("tmp").join("wcs-validation")) {
+        Ok(payload) => {
+            let report = &payload["result"];
+            println!(
+                "wcs validation: {}",
+                payload["out_dir"].as_str().unwrap_or("")
+            );
+            println!(
+                "frames={} validated={} validation_ratio={:.2}% catalog={}",
+                report["frame_count"].as_u64().unwrap_or_default(),
+                report["validated_count"].as_u64().unwrap_or_default(),
+                report["validation_ratio"].as_f64().unwrap_or_default() * 100.0,
+                report["catalog_source_count"].as_u64().unwrap_or_default(),
+            );
+            0
+        }
+        Err(error) => {
+            eprintln!("rst19-wcs-validation: {error}");
+            2
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

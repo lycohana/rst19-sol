@@ -269,6 +269,10 @@ def verify(package: Path, out: Path) -> dict:
         "rst19-relative-photometry.exe" if os.name == "nt" else "rst19-relative-photometry"
     )
     assert relative_photometry_cli.is_file(), "Rust relative photometry CLI is missing from the package"
+    wcs_validation_cli = package / "runtime" / (
+        "rst19-wcs-validation.exe" if os.name == "nt" else "rst19-wcs-validation"
+    )
+    assert wcs_validation_cli.is_file(), "Rust WCS validation CLI is missing from the package"
     environment = {**os.environ, "PYTHONPATH": "", "PYTHONHOME": "", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32") if os.name == "nt" else "/usr/bin:/bin"
     catalog = subprocess.run([str(worker), "--catalog"], capture_output=True, text=True, encoding="utf-8",
@@ -566,6 +570,38 @@ def verify(package: Path, out: Path) -> dict:
     assert len(matched_events) == 1 and matched_events[0]["ok"]
     matched_result = matched_events[0]["payload"]
     assert matched_result["result"]["frames"][0]["status"] == "validated", matched_result
+    matched_cli_output = out / "WCS matched validation native CLI"
+    matched_cli_response = subprocess.run(
+        [
+            str(wcs_validation_cli), str(wcs_data_dir.resolve()), str(matched_catalog.resolve()),
+            "--center-ra", "10", "--center-dec", "20", "--pixel-scale", "1",
+            "--crpix-x", "64", "--crpix-y", "64", "--min-matches", "3",
+            "--out-dir", str(matched_cli_output.resolve()),
+        ],
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=120, check=False,
+    )
+    assert matched_cli_response.returncode == 0, (
+        f"Rust WCS validation CLI failed: {matched_cli_response.stdout}\n{matched_cli_response.stderr}"
+    )
+    assert "frames=1 validated=1" in matched_cli_response.stdout
+    for artifact in (
+        "wcs_frame_validation.csv",
+        "wcs_validation_report.json",
+        "wcs_validation_residual.png",
+        "wcs_validation_scale.png",
+    ):
+        assert (matched_cli_output / artifact).read_bytes() == (matched_output / artifact).read_bytes()
+    wcs_cli_help = subprocess.run(
+        [str(wcs_validation_cli), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env=environment, cwd=out, timeout=60,
+    )
+    assert wcs_cli_help.returncode == 0 and "Usage: rst19-wcs-validation" in wcs_cli_help.stdout
+    wcs_cli_invalid = subprocess.run(
+        [str(wcs_validation_cli)], capture_output=True, text=True,
+        encoding="utf-8", env=environment, cwd=out, timeout=60,
+    )
+    assert wcs_cli_invalid.returncode == 2 and "rst19-wcs-validation:" in wcs_cli_invalid.stderr
     catalog = out / "source catalog.csv"
     make_feature_catalog(catalog)
 
@@ -1416,6 +1452,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-pair-pixel-topology",
                   "rst19-aperture-peak-ratio",
                   "rst19-wcs-validation",
+                  "rst19-wcs-validation native CLI",
                   "rst19-feature-correlation",
                   "rst19-feature-transition-flow",
                   "rst19-feature-gate-route",
@@ -1481,6 +1518,7 @@ def verify(package: Path, out: Path) -> dict:
     }
     report["wcs_validation"] = {
         "native_worker_tool_route_verified": True,
+        "packaged_native_cli_verified": True,
         "frame_count": 1,
         "per_frame_status": {
             "insufficient_catalog": "insufficient",
@@ -1489,6 +1527,13 @@ def verify(package: Path, out: Path) -> dict:
         "csv_json_and_png_artifacts_written": True,
         "external_python_search_disabled": True,
         "scope": "offline catalog matching, frame detection, affine WCS validation, and artifact writing",
+    }
+    report["wcs_validation_cli"] = {
+        "packaged_native_binary": wcs_validation_cli.name,
+        "worker_artifacts_match_cli_byte_for_byte": True,
+        "help_exit_code": wcs_cli_help.returncode,
+        "invalid_arguments_exit_code": wcs_cli_invalid.returncode,
+        "external_python_search_disabled": True,
     }
     report["source_geometry_audit"] = {
         "packaged_native_binary": geometry_cli.name,
