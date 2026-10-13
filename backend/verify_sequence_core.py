@@ -25,6 +25,8 @@ from rst19.sequence import (  # noqa: E402
     _observation_times_seconds,
     _stack_forced_frame_measure_batch,
     _track_fast_candidate_movers,
+    audit_fixed_sentinel,
+    audit_fixed_sentinel_impacts,
     track_detections,
     track_fast_point_movers,
 )
@@ -75,6 +77,7 @@ def synthetic_frames(directory: Path) -> list[Path]:
         image += 440 * np.exp(
             -0.5 * (((xx - (55 + index * 4)) / 1.25) ** 2 + ((yy - (57 + index * 2)) / 1.25) ** 2)
         )
+        image[20, 22] = -1
         path = directory / f"frame-{index:02d}.fits"
         make_fits(path, np.rint(image).astype(np.int16), f"2026-07-03T12:00:{index * 2:02d}.000Z")
         paths.append(path)
@@ -165,6 +168,13 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         analyze_frame(path, background_model=shared_background, **FRAME_OPTIONS)
         for path in paths
     ]
+    python_fixed_sentinel_audit = audit_fixed_sentinel(
+        [analysis.frame.data for analysis in python_analyses]
+    )
+    python_fixed_sentinel_impact_audit = audit_fixed_sentinel_impacts(
+        python_analyses,
+        python_fixed_sentinel_audit,
+    )
     frame_times = _observation_times_seconds(python_analyses).tolist()
     python_tracking_result = track_detections(
         [analysis.detection.quality_sources for analysis in python_analyses],
@@ -199,6 +209,16 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         raise AssertionError("frame count differs")
     for index, (native, python) in enumerate(zip(actual["frame_analyses"], python_analyses)):
         compare(native, python.as_dict(), f"frame_analyses[{index}]")
+    compare(
+        actual["fixed_sentinel_audit"],
+        json.loads(json.dumps(asdict(python_fixed_sentinel_audit), allow_nan=False)),
+        "fixed_sentinel_audit",
+    )
+    compare(
+        actual["fixed_sentinel_impact_audit"],
+        json.loads(json.dumps(asdict(python_fixed_sentinel_impact_audit), allow_nan=False)),
+        "fixed_sentinel_impact_audit",
+    )
     for key in (
         "frame_count",
         "stable_source_count",
@@ -413,8 +433,9 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         "fast_candidate_accepted_track_count": candidate_stage["accepted_track_count"],
         "relative_photometry_orchestration_matches_python": True,
         "relative_photometry_status": candidate_result["relative_photometry"]["status"],
+        "fixed_sentinel_and_impact_audits_match_python": True,
         "observation_times_seconds": frame_times,
-        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, matched-filter candidate association with original-pixel forced measurement and quality gates, and optional relative-photometry orchestration; temporal-reference recovery, trail auditing, and stack recovery remain outside this core operation",
+        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, quality-source fast-point tracking, matched-filter candidate association with original-pixel forced measurement and quality gates, optional relative-photometry orchestration, and fixed-sentinel impact audits; temporal-reference recovery, trail auditing, and stack recovery remain outside this core operation",
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report

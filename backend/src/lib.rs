@@ -51,6 +51,7 @@ pub mod sequence_motion_features;
 pub mod sequence_photometry;
 pub mod sequence_pipeline;
 pub mod sequence_registration;
+pub mod sequence_sentinel;
 pub mod sequence_temporal;
 pub mod sequence_trails;
 pub mod single_frame_trails;

@@ -817,11 +817,18 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         .iter()
         .map(|frame| Value::Object(frame.header.clone()))
         .collect::<Vec<_>>();
+    let fixed_sentinel_audit = crate::sequence_sentinel::audit_fixed_sentinel(&frames, -1, 10_000)?;
+    let mut fixed_sentinel_impact_audit =
+        crate::sequence_sentinel::FixedSentinelImpactAccumulator::new(
+            paths.len(),
+            &fixed_sentinel_audit,
+            5_000,
+        )?;
     let time_axis = sequence_trails::observation_time_axis(&json!({"headers":headers}))?;
     let frame_times: Vec<f64> = serde_json::from_value(time_axis["frame_times"].clone())
         .map_err(|error| error.to_string())?;
 
-    for frame in frames {
+    for (frame_index, frame) in frames.into_iter().enumerate() {
         let background = shared_background
             .as_ref()
             .map(|(background, noise, height, width)| BackgroundModel {
@@ -832,6 +839,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             });
         let analysis =
             pipeline::analyze_frame(frame, None, None, &frame_options, background.as_ref())?;
+        fixed_sentinel_impact_audit.add_frame(frame_index, &analysis)?;
         if fast_point_motion && paths.len() >= 3 {
             let (prepared, audit) = prefilter_fast_candidate_peaks(
                 &analysis.detection.candidate_peaks,
@@ -988,6 +996,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     } else {
         None
     };
+    let fixed_sentinel_impact_audit = fixed_sentinel_impact_audit.finish();
 
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
@@ -997,6 +1006,8 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "fast_point_tracks":fast_point_tracks,
         "fast_candidate_proposals":fast_candidate_proposals,
         "relative_photometry":relative_photometry_result,
+        "fixed_sentinel_audit":fixed_sentinel_audit,
+        "fixed_sentinel_impact_audit":fixed_sentinel_impact_audit,
         "observation_time_axis":time_axis,
         "detector_options":serde_json::to_value(&frame_options.detection).map_err(|error| error.to_string())?,
         "shared_background_model":shared_background.is_some(),
