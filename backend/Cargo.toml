@@ -93,6 +93,10 @@ name = "rst19-sweep"
 path = "src/bin/rst19-sweep.rs"
 
 [[bin]]
+name = "rst19-feature-psf-leaveout"
+path = "src/bin/rst19-feature-psf-leaveout.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 

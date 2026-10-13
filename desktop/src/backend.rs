@@ -75,6 +75,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-innovation-package"
                         | "rst19-temporal-codes"
                         | "rst19-sweep"
+                        | "rst19-feature-psf-leaveout"
                         | "rst19-relative-photometry"
                 )
             ))
@@ -396,6 +397,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sweep"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-feature-psf-leaveout"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

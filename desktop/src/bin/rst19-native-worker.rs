@@ -618,6 +618,28 @@ fn run(request: Value) -> Result<Value, String> {
     if request["tool"] == "rst19-sweep" {
         return rst19_core::detection_sweep::run_desktop(&string_args(&request)?);
     }
+    if request["tool"] == "rst19-feature-psf-leaveout" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::feature_psf_leaveout::run_desktop(&args);
+    }
     if request["tool"] == "rst19-feature-cross-axis-audit" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -861,6 +883,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-sweep" && tool["native"] == true));
+        assert!(tools.iter().any(|tool| {
+            tool["name"] == "rst19-feature-psf-leaveout" && tool["native"] == true
+        }));
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-sequence" && tool["native"] == false));
@@ -875,6 +900,21 @@ mod tests {
         }))
         .unwrap_err();
         assert_eq!(error, "a FITS input path is required");
+    }
+
+    #[test]
+    fn feature_psf_leaveout_is_dispatched_to_rust() {
+        let out_dir =
+            std::env::temp_dir().join(format!("rst19-psf-leaveout-empty-{}", std::process::id()));
+        let error = run(json!({
+            "operation":"tool",
+            "tool":"rst19-feature-psf-leaveout",
+            "args":[],
+            "out_dir":out_dir
+        }))
+        .unwrap_err();
+        let _ = fs::remove_dir_all(out_dir);
+        assert_eq!(error, "FITS path is required");
     }
 
     #[test]

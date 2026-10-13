@@ -1162,7 +1162,7 @@
         "run_feature_psf_leaveout_audit",
         "write_feature_psf_leaveout_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_psf_leaveout_cli",
@@ -1172,7 +1172,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_raw_evidence_audit",
@@ -3174,7 +3174,6 @@
     "rst19-empirical-pair-fit": "rst19.empirical_pair_fit_cli:main",
     "rst19-empirical-pair-free": "rst19.empirical_pair_free_cli:main",
     "rst19-pair-pixel-topology": "rst19.pair_pixel_topology_cli:main",
-    "rst19-feature-psf-leaveout": "rst19.feature_psf_leaveout_cli:main",
     "rst19-feature-evidence-axes": "rst19.feature_evidence_axes_cli:main",
     "rst19-source-peak-consistency": "rst19.source_peak_consistency_cli:main",
     "rst19-source-proposal-peak-audit": "rst19.source_proposal_peak_audit_cli:main",
@@ -3329,6 +3328,7 @@
     "rst19-innovation-package": "Rust standalone CLI, JSONL audit.innovation_package operation, and desktop worker accept injection JSON plus optional sequence/feature evidence; package JSON parity and CSV/Markdown artifacts verified; formal evidence gates cannot be lowered by caller options; Python console entrypoint removed; macOS/Linux acceptance pending",
     "rst19-temporal-codes": "Rust standalone CLI, JSONL audit.temporal_codes operation, and desktop worker read integer FITS sequences; 8-connected components and focus series match the Python behavior; CLI and engine pass with PATH disabled; BOM CSV/JSON artifacts verified; Python console entrypoint removed; package and macOS/Linux acceptance pending",
     "rst19-sweep": "Rust standalone CLI and native desktop-worker route implement threshold and PSF-FWHM scans; all numeric result fields match the Python baseline within 1e-10 on a synthetic FITS fixture; BOM CSV and native PNG outputs verified; Python console entrypoint removed; release-package and macOS/Linux validation pending",
+    "rst19-feature-psf-leaveout": "Rust standalone CLI, JSONL audit.feature_psf_leaveout operation, and native desktop worker read FITS plus source_catalog CSV; every result field matches the Python baseline within 5e-6 absolute plus 2e-6 relative tolerance on a synthetic image; BOM CSV/JSON artifacts and Rust dispatch verified; Python console entrypoint removed; release-package and macOS/Linux validation pending",
     "rst19-aux-audit": "Rust standalone CLI and desktop worker inspect FITS auxiliary attitude fields and produce CSV/JSON; Python console entrypoint removed",
     "rst19-format-audit": "single FITS or directory input; Rust JSONL engine, standalone CLI, and desktop worker match Python result fields and byte-identical CSV artifacts on synthetic and real FITS; package build and cross-platform acceptance pending",
     "rst19-feature-sequence-compare": "reads existing sequence JSON without FITS access or detection; JSONL engine, standalone CLI, and desktop worker match Python result fields and three CSV artifacts byte-for-byte; package build and cross-platform acceptance pending",
@@ -3369,6 +3369,8 @@
     "rst19-feature-gate-temporal-route": "Rust standalone CLI, JSONL audit.feature_gate_temporal_route, and desktop worker join existing route/diagnostic CSVs with persistence JSON; result fields and all four BOM CSV artifacts match Python; PATH-disabled CLI/JSONL and desktop dispatch tests pass; Python console entrypoint removed; packaged and macOS/Linux validation pending"
   },
   "verification": [
+    "tests/feature_psf_leaveout_parity.rs",
+    "tests/fixtures/feature_psf_leaveout.json",
     "tests/parity.rs",
     "tests/measurement_parity.rs",
     "tests/detection_parity.rs",
