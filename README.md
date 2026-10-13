@@ -735,6 +735,14 @@ rst19-sequence doc/00-项目资料/原始数据 `
 rst19-innovation tmp/sequence-final.json --out-dir tmp/innovation
 ```
 
+从分层背景注入证据生成条件化创新交付包使用 Rust 原生 CLI：
+
+```powershell
+cargo run --manifest-path backend/Cargo.toml --bin rst19-innovation-package -- `
+  tmp/stratified-real-background-code-pattern-current-n8/stratified_real_background_injection.json `
+  --out-dir $env:TEMP/rst19-innovation-package --require-defensible
+```
+
 证据报告会把单帧长线候选与跨帧 `moving` 轨迹分开，并使用 `DATE-OBS` 的真实时间计算 pixel/s；三点及以上轨迹还输出基于小样本 OLS 的速度/方向 95% 区间和外推逐轴区间，两点轨迹不伪造区间，单帧候选不伪造跨帧速度。没有像元角尺度和标准 WCS 时不会输出角秒或真实天体速度。通过星表窗口的唯一匹配和局部仿射校准后，创新摘要才会额外显示视场切平面 `arcsec/s`，并同时保留匹配内点数、像素残差和各向异性；这不等同于完整 WCS 或轨道速度。辅助遥测页还会以位置 `m` 和 `DATE-OBS` 检查速度字段的 `m/s?` 自洽性，并给出末帧状态向后 5 个中位帧间隔的常速度位置外推；该预测会标注单位假设，不把它与图像平面速度混用。单帧“分析当前帧”也会运行同一套长线几何筛选，橙色线表示单帧曝光运动候选：形态上可能在曝光内发生位移，但不能替代跨帧确认。GUI 的“15 帧证据”窗口提供逐帧表、线状轨迹表、逐帧“线状诊断”筛选表/曲线、集中展示时序/配准/速度/方向/预测及统计边界的“创新摘要”页、Canvas 图表、辅助遥测表、“遥测轨迹”相对首帧 XY 投影图、按需生成的注册中值/正负残差图证和线状裁剪接触表、注入-回收曲线、真实首帧阈值扫描，以及按需运行的“单图长线”逐帧审计页。遥测轨迹图将观测序列与琥珀色外推段分开显示，仍保留 `m?`/`m/s?` 假设边界。
 
 逐张审计单图长线候选（不跨帧、不把单帧形状写成运动真值）：

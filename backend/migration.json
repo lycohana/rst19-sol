@@ -1698,7 +1698,7 @@
         "_markdown",
         "write_innovation_package"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.innovation_package_cli",
@@ -1708,7 +1708,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.matching",
@@ -3161,7 +3161,6 @@
     "rst19-sequence": "rst19.sequence_cli:main",
     "rst19-mosaic": "rst19.mosaic_cli:main",
     "rst19-innovation": "rst19.innovation_cli:main",
-    "rst19-innovation-package": "rst19.innovation_package_cli:main",
     "rst19-injection": "rst19.injection_cli:main",
     "rst19-sweep": "rst19.sweep_cli:main",
     "rst19-trails": "rst19.trail_cli:main",
@@ -3290,7 +3289,8 @@
     "local pair-response attribution with normalized Gaussian response, repeated-code/negative-anomaly masks, ranked local maxima, signed pixel-class contributions, and detector-level interpretation limits",
     "pair forced-photometry covariance with tie-aware Pearson/Spearman statistics, same-frame normalization, source-pair control distributions, and detector-level interpretation limits",
     "feature temporal-consistency source/class summaries; source and result fields plus BOM CSV artifacts match the Python reference; Rust CLI, JSONL engine, and desktop worker routes verified",
-    "feature spatial-context source summaries, entropy, edge and hard-negative hotspots, deterministic candidate ranking, and local-neighbor context; source fields and three BOM CSV artifacts match the Python baseline"
+    "feature spatial-context source summaries, entropy, edge and hard-negative hotspots, deterministic candidate ranking, and local-neighbor context; source fields and three BOM CSV artifacts match the Python baseline",
+    "conditional innovation evidence packages from stratified injection tables, sequence reports, and feature matrices; Wilson intervals, evidence gates, JSON output, CSV artifacts, Markdown report, standalone Rust CLI, JSONL engine, and desktop worker; formatted evidence artifacts match the Python baseline"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3326,6 +3326,7 @@
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_cli_contracts": {
     "rst19": "native rst19 executable is the public command; rst19-native alias retained; stdout/json-out/error contracts match across 89 parity invocations; standalone Windows executable opens help with PATH disabled; package build/verification and macOS/Linux package validation pending",
+    "rst19-innovation-package": "Rust standalone CLI, JSONL audit.innovation_package operation, and desktop worker accept injection JSON plus optional sequence/feature evidence; package JSON parity and CSV/Markdown artifacts verified; formal evidence gates cannot be lowered by caller options; Python console entrypoint removed; macOS/Linux acceptance pending",
     "rst19-aux-audit": "Rust standalone CLI and desktop worker inspect FITS auxiliary attitude fields and produce CSV/JSON; Python console entrypoint removed",
     "rst19-format-audit": "single FITS or directory input; Rust JSONL engine, standalone CLI, and desktop worker match Python result fields and byte-identical CSV artifacts on synthetic and real FITS; package build and cross-platform acceptance pending",
     "rst19-feature-sequence-compare": "reads existing sequence JSON without FITS access or detection; JSONL engine, standalone CLI, and desktop worker match Python result fields and three CSV artifacts byte-for-byte; package build and cross-platform acceptance pending",
@@ -3522,7 +3523,11 @@
     "tests/feature_gate_temporal_route_parity.rs",
     "generate_feature_gate_temporal_route_reference.py",
     "backend/src/feature_gate_temporal_route.rs",
-    "backend/src/bin/rst19-feature-gate-temporal-route.rs"
+    "backend/src/bin/rst19-feature-gate-temporal-route.rs",
+    "tests/innovation_package_parity.rs",
+    "generate_innovation_package_reference.py",
+    "backend/src/innovation_package.rs",
+    "backend/src/bin/rst19-innovation-package.rs"
   ],
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",
@@ -3530,7 +3535,7 @@
     "remaining sequence work: full multi-scale/raw/temporal candidate assembly and verification, motion/trail and stack-faint orchestration, full relative-photometry configuration/output compatibility, full SequenceResult assembly/output compatibility, and exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-innovation-package, rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
@@ -3570,5 +3575,6 @@
   "native_feature_temporal_consistency_audit": "source and class temporal summaries, strict catalog/frame class provenance, aliases, selected detections, BOM CSV/JSON artifacts, standalone Rust CLI, JSONL audit.feature_temporal_consistency, and desktop worker route; detector-level diagnostics only, not physical identity",
   "native_feature_spatial_context": "reads source_catalog CSV; computes category grid entropy, edge fractions, flux-SNR rejected hotspots, ranked hard-negative examples, and 5/10/20-pixel neighbors; emits JSON and three BOM CSV artifacts; detector-level spatial context is not physical identity",
   "native_feature_evidence_matrix": "joins morphology, feature-cross response, empirical PSF leaveout, and optional spatial-PSF evidence by feature class; Wilson intervals and descriptive routing are computed natively; emits field-compatible JSON and Python-byte-identical BOM CSV; detector evidence is not physical truth",
-  "native_feature_gate_temporal_route": "joins quality-gate route CSV, diagnostic-source CSV and sequence persistence JSON by detection_id; preserves missing quality-source evidence as null; summarizes route/subgroup temporal persistence and tie-inclusive target ranks; JSONL and four Python-byte-identical BOM CSV artifacts; registered-coordinate evidence is not physical identity"
+  "native_feature_gate_temporal_route": "joins quality-gate route CSV, diagnostic-source CSV and sequence persistence JSON by detection_id; preserves missing quality-source evidence as null; summarizes route/subgroup temporal persistence and tie-inclusive target ranks; JSONL and four Python-byte-identical BOM CSV artifacts; registered-coordinate evidence is not physical identity",
+  "native_innovation_package": "builds conditional detection/quality recall profiles, Wilson intervals, source evidence, optional sequence/feature-matrix context, and claim boundaries from injection evidence; emits parity-checked JSON, BOM CSV artifacts, and Markdown; exposed through native CLI, JSONL engine, and desktop worker; Python console entry removed; cross-platform acceptance pending"
 }

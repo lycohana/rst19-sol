@@ -81,6 +81,10 @@ name = "rst19-feature-gate-temporal-route"
 path = "src/bin/rst19-feature-gate-temporal-route.rs"
 
 [[bin]]
+name = "rst19-innovation-package"
+path = "src/bin/rst19-innovation-package.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 

@@ -571,6 +571,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::feature_gate_temporal_route::run_desktop(&args);
     }
+    if request["tool"] == "rst19-innovation-package" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::innovation_package::run_desktop(&args);
+    }
     if request["tool"] == "rst19-feature-cross-axis-audit" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1014,10 +1036,41 @@ mod tests {
         .unwrap();
         assert_eq!(result["tool"], "rst19-feature-gate-temporal-route");
         assert_eq!(result["result"]["source_row_count"], 1);
-        assert_eq!(result["result"]["target_rows"][0]["all_three_ge_required"], false);
+        assert_eq!(
+            result["result"]["target_rows"][0]["all_three_ge_required"],
+            false
+        );
         assert!(out_dir.join("request.json").is_file());
-        assert!(out_dir.join("feature_gate_temporal_route_sources.csv").is_file());
+        assert!(out_dir
+            .join("feature_gate_temporal_route_sources.csv")
+            .is_file());
         assert!(out_dir.join("feature_gate_temporal_routes.json").is_file());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn innovation_package_tool_is_dispatched_to_native_builder() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-innovation-package-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let input = root.join("injection.json");
+        let out_dir = root.join("output");
+        fs::write(&input, r#"{"rows":[{"stratum":"blank","peak_excess_adu":24,"injected_count":8,"candidate_recovered_count":8,"quality_recovered_count":4,"ambiguous_injection_count":0,"unambiguous_injected_count":8,"trial_count":3}]}"#).unwrap();
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-innovation-package",
+            "out_dir":out_dir,
+            "args":[input.to_string_lossy()]
+        }))
+        .unwrap();
+        assert_eq!(result["tool"], "rst19-innovation-package");
+        assert_eq!(result["package"]["status"], "INCOMPLETE");
+        assert!(out_dir.join("innovation_package.json").is_file());
+        assert!(out_dir.join("innovation_delivery.csv").is_file());
+        assert!(out_dir.join("innovation_delivery.md").is_file());
         fs::remove_dir_all(root).unwrap();
     }
 }

@@ -11,7 +11,7 @@
 - 局部背景/RMS、Gaussian PSF 匹配滤波、3×3 PSF 支持反尖峰审计、全量候选审计、孔径通量误差、三种 SNR 和点源质量分层；
 - 基于切平面先验 WCS 的全局/贪心可对照星表一对一匹配；
 - CSV 离线任务星表读取、自行传播和 JSON CLI 输出。
-- Python Tkinter 桌面工作台：选择 FITS、调整参数，在“可信星点 / 全部候选 / 运动候选”图层间切换，并查看最暗源的 `m_inst`、标定表观星等和绝对星等质量状态。
+- 桌面分析工作台：选择 FITS、调整参数，在“可信星点 / 全部候选 / 运动候选”图层间切换，并查看最暗源的 `m_inst`、标定表观星等和绝对星等质量状态；UI 全量 Rust 化仍在迁移中。
 - 15 帧质量源的全局平移配准、唯一轨迹关联和 `static`/`moving`/`transient` 点轨迹基线；另有独立的线状候选检测与跨帧关联。
 - 单帧长线候选检测和 `rst19-innovation` 证据导出：按真实 `DATE-OBS` 生成逐帧/逐轨迹 JSON、CSV 和 PNG，区分单帧候选与跨帧 `moving`。
 - `rst19-innovation-package` 条件化创新交付包：从真实背景分层注入表生成候选/质量召回、质量筛选损失、Wilson 区间和可答辩边界，不读取 FITS、不把背景检测数当误检率。
@@ -94,8 +94,9 @@ rst19-mosaic doc/00-项目资料/原始数据 `
 ```powershell
 rst19-innovation tmp/sequence-final.json --out-dir tmp/innovation
 
-# 从已有真实背景分层注入表生成创新交付包
-rst19-innovation-package tmp/stratified-real-background-code-pattern-current-n8/stratified_real_background_injection.json `
+# 从已有真实背景分层注入表生成创新交付包（Rust 原生 CLI）
+cargo run --manifest-path backend/Cargo.toml --bin rst19-innovation-package -- `
+  tmp/stratified-real-background-code-pattern-current-n8/stratified_real_background_injection.json `
   --out-dir $env:TEMP/rst19-innovation-package
 ```
 
