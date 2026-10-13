@@ -458,7 +458,22 @@ def verify(package: Path, out: Path) -> dict:
     assert sequence_core["schema"] == "rst19.sequence.core.v1"
     assert sequence_core["shared_background_model"] is True
     assert sequence_core["tracking"]["frame_count"] == 2
+    assert isinstance(sequence_core["fast_point_tracks"], list)
+    assert sequence_core["tracking"]["fast_point_motion_count"] == len(sequence_core["fast_point_tracks"])
     assert len(sequence_core["frame_analyses"]) == 2
+    sequence_core_disabled_response = subprocess.run(
+        [str(native_worker)],
+        input=json.dumps({**sequence_core_request, "fast_point_motion": False}, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=120, check=True,
+    )
+    sequence_core_disabled_events = [
+        json.loads(line) for line in sequence_core_disabled_response.stdout.splitlines()
+    ]
+    assert len(sequence_core_disabled_events) == 1 and sequence_core_disabled_events[0]["ok"]
+    sequence_core_disabled = sequence_core_disabled_events[0]["payload"]
+    assert sequence_core_disabled["fast_point_tracks"] == []
+    assert sequence_core_disabled["tracking"]["fast_point_motion_count"] == 0
     catalog = out / "source catalog.csv"
     make_feature_catalog(catalog)
 
@@ -1325,7 +1340,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-proposal-temporal-audit",
                   "rst19-source-geometry-audit",
                   "rst19-relative-photometry",
-                  "sequence core FITS detection/tracking",
+                  "sequence core FITS detection/tracking/fast-point motion",
                   "sequence evidence brief JSONL",
                   "manual threshold feedback JSONL",
               ],
@@ -1366,9 +1381,10 @@ def verify(package: Path, out: Path) -> dict:
     }
     report["sequence_core"] = {
         "native_worker_operation_verified": True,
-        "shared_background_and_two_frame_tracking_verified": True,
+        "shared_background_ordinary_and_fast_point_tracking_verified": True,
+        "fast_point_motion_disable_verified": True,
         "external_python_search_disabled": True,
-        "scope": "frame detection and quality-track association only",
+        "scope": "frame detection, ordinary quality-track association, and supplemental fast-point motion only",
     }
     report["source_geometry_audit"] = {
         "packaged_native_binary": geometry_cli.name,

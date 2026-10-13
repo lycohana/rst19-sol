@@ -20,7 +20,11 @@ sys.path.insert(0, str(ROOT / "src"))
 from rst19.detection import build_background_model  # noqa: E402
 from rst19.fits import auxiliary_mask, read_fits  # noqa: E402
 from rst19.pipeline import analyze_frame  # noqa: E402
-from rst19.sequence import _observation_times_seconds, track_detections  # noqa: E402
+from rst19.sequence import (  # noqa: E402
+    _observation_times_seconds,
+    track_detections,
+    track_fast_point_movers,
+)
 
 FRAME_OPTIONS: dict[str, Any] = {
     "threshold_sigma": 4.0,
@@ -131,11 +135,27 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         for path in paths
     ]
     frame_times = _observation_times_seconds(python_analyses).tolist()
-    python_tracking = track_detections(
+    python_tracking_result = track_detections(
         [analysis.detection.quality_sources for analysis in python_analyses],
         frame_names=[str(path) for path in paths],
         frame_times=frame_times,
-    ).as_dict()
+    )
+    python_tracking = python_tracking_result.as_dict()
+    effective_motion_gate = python_tracking_result.effective_motion_min_displacement_px or 2.0
+    python_fast_point_tracks = track_fast_point_movers(
+        [analysis.detection.quality_sources for analysis in python_analyses],
+        python_tracking_result.cumulative_shifts,
+        frame_times=frame_times,
+        link_radius_px=python_tracking_result.link_radius_px,
+        min_presence=python_tracking_result.min_presence,
+        motion_min_displacement_px=effective_motion_gate,
+        existing_tracks=python_tracking_result.tracks,
+    )
+    python_fast_point_rows = []
+    for index, track in enumerate(python_fast_point_tracks):
+        row = track.as_dict()
+        row["track_id"] = len(python_tracking_result.tracks) + index
+        python_fast_point_rows.append(row)
     request = {
         "operation": "sequence.analyze_core",
         "paths": [str(path) for path in paths],
@@ -162,7 +182,12 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
         "tracks",
     ):
         compare(actual["tracking"][key], python_tracking[key], f"tracking.{key}")
+    compare(actual["fast_point_tracks"], python_fast_point_rows, "fast_point_tracks")
+    compare(actual["tracking"]["fast_point_motion_count"], len(python_fast_point_rows), "tracking.fast_point_motion_count")
     compare(actual["observation_time_axis"]["frame_times"], frame_times, "observation_time_axis.frame_times")
+    disabled = invoke(engine.resolve(), {**request, "fast_point_motion": False})
+    compare(disabled["fast_point_tracks"], [], "disabled.fast_point_tracks")
+    compare(disabled["tracking"]["fast_point_motion_count"], 0, "disabled.tracking.fast_point_motion_count")
     report = {
         "engine": str(engine.resolve()),
         "engine_sha256": hashlib.sha256(engine.read_bytes()).hexdigest(),
@@ -186,8 +211,10 @@ def verify(engine: Path, out: Path) -> dict[str, Any]:
             "cumulative_shifts",
             "tracks",
         ],
+        "fast_point_motion_track_count": len(python_fast_point_rows),
+        "fast_point_motion_disable_verified": True,
         "observation_times_seconds": frame_times,
-        "scope": "Rust FITS detection, shared first-frame background, time parsing, and quality-track association; temporal candidates, trail auditing, stack recovery, and relative photometry remain outside this core operation",
+        "scope": "Rust FITS detection, shared first-frame background, time parsing, ordinary quality tracking, and supplemental fast-point quality tracking; temporal candidate recovery, trail auditing, stack recovery, and relative photometry remain outside this core operation",
     }
     (out / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return report

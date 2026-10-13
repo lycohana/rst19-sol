@@ -8,6 +8,7 @@ use crate::{
     fits,
     pipeline::{self, FrameOptions},
     sequence::{self, TrackSequenceOptions},
+    sequence_fast::{self, FastPointOptions},
     sequence_trails, Result,
 };
 use serde_json::{json, Map, Value};
@@ -148,13 +149,70 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     let tracking_options: TrackSequenceOptions =
         serde_json::from_value(Value::Object(tracking_options))
             .map_err(|error| error.to_string())?;
-    let tracking = sequence::track_detections(&quality_frames, &tracking_options)?;
+    let mut tracking = sequence::track_detections(&quality_frames, &tracking_options)?;
+    let fast_point_motion = match request.get("fast_point_motion") {
+        None | Some(Value::Null) => true,
+        Some(Value::Bool(enabled)) => *enabled,
+        Some(_) => return Err("fast_point_motion must be a boolean".into()),
+    };
+    let mut fast_point_options =
+        object_or_empty(request.get("fast_point_options"), "fast_point_options")?;
+    if fast_point_options
+        .get("link_radius_px")
+        .is_none_or(Value::is_null)
+    {
+        fast_point_options.insert(
+            "link_radius_px".into(),
+            json!(tracking_options.link_radius_px),
+        );
+    }
+    if fast_point_options
+        .get("min_presence")
+        .is_none_or(Value::is_null)
+    {
+        fast_point_options.insert("min_presence".into(), tracking["min_presence"].clone());
+    }
+    if fast_point_options
+        .get("motion_min_displacement_px")
+        .is_none_or(Value::is_null)
+    {
+        fast_point_options.insert(
+            "motion_min_displacement_px".into(),
+            tracking["effective_motion_min_displacement_px"].clone(),
+        );
+    }
+    let fast_point_options: FastPointOptions =
+        serde_json::from_value(Value::Object(fast_point_options))
+            .map_err(|error| error.to_string())?;
+    let mut fast_point_tracks = if fast_point_motion && quality_frames.len() >= 2 {
+        let shifts: Vec<[f64; 2]> = serde_json::from_value(tracking["cumulative_shifts"].clone())
+            .map_err(|error| error.to_string())?;
+        let existing_tracks: Vec<Value> = serde_json::from_value(tracking["tracks"].clone())
+            .map_err(|error| error.to_string())?;
+        let tracks = sequence_fast::track_fast_point_movers(
+            &quality_frames,
+            &shifts,
+            Some(&frame_times),
+            &fast_point_options,
+            &existing_tracks,
+        )?;
+        serde_json::from_value::<Vec<Value>>(tracks["tracks"].clone())
+            .map_err(|error| error.to_string())?
+    } else {
+        Vec::new()
+    };
+    let base_track_count = tracking["tracks"].as_array().map_or(0, Vec::len);
+    for (index, track) in fast_point_tracks.iter_mut().enumerate() {
+        track["track_id"] = json!(base_track_count + index);
+    }
+    tracking["fast_point_motion_count"] = json!(fast_point_tracks.len());
 
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
-        "scope":"frame_detection_and_quality_track_association",
+        "scope":"frame_detection_quality_tracks_and_fast_point_motion",
         "frame_analyses":frame_analyses,
         "tracking":tracking,
+        "fast_point_tracks":fast_point_tracks,
         "observation_time_axis":time_axis,
         "detector_options":serde_json::to_value(&frame_options.detection).map_err(|error| error.to_string())?,
         "shared_background_model":shared_background.is_some(),

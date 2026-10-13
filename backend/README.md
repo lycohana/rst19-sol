@@ -19,7 +19,7 @@ float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径
 `sequence.rescue_collinear_motion_feature_groups` 在常规中心关联失败时，从长单帧线候选中迭代恢复互不重叠的共线运动组；结果仍是图像平面候选，需要后续轨迹门复核。
 `sequence.coherent_raw_motion_point_indices` 将相邻帧原始线候选按实测时间、曝光时长、位移方向和线形支持连成短链；少数弱形态帧可以由强点桥接，但整条链至少需要两个强形态点。它只输出候选帧/点索引，后续关联与运动确认仍需独立运行；完整多尺度候选装配和多帧编排尚未迁入 Rust。
 `sequence.brief` 已迁入 Rust JSONL 引擎和桌面 worker，可从现有序列结果生成字段等价的结构化简报与中文展示文本，覆盖时间跨度、帧间隔、图像平面运动拟合、候选排序、科学结论边界和合成图覆盖说明。它只整理既有证据，不替代 `analyze_sequence` 检测/关联编排，也不将算法候选升级为真实天体；Windows 包 worker 在禁用外部 Python 搜索后通过验收。
-新增 `sequence.analyze_core` 将 FITS 读取、序列快速路径的首帧共享背景、逐帧检测、观测时间轴和质量源关联接入同一个 Rust JSONL/桌面 worker 入口。三帧合成 FITS 与 Python 的逐帧 `FrameAnalysis` 和 `track_detections` 结果逐字段对照通过；该入口只覆盖检测与质量轨迹，不包含时间候选恢复、拖影审计、叠加暗星恢复、相对测光及完整 `SequenceResult` 兼容层，正式序列工具仍由 Python 执行。
+新增 `sequence.analyze_core` 将 FITS 读取、序列快速路径的首帧共享背景、逐帧检测、观测时间轴、质量源关联和补充高速点源轨迹接入同一个 Rust JSONL/桌面 worker 入口。三帧合成 FITS 与 Python 的逐帧 `FrameAnalysis`、`track_detections` 和 `track_fast_point_movers` 结果逐字段对照通过；该入口仍不包含时间候选恢复、拖影审计、叠加暗星恢复、相对测光及完整 `SequenceResult` 兼容层，正式序列工具仍由 Python 执行。
 `sequence.motion_feature_frame_components` 将序列拖影检测的单帧阈值支撑图分成连通候选，支持一像素缺口分组，并返回 PCA 长宽/方向、沿线连续度、边缘和线伪影重叠审计。它只提供几何候选；原图点/双源模型复核与跨帧运动确认仍由后续阶段完成。
 `trails.local_pixel_proposals` 已将单帧原始像素线候选检测迁入 Rust：保留掩膜归一化 Gaussian 平滑、局部峰值预算、方向/长度扫描、局部复核、点源/双星负例控制和线段几何去重。输出仍只是单帧线形候选，不代表跨帧运动；完整序列候选装配仍待迁移。
 
