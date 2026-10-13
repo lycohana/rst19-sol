@@ -71,6 +71,7 @@ def build() -> None:
               "--bin", "rst19-temporal-codes",
               "--bin", "rst19-sweep",
               "--bin", "rst19-feature-psf-leaveout",
+              "--bin", "rst19-pair-pixel-topology",
               "--bin", "rst19-signed-null-audit", "--bin", "rst19-signed-null-sequence"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
@@ -120,6 +121,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / detection_sweep, package / "runtime" / detection_sweep)
     feature_psf_leaveout = "rst19-feature-psf-leaveout.exe" if os.name == "nt" else "rst19-feature-psf-leaveout"
     shutil.copy2(ROOT / "backend/target/release" / feature_psf_leaveout, package / "runtime" / feature_psf_leaveout)
+    pair_pixel_topology = "rst19-pair-pixel-topology.exe" if os.name == "nt" else "rst19-pair-pixel-topology"
+    shutil.copy2(ROOT / "backend/target/release" / pair_pixel_topology, package / "runtime" / pair_pixel_topology)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"

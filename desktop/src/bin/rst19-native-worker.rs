@@ -888,6 +888,9 @@ mod tests {
         }));
         assert!(tools
             .iter()
+            .any(|tool| { tool["name"] == "rst19-pair-pixel-topology" && tool["native"] == true }));
+        assert!(tools
+            .iter()
             .any(|tool| tool["name"] == "rst19-sequence" && tool["native"] == false));
     }
 

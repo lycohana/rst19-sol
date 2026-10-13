@@ -992,6 +992,25 @@ pub fn run_desktop(args: &[String]) -> Result<Value> {
     }))
 }
 
+pub fn run_cli(args: &[String]) -> Result<i32> {
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!("近邻双框原始像素拓扑审计\n\nUsage: rst19-pair-pixel-topology FITS --source-catalog CSV --primary-id ID --secondary-id ID [--patch-padding-px N] [--sigma-levels N ...] [--raw-maximum-neighborhoods-px N ...] [--raw-maximum-sigma-level N] [--special-negative-threshold-adu N] [--out-dir DIR]");
+        return Ok(0);
+    }
+    let response = run_desktop(args)?;
+    println!(
+        "pair pixel topology audit: {}",
+        response["out_dir"].as_str().unwrap_or_default()
+    );
+    println!(
+        "{}",
+        response["result"]["conclusion"]
+            .as_str()
+            .unwrap_or_default()
+    );
+    Ok(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

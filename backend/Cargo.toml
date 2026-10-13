@@ -97,6 +97,10 @@ name = "rst19-feature-psf-leaveout"
 path = "src/bin/rst19-feature-psf-leaveout.rs"
 
 [[bin]]
+name = "rst19-pair-pixel-topology"
+path = "src/bin/rst19-pair-pixel-topology.rs"
+
+[[bin]]
 name = "rst19-relative-photometry"
 path = "src/bin/rst19-relative-photometry.rs"
 
