@@ -593,6 +593,36 @@ fn execute(request: Value) -> Result<Value> {
                     .map_err(|error| error.to_string())?;
             rst19_core::sequence_feature_comparison::compare(&runs)
         }
+        "audit.feature_raw_evidence" => {
+            let catalog_path = request["catalog_path"]
+                .as_str()
+                .ok_or("missing source catalog path")?;
+            let raw_summary_path = request["raw_summary_path"]
+                .as_str()
+                .ok_or("missing raw source summary path")?;
+            let feature_classes = request
+                .get("feature_classes")
+                .filter(|value| !value.is_null())
+                .map(|value| {
+                    serde_json::from_value::<Vec<String>>(value.clone())
+                        .map_err(|error| error.to_string())
+                })
+                .transpose()?;
+            let metrics = request
+                .get("metrics")
+                .filter(|value| !value.is_null())
+                .map(|value| {
+                    serde_json::from_value::<Vec<String>>(value.clone())
+                        .map_err(|error| error.to_string())
+                })
+                .transpose()?;
+            rst19_core::feature_raw_evidence_audit::run(
+                std::path::Path::new(catalog_path),
+                std::path::Path::new(raw_summary_path),
+                feature_classes,
+                metrics,
+            )
+        }
         "audit.pair_mechanism_context" => {
             let catalog_path = request["catalog_path"]
                 .as_str()

@@ -40,6 +40,12 @@ def test_catalog_covers_all_scientific_entry_points():
     sequence_compare = next(tool for tool in tools if tool["name"] == "rst19-feature-sequence-compare")
     assert entries["rst19-feature-sequence-compare"] == "native:rst19-feature-sequence-compare"
     assert sequence_compare["fields"][0]["repeat"] is True
+    raw_evidence = next(tool for tool in tools if tool["name"] == "rst19-feature-raw-evidence-audit")
+    assert entries["rst19-feature-raw-evidence-audit"] == "native:rst19-feature-raw-evidence-audit"
+    assert [field["key"] for field in raw_evidence["fields"]] == [
+        "catalog", "raw_summary", "feature_class", "out_dir"
+    ]
+    assert raw_evidence["fields"][2]["repeat"] is True
 
 
 def test_format_audit_cannot_fall_back_to_python(tmp_path):
@@ -51,6 +57,13 @@ def test_format_audit_cannot_fall_back_to_python(tmp_path):
 
 def test_sequence_feature_comparison_cannot_fall_back_to_python(tmp_path):
     request = {"operation": "tool", "tool": "rst19-feature-sequence-compare", "args": [],
+               "out_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="必须由 native worker 执行"):
+        run(request)
+
+
+def test_feature_raw_evidence_audit_cannot_fall_back_to_python(tmp_path):
+    request = {"operation": "tool", "tool": "rst19-feature-raw-evidence-audit", "args": [],
                "out_dir": str(tmp_path)}
     with pytest.raises(ValueError, match="必须由 native worker 执行"):
         run(request)

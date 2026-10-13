@@ -1191,7 +1191,7 @@
         "run_feature_raw_evidence_audit",
         "write_feature_raw_evidence_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_raw_evidence_audit_cli",
@@ -1201,7 +1201,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.feature_sequence_cli",
@@ -3217,7 +3217,6 @@
     "rst19-feature-gate-route": "rst19.feature_gate_route_cli:main",
     "rst19-feature-gate-temporal-route": "rst19.feature_gate_temporal_route_cli:main",
     "rst19-source-geometry-audit": "rst19.source_geometry_audit_cli:main",
-    "rst19-feature-raw-evidence-audit": "rst19.feature_raw_evidence_audit_cli:main",
     "rst19-feature-temporal-consistency-audit": "rst19.feature_temporal_consistency_audit_cli:main",
     "rst19-feature-cross-axis-audit": "rst19.feature_cross_axis_audit_cli:main",
     "rst19-contaminated-pair-injection": "rst19.contaminated_pair_injection_cli:main",
@@ -3229,7 +3228,8 @@
     "rst19-crowded-ablation": "rst19.crowded_ablation_cli:main",
     "rst19": "native Rust executable; Python CLI parser retained only for desktop form metadata",
     "rst19-format-audit": "native Rust executable and desktop worker route; Python entrypoint/module import removed; static desktop schema remains",
-    "rst19-feature-sequence-compare": "native Rust JSONL operation, standalone executable, and desktop worker route; Python console entrypoint removed; comparison module retained as a parity baseline and shared class-order source"
+    "rst19-feature-sequence-compare": "native Rust JSONL operation, standalone executable, and desktop worker route; Python console entrypoint removed; comparison module retained as a parity baseline and shared class-order source",
+    "rst19-feature-raw-evidence-audit": "native Rust JSONL operation, standalone executable, and desktop worker route; Python console entrypoint removed; CSV join and statistical summaries match the Python baseline"
   },
   "native_implemented": [
     "fits raw typed primary-HDU reader",
@@ -3288,7 +3288,8 @@
     "source-coordinate PCA geometry audit with NumPy-compatible SeedSequence/PCG64 choice sampling, Rust JSONL/desktop routes, and a standalone CLI",
     "robust relative photometry with weighted least squares, iterative MAD rejection, optional spatial terms, independent source-block validation, NumPy-compatible seeded holdout, Rust JSONL/desktop routes, and standalone CLI",
     "sequence evidence brief with image-plane motion regression, local-naive timestamp duration and interval summaries, deterministic candidate ordering, scientific boundary text, and mosaic coverage interpretation",
-    "sequence FITS detection orchestration, shared pilot background, observation time axis, quality-track and fast-point motion association"
+    "sequence FITS detection orchestration, shared pilot background, observation time axis, quality-track and fast-point motion association",
+    "raw local-evidence audit joined to source catalogs by detection_id with finite-value filtering and linear quantiles"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3316,6 +3317,7 @@
   "native_attitude_execution": "attitude.audit.frames and attitude.audit.paths; quaternion/boresight residuals, header pointing consistency, missing-auxiliary handling, RA/Dec and attitude range summaries; rst19-aux-audit writes Python-byte-identical CSV and field-identical JSON",
   "native_format_audit_execution": "audit.format_paths and rst19-format-audit inspect FITS dimensions, storage types, scaling, special values, timestamps and auxiliary position/velocity consistency; JSON fields and CSV bytes match the Python baseline",
   "native_sequence_feature_comparison_execution": "sequence.feature_parameter_compare reads existing sequence JSON only; computes first-frame counts, per-class candidate/quality persistence and class transitions; Rust JSONL engine, standalone CLI, and desktop worker match Python result fields and three CSV artifacts byte-for-byte",
+  "native_feature_raw_evidence_audit_execution": "audit.feature_raw_evidence joins source_catalog and stratified raw-sample CSV on unique detection_id values; validates fields/classes, preserves requested metric/class order, excludes other_rejected by default, and uses NumPy-compatible linear quantiles; Rust JSONL engine, standalone CLI, and desktop worker match Python fields and CSV bytes",
   "native_sequence_execution": "sequence.brief summarizes existing sequence evidence into the same structured Chinese findings and display text, including image-plane motion regression, timestamp duration/intervals and mosaic coverage; sequence.translation.estimate, sequence.frame_assign, sequence.track_motion.fit, sequence.motion_displacement_floor, sequence.track_detections, sequence.fast_point_movers, sequence.fast_candidate_associate for prefiltered raw-peak constant-velocity association, sequence.candidate_consensus with optional per-frame raw-image gates, sequence.reference.median, sequence.reference.coadd, sequence.temporal_reference_candidates for multiscale Gaussian proposals plus forced per-frame PSF responses, sequence.stack_forced_measure_batch for robust annulus backgrounds, aperture SNR, 3x3 pixel support, and shape checks on stack-proposed original-frame coordinates, sequence.line_profile_metrics for bilinear trail continuity/fill diagnostics, sequence.motion_feature_frame_components for thresholded per-frame connected components, gap grouping, PCA line geometry and morphology audit, sequence.trail_shape_evidence for single-frame rejection reasons and sequence shape admission, sequence.motion_feature_track_gates for cross-frame shape/motion-axis/artifact/edge checks, sequence.motion_feature_continuity_gates for continuous observation runs and bounded interior-gap bridging, sequence.motion_feature_exposure_evidence for PSF-deconvolved exposure speed versus inter-frame motion, sequence.motion_feature_confirmation_evidence for required coverage and stable rejection codes, sequence.motion_proposal_thresholds for metadata-aware raw trail proposal floors, sequence.motion_time_axis for validated elapsed times and median reference interval, sequence.observation_time_axis for UTC-normalized FITS DATE-OBS parsing with monotonic frame fallback, sequence.motion_feature_pair_geometry for the soft trail association cost, sequence.fit_collinear_motion_geometry for PCA trail span and time-aware legacy speed, sequence.best_collinear_motion_feature_group for deterministic monotonic cross-frame candidate grouping, sequence.stitch_unassociated_single_frame_points for review-gated constant-velocity singleton recovery, sequence.link_motion_evidence_tracks for one-to-one point-motion/exposure-line evidence de-duplication, sequence.rescue_collinear_motion_feature_groups for iterative disjoint long-trail grouping, sequence.coherent_raw_motion_point_indices for adjacent-frame raw line-proposal chains with shape and timing gates; local-pixel trail proposals are implemented as a reusable leaf; raw-candidate association is implemented before image measurement; sequence.analyze_core now performs matched-filter peak SNR and working-set filtering, edge and line-artifact rejection, existing-track exclusion, time-aware candidate association, original-pixel forced aperture measurement, PSF-support/FWHM/ellipticity gates, and final motion gates; passing algorithmic candidates join fast-point tracks without asserting physical identity; fixed -1 sentinel persistence and candidate/source aperture impact audits are included; sequence.analyze_core also runs persistent matched-filter candidate consensus against borrowed in-memory FITS pixels and returns Python-matching accepted tracks plus rejection audit; multiscale frame assembly and high-level multi-frame orchestration remain pending; affine RANSAC uses deterministic SplitMix64 rather than NumPy PCG64; sequence.analyze_core now reads ordered FITS paths in Rust, reuses the first-frame float32 background on the sequence fast path, runs per-frame detection, normalizes DATE-OBS times, and feeds quality-passed detections into native registration/tracking and supplemental fast-point motion association; this is a core slice only; fixed -1 sentinel and source/candidate impact audits match Python; optional stable-static-track relative-photometry fitting is wired to the native fitter and matches Python; temporal candidate, trail, and stack orchestration plus full SequenceResult assembly/output compatibility remain pending",
   "native_trail_proposals_execution": "trails.local_pixel_proposals; masked constant-boundary Gaussian whitening, spatially tiled local maxima, per-length/angle line responses, local refinement, point/double-source negative controls, and geometry NMS; candidate proposals only",
   "native_photometry_execution": "instrumental/apparent/legacy absolute arithmetic; structured parallax/model-distance/catalog absolute estimates; derived error/interval/strict gates; weighted zero point/color fit; clipping/holdout/catalog quality gates/sample roles; calibration application and error; native JSONL operations",
@@ -3348,7 +3350,8 @@
     "rst19-source-group-audit": "transitive centroid-radius source groups; result and all three CSV plus JSON artifacts match Python across default/explicit radii and target selection; invalid boolean, duplicate ID, invalid coordinate, and missing-target errors match; JSONL engine and desktop worker routes verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending",
     "rst19-source-group-sensitivity": "same source catalog and evidence thresholds across ordered radius scans; result and both CSV plus JSON artifacts match Python across default and custom parallel runs; duplicate/nonpositive radius, nonpositive worker, and missing-target errors match; JSONL engine and desktop worker routes verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending",
     "rst19-source-separation-audit": "source_catalog CSV input; centroid/peak nearest-other spacing, threshold and class summaries, optional target lookup, three CSV plus JSON outputs; JSONL engine and Rust desktop worker routes verified; Windows package verified with external Python search disabled; SciPy may return any of several equally distant IDs, while Rust deterministically chooses the lowest CSV row index; macOS/Linux package validation pending",
-    "rst19-source-geometry-audit": "source_catalog CSV; per-class PCA axis ratio/orientation/residuals and equal-size compact_quality controls; NumPy 1.26.4 sampling compatibility for unsigned 64-bit seeds; Rust engine and desktop worker match Python fields and artifacts within 2e-12 numeric tolerance; Windows package worker and standalone CLI verified with external Python search disabled; macOS/Linux package validation pending"
+    "rst19-source-geometry-audit": "source_catalog CSV; per-class PCA axis ratio/orientation/residuals and equal-size compact_quality controls; NumPy 1.26.4 sampling compatibility for unsigned 64-bit seeds; Rust engine and desktop worker match Python fields and artifacts within 2e-12 numeric tolerance; Windows package worker and standalone CLI verified with external Python search disabled; macOS/Linux package validation pending",
+    "rst19-feature-raw-evidence-audit": "joins existing source_catalog and stratified raw-summary CSV; JSONL engine, standalone CLI, and desktop worker match Python fields and CSV bytes for default/custom classes and metrics; package build and cross-platform acceptance pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3481,7 +3484,8 @@
     "tests/test_sequence_brief.py",
     "backend/verify_sequence_core.py",
     "verify_format_audit.py",
-    "verify_sequence_feature_comparison.py"
+    "verify_sequence_feature_comparison.py",
+    "verify_feature_raw_evidence_audit.py"
   ],
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",

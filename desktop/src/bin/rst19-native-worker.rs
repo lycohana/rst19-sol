@@ -249,6 +249,20 @@ fn run(request: Value) -> Result<Value, String> {
         .map_err(|error| error.to_string())?;
         return rst19_core::sequence_feature_comparison::run_desktop(&string_args(&request)?);
     }
+    if request["tool"] == "rst19-feature-raw-evidence-audit" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        return rst19_core::feature_raw_evidence_audit::run_desktop(&string_args(&request)?);
+    }
     if request["tool"] == "rst19-wcs-validation" {
         let out_dir = PathBuf::from(
             request["out_dir"]

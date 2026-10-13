@@ -42,6 +42,7 @@ def registry() -> dict[str, str]:
     # remaining Python catalog bootstrap is replaced by native Rust metadata.
     entries.setdefault("rst19-format-audit", "native:rst19-format-audit")
     entries.setdefault("rst19-feature-sequence-compare", "native:rst19-feature-sequence-compare")
+    entries.setdefault("rst19-feature-raw-evidence-audit", "native:rst19-feature-raw-evidence-audit")
     return {name: target for name, target in entries.items()
             if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
 
@@ -83,6 +84,26 @@ def catalog() -> list[dict]:
                                "nargs": None, "path": False, "repeat": True},
                               {"key": "out_dir", "flag": "--out-dir", "help": "比较表输出目录",
                                "required": False, "default": "tmp/sequence-feature-parameter-comparison",
+                               "choices": [], "kind": "value", "nargs": None, "path": True,
+                               "repeat": False},
+                          ]})
+            continue
+        if target == "native:rst19-feature-raw-evidence-audit":
+            tools.append({"name": name,
+                          "description": "连接源目录与原始 FITS 抽样 CSV，比较各特征类别的局部证据",
+                          "fields": [
+                              {"key": "catalog", "flag": "", "help": "rst19-sources 导出的 source_catalog.csv",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "raw_summary", "flag": "", "help": "stratified_raw_source_summary.csv",
+                               "required": True, "default": None, "choices": [], "kind": "value",
+                               "nargs": None, "path": True, "repeat": False},
+                              {"key": "feature_class", "flag": "--feature-class",
+                               "help": "需要汇总的 feature_class；可重复传入",
+                               "required": False, "default": [], "choices": [], "kind": "value",
+                               "nargs": None, "path": False, "repeat": True},
+                              {"key": "out_dir", "flag": "--out-dir", "help": "CSV/JSON 输出目录",
+                               "required": False, "default": "tmp/feature-raw-evidence-audit",
                                "choices": [], "kind": "value", "nargs": None, "path": True,
                                "repeat": False},
                           ]})

@@ -1,6 +1,6 @@
 # RST19 Rust 原生桌面
 
-前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-format-audit`、`rst19-feature-sequence-compare`、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-source-group-audit`、`rst19-source-group-sensitivity`、`rst19-source-separation-audit`、`rst19-source-peak-consistency`、`rst19-source-proposal-peak-audit`、`rst19-source-proposal-temporal-audit`、`rst19-source-geometry-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-wcs-validation`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。打包脚本会将独立 `rst19-format-audit`、`rst19-feature-sequence-compare` 与 `rst19-wcs-validation` Rust 二进制复制到 `runtime/`；本轮尚未重建完整发布包。
+前端使用 Rust + egui/eframe 原生绘制。单帧 `rst19` 检测、星表匹配、光度分析、`rst19-format-audit`、`rst19-feature-sequence-compare`、`rst19-feature-raw-evidence-audit`、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-source-group-audit`、`rst19-source-group-sensitivity`、`rst19-source-separation-audit`、`rst19-source-peak-consistency`、`rst19-source-proposal-peak-audit`、`rst19-source-proposal-temporal-audit`、`rst19-source-geometry-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-wcs-validation`、`rst19-feature-correlation` 和 `rst19-feature-transition-flow` 已通过独立 Rust worker 运行；尚未迁移的研究工具仍由 Python worker 执行。打包脚本会将独立 `rst19-format-audit`、`rst19-feature-sequence-compare`、`rst19-feature-raw-evidence-audit` 与 `rst19-wcs-validation` Rust 二进制复制到 `runtime/`；本轮尚未重建完整发布包。
 桌面 Rust worker 还提供人工阈值反馈 JSONL 的追加与读取操作，作为人工复核记录保存。
 光度颜色模型敏感性通过 `photometry.calibration.sensitivity` 原生操作执行；在缺少已声明光度系统/波段时保留 `DIAGNOSTIC_ONLY` 状态，不把诊断提升为标准测光结论。
 完整发布包暂时同时包含 Rust 原生 worker 与 Python/NumPy/SciPy 环境，以及中文字体；使用者无需安装 Python、Rust、Node.js 或浏览器。
@@ -44,7 +44,7 @@ python desktop/build.py
 ```
 
 构建脚本创建专用 `.build-venv`，安装固定版本的科学与打包依赖，构建 Rust release，
-构建 Rust 桌面、原生计算 worker、`rst19-format-audit`、`rst19-feature-sequence-compare`、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-relative-photometry` 和 `rst19-wcs-validation` 命令，使用 PyInstaller onedir 打包尚未迁移的 Python 工具环境，下载可再分发的 Noto 中文字体与许可证，
+构建 Rust 桌面、原生计算 worker、`rst19-format-audit`、`rst19-feature-sequence-compare`、`rst19-feature-raw-evidence-audit`、`rst19-aux-audit`、`rst19-gaia-merge`、`rst19-relative-photometry` 和 `rst19-wcs-validation` 命令，使用 PyInstaller onedir 打包尚未迁移的 Python 工具环境，下载可再分发的 Noto 中文字体与许可证，
 验证全部算法工具能在冻结环境中导入，再输出 `dist/RST19-平台-架构-时间/` 与 ZIP。
 包中包含运行环境版本与逐文件 SHA-256 清单。每次构建使用新目录，不清理旧包或用户数据。
 

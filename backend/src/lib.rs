@@ -23,6 +23,7 @@ pub mod feature_flag_profile;
 pub mod feature_gate_margin;
 pub mod feature_gate_route;
 pub mod feature_hard_negative;
+pub mod feature_raw_evidence_audit;
 pub mod feature_transition_flow;
 pub mod feedback;
 pub mod filtering;

@@ -314,6 +314,15 @@ def verify(package: Path, out: Path) -> dict:
         encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
     )
     assert "Usage: rst19-feature-sequence-compare" in sequence_compare_help.stdout, sequence_compare_help.stdout
+    raw_evidence_audit = package / "runtime" / (
+        "rst19-feature-raw-evidence-audit.exe" if os.name == "nt" else "rst19-feature-raw-evidence-audit"
+    )
+    assert raw_evidence_audit.is_file(), "Rust raw evidence audit CLI is missing from the package"
+    raw_evidence_help = subprocess.run(
+        [str(raw_evidence_audit), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env={**os.environ, "PATH": ""}, timeout=10, check=True,
+    )
+    assert "Usage: rst19-feature-raw-evidence-audit" in raw_evidence_help.stdout, raw_evidence_help.stdout
     attitude_cli = package / "runtime" / ("rst19-aux-audit.exe" if os.name == "nt" else "rst19-aux-audit")
     assert attitude_cli.is_file(), "Rust auxiliary attitude audit CLI is missing from the package"
     geometry_cli = package / "runtime" / (
