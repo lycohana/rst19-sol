@@ -83,6 +83,9 @@ fn run(request: Value) -> Result<Value, String> {
     if request["operation"] == "photometry.relative.fit" {
         return rst19_core::relative_photometry::handle_request(&request);
     }
+    if request["operation"] == "sequence.brief" {
+        return rst19_core::sequence_brief::handle_request(&request);
+    }
     if request["operation"] != "tool" {
         return Err(
             "Rust desktop worker only accepts preview, sensitivity, feedback, or native tools"

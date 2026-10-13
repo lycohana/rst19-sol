@@ -417,6 +417,32 @@ def verify(package: Path, out: Path) -> dict:
         encoding="utf-8", env=environment, cwd=out, timeout=60,
     )
     assert relative_cli_help.returncode == 0 and "Usage: rst19-relative-photometry" in relative_cli_help.stdout
+    sequence_brief_request = {
+        "operation": "sequence.brief",
+        "result": {
+            "frames": [
+                {"timestamp": "2026-03-30T16:32:05.000"},
+                {"timestamp": "2026-03-30T16:32:07.000"},
+            ],
+            "cumulative_shifts": [[0.0, 0.0], [0.1, 0.2]],
+            "motion_features": [],
+            "tracks": [],
+            "stable_source_count": 3,
+            "persistent_source_count": 0,
+        },
+    }
+    sequence_brief_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(sequence_brief_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment,
+        cwd=out, timeout=60, check=True,
+    )
+    sequence_brief_events = [json.loads(line) for line in sequence_brief_response.stdout.splitlines()]
+    assert len(sequence_brief_events) == 1 and sequence_brief_events[0]["ok"]
+    sequence_brief = sequence_brief_events[0]["payload"]
+    assert sequence_brief["brief"]["frame_count"] == 2
+    assert sequence_brief["brief"]["duration_s"] == 2.0
+    assert "没有形成运动候选" in sequence_brief["brief"]["headline"]
+    assert "图像几何" in sequence_brief["text"]
     catalog = out / "source catalog.csv"
     make_feature_catalog(catalog)
 
@@ -1283,6 +1309,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-proposal-temporal-audit",
                   "rst19-source-geometry-audit",
                   "rst19-relative-photometry",
+                  "sequence evidence brief JSONL",
                   "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
@@ -1313,6 +1340,11 @@ def verify(package: Path, out: Path) -> dict:
         "desktop_tool_fields_match_cli": True,
         "known_offsets_and_relative_magnitudes_match": True,
         "help_exit_code": relative_cli_help.returncode,
+        "external_python_search_disabled": True,
+    }
+    report["sequence_brief"] = {
+        "native_worker_operation_verified": True,
+        "timestamp_duration_and_empty_candidate_summary_verified": True,
         "external_python_search_disabled": True,
     }
     report["source_geometry_audit"] = {

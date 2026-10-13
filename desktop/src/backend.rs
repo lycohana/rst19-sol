@@ -29,6 +29,7 @@ fn uses_native_worker(request: &Value) -> bool {
                     | "feedback.load"
                     | "photometry.calibration.sensitivity"
                     | "photometry.relative.fit"
+                    | "sequence.brief"
                     | "sequence.stack_forced_measure_batch"
             )
         )
@@ -253,6 +254,7 @@ mod tests {
         assert!(uses_native_worker(
             &json!({"operation":"photometry.relative.fit"})
         ));
+        assert!(uses_native_worker(&json!({"operation":"sequence.brief"})));
         assert!(uses_native_worker(
             &json!({"operation":"sequence.stack_forced_measure_batch"})
         ));

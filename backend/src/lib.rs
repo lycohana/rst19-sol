@@ -42,6 +42,7 @@ pub mod psf;
 pub mod relative_photometry;
 pub mod sequence;
 pub mod sequence_assignment;
+pub mod sequence_brief;
 pub mod sequence_consensus;
 pub mod sequence_fast;
 pub mod sequence_fast_candidates;
