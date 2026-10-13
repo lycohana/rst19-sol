@@ -3073,7 +3073,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.temporal_code_cli",
@@ -3162,7 +3162,6 @@
     "rst19-mosaic": "rst19.mosaic_cli:main",
     "rst19-innovation": "rst19.innovation_cli:main",
     "rst19-injection": "rst19.injection_cli:main",
-    "rst19-sweep": "rst19.sweep_cli:main",
     "rst19-trails": "rst19.trail_cli:main",
     "rst19-sources": "rst19.source_cli:main",
     "rst19-feature-sequence": "rst19.feature_sequence_cli:main",
@@ -3228,6 +3227,7 @@
     "exposure units",
     "f64 sigma-clipped statistics",
     "f64 local background maps",
+    "threshold and PSF FWHM sensitivity sweeps over shared raw FITS data, with native detector reuse and CSV/PNG artifacts",
     "TAN projection",
     "quaternion boresight",
     "affine projection and velocity transform",
@@ -3306,6 +3306,7 @@
     "legacy compact KD-tree tie handling"
   ],
   "native_detection_execution": "float64 and float32 Gaussian/hybrid/ensemble; optional local deblend; shared-background shape validation; exactly overlapping PSF templates return no identifiable pair evidence; verify_float32.py matches every field on 12 synthetic dtype/mode/fast-path combinations and three 512x512 real FITS ROI modes at max_sources=300; full-image and sequence float32 acceptance pending",
+  "native_detection_sweep": "threshold and PSF-FWHM modes use the native FITS reader, auxiliary mask, and detector; synthetic Python-baseline results match every CSV/JSON result field within 1e-10 for both modes; BOM CSV schemas and valid PNG artifacts verified; chart pixels are generated natively and are not compared to Python",
   "native_matching_helpers": [
     "rectangular shortest augmenting path assignment with baseline ties",
     "sparse connected-component global candidate assignment",
@@ -3327,6 +3328,7 @@
     "rst19": "native rst19 executable is the public command; rst19-native alias retained; stdout/json-out/error contracts match across 89 parity invocations; standalone Windows executable opens help with PATH disabled; package build/verification and macOS/Linux package validation pending",
     "rst19-innovation-package": "Rust standalone CLI, JSONL audit.innovation_package operation, and desktop worker accept injection JSON plus optional sequence/feature evidence; package JSON parity and CSV/Markdown artifacts verified; formal evidence gates cannot be lowered by caller options; Python console entrypoint removed; macOS/Linux acceptance pending",
     "rst19-temporal-codes": "Rust standalone CLI, JSONL audit.temporal_codes operation, and desktop worker read integer FITS sequences; 8-connected components and focus series match the Python behavior; CLI and engine pass with PATH disabled; BOM CSV/JSON artifacts verified; Python console entrypoint removed; package and macOS/Linux acceptance pending",
+    "rst19-sweep": "Rust standalone CLI and native desktop-worker route implement threshold and PSF-FWHM scans; all numeric result fields match the Python baseline within 1e-10 on a synthetic FITS fixture; BOM CSV and native PNG outputs verified; Python console entrypoint removed; release-package and macOS/Linux validation pending",
     "rst19-aux-audit": "Rust standalone CLI and desktop worker inspect FITS auxiliary attitude fields and produce CSV/JSON; Python console entrypoint removed",
     "rst19-format-audit": "single FITS or directory input; Rust JSONL engine, standalone CLI, and desktop worker match Python result fields and byte-identical CSV artifacts on synthetic and real FITS; package build and cross-platform acceptance pending",
     "rst19-feature-sequence-compare": "reads existing sequence JSON without FITS access or detection; JSONL engine, standalone CLI, and desktop worker match Python result fields and three CSV artifacts byte-for-byte; package build and cross-platform acceptance pending",
@@ -3530,7 +3532,12 @@
     "backend/src/bin/rst19-innovation-package.rs",
     "tests/temporal_code_parity.rs",
     "backend/src/temporal_code.rs",
-    "backend/src/bin/rst19-temporal-codes.rs"
+    "backend/src/bin/rst19-temporal-codes.rs",
+    "tests/detection_sweep_parity.rs",
+    "tests/fixtures/detection_sweep.json",
+    "backend/src/detection_sweep.rs",
+    "backend/src/bin/rst19-sweep.rs",
+    "desktop/src/bin/rst19-native-worker.rs"
   ],
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",
@@ -3538,7 +3545,7 @@
     "remaining sequence work: full multi-scale/raw/temporal candidate assembly and verification, motion/trail and stack-faint orchestration, full relative-photometry configuration/output compatibility, full SequenceResult assembly/output compatibility, and exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-innovation-package, rst19-temporal-codes, rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-innovation-package, rst19-temporal-codes, rst19-sweep, rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],

@@ -615,6 +615,9 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::temporal_code::run_desktop(&args);
     }
+    if request["tool"] == "rst19-sweep" {
+        return rst19_core::detection_sweep::run_desktop(&string_args(&request)?);
+    }
     if request["tool"] == "rst19-feature-cross-axis-audit" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -857,7 +860,21 @@ mod tests {
             .any(|tool| tool["name"] == "rst19-temporal-codes" && tool["native"] == true));
         assert!(tools
             .iter()
+            .any(|tool| tool["name"] == "rst19-sweep" && tool["native"] == true));
+        assert!(tools
+            .iter()
             .any(|tool| tool["name"] == "rst19-sequence" && tool["native"] == false));
+    }
+
+    #[test]
+    fn detection_sweep_is_dispatched_to_rust() {
+        let error = run(json!({
+            "operation":"tool",
+            "tool":"rst19-sweep",
+            "args":[]
+        }))
+        .unwrap_err();
+        assert_eq!(error, "a FITS input path is required");
     }
 
     #[test]

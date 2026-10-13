@@ -12,6 +12,7 @@ pub mod compatible_spatial;
 pub mod coordinates;
 pub mod deblend;
 pub mod detection;
+pub mod detection_sweep;
 pub mod direct_neighbor_audit;
 pub mod feature_class_context;
 pub mod feature_correlation_audit;

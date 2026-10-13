@@ -69,7 +69,7 @@ def build() -> None:
               "--bin", "rst19-relative-photometry", "--bin", "rst19-wcs-validation",
               "--bin", "rst19-innovation-package",
               "--bin", "rst19-temporal-codes",
-              "--bin", "rst19-temporal-codes",
+              "--bin", "rst19-sweep",
               "--bin", "rst19-signed-null-audit", "--bin", "rst19-signed-null-sequence"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
@@ -115,8 +115,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / innovation_package, package / "runtime" / innovation_package)
     temporal_codes = "rst19-temporal-codes.exe" if os.name == "nt" else "rst19-temporal-codes"
     shutil.copy2(ROOT / "backend/target/release" / temporal_codes, package / "runtime" / temporal_codes)
-    temporal_codes = "rst19-temporal-codes.exe" if os.name == "nt" else "rst19-temporal-codes"
-    shutil.copy2(ROOT / "backend/target/release" / temporal_codes, package / "runtime" / temporal_codes)
+    detection_sweep = "rst19-sweep.exe" if os.name == "nt" else "rst19-sweep"
+    shutil.copy2(ROOT / "backend/target/release" / detection_sweep, package / "runtime" / detection_sweep)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"
