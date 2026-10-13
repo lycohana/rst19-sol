@@ -242,6 +242,10 @@ def verify(package: Path, out: Path) -> dict:
         "rst19-source-geometry-audit.exe" if os.name == "nt" else "rst19-source-geometry-audit"
     )
     assert geometry_cli.is_file(), "Rust source geometry audit CLI is missing from the package"
+    relative_photometry_cli = package / "runtime" / (
+        "rst19-relative-photometry.exe" if os.name == "nt" else "rst19-relative-photometry"
+    )
+    assert relative_photometry_cli.is_file(), "Rust relative photometry CLI is missing from the package"
     environment = {**os.environ, "PYTHONPATH": "", "PYTHONHOME": "", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32") if os.name == "nt" else "/usr/bin:/bin"
     catalog = subprocess.run([str(worker), "--catalog"], capture_output=True, text=True, encoding="utf-8",
@@ -351,6 +355,68 @@ def verify(package: Path, out: Path) -> dict:
         encoding="utf-8", env=environment, cwd=out, timeout=60,
     )
     assert geometry_help.returncode == 0 and "Usage: rst19-source-geometry-audit" in geometry_help.stdout
+    relative_input = out / "relative photometry.json"
+    relative_rows = [
+        {"frame_id": 0, "source_id": "s1", "instrumental_magnitude": 10.0,
+         "magnitude_error": 0.01, "x": 0.0, "y": 0.0,
+         "quality_passed": True, "is_moving": False},
+        {"frame_id": 0, "source_id": "s2", "instrumental_magnitude": 12.0,
+         "magnitude_error": 0.01, "x": 1.0, "y": 1.0,
+         "quality_passed": True, "is_moving": False},
+        {"frame_id": 1, "source_id": "s1", "instrumental_magnitude": 10.2,
+         "magnitude_error": 0.01, "x": 0.0, "y": 0.0,
+         "quality_passed": True, "is_moving": False},
+        {"frame_id": 1, "source_id": "s2", "instrumental_magnitude": 12.2,
+         "magnitude_error": 0.01, "x": 1.0, "y": 1.0,
+         "quality_passed": True, "is_moving": False},
+    ]
+    relative_input.write_text(json.dumps({"observations": relative_rows}), encoding="utf-8")
+    relative_cli_out = out / "relative-photometry-cli.json"
+    relative_cli_response = subprocess.run(
+        [str(relative_photometry_cli), str(relative_input.resolve()), "--validation-fraction", "0",
+         "--out", str(relative_cli_out.resolve())],
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out, timeout=60,
+    )
+    assert relative_cli_response.returncode == 0, (relative_cli_response.stdout, relative_cli_response.stderr)
+    relative_cli_result = json.loads(relative_cli_out.read_text(encoding="utf-8"))
+    assert relative_cli_result["status"] == "VALID"
+    assert relative_cli_result["reference_sample_count"] == 4
+    assert abs(relative_cli_result["frame_zero_points"]["0"] + 0.1) < 1e-10
+    assert abs(relative_cli_result["frame_zero_points"]["1"] - 0.1) < 1e-10
+    assert abs(relative_cli_result["relative_magnitudes"]["s1"] - 10.1) < 1e-10
+    assert abs(relative_cli_result["relative_magnitudes"]["s2"] - 12.1) < 1e-10
+    relative_request = {
+        "operation": "photometry.relative.fit", "observations": relative_rows,
+        "options": {"validation_fraction": 0},
+    }
+    relative_jsonl_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(relative_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out, timeout=60, check=True,
+    )
+    relative_jsonl_events = [json.loads(line) for line in relative_jsonl_response.stdout.splitlines()]
+    assert len(relative_jsonl_events) == 1 and relative_jsonl_events[0]["ok"]
+    relative_jsonl_result = relative_jsonl_events[0]["payload"]
+    assert relative_jsonl_result == relative_cli_result
+    relative_tool_out = out / "relative-photometry-tool"
+    relative_tool_request = {
+        "operation": "tool", "tool": "rst19-relative-photometry",
+        "args": [str(relative_input.resolve()), "--validation-fraction", "0"],
+        "out_dir": str(relative_tool_out.resolve()),
+    }
+    relative_tool_response = subprocess.run(
+        [str(native_worker)], input=json.dumps(relative_tool_request, ensure_ascii=False),
+        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=out, timeout=60, check=True,
+    )
+    relative_tool_events = [json.loads(line) for line in relative_tool_response.stdout.splitlines()]
+    assert len(relative_tool_events) == 1 and relative_tool_events[0]["ok"]
+    relative_tool_result = relative_tool_events[0]["payload"]["result"]
+    assert relative_tool_result == relative_cli_result
+    assert json.loads((relative_tool_out / "relative_photometry.json").read_text(encoding="utf-8")) == relative_cli_result
+    relative_cli_help = subprocess.run(
+        [str(relative_photometry_cli), "--help"], capture_output=True, text=True,
+        encoding="utf-8", env=environment, cwd=out, timeout=60,
+    )
+    assert relative_cli_help.returncode == 0 and "Usage: rst19-relative-photometry" in relative_cli_help.stdout
     catalog = out / "source catalog.csv"
     make_feature_catalog(catalog)
 
@@ -1216,6 +1282,7 @@ def verify(package: Path, out: Path) -> dict:
                   "rst19-source-proposal-peak-audit",
                   "rst19-source-proposal-temporal-audit",
                   "rst19-source-geometry-audit",
+                  "rst19-relative-photometry",
                   "manual threshold feedback JSONL",
               ],
               "candidate_count": payload["result"]["detection"]["candidate_count"],
@@ -1238,6 +1305,14 @@ def verify(package: Path, out: Path) -> dict:
         "csv_matches_worker_byte_for_byte": True,
         "json_fields_match_worker": True,
         "help_exit_code": attitude_help.returncode,
+        "external_python_search_disabled": True,
+    }
+    report["relative_photometry"] = {
+        "packaged_native_binary": relative_photometry_cli.name,
+        "jsonl_worker_fields_match_cli": True,
+        "desktop_tool_fields_match_cli": True,
+        "known_offsets_and_relative_magnitudes_match": True,
+        "help_exit_code": relative_cli_help.returncode,
         "external_python_search_disabled": True,
     }
     report["source_geometry_audit"] = {

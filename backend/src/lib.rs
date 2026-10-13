@@ -39,6 +39,7 @@ pub mod photometry;
 pub mod pipeline;
 pub mod precision;
 pub mod psf;
+pub mod relative_photometry;
 pub mod sequence;
 pub mod sequence_assignment;
 pub mod sequence_consensus;

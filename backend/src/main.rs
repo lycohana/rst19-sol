@@ -809,6 +809,7 @@ fn execute(request: Value) -> Result<Value> {
         "sequence.stack_forced_measure_batch" => {
             rst19_core::sequence_photometry::handle_request(&request)
         }
+        "photometry.relative.fit" => rst19_core::relative_photometry::handle_request(&request),
         "sequence.temporal_reference_candidates" => {
             rst19_core::sequence_temporal::temporal_reference_candidates(&request)
         }

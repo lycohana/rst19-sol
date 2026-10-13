@@ -28,6 +28,7 @@ fn uses_native_worker(request: &Value) -> bool {
                 "feedback.append"
                     | "feedback.load"
                     | "photometry.calibration.sensitivity"
+                    | "photometry.relative.fit"
                     | "sequence.stack_forced_measure_batch"
             )
         )
@@ -61,6 +62,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-source-proposal-peak-audit"
                         | "rst19-source-proposal-temporal-audit"
                         | "rst19-source-geometry-audit"
+                        | "rst19-relative-photometry"
                 )
             ))
 }
@@ -249,6 +251,9 @@ mod tests {
             &json!({"operation":"photometry.calibration.sensitivity"})
         ));
         assert!(uses_native_worker(
+            &json!({"operation":"photometry.relative.fit"})
+        ));
+        assert!(uses_native_worker(
             &json!({"operation":"sequence.stack_forced_measure_batch"})
         ));
         assert!(uses_native_worker(
@@ -325,6 +330,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-source-proposal-temporal-audit"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-relative-photometry"})
         ));
         assert!(!uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-sequence"})

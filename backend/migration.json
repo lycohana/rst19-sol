@@ -2419,7 +2419,7 @@
         "_empty_result",
         "fit_relative_photometry"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.relative_photometry_cli",
@@ -2430,7 +2430,7 @@
         "_observations",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.sequence",
@@ -3285,7 +3285,8 @@
     "raw FITS peak-consistency audit with nearest-edge local maxima, three-radius multiplicity and gap summaries, feature-class quantiles, target locations, and Python-compatible CSV/JSON artifacts",
     "proposal-method provenance cross-joined with raw local-peak consistency by detection_id; deterministic class-by-method-group summaries, target routing, and Python-compatible artifacts",
     "source proposal provenance joined to source-exact diagnostics and compact subgroup persistence; ordered targets preserve unavailable temporal detail as null; Python-identical result and CSV artifacts",
-    "source-coordinate PCA geometry audit with NumPy-compatible SeedSequence/PCG64 choice sampling, Rust JSONL/desktop routes, and a standalone CLI"
+    "source-coordinate PCA geometry audit with NumPy-compatible SeedSequence/PCG64 choice sampling, Rust JSONL/desktop routes, and a standalone CLI",
+    "robust relative photometry with weighted least squares, iterative MAD rejection, optional spatial terms, independent source-block validation, NumPy-compatible seeded holdout, Rust JSONL/desktop routes, and standalone CLI"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3314,6 +3315,7 @@
   "native_sequence_execution": "sequence.translation.estimate, sequence.frame_assign, sequence.track_motion.fit, sequence.motion_displacement_floor, sequence.track_detections, sequence.fast_point_movers, sequence.fast_candidate_associate for prefiltered raw-peak constant-velocity association, sequence.candidate_consensus with optional per-frame raw-image gates, sequence.reference.median, sequence.reference.coadd, sequence.temporal_reference_candidates for multiscale Gaussian proposals plus forced per-frame PSF responses, sequence.stack_forced_measure_batch for robust annulus backgrounds, aperture SNR, 3x3 pixel support, and shape checks on stack-proposed original-frame coordinates, sequence.line_profile_metrics for bilinear trail continuity/fill diagnostics, sequence.motion_feature_frame_components for thresholded per-frame connected components, gap grouping, PCA line geometry and morphology audit, sequence.trail_shape_evidence for single-frame rejection reasons and sequence shape admission, sequence.motion_feature_track_gates for cross-frame shape/motion-axis/artifact/edge checks, sequence.motion_feature_continuity_gates for continuous observation runs and bounded interior-gap bridging, sequence.motion_feature_exposure_evidence for PSF-deconvolved exposure speed versus inter-frame motion, sequence.motion_feature_confirmation_evidence for required coverage and stable rejection codes, sequence.motion_proposal_thresholds for metadata-aware raw trail proposal floors, sequence.motion_time_axis for validated elapsed times and median reference interval, sequence.observation_time_axis for UTC-normalized FITS DATE-OBS parsing with monotonic frame fallback, sequence.motion_feature_pair_geometry for the soft trail association cost, sequence.fit_collinear_motion_geometry for PCA trail span and time-aware legacy speed, sequence.best_collinear_motion_feature_group for deterministic monotonic cross-frame candidate grouping, sequence.stitch_unassociated_single_frame_points for review-gated constant-velocity singleton recovery, sequence.link_motion_evidence_tracks for one-to-one point-motion/exposure-line evidence de-duplication, sequence.rescue_collinear_motion_feature_groups for iterative disjoint long-trail grouping, sequence.coherent_raw_motion_point_indices for adjacent-frame raw line-proposal chains with shape and timing gates; local-pixel trail proposals are implemented as a reusable leaf; raw-candidate association is implemented before image measurement; multiscale/raw-candidate frame assembly and high-level multi-frame orchestration remain pending; affine RANSAC uses deterministic SplitMix64 rather than NumPy PCG64",
   "native_trail_proposals_execution": "trails.local_pixel_proposals; masked constant-boundary Gaussian whitening, spatially tiled local maxima, per-length/angle line responses, local refinement, point/double-source negative controls, and geometry NMS; candidate proposals only",
   "native_photometry_execution": "instrumental/apparent/legacy absolute arithmetic; structured parallax/model-distance/catalog absolute estimates; derived error/interval/strict gates; weighted zero point/color fit; clipping/holdout/catalog quality gates/sample roles; calibration application and error; native JSONL operations",
+  "native_relative_photometry": "photometry.relative.fit; weighted source/frame/spatial least squares, iterative MAD rejection, median-zero-point gauge, covariance uncertainties, source-block holdout validation and NumPy-compatible seeded permutation",
   "native_source_photometry": "complete source table status/flags/reference/model magnitude separation; faintest ranking, ties, calibration consistency and partial selection scope; JSONL photometry.table/photometry.faintest",
   "native_feature_flag_profile": "reads source_catalog CSV; overlap-aware category/flag counts and target extraction; writes matching BOM CSV and JSON artifacts; JSONL audit.feature_flag_profile",
   "native_feature_flag_interaction": "reads source_catalog CSV; overlap-aware singleton/pair counts, exact-set and quality counts, and high-SNR hard-negative diagnostics; writes matching BOM CSV and JSON artifacts; JSONL audit.feature_flag_interaction",
@@ -3323,6 +3325,7 @@
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_cli_contracts": {
     "rst19": "rst19-native executable; synthetic/default modes, stdout/json-out/errors and bounded original FITS verified; desktop single-frame route uses bundled Rust worker",
+    "rst19-relative-photometry": "native Rust standalone CLI and desktop worker route; Python output parity across seven fitting/filtering/spatial/degenerate/zero-dof and iterable-input cases; Windows package verified with external Python search disabled; macOS/Linux package validation pending",
     "rst19-aux-audit": "single FITS or sorted directory input; Rust CLI and desktop worker match Python CSV/JSON outputs; Windows package includes the native CLI binary and verifies it with external Python search disabled; broader parser-edge and cross-platform acceptance pending",
     "rst19-feature-flag-profile": "overlap-aware CSV profile; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
     "rst19-feature-flag-interaction": "overlap-aware singleton/pair CSV audit with exact-set and high-SNR diagnostics; complete result parity and byte-identical CSV artifacts verified; desktop route uses bundled Rust worker; Windows package route verified; macOS/Linux package validation pending",
@@ -3345,7 +3348,8 @@
     "rst19-source-group-audit": "transitive centroid-radius source groups; result and all three CSV plus JSON artifacts match Python across default/explicit radii and target selection; invalid boolean, duplicate ID, invalid coordinate, and missing-target errors match; JSONL engine and desktop worker routes verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending",
     "rst19-source-group-sensitivity": "same source catalog and evidence thresholds across ordered radius scans; result and both CSV plus JSON artifacts match Python across default and custom parallel runs; duplicate/nonpositive radius, nonpositive worker, and missing-target errors match; JSONL engine and desktop worker routes verified; Windows package route verified with external Python search disabled; macOS/Linux validation pending",
     "rst19-source-separation-audit": "source_catalog CSV input; centroid/peak nearest-other spacing, threshold and class summaries, optional target lookup, three CSV plus JSON outputs; JSONL engine and Rust desktop worker routes verified; Windows package verified with external Python search disabled; SciPy may return any of several equally distant IDs, while Rust deterministically chooses the lowest CSV row index; macOS/Linux package validation pending",
-    "rst19-source-geometry-audit": "source_catalog CSV; per-class PCA axis ratio/orientation/residuals and equal-size compact_quality controls; NumPy 1.26.4 sampling compatibility for unsigned 64-bit seeds; Rust engine and desktop worker match Python fields and artifacts within 2e-12 numeric tolerance; Windows package worker and standalone CLI verified with external Python search disabled; macOS/Linux package validation pending"
+    "rst19-source-geometry-audit": "source_catalog CSV; per-class PCA axis ratio/orientation/residuals and equal-size compact_quality controls; NumPy 1.26.4 sampling compatibility for unsigned 64-bit seeds; Rust engine and desktop worker match Python fields and artifacts within 2e-12 numeric tolerance; Windows package worker and standalone CLI verified with external Python search disabled; macOS/Linux package validation pending",
+    "rst19-relative-photometry": "robust relative frame/source fit with MAD rejection, holdout, optional spatial terms and uncertainty output; Rust engine, desktop JSONL/tool routes, and standalone CLI match Python across seven scenarios at 5e-7 tolerance; Windows package worker and CLI run with external Python search disabled; macOS/Linux package validation pending"
   },
   "verification": [
     "tests/parity.rs",
@@ -3471,7 +3475,9 @@
     "backend/verify_source_geometry_audit.py",
     "tests/test_source_geometry_audit.py",
     "backend/verify_calibration_sensitivity.py",
-    "tests/test_calibration_sensitivity.py"
+    "tests/test_calibration_sensitivity.py",
+    "backend/verify_relative_photometry.py",
+    "tests/test_relative_photometry.py"
   ],
   "remaining": [
     "full float32 detection acceptance coverage",
@@ -3479,7 +3485,7 @@
     "remaining multiscale/raw-candidate frame assembly and original-image forced photometry, high-level multi-frame orchestration; exact NumPy PCG64 RANSAC sampling parity",
     "all scientific audits and experiments",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
@@ -3502,5 +3508,6 @@
   "native_source_proposal_peak_audit": "strict detection_id join of source catalog proposal_methods and raw peak-consistency fields; class-by-method-group metrics, ordered target summaries, and Python-identical result/CSV/JSON outputs",
   "native_source_proposal_temporal_audit": "source proposal provenance joined to source-exact diagnostics and compact subgroup persistence; ordered targets preserve unavailable temporal detail as null; Python-identical result and CSV artifacts",
   "native_source_geometry_audit": "source_catalog coordinate PCA audit with NumPy-compatible PCG64/Floyd/tail-shuffle sampling; result and artifact values parity-checked at 2e-12 tolerance; Windows package worker and standalone CLI verified without external Python; macOS/Linux validation pending",
-  "native_calibration_sensitivity": "zero/linear/quadratic color-model refits reuse the native photometric calibration quality gates; per-source calibrated magnitudes, spread, faintest-source ranking, model usability and claim boundaries match Python fields within 2e-10 relative and 2e-11 absolute tolerance; JSONL engine and desktop worker routes verified; Windows package route verified without external Python"
+  "native_calibration_sensitivity": "zero/linear/quadratic color-model refits reuse the native photometric calibration quality gates; per-source calibrated magnitudes, spread, faintest-source ranking, model usability and claim boundaries match Python fields within 2e-10 relative and 2e-11 absolute tolerance; JSONL engine and desktop worker routes verified; Windows package route verified without external Python",
+  "native_relative_photometry": "relative zero points and source magnitudes with weighted least squares, source-block holdout, iterative outlier rejection and optional spatial terms; seven scenarios match Python through engine, desktop worker and standalone CLI; packaged Rust routes pass without external Python; macOS/Linux validation pending"
 }

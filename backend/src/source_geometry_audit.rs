@@ -388,6 +388,53 @@ impl NumpyPcg64 {
             return (product >> 64) as usize;
         }
     }
+
+    fn random_interval(&mut self, maximum: usize) -> usize {
+        if maximum <= u32::MAX as usize {
+            let maximum = maximum as u32;
+            let mut mask = maximum;
+            mask |= mask >> 1;
+            mask |= mask >> 2;
+            mask |= mask >> 4;
+            mask |= mask >> 8;
+            mask |= mask >> 16;
+            loop {
+                let value = self.next_u32() & mask;
+                if value <= maximum {
+                    return value as usize;
+                }
+            }
+        }
+        let maximum = maximum as u64;
+        let mut mask = maximum;
+        mask |= mask >> 1;
+        mask |= mask >> 2;
+        mask |= mask >> 4;
+        mask |= mask >> 8;
+        mask |= mask >> 16;
+        mask |= mask >> 32;
+        loop {
+            let value = self.next_u64() & mask;
+            if value <= maximum {
+                return value as usize;
+            }
+        }
+    }
+}
+
+/// NumPy 1.26 Generator.permutation for an integer range, using the same
+/// PCG64 stream and masked-rejection Fisher-Yates shuffle as `default_rng`.
+pub(crate) fn numpy_default_rng_permutation(seed: u128, length: usize) -> Vec<usize> {
+    let mut values = (0..length).collect::<Vec<_>>();
+    if length < 2 {
+        return values;
+    }
+    let mut rng = NumpyPcg64::new(seed);
+    for index in (1..length).rev() {
+        let selected = rng.random_interval(index);
+        values.swap(index, selected);
+    }
+    values
 }
 
 fn choice_indices(population: usize, sample_count: usize, rng: &mut NumpyPcg64) -> Vec<usize> {
@@ -800,5 +847,15 @@ mod tests {
     fn large_integer_seed_uses_the_same_seed_sequence_words() {
         let mut rng = NumpyPcg64::new((1_u128 << 64) + 3);
         assert_eq!(rng.next_u64(), 13_362_612_774_902_755_871);
+    }
+
+    #[test]
+    fn permutation_matches_numpy_default_rng() {
+        assert_eq!(numpy_default_rng_permutation(0, 6), [3, 2, 5, 4, 0, 1]);
+        assert_eq!(numpy_default_rng_permutation(12, 6), [1, 3, 2, 5, 4, 0]);
+        assert_eq!(
+            numpy_default_rng_permutation(0, 15),
+            [2, 11, 3, 10, 0, 4, 7, 5, 14, 12, 6, 9, 13, 8, 1]
+        );
     }
 }
