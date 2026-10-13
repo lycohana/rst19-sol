@@ -79,6 +79,30 @@ fn optional_request_limit(request: &Value, key: &str, default: usize) -> Result<
     }
 }
 
+fn sequence_track_counts(tracks: &[Value]) -> Value {
+    let count =
+        |predicate: &dyn Fn(&Value) -> bool| tracks.iter().filter(|track| predicate(track)).count();
+    let class_is = |class: &'static str| {
+        move |track: &Value| track.get("classification").and_then(Value::as_str) == Some(class)
+    };
+    let evidence_is = |level: &'static str| {
+        move |track: &Value| track.get("evidence_level").and_then(Value::as_str) == Some(level)
+    };
+    let static_count = count(&class_is("static"));
+    let persistent_count =
+        count(&|track| class_is("persistent")(track) && !evidence_is("stack_faint")(track));
+    json!({
+        "stable_source_count":static_count,
+        "persistent_source_count":persistent_count,
+        "stable_field_candidate_count":static_count+persistent_count,
+        "candidate_consensus_count":count(&|track| evidence_is("candidate_consensus")(track) || evidence_is("temporal_reference")(track)),
+        "temporal_reference_count":count(&evidence_is("temporal_reference")),
+        "stack_faint_count":count(&evidence_is("stack_faint")),
+        "moving_track_count":count(&class_is("moving")),
+        "transient_track_count":count(&class_is("transient")),
+    })
+}
+
 fn sequence_frame_options(request: &Value) -> Result<FrameOptions> {
     let mut options = object_or_empty(request.get("frame_options"), "frame_options")?;
     options
@@ -1233,7 +1257,28 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         track["track_id"] =
             json!(base_track_count + fast_point_tracks.len() + candidate_consensus_count + index);
     }
-    tracking["stack_faint_count"] = json!(stack_faint.tracks.len());
+    let mut all_tracks = tracking["tracks"].as_array().cloned().unwrap_or_default();
+    all_tracks.extend(fast_point_tracks.iter().cloned());
+    all_tracks.extend(
+        candidate_consensus["tracks"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+    );
+    all_tracks.extend(stack_faint.tracks.iter().cloned());
+    let track_counts = sequence_track_counts(&all_tracks);
+    for key in [
+        "stable_source_count",
+        "persistent_source_count",
+        "stable_field_candidate_count",
+        "candidate_consensus_count",
+        "temporal_reference_count",
+        "stack_faint_count",
+        "moving_track_count",
+        "transient_track_count",
+    ] {
+        tracking[key] = track_counts[key].clone();
+    }
     tracking["stack_faint_candidate_count"] = json!(stack_faint.candidate_count);
     tracking["stack_reference_mode"] = json!(stack_options.reference_mode);
     tracking["stack_threshold_sigma"] = json!(stack_options.threshold_sigma);
@@ -1262,6 +1307,8 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "fast_point_tracks":fast_point_tracks,
         "fast_candidate_proposals":fast_candidate_proposals,
         "candidate_consensus":candidate_consensus,
+        "tracks":all_tracks,
+        "track_counts":track_counts,
         "stack_faint_tracks":stack_faint.tracks,
         "stack_faint_candidate_count":stack_faint.candidate_count,
         "stack_faint_audit":stack_faint.audit,
@@ -1280,6 +1327,27 @@ pub fn handle_request(request: &Value) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assembled_track_counts_keep_candidate_layers_separate_from_stack_faint_sources() {
+        let tracks = json!([
+            {"classification":"static","evidence_level":"quality"},
+            {"classification":"persistent","evidence_level":"quality"},
+            {"classification":"persistent","evidence_level":"stack_faint"},
+            {"classification":"transient","evidence_level":"candidate_consensus"},
+            {"classification":"persistent","evidence_level":"temporal_reference"},
+            {"classification":"moving","evidence_level":"motion_feature"}
+        ]);
+        let counts = sequence_track_counts(tracks.as_array().unwrap());
+        assert_eq!(counts["stable_source_count"], 1);
+        assert_eq!(counts["persistent_source_count"], 2);
+        assert_eq!(counts["stable_field_candidate_count"], 3);
+        assert_eq!(counts["candidate_consensus_count"], 2);
+        assert_eq!(counts["temporal_reference_count"], 1);
+        assert_eq!(counts["stack_faint_count"], 1);
+        assert_eq!(counts["moving_track_count"], 1);
+        assert_eq!(counts["transient_track_count"], 1);
+    }
 
     #[test]
     fn sequence_detector_defaults_match_the_python_fast_sequence_contract() {
