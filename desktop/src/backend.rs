@@ -51,6 +51,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-multipsf-audit"
                         | "rst19-free-multipsf-audit"
                         | "rst19-forced-stability"
+                        | "rst19-feature-sequence"
                         | "rst19-format-audit"
                         | "rst19-feature-sequence-compare"
                         | "rst19-feature-raw-evidence-audit"

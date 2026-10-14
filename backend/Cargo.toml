@@ -37,6 +37,10 @@ name = "rst19-feature-sequence-compare"
 path = "src/bin/rst19-feature-sequence-compare.rs"
 
 [[bin]]
+name = "rst19-feature-sequence"
+path = "src/bin/rst19-feature-sequence.rs"
+
+[[bin]]
 name = "rst19-feature-raw-evidence-audit"
 path = "src/bin/rst19-feature-raw-evidence-audit.rs"
 
