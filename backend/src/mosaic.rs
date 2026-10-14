@@ -39,6 +39,8 @@ struct Mosaic {
     mode: String,
     clip_sigma: f64,
     interpolation_order: usize,
+    masked_zero_pixels: bool,
+    masked_auxiliary_pixels: bool,
     frame_valid_counts: Vec<u64>,
 }
 
@@ -219,13 +221,15 @@ fn mosaic_bounds(height: usize, width: usize, shifts: &[[f64; 2]]) -> Result<Mos
 }
 
 fn build_with_shape(
-    frames: Vec<Frame>,
+    mut frames: Vec<Frame>,
     source_height: usize,
     source_width: usize,
     shifts: Vec<[f64; 2]>,
     mode: &str,
     clip_sigma: f64,
     interpolation_order: usize,
+    mask_zero_pixels: bool,
+    mask_auxiliary_pixels: bool,
 ) -> Result<Mosaic> {
     if frames.is_empty() {
         return Err("at least one frame is required".into());
@@ -256,6 +260,18 @@ fn build_with_shape(
         || frames.iter().any(|frame| frame.values.len() != source_size)
     {
         return Err("all mosaic frames must have the same image shape".into());
+    }
+    let auxiliary_mask = if mask_auxiliary_pixels {
+        fits::auxiliary_mask(source_height, source_width)?
+    } else {
+        vec![false; source_size]
+    };
+    for frame in &mut frames {
+        for (index, value) in frame.values.iter_mut().enumerate() {
+            if auxiliary_mask[index] || (mask_zero_pixels && *value == 0.0) {
+                *value = f32::NAN;
+            }
+        }
     }
     let (output_height, output_width, origin_x, origin_y, frame_origins) =
         mosaic_bounds(source_height, source_width, &shifts)?;
@@ -335,6 +351,8 @@ fn build_with_shape(
         mode: mode.to_owned(),
         clip_sigma,
         interpolation_order,
+        masked_zero_pixels: mask_zero_pixels,
+        masked_auxiliary_pixels: mask_auxiliary_pixels,
         frame_valid_counts,
     })
 }
@@ -376,12 +394,16 @@ fn metadata(mosaic: &Mosaic) -> Value {
         "common_origin_xy": [mosaic.origin_x, mosaic.origin_y],
         "frame_origins_xy": mosaic.frame_origins,
         "cumulative_shifts": mosaic.shifts,
-        "frame_paths": mosaic.frame_paths,
+        "frame_paths": mosaic
+            .frame_paths
+            .iter()
+            .filter(|path| !path.is_empty())
+            .collect::<Vec<_>>(),
         "combine_mode": mosaic.mode,
         "clip_sigma": mosaic.clip_sigma,
         "interpolation_order": mosaic.interpolation_order,
-        "masked_zero_pixels": true,
-        "masked_auxiliary_pixels": true,
+        "masked_zero_pixels": mosaic.masked_zero_pixels,
+        "masked_auxiliary_pixels": mosaic.masked_auxiliary_pixels,
         "frame_valid_pixel_counts": mosaic.frame_valid_counts,
         "covered_pixel_count": covered,
         "overlap_pixel_count": overlap,
@@ -855,15 +877,9 @@ fn run_paths(
             return Err("all mosaic frames must have the same image shape".into());
         }
         shape = Some((fits.height, fits.width));
-        let mask = fits::auxiliary_mask(fits.height, fits.width)?;
         let mut values = Vec::with_capacity(fits.data.len());
-        for (index, masked) in mask.iter().enumerate() {
-            let value = fits.data.value(index) as f32;
-            values.push(if !value.is_finite() || value == 0.0 || *masked {
-                f32::NAN
-            } else {
-                value
-            });
+        for index in 0..fits.data.len() {
+            values.push(fits.data.value(index) as f32);
         }
         let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.clone());
         frames.push(Frame {
@@ -880,6 +896,8 @@ fn run_paths(
         mode,
         clip_sigma,
         interpolation_order,
+        true,
+        true,
     )?;
     let summary = metadata(&mosaic);
     write_artifacts(out_dir, &mosaic, &summary, raw_preview)?;
@@ -1096,6 +1114,8 @@ mod tests {
             "median",
             3.0,
             1,
+            true,
+            true,
         )
         .unwrap();
         assert_eq!((result.output_height, result.output_width), (3, 5));
@@ -1151,8 +1171,16 @@ mod tests {
                 mode,
                 fixture["clip_sigma"].as_f64().unwrap(),
                 interpolation_order,
+                false,
+                false,
             )
             .unwrap();
+
+            assert_eq!(
+                metadata(&actual),
+                case["metadata"],
+                "{mode}, order {interpolation_order}, metadata"
+            );
 
             let expected_image: Vec<f32> = case["image"]
                 .as_array()
@@ -1215,6 +1243,36 @@ mod tests {
     }
 
     #[test]
+    fn zero_and_auxiliary_masks_are_applied_and_reported() {
+        let mut values = vec![1.0; 2 * 110];
+        values[0] = 999.0;
+        values[110 + 10] = 0.0;
+        let result = build_with_shape(
+            vec![frame(&values, "masked.fits")],
+            2,
+            110,
+            vec![[0.0, 0.0]],
+            "median",
+            3.0,
+            1,
+            true,
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(
+            result.coverage.iter().filter(|value| **value > 0).count(),
+            115
+        );
+        assert_eq!(result.coverage[0], 0);
+        assert_eq!(result.coverage[110 + 10], 0);
+        assert_eq!(result.coverage[109], 1);
+        let summary = metadata(&result);
+        assert_eq!(summary["masked_zero_pixels"], true);
+        assert_eq!(summary["masked_auxiliary_pixels"], true);
+    }
+
+    #[test]
     fn masked_neighbors_are_renormalized_and_zero_coverage_stays_nan() {
         let result = build_with_shape(
             vec![frame(&[10.0, f32::NAN, 30.0, 40.0], "a.fits")],
@@ -1224,6 +1282,8 @@ mod tests {
             "median",
             3.0,
             1,
+            false,
+            false,
         )
         .unwrap();
         assert_eq!(result.coverage, vec![1, 0, 1, 1]);
@@ -1357,6 +1417,8 @@ mod tests {
             mode: "median".into(),
             clip_sigma: 3.0,
             interpolation_order: 1,
+            masked_zero_pixels: true,
+            masked_auxiliary_pixels: true,
             frame_valid_counts: vec![width as u64],
         };
 
@@ -1391,6 +1453,8 @@ mod tests {
             "robust_mean",
             1.0,
             1,
+            false,
+            false,
         )
         .unwrap();
         assert_eq!(result.image, vec![10.5]);

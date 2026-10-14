@@ -6,6 +6,8 @@
 
 本节覆盖最新工作区代码；后文保留此前验证记录，不能视为当前全部测试通过。
 
+- 2026-10-14 `mosaic` Rust parity 补验：沿用冻结 Python `mosaic.py` 源码 SHA-256 `2c5caa83ae30fa413f823f43ed11b47652e98389df5da3ac097e1a2865a83d9a`，对 median/robust_mean 与插值阶数 0–3 的 8 组图像、coverage、scatter 和全部元数据逐字段对照。修正数组输入的空 frame path 序列化，并让 Rust 构建路径实际应用可选零值/辅助像素掩膜、记录对应 metadata。Pillow RGBA 缩放固定像素对照继续通过。`cargo test --locked --manifest-path backend/Cargo.toml --lib mosaic` 11 项通过；桌面 worker mosaic 路由 1 项通过；`cargo fmt --check` 与 `git diff --check` 通过。mosaic 尚缺 Rust cache API 与旧 Tkinter 路径移除，因此模块状态仍是 in_progress。
+
 - 2026-10-14 `rst19.detection` 的核心检测算法已按当前源码重验：Python 基线 SHA-256 为 `152b377688e4901a3b7f7d5b65c2da76259f6793c1b4fb89f7c99c2deb1bd99f`，Rust release engine SHA-256 为 `efab3d99ef35860ccbfe095b1d162f38404c1b16a8c47d85b26c8a3dacbc1258`。3 种合成提案模式、真实帧 512×512 ROI 的 3 种模式、以及 4096×4096 全幅 hybrid 均逐字段通过既有验证器；全幅候选/返回数均为 66,469，质量通过数为 27,552。FITS SHA-256 `6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6` 前后不变，Rust 引擎直接读取 FITS 路径。报告：`tmp/native-detection-full-current-20261014-c1677a7/verification.json`。这只完成 detector 核心；`rst19-sources` 的源表/诊断产物流程仍走 Python worker。
 
 - 2026-10-14 源级分类汇总切片已实现为 Rust：首要类别、提议器交叉表、形态分位数、重叠子类和 4×4 空间汇总。`cargo test --lib --locked source_classification::tests` 的 4 项测试通过；摘要结果逐字段匹配冻结旧版基准 `backend/tests/fixtures/source_classification_parity.json`。这只迁移了 `experiments.py` 中用于源审计的摘要算法；`rst19-sources` 仍为 `native: false`，源级 PSF 相似度/空间 PSF 表、CLI 和桌面分发路由尚未接到 Rust，因此 Python 运行时仍未移除。
