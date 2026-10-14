@@ -45,6 +45,7 @@ pub mod filtering;
 pub mod filtering32;
 pub mod fits;
 pub mod format_audit;
+pub mod free_multipsf_audit;
 pub mod innovation_package;
 pub mod matching;
 pub mod measurement;

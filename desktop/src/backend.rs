@@ -49,6 +49,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-empirical-pair-fit"
                         | "rst19-empirical-pair-free"
                         | "rst19-multipsf-audit"
+                        | "rst19-free-multipsf-audit"
                         | "rst19-format-audit"
                         | "rst19-feature-sequence-compare"
                         | "rst19-feature-raw-evidence-audit"
@@ -331,6 +332,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-multipsf-audit"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-free-multipsf-audit"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-sequence-compare"})

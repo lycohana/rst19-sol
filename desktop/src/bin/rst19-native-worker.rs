@@ -246,6 +246,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::multipsf_audit::run_desktop(&args);
     }
+    if request["tool"] == "rst19-free-multipsf-audit" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::free_multipsf_audit::run_desktop(&args);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1437,6 +1459,33 @@ mod tests {
         }
     }
 
+    #[test]
+    fn free_multipsf_audit_runs_through_the_native_worker_and_writes_artifacts() {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let frames = workspace.join("backend/tests/fixtures/empirical_pair_audit_parity/frames");
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-free-multipsf-dispatch-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        let out_dir = root.join("output");
+        let result = run(json!({
+            "operation":"tool", "tool":"rst19-free-multipsf-audit",
+            "args":[frames.to_string_lossy(),"--positions","46,48;48.5,48;50,45","--mask-modes","raw","--position-radius","0.75"],
+            "out_dir":out_dir
+        })).unwrap();
+        assert_eq!(result["frame_count"], 1);
+        for artifact in [
+            "request.json",
+            "local_free_multipsf_audit.csv",
+            "local_free_multipsf_audit.json",
+            "local_free_multipsf_bic.png",
+        ] {
+            assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn fits_card(key: &str, value: &str) -> [u8; 80] {
         let mut card = [b' '; 80];
         let text = format!("{key:<8}= {value:>20}");
@@ -1506,6 +1555,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| { tool["name"] == "rst19-multipsf-audit" && tool["native"] == true }));
+        assert!(tools
+            .iter()
+            .any(|tool| { tool["name"] == "rst19-free-multipsf-audit" && tool["native"] == true }));
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-sweep" && tool["native"] == true));

@@ -93,16 +93,16 @@ impl LocalMultiPSFAuditResult {
 }
 
 #[derive(Clone, Debug)]
-struct ModelFit {
-    sample_count: usize,
-    masked_pixel_count: usize,
-    rss: f64,
-    bic: f64,
-    amplitudes: Vec<f64>,
-    component_snr: Vec<f64>,
-    active_component_count: usize,
-    max_template_correlation: Option<f64>,
-    design_condition_number: Option<f64>,
+pub(crate) struct ModelFit {
+    pub(crate) sample_count: usize,
+    pub(crate) masked_pixel_count: usize,
+    pub(crate) rss: f64,
+    pub(crate) bic: f64,
+    pub(crate) amplitudes: Vec<f64>,
+    pub(crate) component_snr: Vec<f64>,
+    pub(crate) active_component_count: usize,
+    pub(crate) max_template_correlation: Option<f64>,
+    pub(crate) design_condition_number: Option<f64>,
 }
 
 #[derive(Clone, Debug)]
@@ -228,7 +228,12 @@ fn parse_args(args: &[String]) -> Result<Options> {
     })
 }
 
-fn patch_bounds(width: usize, height: usize, positions: &[[f64; 2]], margin: usize) -> [usize; 4] {
+pub(crate) fn patch_bounds(
+    width: usize,
+    height: usize,
+    positions: &[[f64; 2]],
+    margin: usize,
+) -> [usize; 4] {
     let min_x = positions.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
     let max_x = positions
         .iter()
@@ -246,7 +251,7 @@ fn patch_bounds(width: usize, height: usize, positions: &[[f64; 2]], margin: usi
     [x0, y0, x1, y1]
 }
 
-fn display_input_path(path: &Path) -> String {
+pub(crate) fn display_input_path(path: &Path) -> String {
     let value = path.to_string_lossy();
     if path.is_relative() {
         value
@@ -259,7 +264,7 @@ fn display_input_path(path: &Path) -> String {
     }
 }
 
-fn least_squares(matrix: &DMatrix<f64>, rhs: &DMatrix<f64>) -> Option<DMatrix<f64>> {
+pub(crate) fn least_squares(matrix: &DMatrix<f64>, rhs: &DMatrix<f64>) -> Option<DMatrix<f64>> {
     if matrix.nrows() != rhs.nrows() || matrix.ncols() == 0 {
         return None;
     }
@@ -339,7 +344,7 @@ fn solve_nnls(matrix: &DMatrix<f64>, data: &DVector<f64>) -> Option<DVector<f64>
     None
 }
 
-fn fit_fixed(
+pub(crate) fn fit_fixed(
     frame: &FitsFrame,
     mask: &[bool],
     model_positions: &[[f64; 2]],
@@ -487,7 +492,7 @@ fn fit_fixed(
     })
 }
 
-fn parse_shifts(path: &Path) -> Result<Vec<[f64; 2]>> {
+pub(crate) fn parse_shifts(path: &Path) -> Result<Vec<[f64; 2]>> {
     let payload: Value = serde_json::from_slice(
         &fs::read(path).map_err(|error| format!("cannot read shifts JSON: {error}"))?,
     )
@@ -771,7 +776,7 @@ fn median(values: &mut [f64]) -> Option<f64> {
     })
 }
 
-fn write_chart(path: &Path, result: &LocalMultiPSFAuditResult) -> Result<()> {
+pub(crate) fn write_chart(path: &Path, result: &LocalMultiPSFAuditResult) -> Result<()> {
     let (width, height) = (1200usize, 680usize);
     let plot = [70usize, 40usize, width - 35, height - 60];
     let mut series = Vec::new();
