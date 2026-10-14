@@ -716,6 +716,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::aperture_sensitivity::run_desktop(&args);
     }
+    if request["tool"] == "rst19-spatial-injection" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::spatial_injection::run_desktop(&args);
+    }
     if request["tool"] == "rst19-format-audit" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1435,6 +1457,41 @@ mod tests {
             "request.json",
             "aperture_sensitivity_audit.csv",
             "aperture_sensitivity_audit.json",
+        ] {
+            assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn spatial_injection_tool_runs_through_the_native_worker() {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let fits_path = workspace
+            .join("backend")
+            .join("tests")
+            .join("fixtures")
+            .join("contaminated_pair_injection_parity.fits");
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-spatial-injection-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        let out_dir = root.join("output");
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-spatial-injection",
+            "args":[fits_path.to_string_lossy(), "--grid-size", "1", "--peak-levels", "56", "--aperture-radius", "3"],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+
+        assert_eq!(result["tool"], "rst19-spatial-injection");
+        assert_eq!(result["result"]["rows"].as_array().unwrap().len(), 1);
+        assert_eq!(result["result"]["rows"][0]["injected_count"], 1);
+        for artifact in [
+            "request.json",
+            "spatial_injection_audit.csv",
+            "spatial_injection_audit.json",
         ] {
             assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
         }

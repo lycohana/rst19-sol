@@ -111,6 +111,7 @@ pub mod source_proposal_temporal_audit;
 pub mod source_psf;
 pub mod source_separation_audit;
 pub mod spatial;
+pub mod spatial_injection;
 pub mod statistics;
 pub mod statistics32;
 pub mod temporal_code;

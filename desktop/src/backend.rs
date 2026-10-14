@@ -76,6 +76,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-pair-support-audit"
                         | "rst19-aperture-peak-ratio"
                         | "rst19-aperture-sensitivity"
+                        | "rst19-spatial-injection"
                         | "rst19-wcs-validation"
                         | "rst19-feature-correlation"
                         | "rst19-feature-transition-flow"
@@ -403,6 +404,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-aperture-sensitivity"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-spatial-injection"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-wcs-validation"})
