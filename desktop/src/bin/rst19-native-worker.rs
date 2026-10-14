@@ -383,6 +383,33 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::gaia_tiled::run_desktop(&args);
     }
+    if request["tool"] == "rst19-gaia-frame" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out" || arg.starts_with("--out="))
+        {
+            args.push("--out".into());
+            args.push(
+                out_dir
+                    .join("gaia-frame.csv")
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        return rst19_core::gaia_frame::run_desktop(&args, &out_dir);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1829,6 +1856,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| { tool["name"] == "rst19-gaia-tiled" && tool["native"] == true }));
+        assert!(tools
+            .iter()
+            .any(|tool| { tool["name"] == "rst19-gaia-frame" && tool["native"] == true }));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-contaminated-pair-injection" && tool["native"] == true
         }));
@@ -2432,6 +2462,46 @@ mod tests {
         .unwrap();
         assert_eq!(result["network"], false);
         assert!(result["initial_tile_count"].as_u64().unwrap() > 1);
+        assert!(out_dir.join("request.json").is_file());
+    }
+
+    #[test]
+    fn gaia_frame_tool_uses_native_fits_auxiliary_and_stays_offline_in_dry_run() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-gaia-frame-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let fits = root.join("frame.fits");
+        let out_dir = root.join("output");
+        write_single_frame_test_fits(&fits);
+        let mut bytes = fs::read(&fits).unwrap();
+        let mut values = [0.0_f64; 26];
+        values[0] = 10.0;
+        values[1] = 30.0;
+        values[2] = 45.5;
+        values[3] = -12.25;
+        values[10] = 1.0;
+        for (index, value) in values.iter().enumerate() {
+            let mut raw = value.to_le_bytes();
+            for pair in raw.as_chunks_mut::<2>().0 {
+                pair.swap(0, 1);
+            }
+            bytes[2880 + index * 8..2880 + (index + 1) * 8].copy_from_slice(&raw);
+        }
+        fs::write(&fits, bytes).unwrap();
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-gaia-frame",
+            "args":[fits.to_string_lossy(), "--dry-run"],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+        assert_eq!(result["dry_run"], true);
+        assert_eq!(result["center_ra_deg"], 45.5);
+        assert_eq!(result["center_dec_deg"], -12.25);
+        assert_eq!(result["plan"]["network"], false);
         assert!(out_dir.join("request.json").is_file());
     }
 

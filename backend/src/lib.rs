@@ -48,6 +48,7 @@ pub mod fits;
 pub mod forced_stability;
 pub mod format_audit;
 pub mod free_multipsf_audit;
+pub mod gaia_frame;
 pub mod gaia_remote;
 pub mod gaia_tiled;
 pub mod innovation_package;

@@ -531,9 +531,22 @@
         "path": false,
         "toggle_value": null,
         "repeat": false
+      },
+      {
+        "key": "dry_run",
+        "flag": "--dry-run",
+        "help": "只从 FITS 视轴生成分块计划，不联网、不写文件",
+        "required": false,
+        "default": false,
+        "choices": [],
+        "kind": "bool",
+        "nargs": 0,
+        "path": false,
+        "toggle_value": true,
+        "repeat": false
       }
     ],
-    "native": false
+    "native": true
   },
   {
     "name": "rst19-photometric-auto",

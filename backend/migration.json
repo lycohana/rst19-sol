@@ -1440,7 +1440,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.gaia_remote",
@@ -3141,7 +3141,7 @@
   "tools": {
     "rst19-gaia": "native:rst19-gaia",
     "rst19-gaia-tiled": "native:rst19-gaia-tiled",
-    "rst19-gaia-frame": "rst19.gaia_frame_cli:main",
+    "rst19-gaia-frame": "native:rst19-gaia-frame",
     "rst19-photometric-auto": "rst19.photometric_workflow_cli:main",
     "rst19-plate-solver": "rst19.plate_solver_cli:main",
     "rst19-photometric-report": "Rust standalone CLI, JSONL photometry.report operation, and desktop worker; full JSON output matches the frozen Python reference for all four observability levels; strict absolute-distance and extinction gates, error/provenance summaries, CLI flags, and PATH-disabled execution verified; Python console entry removed; package and macOS/Linux acceptance pending",
@@ -3323,7 +3323,8 @@
   "native_source_photometry": "complete source table status/flags/reference/model magnitude separation; faintest ranking, ties, calibration consistency and partial selection scope; JSONL photometry.table/photometry.faintest",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_gaia_execution": "rst19-gaia is implemented in Rust with rustls-backed HTTP, safe numeric ADQL construction, CSV and TABLEDATA VOTable parsing, duplicate/source-coordinate checks, CatalogSource-compatible CSV aliases, optional GSP-Phot joins, and metadata artifacts. Frozen Python CSV parity is byte-identical; local TAP mock, VOTable status, numeric validation, offline CLI, and native desktop worker tests pass. Windows release CLI was verified with PATH limited to System32; SHA-256 18c7b26de2e67c1fd92d5f8bb47763574c0c1aeb75c84e830db7a91918f906d6.",
-  "native_gaia_tiled_execution": "rst19-gaia-tiled now uses Rust for spherical tile planning, RA wrap and high-declination geometry, adaptive subdivision of saturated TAP blocks, source deduplication, truncation/completeness audit, CSV/metadata output, standalone CLI, and desktop worker dry-run. Planner/subdivision unit tests and offline worker test pass; full backend cargo test passed 277 tests and desktop passed 4+37 tests. Windows release dry-run succeeds with PATH limited to C:\\Windows\\System32 (SHA-256 3fbc0d59603d36b2a87646a34fd136dcc790cb7c593173f41e162a85abd1d1c0). Live TAP requests and frozen full-workflow Python parity remain unverified. Tool directory now has 59/71 native routes; 12 Python routes remain, including Gaia FITS-frame integration.",
+  "native_gaia_tiled_execution": "rst19-gaia-tiled now uses Rust for spherical tile planning, RA wrap and high-declination geometry, adaptive subdivision of saturated TAP blocks, source deduplication, truncation/completeness audit, CSV/metadata output, standalone CLI, and desktop worker dry-run. Planner/subdivision unit tests and offline worker test pass; full backend cargo test passed 277 tests and desktop passed 4+37 tests. Windows release dry-run succeeds with PATH limited to C:\\Windows\\System32 (SHA-256 3fbc0d59603d36b2a87646a34fd136dcc790cb7c593173f41e162a85abd1d1c0). Live TAP requests and frozen full-workflow Python parity remain unverified.",
+  "native_gaia_frame_execution": "rst19-gaia-frame now reads pointing RA/DEC from the FITS auxiliary block, defaults to a conservative 9.78-degree-square half-diagonal, and delegates queries to the native Gaia tiled client. It writes the CatalogSource-compatible CSV plus compact .csv.meta.json audit with frame path and CSV SHA-256; a local TAP mock and offline dry-run cover query/artifact and route behavior. Full backend cargo test passed 279 tests and desktop passed 4+38 tests; the Gaia frame module and desktop native worker have no default Clippy warnings. Windows release dry-run succeeded with PATH limited to C:\\Windows\\System32 and Python commands unavailable (SHA-256 36e2449f939d90fca1115b7342fe0d188610fd46279d703ec917ddf1e354258f). Live Gaia network and frozen Python whole-workflow parity remain unverified. Tool directory now has 60/71 native routes; 11 Python routes remain.",
   "native_cli_contracts": {
     "rst19-gaia": "Rust standalone CLI and native desktop worker perform Gaia DR3 cone queries with --dry-run ADQL output, optional GSP-Phot fields, CSV/VOTable parsing, compatibility CSV, and metadata; frozen Python CSV bytes match; Windows release CLI verified with PATH limited to System32",
     "rst19": "native rst19 executable is the public command; rst19-native alias retained; stdout/json-out/error contracts match across 89 parity invocations; standalone Windows executable opens help with PATH disabled; package build/verification and macOS/Linux package validation pending",

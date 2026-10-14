@@ -55,6 +55,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-feature-audit-replicates"
                         | "rst19-gaia"
                         | "rst19-gaia-tiled"
+                        | "rst19-gaia-frame"
                         | "rst19-format-audit"
                         | "rst19-feature-sequence-compare"
                         | "rst19-feature-raw-evidence-audit"
