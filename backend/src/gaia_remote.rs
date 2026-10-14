@@ -758,7 +758,7 @@ fn normalized_output_row(row: &HashMap<String, String>) -> HashMap<String, Strin
     output
 }
 
-fn write_catalog(rows: &[HashMap<String, String>], output: &Path) -> Result<(), String> {
+pub(crate) fn write_catalog(rows: &[HashMap<String, String>], output: &Path) -> Result<(), String> {
     if let Some(parent) = output.parent().filter(|path| !path.as_os_str().is_empty()) {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -833,6 +833,35 @@ fn fetch(options: &Options, adql: &str) -> Result<Vec<HashMap<String, String>>, 
         rows.truncate(limit);
     }
     Ok(rows)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn query_rows(
+    ra: f64,
+    dec: f64,
+    radius: f64,
+    limit: Option<usize>,
+    min_g_mag: Option<f64>,
+    max_g_mag: Option<f64>,
+    include_model: bool,
+    timeout: f64,
+    endpoint: &str,
+) -> Result<Vec<HashMap<String, String>>, String> {
+    let options = Options {
+        ra,
+        dec,
+        radius,
+        out: None,
+        limit,
+        min_g_mag,
+        max_g_mag,
+        include_model,
+        timeout,
+        endpoint: endpoint.trim().to_owned(),
+        dry_run: false,
+    };
+    let adql = build_adql(ra, dec, radius, limit, min_g_mag, max_g_mag, include_model)?;
+    fetch(&options, &adql)
 }
 
 fn metadata(options: &Options, adql: &str, row_count: usize) -> Value {

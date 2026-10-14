@@ -23,7 +23,6 @@ dev = [
 rst19-gui = "rst19.desktop_launcher:main"
 rst19-ui = "rst19.desktop_launcher:main"
 rst19-tk = "rst19.gui:main"
-rst19-gaia-tiled = "rst19.gaia_tiled_cli:main"
 rst19-gaia-frame = "rst19.gaia_frame_cli:main"
 rst19-photometric-auto = "rst19.photometric_workflow_cli:main"
 rst19-plate-solver = "rst19.plate_solver_cli:main"

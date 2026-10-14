@@ -356,6 +356,33 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::gaia_remote::run_desktop(&args);
     }
+    if request["tool"] == "rst19-gaia-tiled" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out" || arg.starts_with("--out="))
+        {
+            args.push("--out".into());
+            args.push(
+                out_dir
+                    .join("gaia-tiled.csv")
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        return rst19_core::gaia_tiled::run_desktop(&args);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1799,6 +1826,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-gaia" && tool["native"] == true));
+        assert!(tools
+            .iter()
+            .any(|tool| { tool["name"] == "rst19-gaia-tiled" && tool["native"] == true }));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-contaminated-pair-injection" && tool["native"] == true
         }));
@@ -2382,6 +2412,26 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("CIRCLE('ICRS', 12.5, -1.25, 0.4)"));
+        assert!(out_dir.join("request.json").is_file());
+    }
+
+    #[test]
+    fn gaia_tiled_tool_uses_native_planner_and_dry_run_stays_offline() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-gaia-tiled-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        let out_dir = root.join("output");
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-gaia-tiled",
+            "out_dir":out_dir,
+            "args":["--ra", "359.8", "--dec", "70", "--radius", "2", "--tile-radius", "0.5", "--dry-run"]
+        }))
+        .unwrap();
+        assert_eq!(result["network"], false);
+        assert!(result["initial_tile_count"].as_u64().unwrap() > 1);
         assert!(out_dir.join("request.json").is_file());
     }
 

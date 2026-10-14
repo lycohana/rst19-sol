@@ -83,7 +83,7 @@ def build() -> None:
               "--bin", "rst19-empirical-pair-free", "--bin", "rst19-multipsf-audit",
               "--bin", "rst19-free-multipsf-audit", "--bin", "rst19-forced-stability",
               "--bin", "rst19-feature-sequence", "--bin", "rst19-feature-audit-replicates",
-              "--bin", "rst19-gaia"])
+              "--bin", "rst19-gaia", "--bin", "rst19-gaia-tiled"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
@@ -122,6 +122,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / feature_audit_replicates_cli, package / "runtime" / feature_audit_replicates_cli)
     gaia_cli = "rst19-gaia.exe" if os.name == "nt" else "rst19-gaia"
     shutil.copy2(ROOT / "backend/target/release" / gaia_cli, package / "runtime" / gaia_cli)
+    gaia_tiled_cli = "rst19-gaia-tiled.exe" if os.name == "nt" else "rst19-gaia-tiled"
+    shutil.copy2(ROOT / "backend/target/release" / gaia_tiled_cli, package / "runtime" / gaia_tiled_cli)
     format_audit_cli = "rst19-format-audit.exe" if os.name == "nt" else "rst19-format-audit"
     shutil.copy2(ROOT / "backend/target/release" / format_audit_cli, package / "runtime" / format_audit_cli)
     sequence_feature_compare = "rst19-feature-sequence-compare.exe" if os.name == "nt" else "rst19-feature-sequence-compare"

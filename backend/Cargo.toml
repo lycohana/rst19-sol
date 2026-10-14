@@ -49,6 +49,10 @@ name = "rst19-gaia"
 path = "src/bin/rst19-gaia.rs"
 
 [[bin]]
+name = "rst19-gaia-tiled"
+path = "src/bin/rst19-gaia-tiled.rs"
+
+[[bin]]
 name = "rst19-feature-raw-evidence-audit"
 path = "src/bin/rst19-feature-raw-evidence-audit.rs"
 
