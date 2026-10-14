@@ -1251,11 +1251,19 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             raw_motion_components.push(raw_components);
         }
     }
-    let motion_frame_model_review =
+    let reviewed_motion_frame_components =
         crate::sequence_motion_tracks::review_temporal_components_against_raw_frames(
             &motion_frame_components,
             &raw_motion_components,
             &shifts,
+            frame_options.detection.measurement.psf_fwhm,
+        )?;
+    let motion_frame_model_review =
+        crate::sequence_motion_tracks::supplement_with_coherent_raw_frame_candidates(
+            &reviewed_motion_frame_components,
+            &raw_motion_components,
+            &frame_times,
+            &motion_exposure_seconds,
             frame_options.detection.measurement.psf_fwhm,
         )?;
     let motion_component_tracks =

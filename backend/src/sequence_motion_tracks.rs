@@ -322,6 +322,249 @@ pub fn review_temporal_components_against_raw_frames(
     }))
 }
 
+/// Add review-supported raw-frame proposals that are anchored to temporal
+/// candidates or form the same coherent multi-frame chain used by Python.
+pub fn supplement_with_coherent_raw_frame_candidates(
+    reviewed_temporal_components: &Value,
+    raw_components_by_frame: &[Value],
+    frame_times: &[f64],
+    exposure_seconds: &[Option<f64>],
+    psf_fwhm: f64,
+) -> Result<Value> {
+    let mut result = reviewed_temporal_components.clone();
+    let frames = result
+        .get("frames")
+        .and_then(Value::as_array)
+        .cloned()
+        .ok_or_else(|| "reviewed temporal components must contain frames".to_string())?;
+    if result["status"] == "insufficient_frames" || frames.len() < 2 {
+        if let Some(object) = result.as_object_mut() {
+            object.insert("raw_fallback_audit".into(), json!([]));
+            object.insert("unassociated_single_frame_points".into(), json!([]));
+        }
+        return Ok(result);
+    }
+    if frames.len() != raw_components_by_frame.len()
+        || frames.len() != frame_times.len()
+        || frames.len() != exposure_seconds.len()
+    {
+        return Err("review, raw, time, and exposure frame counts must match".into());
+    }
+    if !psf_fwhm.is_finite() || psf_fwhm <= 0.0 {
+        return Err("motion feature psf_fwhm must be finite and positive".into());
+    }
+    if frame_times.iter().any(|time| !time.is_finite())
+        || frame_times.windows(2).any(|pair| pair[1] <= pair[0])
+    {
+        return Err("motion feature frame_times must be finite and strictly increasing".into());
+    }
+
+    let mut intervals = frame_times
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .collect::<Vec<_>>();
+    intervals.sort_by(f64::total_cmp);
+    let reference_interval = if intervals.len() % 2 == 0 {
+        let middle = intervals.len() / 2;
+        0.5 * (intervals[middle - 1] + intervals[middle])
+    } else {
+        intervals[intervals.len() / 2]
+    };
+    let exposures = exposure_seconds
+        .iter()
+        .map(|exposure| match exposure {
+            Some(value) if value.is_finite() && *value > 0.0 => Ok(*value),
+            Some(_) => Err("exposure times must be finite and positive".to_string()),
+            None => Ok(reference_interval),
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let mut supported_raw_frames = Vec::with_capacity(raw_components_by_frame.len());
+    let mut supported_raw_indices = Vec::with_capacity(raw_components_by_frame.len());
+    for raw_frame in raw_components_by_frame {
+        let raw_points = raw_frame
+            .get("points")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut supported_points = Vec::new();
+        let mut original_indices = Vec::new();
+        for (raw_index, point) in raw_points.iter().enumerate() {
+            if sequence_line_model_review_supported(point, psf_fwhm)? {
+                supported_points.push(point.clone());
+                original_indices.push(raw_index);
+            }
+        }
+        supported_raw_frames.push(supported_points);
+        supported_raw_indices.push(original_indices);
+    }
+    let coherent = crate::sequence_trails::coherent_raw_motion_point_indices(&json!({
+        "frames":supported_raw_frames,
+        "psf_fwhm":psf_fwhm,
+        "min_presence":3,
+        "frame_times":frame_times,
+        "exposure_times_s":exposures,
+    }))?;
+    let mut coherent_indices = std::collections::BTreeSet::<(usize, usize)>::new();
+    if let Some(indices) = coherent.get("selected_indices").and_then(Value::as_array) {
+        for pair in indices {
+            let Some(pair) = pair.as_array() else {
+                continue;
+            };
+            let (Some(frame_index), Some(supported_index)) = (
+                pair.first().and_then(Value::as_u64),
+                pair.get(1).and_then(Value::as_u64),
+            ) else {
+                continue;
+            };
+            let (Ok(frame_index), Ok(supported_index)) = (
+                usize::try_from(frame_index),
+                usize::try_from(supported_index),
+            ) else {
+                continue;
+            };
+            let Some(raw_index) = supported_raw_indices
+                .get(frame_index)
+                .and_then(|indices| indices.get(supported_index))
+                .copied()
+            else {
+                continue;
+            };
+            coherent_indices.insert((frame_index, raw_index));
+        }
+    }
+
+    let temporal_anchors = frames
+        .iter()
+        .flat_map(|frame| {
+            frame
+                .get("points")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter_map(|point| {
+            Some((
+                finite_number(point, "aligned_x")?,
+                finite_number(point, "aligned_y")?,
+            ))
+        })
+        .collect::<Vec<_>>();
+    let mut updated_frames = frames;
+    let mut fallback_audit = Vec::with_capacity(updated_frames.len());
+    let mut unassociated_points = Vec::new();
+    for (frame_index, frame) in updated_frames.iter_mut().enumerate() {
+        let raw_points = raw_components_by_frame[frame_index]
+            .get("points")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut frame_audit = frame.get("audit").cloned().unwrap_or_else(|| json!({}));
+        let frame_points = frame
+            .get_mut("points")
+            .and_then(Value::as_array_mut)
+            .ok_or_else(|| "reviewed motion frame must contain a points array".to_string())?;
+        let temporal_count = frame_points.len();
+        let mut reviewed_raw_count = 0usize;
+        let mut coherent_count = 0usize;
+        let mut anchored_count = 0usize;
+        let mut added_count = 0usize;
+        let mut duplicate_count = 0usize;
+        let mut unassociated_count = 0usize;
+        for (raw_index, mut raw_point) in raw_points.into_iter().enumerate() {
+            if !sequence_line_model_review_supported(&raw_point, psf_fwhm)? {
+                continue;
+            }
+            reviewed_raw_count += 1;
+            let coherent = coherent_indices.contains(&(frame_index, raw_index));
+            if coherent {
+                coherent_count += 1;
+            }
+            let anchor_supported = temporal_anchors.iter().any(|(anchor_x, anchor_y)| {
+                let Some(x) = finite_number(&raw_point, "aligned_x") else {
+                    return false;
+                };
+                let Some(y) = finite_number(&raw_point, "aligned_y") else {
+                    return false;
+                };
+                (x - anchor_x).hypot(y - anchor_y) <= 24.0_f64.max(6.0 * psf_fwhm)
+            });
+            if anchor_supported {
+                anchored_count += 1;
+            }
+            if !anchor_supported && !coherent {
+                unassociated_count += 1;
+                raw_point["sequence_candidate_source"] = json!("single_frame_trail_review_only");
+                unassociated_points.push(json!({
+                    "frame_index":frame_index,
+                    "point":raw_point,
+                }));
+                continue;
+            }
+
+            let raw_x = finite_number(&raw_point, "aligned_x").unwrap_or(f64::NAN);
+            let raw_y = finite_number(&raw_point, "aligned_y").unwrap_or(f64::NAN);
+            let raw_length = finite_number(&raw_point, "length_px").unwrap_or(f64::NAN);
+            let is_duplicate = frame_points.iter().any(|existing| {
+                let Some(existing_x) = finite_number(existing, "aligned_x") else {
+                    return false;
+                };
+                let Some(existing_y) = finite_number(existing, "aligned_y") else {
+                    return false;
+                };
+                let Some(existing_length) = finite_number(existing, "length_px") else {
+                    return false;
+                };
+                (raw_x - existing_x).hypot(raw_y - existing_y)
+                    <= 6.0_f64.max(0.25 * raw_length.min(existing_length))
+            });
+            if is_duplicate {
+                duplicate_count += 1;
+                continue;
+            }
+            raw_point["sequence_candidate_source"] = json!("single_frame_shape");
+            frame_points.push(raw_point);
+            added_count += 1;
+        }
+        if let Some(audit) = frame_audit.as_object_mut() {
+            audit.insert("feature_count".into(), json!(frame_points.len()));
+            audit.insert(
+                "max_feature_residual_snr".into(),
+                frame_points
+                    .iter()
+                    .filter_map(|point| finite_number(point, "residual_snr"))
+                    .max_by(f64::total_cmp)
+                    .map_or(Value::Null, |value| json!(value)),
+            );
+            audit.insert("raw_fallback_added_count".into(), json!(added_count));
+        }
+        frame["audit"] = frame_audit;
+        fallback_audit.push(json!({
+            "frame_index":frame_index,
+            "temporal_candidate_count":temporal_count,
+            "review_supported_raw_count":reviewed_raw_count,
+            "coherent_raw_chain_count":coherent_count,
+            "temporal_anchor_count":anchored_count,
+            "raw_fallback_added_count":added_count,
+            "duplicate_raw_candidate_count":duplicate_count,
+            "unassociated_single_frame_count":unassociated_count,
+        }));
+    }
+    if let Some(object) = result.as_object_mut() {
+        object.insert(
+            "scope".into(),
+            json!("temporal_components_reviewed_with_coherent_raw_shape_fallback"),
+        );
+        object.insert("frames".into(), json!(updated_frames));
+        object.insert("raw_fallback_audit".into(), json!(fallback_audit));
+        object.insert(
+            "unassociated_single_frame_points".into(),
+            json!(unassociated_points),
+        );
+    }
+    Ok(result)
+}
+
 /// Associate Rust temporal-residual component proposals without promoting
 /// them to confirmed motion features.
 pub fn associate_temporal_component_tracks(

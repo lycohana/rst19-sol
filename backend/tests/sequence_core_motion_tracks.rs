@@ -23,6 +23,14 @@ fn sequence_core_returns_separate_unclassified_motion_component_tracks() {
     .unwrap();
 
     assert_eq!(result["motion_frame_components"]["status"], "analyzed");
+    assert_eq!(result["motion_frame_model_review"]["status"], "analyzed");
+    assert_eq!(
+        result["motion_frame_model_review"]["raw_fallback_audit"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
     assert_eq!(result["motion_component_tracks"]["status"], "analyzed");
     assert_eq!(
         result["motion_component_tracks"]["classification_performed"],
