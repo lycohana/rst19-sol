@@ -976,6 +976,44 @@ pub fn run_desktop(args: &[String]) -> Result<Value> {
     }))
 }
 
+const CLI_HELP: &str = "把 source_catalog 候选放回原始 FITS，审计 3x3/5x5/7x7 raw 局部峰一致性\n\nUSAGE: rst19-source-peak-consistency CATALOG.csv FRAME.fits [OPTIONS]\n\nOptions:\n  --target-id ID     重复传入以导出指定 detection_id 的局部峰位置\n  --out-dir DIR      [default: tmp/source-peak-consistency]\n  -h, --help";
+
+pub fn run_cli(args: &[String]) -> i32 {
+    if args
+        .iter()
+        .any(|argument| argument == "-h" || argument == "--help")
+    {
+        println!("{CLI_HELP}");
+        return 0;
+    }
+    match run_desktop(args) {
+        Ok(payload) => {
+            println!(
+                "rst19-source-peak-consistency: 结果已写入 {}",
+                payload["out_dir"].as_str().unwrap_or("")
+            );
+            if let Some(rows) = payload["result"]["class_summaries"].as_array() {
+                for row in rows {
+                    println!(
+                        "{}: n={} raw_local_max(r1/r2/r3)={}/{}/{}",
+                        row["feature_class"].as_str().unwrap_or(""),
+                        row["candidate_count"].as_u64().unwrap_or(0),
+                        row["raw_local_maximum_count_r1"].as_u64().unwrap_or(0),
+                        row["raw_local_maximum_count_r2"].as_u64().unwrap_or(0),
+                        row["raw_local_maximum_count_r3"].as_u64().unwrap_or(0),
+                    );
+                }
+            }
+            println!("{}", payload["result"]["conclusion"].as_str().unwrap_or(""));
+            0
+        }
+        Err(error) => {
+            eprintln!("rst19-source-peak-consistency: {error}");
+            2
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -990,6 +1028,11 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ))
+    }
+
+    #[test]
+    fn standalone_cli_help_is_available_without_python() {
+        assert_eq!(run_cli(&["--help".into()]), 0);
     }
 
     fn fits_card(key: &str, value: &str) -> String {
@@ -1063,6 +1106,17 @@ mod tests {
             .is_file());
         assert!(out.join("source_peak_consistency_targets.csv").is_file());
         assert!(out.join("source_peak_consistency.json").is_file());
+        let cli_out = root.join("cli-out");
+        let args = vec![
+            catalog.to_string_lossy().into_owned(),
+            fits_path.to_string_lossy().into_owned(),
+            "--target-id".into(),
+            "2".into(),
+            "--out-dir".into(),
+            cli_out.to_string_lossy().into_owned(),
+        ];
+        assert_eq!(run_cli(&args), 0);
+        assert!(cli_out.join("source_peak_consistency.json").is_file());
     }
 
     #[test]

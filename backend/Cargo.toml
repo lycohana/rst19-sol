@@ -65,6 +65,10 @@ name = "rst19-photometric-auto"
 path = "src/bin/rst19-photometric-auto.rs"
 
 [[bin]]
+name = "rst19-source-peak-consistency"
+path = "src/bin/rst19-source-peak-consistency.rs"
+
+[[bin]]
 name = "rst19-feature-raw-evidence-audit"
 path = "src/bin/rst19-feature-raw-evidence-audit.rs"
 
