@@ -326,7 +326,7 @@
         "_save_crowded_case_sheet",
         "run_crowded_pair_ablation"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.crowded_ablation_cli",
@@ -336,7 +336,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.detection",
@@ -3192,7 +3192,7 @@
     "rst19-motion-ablation": "native:rst19-motion-ablation",
     "rst19-motion-crossing-ablation": "native:rst19-motion-crossing-ablation",
     "rst19-motion-proposal-ablation": "rst19.motion_proposal_ablation_cli:main",
-    "rst19-crowded-ablation": "rst19.crowded_ablation_cli:main",
+    "rst19-crowded-ablation": "native:rst19-crowded-ablation",
     "rst19": "native Rust executable; Python CLI parser retained only for desktop form metadata",
     "rst19-format-audit": "native Rust executable and desktop worker route; Python entrypoint/module import removed; static desktop schema remains",
     "rst19-feature-sequence-compare": "native Rust JSONL operation, standalone executable, and desktop worker route; Python console entrypoint removed; comparison module retained as a parity baseline and shared class-order source",
@@ -3281,7 +3281,8 @@
     "conditional innovation evidence packages from stratified injection tables, sequence reports, and feature matrices; Wilson intervals, evidence gates, JSON output, CSV artifacts, Markdown report, standalone Rust CLI, JSONL engine, and desktop worker; formatted evidence artifacts match the Python baseline",
     "sequence feature persistence: frame detection, mutual-nearest response matching, class transition tables, diagnostic/proposal subgroups and temporal profiles",
     "feature audit replicates: NumPy PCG64/Ziggurat seeded Gaussian inputs, native detection, paired positive recovery/negative leakage aggregation and Wilson intervals",
-    "Gaia DR3 public-catalog workflow: camera-footprint radius validation, tiled query delegation, GSP-Phot join selection, CatalogSource CSV, compact SHA-256/completeness sidecar, and FITS auxiliary pointing entrypoint"
+    "Gaia DR3 public-catalog workflow: camera-footprint radius validation, tiled query delegation, GSP-Phot join selection, CatalogSource CSV, compact SHA-256/completeness sidecar, and FITS auxiliary pointing entrypoint",
+    "crowded-pair ablation: anchor screening, paired Gaussian injections, detector runs, target-level metrics, NPY/CSV/PNG artifacts, and HTML report merge"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3379,7 +3380,8 @@
     "rst19-feature-spatial-context": "Rust standalone CLI, JSONL audit.feature_spatial_context, and desktop worker; result fields match the Python reference within 2e-7 absolute plus 2e-8 relative tolerance; three BOM CSV artifacts match byte-for-byte; PATH-disabled CLI and engine tests pass; release-package and macOS/Linux acceptance pending; Python console entrypoint removed",
     "rst19-feature-evidence": "Rust standalone CLI, JSONL audit.feature_evidence_matrix, and desktop worker route read morphology, feature-cross, PSF leaveout, and optional spatial-PSF CSVs; result fields match Python within 2e-7 absolute plus 2e-8 relative tolerance and the BOM CSV is byte-identical; PATH-disabled standalone CLI/JSONL checks, desktop worker dispatch tests, and parity fixtures pass; Python console entrypoint removed, package and macOS/Linux validation pending",
     "rst19-feature-gate-temporal-route": "Rust standalone CLI, JSONL audit.feature_gate_temporal_route, and desktop worker join existing route/diagnostic CSVs with persistence JSON; result fields and all four BOM CSV artifacts match Python; PATH-disabled CLI/JSONL and desktop dispatch tests pass; Python console entrypoint removed; packaged and macOS/Linux validation pending",
-    "rst19-motion-ablation": "Rust standalone CLI and desktop native worker validate a frozen sequence cache and every FITS SHA-256, reproduce Python MT19937 truth placement, run baseline and fast-point association, and emit CSV/JSON/PNG/report artifacts; frozen fixture and real 15-frame cache outputs match Python; Python console entry removed; full package and macOS/Linux acceptance pending"
+    "rst19-motion-ablation": "Rust standalone CLI and desktop native worker validate a frozen sequence cache and every FITS SHA-256, reproduce Python MT19937 truth placement, run baseline and fast-point association, and emit CSV/JSON/PNG/report artifacts; frozen fixture and real 15-frame cache outputs match Python; Python console entry removed; full package and macOS/Linux acceptance pending",
+    "rst19-crowded-ablation": "Rust standalone CLI and desktop native worker run the crowded-pair ablation and merge its report section; Python console entry removed and Python module retained as an offline parity reference. Frozen real-FITS comparison matched all 24 NPY files byte-for-byte and all CSV values within 1e-10 (maximum delta 2.14e-14); 10 target detection_id labels are swapped while coordinates and aggregate values match. Windows release ran with PATH limited to System32; full package and macOS/Linux acceptance pending"
   },
   "verification": [
     "tests/feature_psf_leaveout_parity.rs",
@@ -3582,7 +3584,16 @@
     "desktop/src/tool_catalog.json",
     "cargo test --locked --manifest-path backend/Cargo.toml",
     "cargo test --locked --manifest-path desktop/Cargo.toml --bin rst19-native-worker",
-    "tmp/native-motion-association-rust-final-20261014/verification.json"
+    "tmp/native-motion-association-rust-final-20261014/verification.json",
+    "backend/src/crowded_pair_ablation.rs",
+    "backend/src/bin/rst19-crowded-ablation.rs",
+    "desktop/src/backend.rs",
+    "desktop/src/bin/rst19-native-worker.rs",
+    "desktop/src/tool_catalog.json",
+    "cargo test --locked --manifest-path backend/Cargo.toml",
+    "cargo test --locked --manifest-path desktop/Cargo.toml",
+    "tmp/native-crowded-rust-final-20261014/verification.json",
+    "tmp/native-crowded-rust-report-final-20261014/index.html"
   ],
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",

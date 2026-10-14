@@ -103,6 +103,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-photometric-report"
                         | "rst19-mosaic"
                         | "rst19-motion-ablation"
+                        | "rst19-crowded-ablation"
                         | "rst19-motion-crossing-ablation"
                         | "rst19-contaminated-pair-injection"
                         | "rst19-contaminated-pair-class"
@@ -489,6 +490,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-motion-ablation"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-crowded-ablation"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-contaminated-pair-injection"})

@@ -80,6 +80,7 @@ def build() -> None:
               "--bin", "rst19-contaminated-pair-injection", "--bin", "rst19-contaminated-pair-class",
               "--bin", "rst19-aperture-sensitivity", "--bin", "rst19-spatial-injection",
               "--bin", "rst19-motion-crossing-ablation",
+              "--bin", "rst19-crowded-ablation",
               "--bin", "rst19-empirical-pair-audit", "--bin", "rst19-empirical-pair-fit",
               "--bin", "rst19-empirical-pair-free", "--bin", "rst19-multipsf-audit",
               "--bin", "rst19-free-multipsf-audit", "--bin", "rst19-forced-stability",
@@ -191,6 +192,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / spatial_injection, package / "runtime" / spatial_injection)
     motion_crossing_ablation = "rst19-motion-crossing-ablation.exe" if os.name == "nt" else "rst19-motion-crossing-ablation"
     shutil.copy2(ROOT / "backend/target/release" / motion_crossing_ablation, package / "runtime" / motion_crossing_ablation)
+    crowded_ablation = "rst19-crowded-ablation.exe" if os.name == "nt" else "rst19-crowded-ablation"
+    shutil.copy2(ROOT / "backend/target/release" / crowded_ablation, package / "runtime" / crowded_ablation)
     executable = "rst19-desktop.exe" if os.name == "nt" else "rst19-desktop"
     shutil.copy2(DESKTOP / "target/release" / executable, package / executable)
     assets = package / "assets"

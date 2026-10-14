@@ -13,6 +13,7 @@ pub mod compatible_spatial;
 pub mod contaminated_pair_class;
 pub mod contaminated_pair_injection;
 pub mod coordinates;
+pub mod crowded_pair_ablation;
 pub mod deblend;
 pub mod detection;
 pub mod detection_sweep;

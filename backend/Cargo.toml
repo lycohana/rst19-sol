@@ -225,6 +225,10 @@ name = "rst19-motion-ablation"
 path = "src/bin/rst19-motion-ablation.rs"
 
 [[bin]]
+name = "rst19-crowded-ablation"
+path = "src/bin/rst19-crowded-ablation.rs"
+
+[[bin]]
 name = "rst19-motion-crossing-ablation"
 path = "src/bin/rst19-motion-crossing-ablation.rs"
 
