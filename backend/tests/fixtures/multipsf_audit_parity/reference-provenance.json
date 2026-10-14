@@ -1,0 +1,27 @@
+{
+  "purpose": "Frozen one-time legacy output used as a Rust parity oracle; this fixture is data only and Rust tests never invoke Python.",
+  "generated_before_native_migration": true,
+  "legacy_sources": {
+    "src/rst19/multipsf_cli.py": "EDD4385C1D9E3306713281412CD200273CD492AAADECAD6784A614AB1B07345C",
+    "src/rst19/experiments.py": "F0EB598408AB275024DD403AAD7C09E8AADD898747D351BBFF003BE3A7C98D09"
+  },
+  "input_fixture": {
+    "path": "backend/tests/fixtures/empirical_pair_audit_parity/frames/frame.fits",
+    "sha256": "ACBE7F5837CC3DB6FBC603F0FC6AEF81A7B5F1C11D0011605F28A646CBE6A8BF"
+  },
+  "parameters": {
+    "positions": [[46.0, 48.0], [48.5, 48.0], [50.0, 45.0]],
+    "psf_fwhm_px": 2.0,
+    "mask_modes": ["raw"],
+    "frame_shifts": null
+  },
+  "output_fixture_sha256": {
+    "reference-output.json": "D37AC73B841134EF9C77A712F24B278B8658AAED125516F4EE1E6B117E253A3F",
+    "reference-output.csv": "DB3B970A27359ACD4C5FB761A05142C9E491FD9CD3B53BEA199C120F857395F9"
+  },
+  "comparison": {
+    "numeric_tolerance": "1e-8 absolute + 1e-10 relative",
+    "ignored_field": "path; it depends on the caller's relative or absolute input path",
+    "png": "signature and 1200x680 dimensions checked; pixel equality is not claimed"
+  }
+}

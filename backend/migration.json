@@ -1880,7 +1880,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.pair_audit_cli",
@@ -3166,7 +3166,7 @@
     "rst19-sources": "native:rst19-sources",
     "rst19-feature-sequence": "rst19.feature_sequence_cli:main",
     "rst19-pair-audit": "rst19.pair_audit_cli:main",
-    "rst19-multipsf-audit": "rst19.multipsf_cli:main",
+    "rst19-multipsf-audit": "native:rst19-multipsf-audit",
     "rst19-free-multipsf-audit": "rst19.free_multipsf_cli:main",
     "rst19-feature-cross": "native:rst19-feature-cross",
     "rst19-forced-stability": "rst19.forced_stability:main",
@@ -3326,6 +3326,7 @@
   "native_empirical_pair_audit_execution": "Rust rst19-empirical-pair-audit CLI and desktop worker load source catalogs, build global/local empirical PSFs, compute per-frame pair shape metrics, and write CSV/JSON/PNG; frozen Python reference JSON keys/text and discrete CSV values match, numeric values match within 1e-8 absolute + 1e-12 relative tolerance except kernel_sum within 1e-6 absolute for float32 reduction order; backend 149 tests and desktop 4+28 tests pass; Windows release CLI generated all three artifacts with Python absent from PATH (SHA-256 102bb1711080c80fec54d889122ffb98ced1fb5f403a879c5a7d0b77a14950b4); full release package and macOS/Linux validation pending",
   "native_empirical_pair_fit_execution": "Rust rst19-empirical-pair-fit CLI and desktop native worker preserve fixed K=1/K=2 empirical-PSF fitting, nonnegative amplitudes, planar background, BIC/SNR/covariance diagnostics, mask modes, and best-single grid control; frozen Python JSON/CSV match with 1e-5 absolute + 1e-8 relative numeric tolerance, PNG dimensions verified; backend 153 tests and desktop 4+30 tests pass; Windows release CLI emits CSV/JSON/PNG with PATH limited to System32 (SHA-256 9f47936a7d2b6de6f3145dc17686a06610e995408775924da8cb3329b6cb7300); Python console route removed and migrated desktop path dispatches Rust; 19 of 71 tools still use Python, so full runtime removal and macOS/Linux package validation remain pending",
   "native_empirical_pair_free_execution": "Rust rst19-empirical-pair-free CLI and desktop native worker implement bounded continuous K=1/K=2 position/amplitude/background fitting with shared empirical PSF, masks, covariance, SNR, BIC, and artifacts; frozen Python discrete decisions match exactly, numeric tolerances are 0.005 px positions, 0.5 amplitude, 2 RSS, 0.6 BIC, and 5% component SNR; optimizer evaluation counts are implementation-specific and PNG dimensions (1200x680) were checked without pixel equality; backend 153 tests and desktop 4+30 tests pass; Windows release CLI generates CSV/JSON/PNG with PATH limited to System32 (SHA-256 C652304B0BE2A0FB160FA37F0AD4209FDF127E04FE0910EED3500C623209975F); 52 of 71 tool routes are native, 19 remain Python, and full package plus macOS/Linux validation is pending",
+  "native_multipsf_audit_execution": "Rust rst19-multipsf-audit CLI and desktop native worker compare fixed-position Gaussian K=1..N models on a shared patch/background with nonnegative amplitudes, mask modes, BIC deltas, component SNR, template correlation, conditioning, and CSV/JSON/PNG artifacts; 4 Rust unit tests cover argument contract, general NNLS including inactive components, synthetic two-source recovery, and JSON/CSV parity against a frozen one-time legacy reference (the Rust test never invokes Python); numeric tolerance is 1e-8 absolute + 1e-10 relative and input path is ignored; PNG signature and 1200x680 dimensions verified without pixel equality; backend 157 unit tests plus integration/doc tests pass and desktop 4+31 tests pass; Windows release CLI generated CSV/JSON/PNG with PATH limited to System32 (SHA-256 01A7AD9A48DC3CC9918697EAC461B621E327D8A87B5C6402D5372E9A077DD0C7); 53 of 71 tool routes are native and 18 remain Python, so the Python runtime is still required; full package, macOS and Linux acceptance remain pending",
   "native_source_photometry": "complete source table status/flags/reference/model magnitude separation; faintest ranking, ties, calibration consistency and partial selection scope; JSONL photometry.table/photometry.faintest",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_cli_contracts": {

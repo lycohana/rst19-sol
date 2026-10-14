@@ -1,0 +1,157 @@
+{
+  "frame_count": 1,
+  "target_positions": [
+    [
+      46.0,
+      48.0
+    ],
+    [
+      48.5,
+      48.0
+    ],
+    [
+      50.0,
+      45.0
+    ]
+  ],
+  "frame_shifts": [
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "mask_modes": [
+    "raw"
+  ],
+  "psf_fwhm_px": 2.0,
+  "parameters": {
+    "psf_fwhm_px": 2.0,
+    "mask_modes": [
+      "raw"
+    ],
+    "component_counts": [
+      1,
+      2,
+      3
+    ],
+    "confirmation_delta_bic": 10.0,
+    "confirmation_component_snr": 5.0,
+    "frame_shifts": [
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "model": "shared linear background + fixed-position Gaussian PSF + nonnegative amplitudes",
+    "interpretation_boundary": "local model evidence, not WCS/catalog identity"
+  },
+  "rows": [
+    {
+      "frame_index": 1,
+      "path": "backend\\tests\\fixtures\\empirical_pair_audit_parity\\frames\\frame.fits",
+      "mask_mode": "raw",
+      "component_count": 1,
+      "target_positions": [
+        [
+          46.0,
+          48.0
+        ]
+      ],
+      "sample_count": 156,
+      "masked_pixel_count": 0,
+      "rss": 693.2915984707183,
+      "bic": 252.88819417959868,
+      "delta_bic_from_single": 0.0,
+      "delta_bic_from_previous": null,
+      "amplitudes": [
+        0.0
+      ],
+      "component_snr": [
+        0.0
+      ],
+      "active_component_count": 0,
+      "max_template_correlation": null,
+      "design_condition_number": 1.0,
+      "confirmation_line": false,
+      "note": "局部模型比较；不等于物理恒星身份"
+    },
+    {
+      "frame_index": 1,
+      "path": "backend\\tests\\fixtures\\empirical_pair_audit_parity\\frames\\frame.fits",
+      "mask_mode": "raw",
+      "component_count": 2,
+      "target_positions": [
+        [
+          46.0,
+          48.0
+        ],
+        [
+          48.5,
+          48.0
+        ]
+      ],
+      "sample_count": 156,
+      "masked_pixel_count": 0,
+      "rss": 688.8016447473951,
+      "bic": 256.9244640943499,
+      "delta_bic_from_single": -4.036269914751216,
+      "delta_bic_from_previous": -4.036269914751216,
+      "amplitudes": [
+        0.0,
+        1.4596877472245906
+      ],
+      "component_snr": [
+        0.0,
+        0.9921156909810658
+      ],
+      "active_component_count": 1,
+      "max_template_correlation": 0.0540034026591485,
+      "design_condition_number": 1.0559769652478446,
+      "confirmation_line": false,
+      "note": "局部模型比较；不等于物理恒星身份"
+    },
+    {
+      "frame_index": 1,
+      "path": "backend\\tests\\fixtures\\empirical_pair_audit_parity\\frames\\frame.fits",
+      "mask_mode": "raw",
+      "component_count": 3,
+      "target_positions": [
+        [
+          46.0,
+          48.0
+        ],
+        [
+          48.5,
+          48.0
+        ],
+        [
+          50.0,
+          45.0
+        ]
+      ],
+      "sample_count": 156,
+      "masked_pixel_count": 0,
+      "rss": 686.1120660490699,
+      "bic": 261.3639911641078,
+      "delta_bic_from_single": -8.475796984509117,
+      "delta_bic_from_previous": -4.439527069757901,
+      "amplitudes": [
+        0.0,
+        1.4976930907610297,
+        1.1379511193864675
+      ],
+      "component_snr": [
+        0.0,
+        1.015982653667949,
+        0.766814345954385
+      ],
+      "active_component_count": 2,
+      "max_template_correlation": 0.0540034026591485,
+      "design_condition_number": 1.0687755023421068,
+      "confirmation_line": false,
+      "note": "局部模型比较；不等于物理恒星身份"
+    }
+  ],
+  "conclusion": "固定位置 K 源 PSF 审计完成：1 帧、3 个候选位置，当前证据线下 raw 掩膜确认统计为 K=2: 0/1 帧, K=3: 0/1 帧。K 源模型只说明局部像素对某个受限模型的相对支持；它不能替代自由位置、空间变 PSF、完整噪声似然、人工注入或 WCS/星表身份。 首帧/各帧 raw 最优模型：F01: BIC 最优 K=1 (ΔBIC=0.00)。",
+  "note": "位置由 detector 候选/人工审计坐标固定给出；K=1..N 共享局部背景和像素窗口，非负幅度用 NNLS 拟合。结果是局部模型敏感性证据，不是物理恒星身份。"
+}

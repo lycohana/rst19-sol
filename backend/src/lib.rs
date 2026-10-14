@@ -51,6 +51,7 @@ pub mod measurement;
 pub mod models;
 pub mod mosaic;
 pub mod motion_crossing_ablation;
+pub mod multipsf_audit;
 pub mod pair_flux_covariance;
 pub mod pair_mechanism_context;
 pub mod pair_mechanism_sensitivity;
