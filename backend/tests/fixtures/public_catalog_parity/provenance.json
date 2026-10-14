@@ -1,0 +1,17 @@
+{
+  "reference": "Frozen Python rst19.public_catalog audit from a parsed Gaia DR3 TAP CSV response; paths normalized for Rust test comparison.",
+  "python_version": "3.11.9",
+  "source_sha256": {
+    "src/rst19/public_catalog.py": "04d3e47c41d88b7e7b86a94bd202422ce7dacb0bed272ca5d8283f4027fdea9f",
+    "src/rst19/gaia_tiled.py": "ec7508e0e05bc2445ded5172f789ddd82c135589466f9181b832947cee2e2a00",
+    "src/rst19/gaia_remote.py": "2636150706ba0d680ce84e0c02445271721d2ceccc27ec457e704c8789137779"
+  },
+  "response_sha256": "fa597b76e34a545d83e6361502a243884cf11f36c237c9906b5945042e4737cc",
+  "csv_reference_sha256": "97637132c0ce5cd8e18c8b9f19f4e1c2ee9d8d69b7898b48b978ca8a785c0f78",
+  "csv_byte_count": 1143,
+  "normalization": [
+    "output_path -> <OUTPUT>",
+    "audit_path -> <AUDIT>",
+    "runtime endpoint -> http://127.0.0.1:0/tap/sync in Rust test"
+  ]
+}

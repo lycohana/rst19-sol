@@ -337,6 +337,15 @@ mod tests {
         };
         let audit = download_public_gaia_catalog(&options).unwrap();
         server.join().unwrap();
+        let mut normalized_audit = audit.clone();
+        normalized_audit["output_path"] = Value::String("<OUTPUT>".into());
+        normalized_audit["audit_path"] = Value::String("<AUDIT>".into());
+        normalized_audit["endpoint"] = Value::String("http://127.0.0.1:0/tap/sync".into());
+        let python_reference: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/public_catalog_parity/reference.json"
+        ))
+        .unwrap();
+        assert_eq!(normalized_audit, python_reference);
         assert_eq!(
             fs::read(&output).unwrap(),
             include_bytes!("../tests/fixtures/gaia_remote_parity/reference.csv")
