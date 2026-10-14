@@ -268,6 +268,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::free_multipsf_audit::run_desktop(&args);
     }
+    if request["tool"] == "rst19-forced-stability" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::forced_stability::run_desktop(&args);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1486,6 +1508,49 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[test]
+    fn forced_stability_runs_through_the_native_worker_and_writes_artifacts() {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let frame =
+            workspace.join("backend/tests/fixtures/empirical_pair_audit_parity/frames/frame.fits");
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-forced-stability-dispatch-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let source_catalog = root.join("source_catalog.csv");
+        fs::write(&source_catalog, "detection_id,x,y,peak_x,peak_y,flux_snr,feature_class,feature_class_label\n1,46,48,46,48,10,compact_quality,compact\n").unwrap();
+        let persistence_json = root.join("persistence.json");
+        fs::write(
+            &persistence_json,
+            serde_json::to_vec(&json!({
+                "frame_count":1,
+                "cumulative_shifts":[[0.0,0.0]],
+                "frame_rows":[{"frame_index":1,"path":frame,"background_adu":100.0,"noise_adu":3.0}]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let out_dir = root.join("output");
+        let result = run(json!({
+            "operation":"tool", "tool":"rst19-forced-stability",
+            "args":[source_catalog.to_string_lossy(),persistence_json.to_string_lossy(),"--base-dir",root.to_string_lossy(),"--quiet"],
+            "out_dir":out_dir
+        })).unwrap();
+        assert_eq!(result["frame_count"], 1);
+        assert_eq!(result["anchor_count"], 1);
+        for artifact in [
+            "request.json",
+            "forced_stability_frame_metrics.csv",
+            "forced_stability_summary.csv",
+            "forced_stability.json",
+        ] {
+            assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn fits_card(key: &str, value: &str) -> [u8; 80] {
         let mut card = [b' '; 80];
         let text = format!("{key:<8}= {value:>20}");
@@ -1558,6 +1623,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| { tool["name"] == "rst19-free-multipsf-audit" && tool["native"] == true }));
+        assert!(tools
+            .iter()
+            .any(|tool| { tool["name"] == "rst19-forced-stability" && tool["native"] == true }));
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-sweep" && tool["native"] == true));

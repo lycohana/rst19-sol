@@ -161,6 +161,10 @@ name = "rst19-free-multipsf-audit"
 path = "src/bin/rst19-free-multipsf-audit.rs"
 
 [[bin]]
+name = "rst19-forced-stability"
+path = "src/bin/rst19-forced-stability.rs"
+
+[[bin]]
 name = "rst19-aperture-peak-ratio"
 path = "src/bin/rst19-aperture-peak-ratio.rs"
 
