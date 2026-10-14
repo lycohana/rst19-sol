@@ -85,7 +85,9 @@ def build() -> None:
               "--bin", "rst19-feature-sequence", "--bin", "rst19-feature-audit-replicates",
               "--bin", "rst19-gaia", "--bin", "rst19-gaia-tiled", "--bin", "rst19-gaia-frame",
               "--bin", "rst19-plate-solver", "--bin", "rst19-photometric-auto",
-              "--bin", "rst19-source-peak-consistency"])
+              "--bin", "rst19-source-peak-consistency",
+              "--bin", "rst19-source-proposal-peak-audit",
+              "--bin", "rst19-source-proposal-temporal-audit"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
@@ -134,6 +136,10 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / photometric_auto_cli, package / "runtime" / photometric_auto_cli)
     source_peak_consistency_cli = "rst19-source-peak-consistency.exe" if os.name == "nt" else "rst19-source-peak-consistency"
     shutil.copy2(ROOT / "backend/target/release" / source_peak_consistency_cli, package / "runtime" / source_peak_consistency_cli)
+    source_proposal_peak_cli = "rst19-source-proposal-peak-audit.exe" if os.name == "nt" else "rst19-source-proposal-peak-audit"
+    shutil.copy2(ROOT / "backend/target/release" / source_proposal_peak_cli, package / "runtime" / source_proposal_peak_cli)
+    source_proposal_temporal_cli = "rst19-source-proposal-temporal-audit.exe" if os.name == "nt" else "rst19-source-proposal-temporal-audit"
+    shutil.copy2(ROOT / "backend/target/release" / source_proposal_temporal_cli, package / "runtime" / source_proposal_temporal_cli)
     format_audit_cli = "rst19-format-audit.exe" if os.name == "nt" else "rst19-format-audit"
     shutil.copy2(ROOT / "backend/target/release" / format_audit_cli, package / "runtime" / format_audit_cli)
     sequence_feature_compare = "rst19-feature-sequence-compare.exe" if os.name == "nt" else "rst19-feature-sequence-compare"

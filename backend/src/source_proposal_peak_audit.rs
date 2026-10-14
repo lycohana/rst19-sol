@@ -763,6 +763,45 @@ pub fn run_desktop(args: &[String]) -> Result<Value> {
     }))
 }
 
+const CLI_HELP: &str = "按类别和提议器来源连接 source_catalog 与 raw 峰审计\n\nUSAGE: rst19-source-proposal-peak-audit CATALOG.csv PEAK_CONSISTENCY.csv [OPTIONS]\n\nOptions:\n  --target-id ID   重复传入以导出指定 detection_id\n  --out-dir DIR    [default: tmp/source-proposal-peak-audit]\n  -h, --help";
+
+pub fn run_cli(args: &[String]) -> i32 {
+    if args
+        .iter()
+        .any(|argument| argument == "-h" || argument == "--help")
+    {
+        println!("{CLI_HELP}");
+        return 0;
+    }
+    match run_desktop(args) {
+        Ok(payload) => {
+            println!(
+                "rst19-source-proposal-peak-audit: 结果已写入 {}",
+                payload["out_dir"].as_str().unwrap_or("")
+            );
+            if let Some(rows) = payload["result"]["summaries"].as_array() {
+                for row in rows {
+                    println!(
+                        "{}/{}: n={} quality={} raw_local_max_r1={}/{}",
+                        row["feature_class"].as_str().unwrap_or(""),
+                        row["method_group"].as_str().unwrap_or(""),
+                        row["candidate_count"].as_u64().unwrap_or(0),
+                        row["quality_count"].as_u64().unwrap_or(0),
+                        row["raw_local_maximum_count_r1"].as_u64().unwrap_or(0),
+                        row["candidate_count"].as_u64().unwrap_or(0),
+                    );
+                }
+            }
+            println!("{}", payload["result"]["conclusion"].as_str().unwrap_or(""));
+            0
+        }
+        Err(error) => {
+            eprintln!("rst19-source-proposal-peak-audit: {error}");
+            2
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -784,6 +823,11 @@ mod tests {
             proposal_method_group_name(" gaussian |dog_narrow|dog_broad|other"),
             "all_three"
         );
+    }
+
+    #[test]
+    fn standalone_cli_help_is_available_without_python() {
+        assert_eq!(run_cli(&["--help".into()]), 0);
     }
 
     #[test]
