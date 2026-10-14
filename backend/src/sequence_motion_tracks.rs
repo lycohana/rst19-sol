@@ -49,6 +49,279 @@ fn point_xy(point: &Value) -> Result<[f64; 2]> {
     Ok([x, y])
 }
 
+fn finite_number(point: &Value, key: &str) -> Option<f64> {
+    point
+        .get(key)
+        .and_then(Value::as_f64)
+        .filter(|value| value.is_finite())
+}
+
+fn model_is_supported(point: &Value) -> bool {
+    let model = point.get("single_frame_model").and_then(Value::as_str);
+    let line_snr = finite_number(point, "line_template_snr");
+    match model {
+        Some("long_line_profile") => {
+            line_snr.is_some_and(|value| value >= 5.0)
+                && finite_number(point, "line_vs_background_delta_bic")
+                    .is_some_and(|value| value >= 6.0)
+        }
+        Some("line") => {
+            line_snr.is_some_and(|value| value >= 5.0)
+                && finite_number(point, "line_vs_point_delta_bic").is_some_and(|value| value >= 6.0)
+                && finite_number(point, "line_vs_double_delta_bic")
+                    .is_some_and(|value| value >= 6.0)
+                && finite_number(point, "line_vs_elliptical_delta_bic")
+                    .is_some_and(|value| value >= 6.0)
+        }
+        _ => false,
+    }
+}
+
+/// Port of Python's `_single_frame_sequence_line_model_is_review_supported`.
+pub fn sequence_line_model_review_supported(point: &Value, psf_fwhm: f64) -> Result<bool> {
+    if !psf_fwhm.is_finite() || psf_fwhm <= 0.0 {
+        return Err("psf_fwhm must be finite and positive".into());
+    }
+    if model_is_supported(point) {
+        return Ok(true);
+    }
+    let model = point.get("single_frame_model").and_then(Value::as_str);
+    if !matches!(
+        model,
+        Some("line" | "long_line_profile" | "elliptical_point")
+    ) {
+        return Ok(false);
+    }
+    let (Some(line_snr), Some(background_delta), Some(continuity), Some(fill), Some(length)) = (
+        finite_number(point, "line_template_snr"),
+        finite_number(point, "line_vs_background_delta_bic"),
+        finite_number(point, "continuity_ratio"),
+        finite_number(point, "profile_fill_ratio"),
+        finite_number(point, "length_px"),
+    ) else {
+        return Ok(false);
+    };
+    if length < 6.0_f64.max(2.5 * psf_fwhm)
+        || line_snr < 5.0
+        || background_delta < 2.0
+        || continuity < 0.45
+        || fill < 0.45
+    {
+        return Ok(false);
+    }
+    if matches!(model, Some("line" | "elliptical_point")) {
+        if [
+            finite_number(point, "line_vs_point_delta_bic"),
+            finite_number(point, "line_vs_double_delta_bic"),
+            finite_number(point, "line_vs_elliptical_delta_bic"),
+        ]
+        .into_iter()
+        .any(|value| value.is_none_or(|delta| delta < 2.0))
+        {
+            return Ok(false);
+        }
+    }
+    if model == Some("elliptical_point")
+        && finite_number(point, "width_px").is_none_or(|width| width > 0.75_f64.max(0.5 * psf_fwhm))
+    {
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn line_geometries_overlap(first: &Value, second: &Value) -> bool {
+    let (
+        Some(mut first_x),
+        Some(mut first_y),
+        Some(mut first_length),
+        Some(mut first_width),
+        Some(mut first_angle),
+        Some(mut second_x),
+        Some(mut second_y),
+        Some(mut second_length),
+        Some(mut second_width),
+        Some(mut second_angle),
+    ) = (
+        finite_number(first, "x"),
+        finite_number(first, "y"),
+        finite_number(first, "length_px"),
+        finite_number(first, "width_px"),
+        finite_number(first, "angle_deg"),
+        finite_number(second, "x"),
+        finite_number(second, "y"),
+        finite_number(second, "length_px"),
+        finite_number(second, "width_px"),
+        finite_number(second, "angle_deg"),
+    )
+    else {
+        return false;
+    };
+    if first_length <= 0.0 || second_length <= 0.0 {
+        return false;
+    }
+    if second_length > first_length {
+        std::mem::swap(&mut first_x, &mut second_x);
+        std::mem::swap(&mut first_y, &mut second_y);
+        std::mem::swap(&mut first_length, &mut second_length);
+        std::mem::swap(&mut first_width, &mut second_width);
+        std::mem::swap(&mut first_angle, &mut second_angle);
+    }
+    let angle_difference = ((first_angle - second_angle + 90.0).rem_euclid(180.0) - 90.0).abs();
+    if angle_difference > 15.0 {
+        return false;
+    }
+    let angle = first_angle.to_radians();
+    let direction_x = angle.cos();
+    let direction_y = angle.sin();
+    let delta_x = second_x - first_x;
+    let delta_y = second_y - first_y;
+    let perpendicular_distance = (delta_x * direction_y - delta_y * direction_x).abs();
+    let perpendicular_gate = 2.5_f64.max(0.5 * (first_width + second_width) + 1.5);
+    if perpendicular_distance > perpendicular_gate {
+        return false;
+    }
+    let parallel_distance = (delta_x * direction_x + delta_y * direction_y).abs();
+    let overlap = 0.5 * (first_length + second_length) - parallel_distance;
+    overlap / second_length >= 0.35
+}
+
+/// Attach raw-pixel line-model evidence to temporal residual proposals, then
+/// reject temporal-only structures that lack a matching review-supported line.
+pub fn review_temporal_components_against_raw_frames(
+    temporal_components: &Value,
+    raw_components_by_frame: &[Value],
+    shifts: &[[f64; 2]],
+    psf_fwhm: f64,
+) -> Result<Value> {
+    let frames = temporal_components
+        .get("frames")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "temporal components must contain frames".to_string())?;
+    if frames.is_empty() || temporal_components["status"] == "insufficient_frames" {
+        return Ok(json!({
+            "status":"insufficient_frames",
+            "scope":"temporal_components_reviewed_against_raw_pixel_line_models",
+            "frames":[],
+            "review_audit":[],
+        }));
+    }
+    if frames.len() != raw_components_by_frame.len() || frames.len() != shifts.len() {
+        return Err("temporal, raw, and shift frame counts must match".into());
+    }
+    if !psf_fwhm.is_finite() || psf_fwhm <= 0.0 {
+        return Err("psf_fwhm must be finite and positive".into());
+    }
+
+    let model_fields = [
+        "line_template_snr",
+        "line_vs_point_delta_bic",
+        "line_vs_double_delta_bic",
+        "line_vs_background_delta_bic",
+        "line_vs_elliptical_delta_bic",
+        "single_frame_model",
+        "single_frame_model_margin_bic",
+        "continuity_ratio",
+        "profile_fill_ratio",
+        "line_artifact_overlap_fraction",
+    ];
+    let mut reviewed_frames = Vec::with_capacity(frames.len());
+    let mut review_audit = Vec::with_capacity(frames.len());
+    for (frame_index, (temporal_frame, raw_frame)) in
+        frames.iter().zip(raw_components_by_frame).enumerate()
+    {
+        let temporal_points = temporal_frame
+            .get("points")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let raw_points = raw_frame
+            .get("points")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut reviewed_points = Vec::new();
+        let mut geometry_match_count = 0usize;
+        let mut model_rejected_count = 0usize;
+        for mut temporal_point in temporal_points.iter().cloned() {
+            let temporal_geometry = [
+                finite_number(&temporal_point, "x").unwrap_or(f64::NAN),
+                finite_number(&temporal_point, "y").unwrap_or(f64::NAN),
+                finite_number(&temporal_point, "length_px").unwrap_or(f64::NAN),
+                finite_number(&temporal_point, "width_px").unwrap_or(f64::NAN),
+                finite_number(&temporal_point, "angle_deg").unwrap_or(f64::NAN),
+            ];
+            let mut matches = raw_points
+                .iter()
+                .filter(|raw_point| line_geometries_overlap(&temporal_point, raw_point))
+                .map(|raw_point| {
+                    let center_distance = (temporal_geometry[0]
+                        - finite_number(raw_point, "x").unwrap_or(f64::INFINITY))
+                    .hypot(
+                        temporal_geometry[1]
+                            - finite_number(raw_point, "y").unwrap_or(f64::INFINITY),
+                    );
+                    let length_difference = (temporal_geometry[2]
+                        - finite_number(raw_point, "length_px").unwrap_or(f64::INFINITY))
+                    .abs();
+                    (center_distance, length_difference, raw_point)
+                })
+                .collect::<Vec<_>>();
+            matches
+                .sort_by(|left, right| left.0.total_cmp(&right.0).then(left.1.total_cmp(&right.1)));
+            let Some((_, _, raw_point)) = matches.first() else {
+                continue;
+            };
+            geometry_match_count += 1;
+            if let Some(temporal_object) = temporal_point.as_object_mut() {
+                for key in model_fields {
+                    temporal_object.insert(
+                        key.to_owned(),
+                        raw_point.get(key).cloned().unwrap_or(Value::Null),
+                    );
+                }
+            }
+            if sequence_line_model_review_supported(&temporal_point, psf_fwhm)? {
+                reviewed_points.push(temporal_point);
+            } else {
+                model_rejected_count += 1;
+            }
+        }
+        let mut audit = temporal_frame
+            .get("audit")
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        if let Some(audit_object) = audit.as_object_mut() {
+            audit_object.insert("feature_count".into(), json!(reviewed_points.len()));
+            audit_object.insert(
+                "max_feature_residual_snr".into(),
+                reviewed_points
+                    .iter()
+                    .filter_map(|point| finite_number(point, "residual_snr"))
+                    .max_by(f64::total_cmp)
+                    .map_or(Value::Null, |value| json!(value)),
+            );
+        }
+        review_audit.push(json!({
+            "frame_index":frame_index,
+            "temporal_component_count":temporal_points.len(),
+            "raw_component_count":raw_points.len(),
+            "raw_geometry_match_count":geometry_match_count,
+            "model_rejected_count":model_rejected_count,
+            "reviewed_component_count":reviewed_points.len(),
+        }));
+        reviewed_frames.push(json!({"points":reviewed_points,"audit":audit}));
+    }
+    Ok(json!({
+        "status":"analyzed",
+        "scope":"temporal_components_reviewed_against_raw_pixel_line_models",
+        "min_length_px":temporal_components.get("min_length_px").cloned().unwrap_or(Value::Null),
+        "thresholds_adu":temporal_components.get("thresholds_adu").cloned().unwrap_or(Value::Null),
+        "metadata_supported":temporal_components.get("metadata_supported").cloned().unwrap_or(Value::Bool(false)),
+        "frames":reviewed_frames,
+        "review_audit":review_audit,
+    }))
+}
+
 /// Associate Rust temporal-residual component proposals without promoting
 /// them to confirmed motion features.
 pub fn associate_temporal_component_tracks(

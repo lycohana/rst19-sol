@@ -1205,14 +1205,65 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             })
         })
         .collect::<Result<Vec<_>>>()?;
+    let motion_metadata_supported = motion_frame_components["metadata_supported"]
+        .as_bool()
+        .unwrap_or(false);
+    let motion_min_length_px = motion_frame_components["min_length_px"]
+        .as_f64()
+        .unwrap_or_else(|| 8.0_f64.max(3.0 * frame_options.detection.measurement.psf_fwhm));
+    let mut raw_motion_components = Vec::with_capacity(frame_analysis_objects.len());
+    if paths.len() >= 2 {
+        for (frame_index, analysis) in frame_analysis_objects.iter().enumerate() {
+            let frame_thresholds = crate::sequence_trails::motion_proposal_thresholds(&json!({
+                "psf_fwhm":frame_options.detection.measurement.psf_fwhm,
+                "min_length_px":motion_min_length_px,
+                "exposure_s":motion_exposure_seconds,
+                "metadata_supported":motion_metadata_supported,
+                "short_exposure_s":motion_exposure_seconds[frame_index],
+            }))?;
+            let short_min_feature_area = frame_thresholds["short_min_area"]
+                .as_u64()
+                .map(|value| value as usize)
+                .ok_or("motion proposal thresholds did not return short_min_area")?;
+            let mut raw_components =
+                crate::sequence_motion_features::sequence_single_frame_components_from_analysis(
+                    analysis,
+                    frame_options.detection.measurement.psf_fwhm,
+                    10.0,
+                    60.0,
+                    20,
+                    2.5,
+                    motion_min_length_px,
+                    short_min_feature_area,
+                )?;
+            if let Some(points) = raw_components
+                .get_mut("points")
+                .and_then(Value::as_array_mut)
+            {
+                for point in points {
+                    point["frame_index"] = json!(frame_index);
+                    let x = point["x"].as_f64().unwrap_or(0.0);
+                    let y = point["y"].as_f64().unwrap_or(0.0);
+                    point["aligned_x"] = json!(x - shifts[frame_index][0]);
+                    point["aligned_y"] = json!(y - shifts[frame_index][1]);
+                }
+            }
+            raw_motion_components.push(raw_components);
+        }
+    }
+    let motion_frame_model_review =
+        crate::sequence_motion_tracks::review_temporal_components_against_raw_frames(
+            &motion_frame_components,
+            &raw_motion_components,
+            &shifts,
+            frame_options.detection.measurement.psf_fwhm,
+        )?;
     let motion_component_tracks =
         crate::sequence_motion_tracks::associate_temporal_component_tracks(
-            &motion_frame_components,
+            &motion_frame_model_review,
             &frame_times,
             &motion_exposure_seconds,
-            motion_frame_components["metadata_supported"]
-                .as_bool()
-                .unwrap_or(false),
+            motion_metadata_supported,
             motion_line_link_radius_px,
             frame_options.detection.measurement.psf_fwhm,
         )?;
@@ -1342,7 +1393,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
 
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
-        "scope":"frame_detection_quality_tracks_temporal_reference_candidates_fast_point_motion_candidate_proposals_candidate_consensus_and_unverified_motion_component_association",
+        "scope":"frame_detection_quality_tracks_temporal_reference_candidates_fast_point_motion_candidate_proposals_candidate_consensus_raw_pixel_line_model_review_and_unverified_motion_component_association",
         "frame_analyses":frame_analyses,
         "tracking":tracking,
         "fast_point_tracks":fast_point_tracks,
@@ -1358,6 +1409,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "temporal_proposal_mode":temporal_proposal_mode,
         "relative_photometry":relative_photometry_result,
         "motion_frame_components":motion_frame_components,
+        "motion_frame_model_review":motion_frame_model_review,
         "motion_component_tracks":motion_component_tracks,
         "fixed_sentinel_audit":fixed_sentinel_audit,
         "fixed_sentinel_impact_audit":fixed_sentinel_impact_audit,

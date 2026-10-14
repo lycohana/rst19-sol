@@ -581,6 +581,54 @@ pub fn single_frame_components_from_analysis(
     min_feature_area: usize,
     min_axis_ratio: f64,
 ) -> Result<Value> {
+    single_frame_components_from_analysis_with_limits(
+        analysis,
+        psf_fwhm,
+        residual_sigma,
+        min_residual_adu,
+        min_feature_area,
+        min_axis_ratio,
+        8.0_f64.max(3.0 * psf_fwhm),
+        20,
+    )
+}
+
+/// Extract and model-review a raw frame using the metadata-aware proposal
+/// floors used by the multi-frame sequence detector.
+#[allow(clippy::too_many_arguments)]
+pub fn sequence_single_frame_components_from_analysis(
+    analysis: &FrameAnalysis,
+    psf_fwhm: f64,
+    residual_sigma: f64,
+    min_residual_adu: f64,
+    min_feature_area: usize,
+    min_axis_ratio: f64,
+    min_length_px: f64,
+    short_min_feature_area: usize,
+) -> Result<Value> {
+    single_frame_components_from_analysis_with_limits(
+        analysis,
+        psf_fwhm,
+        residual_sigma,
+        min_residual_adu,
+        min_feature_area,
+        min_axis_ratio,
+        min_length_px,
+        short_min_feature_area,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn single_frame_components_from_analysis_with_limits(
+    analysis: &FrameAnalysis,
+    psf_fwhm: f64,
+    residual_sigma: f64,
+    min_residual_adu: f64,
+    min_feature_area: usize,
+    min_axis_ratio: f64,
+    min_length_px: f64,
+    short_min_feature_area: usize,
+) -> Result<Value> {
     if !psf_fwhm.is_finite()
         || psf_fwhm <= 0.0
         || !residual_sigma.is_finite()
@@ -590,6 +638,9 @@ pub fn single_frame_components_from_analysis(
         || min_feature_area < 3
         || !min_axis_ratio.is_finite()
         || min_axis_ratio <= 0.0
+        || !min_length_px.is_finite()
+        || min_length_px <= 0.0
+        || short_min_feature_area < 3
     {
         return Err("single-frame trail parameters must be finite and positive".into());
     }
@@ -627,7 +678,7 @@ pub fn single_frame_components_from_analysis(
             }
         }
     }
-    let short_min_pixels = 20usize.max((2.0 * psf_fwhm * psf_fwhm).ceil() as usize);
+    let short_min_pixels = short_min_feature_area.max((2.0 * psf_fwhm * psf_fwhm).ceil() as usize);
     motion_feature_frame_components_for_planes(
         &residual,
         &valid,
@@ -639,7 +690,7 @@ pub fn single_frame_components_from_analysis(
             threshold,
             residual_noise: noise,
             psf_fwhm,
-            min_length: 8.0f64.max(3.0 * psf_fwhm),
+            min_length: min_length_px,
             min_feature_area: min_feature_area as i64,
             min_axis_ratio,
             bridge_gaps: false,
