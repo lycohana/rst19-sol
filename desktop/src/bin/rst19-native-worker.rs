@@ -410,6 +410,33 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::gaia_frame::run_desktop(&args, &out_dir);
     }
+    if request["tool"] == "rst19-plate-solver" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out" || arg.starts_with("--out="))
+        {
+            args.push("--out".into());
+            args.push(
+                out_dir
+                    .join("plate-solution.json")
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        return rst19_core::plate_solver::run_desktop(&args, &out_dir);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1859,6 +1886,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| { tool["name"] == "rst19-gaia-frame" && tool["native"] == true }));
+        assert!(tools
+            .iter()
+            .any(|tool| { tool["name"] == "rst19-plate-solver" && tool["native"] == true }));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-contaminated-pair-injection" && tool["native"] == true
         }));
@@ -2503,6 +2533,42 @@ mod tests {
         assert_eq!(result["center_dec_deg"], -12.25);
         assert_eq!(result["plan"]["network"], false);
         assert!(out_dir.join("request.json").is_file());
+    }
+
+    #[test]
+    fn plate_solver_tool_uses_native_fits_catalog_and_writes_solution_json() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-plate-solver-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let fits = root.join("frame.fits");
+        let catalog = root.join("catalog.csv");
+        let out_dir = root.join("output");
+        write_single_frame_test_fits(&fits);
+        fs::write(
+            &catalog,
+            "source_id,ra_deg,dec_deg,magnitude\nstar-a,10.0,20.0,8.5\nstar-b,10.02,20.01,9.0\n",
+        )
+        .unwrap();
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-plate-solver",
+            "args":[
+                fits.to_string_lossy(),
+                "--catalog", catalog.to_string_lossy(),
+                "--center-ra", "10",
+                "--center-dec", "20",
+                "--pixel-scale-arcsec", "8.5",
+                "--out", out_dir.join("solution.json").to_string_lossy()
+            ],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+        assert!(result["plate_solution"]["valid"].is_boolean());
+        assert!(out_dir.join("request.json").is_file());
+        assert!(out_dir.join("solution.json").is_file());
     }
 
     #[test]

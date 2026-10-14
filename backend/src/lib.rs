@@ -70,6 +70,7 @@ pub mod photometric_calibration;
 pub mod photometric_report;
 pub mod photometry;
 pub mod pipeline;
+pub mod plate_solver;
 pub mod precision;
 pub mod psf;
 pub mod relative_photometry;

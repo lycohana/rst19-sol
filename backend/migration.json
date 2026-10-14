@@ -2340,7 +2340,7 @@
         "_candidate_key",
         "solve_plate"
       ],
-      "migration_status": "pending"
+      "migration_status": "in_progress"
     },
     {
       "python_module": "rst19.plate_solver_cli",
@@ -2350,7 +2350,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.public_catalog",

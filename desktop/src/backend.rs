@@ -56,6 +56,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-gaia"
                         | "rst19-gaia-tiled"
                         | "rst19-gaia-frame"
+                        | "rst19-plate-solver"
                         | "rst19-format-audit"
                         | "rst19-feature-sequence-compare"
                         | "rst19-feature-raw-evidence-audit"
@@ -293,6 +294,9 @@ mod tests {
     #[test]
     fn preview_single_frame_and_sequence_core_use_the_native_worker_route() {
         assert!(uses_native_worker(&json!({"operation":"preview"})));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-plate-solver"})
+        ));
         assert!(uses_native_worker(
             &json!({"operation":"psf.empirical.estimate"})
         ));

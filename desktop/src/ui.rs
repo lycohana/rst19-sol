@@ -84,6 +84,7 @@ fn title(name: &str) -> &str {
         "rst19-mosaic" => "注册合成大图",
         "rst19-photometric-auto" => "自动星表与测光",
         "rst19-gaia-frame" => "单帧 Gaia 星表",
+        "rst19-plate-solver" => "视场解算",
         "rst19-innovation" => "创新证据报告",
         "rst19-injection" => "注入回收实验",
         "rst19-sweep" => "检测参数扫描",
