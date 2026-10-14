@@ -1,0 +1,35 @@
+{
+  "results": [
+    {
+      "source_id": "123",
+      "ra": "129.5",
+      "dec": "-1.25",
+      "ref_epoch": "2016.0",
+      "pmra": "1.2",
+      "pmdec": "-2.3",
+      "phot_g_mean_mag": "15.4",
+      "phot_g_mean_flux": "1000",
+      "phot_g_mean_flux_error": "10",
+      "phot_g_mean_flux_over_error": "100",
+      "phot_bp_mean_mag": "15.8",
+      "phot_rp_mean_mag": "14.9",
+      "phot_bp_rp_excess_factor": "1.2",
+      "parallax": "2.1",
+      "parallax_error": "0.1",
+      "ruwe": "1.05",
+      "duplicated_source": "false",
+      "visibility_periods_used": "12",
+      "phot_variable_flag": "NOT_AVAILABLE",
+      "distance_gspphot": "100.0",
+      "distance_gspphot_lower": "90.0",
+      "distance_gspphot_upper": "110.0",
+      "ag_gspphot": "",
+      "ag_gspphot_lower": "",
+      "ag_gspphot_upper": "",
+      "ebpminrp_gspphot": "0.08",
+      "a0": "0.3",
+      "a0_lower": "0.2",
+      "a0_upper": "0.4"
+    }
+  ]
+}

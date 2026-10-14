@@ -1,0 +1,14 @@
+{
+  "reference_source": "src/rst19/gaia_remote.py::parse_gaia_json + write_catalog_csv",
+  "source_sha256": "2636150706ba0d680ce84e0c02445271721d2ceccc27ec457e704c8789137779",
+  "response_sha256": {
+    "json_a0_array.json": "35556e6f837c4564fa64acaa36602a4835f5e4d4d690f747fb2e5c708e0a104a",
+    "json_a0_objects.json": "60e5eeca9b978dbe3f115c1545485c62518582fe6fa50fad96d1b31a3d7bbebb"
+  },
+  "output_sha256": {
+    "json_a0_array_reference.csv": "68ef9bd947258ae1e97ae5b293f40efdaece4c6c857373da716c8539b2df916f",
+    "json_a0_objects_reference.csv": "68ef9bd947258ae1e97ae5b293f40efdaece4c6c857373da716c8539b2df916f"
+  },
+  "row_count": 1,
+  "notes": "Frozen offline JSON array and object-row responses with A0 extinction semantics and percentile bounds."
+}

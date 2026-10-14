@@ -1508,7 +1508,7 @@
         "query_gaia",
         "write_catalog_csv"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.gaia_remote_cli",
@@ -1518,7 +1518,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.gaia_tiled",
@@ -3182,7 +3182,7 @@
     "rst19-signed-null-audit": "native Rust single-frame signed-null detector audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate",
     "rst19-signed-null-sequence": "native Rust multi-frame signed-null aggregation, recurrence audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate",
     "rst19-gaia-merge": "native Rust layered Gaia CSV merge, standalone executable, and desktop worker route; Python console entrypoint removed",
-    "rst19-gaia": "native Rust Gaia DR3 cone-query executable and desktop worker route; Python console entrypoint removed; offline frozen response and CSV parity verified",
+    "rst19-gaia": "native Rust Gaia DR3 cone-query executable and desktop worker route; CSV/JSON/VOTable response parsing and Gaia-compatible A0/V extinction normalization; frozen Python output parity verified",
     "rst19-gaia-tiled": "native Rust adaptive Gaia DR3 tiled-query executable and desktop worker route; Python console entrypoint removed; frozen planning, query-state, CSV, and metadata parity verified",
     "rst19-relative-photometry": "native Rust relative photometry JSON CLI and desktop worker route; Python console entrypoint removed",
     "rst19-wcs-validation": "native Rust FITS/catalog local WCS validation, artifact generation, standalone executable, and desktop worker route; Python console entrypoint removed",
@@ -3297,7 +3297,8 @@
     "Gaia DR3 public-catalog workflow: camera-footprint radius validation, tiled query delegation, GSP-Phot join selection, CatalogSource CSV, compact SHA-256/completeness sidecar, and FITS auxiliary pointing entrypoint",
     "crowded-pair ablation: anchor screening, paired Gaussian injections, detector runs, target-level metrics, NPY/CSV/PNG artifacts, and HTML report merge",
     "point-source ablation with shared float32 FITS background, frozen target manifests, Gaussian/hybrid/ensemble detections, injection recovery, and native CSV/NPY/PNG/HTML artifacts",
-    "Gaia DR3 spherical tiled planning, adaptive saturation subdivision, de-duplication, scope filtering, completeness audit, compatibility CSV, and metadata with frozen Python parity"
+    "Gaia DR3 spherical tiled planning, adaptive saturation subdivision, de-duplication, scope filtering, completeness audit, compatibility CSV, and metadata with frozen Python parity",
+    "Gaia DR3 cone-query CSV/JSON/VOTable parsing and CatalogSource-compatible normalization including A0/V extinction semantics"
   ],
   "native_detection_helpers": [
     "f64 masked Gaussian and starlet filters",
@@ -3336,7 +3337,7 @@
     "rst19-aux-audit": "Rust standalone CLI and desktop worker inspect FITS auxiliary attitude fields and produce CSV/JSON; Python console entrypoint removed",
     "rst19-format-audit": "single FITS or directory input; Rust JSONL engine, standalone CLI, and desktop worker match Python result fields and byte-identical CSV artifacts on synthetic and real FITS; package build and cross-platform acceptance pending",
     "rst19-feature-sequence-compare": "reads existing sequence JSON without FITS access or detection; JSONL engine, standalone CLI, and desktop worker match Python result fields and three CSV artifacts byte-for-byte; package build and cross-platform acceptance pending",
-    "rst19-gaia": "Rust standalone CLI and desktop worker perform Gaia DR3 cone queries with dry-run ADQL, CSV/VOTable parsing, compatibility CSV, and metadata; frozen Python response and CSV bytes match; no live TAP request is part of parity tests",
+    "rst19-gaia": "Rust standalone CLI and desktop worker perform Gaia DR3 cone queries with safe ADQL, CSV/JSON/VOTable parsing, compatibility CSV, GSP-Phot and semantic extinction aliases; frozen Python CSV and JSON outputs match byte-for-byte; no live TAP request is part of parity tests",
     "rst19-trails": "Rust standalone binary and native desktop worker route run the single-frame FITS audit; frozen Python result fields match for zero-trail and model-rejected line-geometry fixtures; PATH-disabled CLI tests check counts, CSV/PNG artifacts, and unchanged FITS input; Python console entrypoint removed from pyproject.toml; accepted-trail positive fixture, full runtime removal, package and cross-platform acceptance remain pending",
     "rst19-contaminated-pair-class": "Rust standalone CLI and native desktop worker run class-based anchor selection and contaminated-pair injection; full result fields, three class CSVs, injection JSON, and injection CSV values match Python within the established numeric tolerance; Python console entrypoint removed; release-package and macOS/Linux acceptance pending",
     "rst19-aperture-sensitivity": "Rust standalone CLI and native desktop worker perform empirical-PSF aperture scans, NumPy-compatible seeded blank-site selection, paired float32 controls, and CSV/JSON artifact writing; frozen Python JSON/CSV outputs match for all discrete fields and within 2e-5 absolute plus 2e-6 relative numeric tolerance, with 1.2e-4 absolute plus 2e-6 relative tolerance for float32 SNR fields; PATH-disabled CLI verified and Python console entrypoint removed; release-package and macOS/Linux acceptance pending",
@@ -3600,7 +3601,9 @@
     "backend/tests/fixtures/gaia_tiled_parity/catalog.csv",
     "backend/tests/fixtures/gaia_tiled_parity/metadata.json",
     "cargo test --locked --manifest-path backend/Cargo.toml --lib gaia_tiled",
-    "tests/test_gaia_tiled.py"
+    "tests/test_gaia_tiled.py",
+    "cargo test --locked --manifest-path backend/Cargo.toml --lib gaia_remote",
+    "tests/test_gaia_remote.py"
   ],
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",
@@ -3623,7 +3626,7 @@
   "native_multipsf_audit_execution": "Rust rst19-multipsf-audit CLI and desktop native worker compare fixed-position Gaussian K=1..N models on a shared patch/background with nonnegative amplitudes, mask modes, BIC deltas, component SNR, template correlation, conditioning, and CSV/JSON/PNG artifacts; 4 Rust unit tests cover argument contract, general NNLS including inactive components, synthetic two-source recovery, and JSON/CSV parity against a frozen one-time legacy reference (the Rust test never invokes Python); numeric tolerance is 1e-8 absolute + 1e-10 relative and input path is ignored; PNG signature and 1200x680 dimensions verified without pixel equality; backend 157 unit tests plus integration/doc tests pass and desktop 4+31 tests pass; Windows release CLI generated CSV/JSON/PNG with PATH limited to System32 (SHA-256 01A7AD9A48DC3CC9918697EAC461B621E327D8A87B5C6402D5372E9A077DD0C7); 53 of 71 tool routes are native and 18 remain Python, so the Python runtime is still required; full package, macOS and Linux acceptance remain pending",
   "native_forced_stability_execution": "Rust rst19-forced-stability CLI and desktop worker now perform deterministic class-stratified anchor selection, registered-shift forced photometry, bounded three-scale matched-response relocation, class summaries, and optional pair geometry artifacts. The implementation reuses native sequence forced-measurement code; five Rust tests cover sampling, summary/pair rules, synthetic relocation, and a FITS artifact run. No Python is invoked and this feature was not compared with a frozen Python output snapshot. Backend cargo test --locked passed 165 unit tests plus all integration/doc tests; desktop passed 4+33 tests; allowlisted backend all-target Clippy and both format checks passed. Windows release CLI wrote CSV/JSON with PATH limited to System32 and no Python executable (SHA-256 0E0319D698C728710BD68973000D271EB0FB5F0AF6C704408D5B138B35368FE0). Current catalog: 63 of 71 tools route natively, 8 remain Python; full package and macOS/Linux acceptance remain pending",
   "native_free_multipsf_audit_execution": "Rust rst19-free-multipsf-audit CLI and desktop native worker fit bounded continuous Gaussian positions, nonnegative amplitudes, and shared planar background for K=1..N; computes BIC/SNR, bound and optimizer diagnostics, and optional position-radius sweeps with CSV/JSON/PNG output. Three Rust tests cover defaults, injected-center recovery, and artifact contracts; no Python is invoked and no frozen Python parity comparison was run for this feature. Backend cargo test --locked passed 160 unit tests plus all integration/doc tests; desktop passed 4+32 tests. Windows release CLI wrote all artifacts with PATH limited to System32; binary SHA-256 9F5D8F2290A9C9DC8D4B47A5DBF01120C7FC9BBC9792D418787031CFAB93F462. Current inventory: 63 of 71 tools route natively, 8 remain Python; product Python runtime, full desktop package, and macOS/Linux acceptance remain pending",
-  "native_gaia_execution": "rst19-gaia is implemented in Rust with rustls-backed HTTP, safe numeric ADQL construction, CSV and TABLEDATA VOTable parsing, duplicate/source-coordinate checks, CatalogSource-compatible CSV aliases, optional GSP-Phot joins, and metadata artifacts. Frozen Python CSV parity is byte-identical; local TAP mock, VOTable status, numeric validation, offline CLI, and native desktop worker tests pass. Windows release CLI was verified with PATH limited to System32; SHA-256 18c7b26de2e67c1fd92d5f8bb47763574c0c1aeb75c84e830db7a91918f906d6.",
+  "native_gaia_execution": "rst19-gaia is implemented in Rust with rustls-backed HTTP, safe numeric ADQL construction, CSV/JSON/TABLEDATA VOTable parsing, response validation, duplicate/source-coordinate checks, CatalogSource-compatible aliases, GSP-Phot and A0/V extinction semantics, compatibility CSV and metadata. Frozen Python CSV and JSON response outputs match byte-for-byte; local TAP mock, VOTable status, numeric validation, offline CLI and native desktop worker tests pass. Live Gaia TAP requests are not part of parity tests.",
   "native_gaia_tiled_execution": "rst19-gaia-tiled now uses Rust for spherical tile planning, RA wrap and high-declination geometry, adaptive subdivision of saturated TAP blocks, source deduplication, truncation/completeness audit, CSV/metadata output, standalone CLI, and desktop worker dry-run. Planner/subdivision unit tests and offline worker test pass; full backend cargo test passed 277 tests and desktop passed 4+37 tests. Windows release dry-run succeeds with PATH limited to C:\\Windows\\System32 (SHA-256 3fbc0d59603d36b2a87646a34fd136dcc790cb7c593173f41e162a85abd1d1c0). Live TAP requests and frozen full-workflow Python parity remain unverified.",
   "native_gaia_frame_execution": "rst19-gaia-frame reads pointing RA/DEC from the FITS auxiliary block, defaults to the conservative 9.78-degree-square half-diagonal, and delegates the download and audit sidecar to the shared Rust public_catalog module over the native Gaia tiled client. Local TAP mock and offline dry-run cover query/artifact and route behavior; the frozen Python public-catalog sidecar matches every field after normalizing only paths and the dynamic endpoint. Full backend cargo test passes with 197 library unit tests plus all integration/doc tests. Live Gaia network remains unverified. The desktop catalog has 63/71 native routes and 8 Python routes; global Python runtime removal and macOS/Linux acceptance remain pending.",
   "native_relative_photometry": "relative zero points and source magnitudes with weighted least squares, source-block holdout, iterative outlier rejection and optional spatial terms; seven scenarios match Python through engine, desktop worker and standalone CLI; packaged Rust routes pass without external Python; macOS/Linux validation pending",

@@ -29,6 +29,7 @@ if __name__=="__main__":
         previous={item["python_module"]:item["migration_status"]
                   for item in previous_payload.get("modules",[])}
     native_complete_modules={"format_audit","format_audit_cli",
+                             "gaia_remote","gaia_remote_cli",
                              "gaia_tiled","gaia_tiled_cli",
                              "sequence_feature_comparison","feature_sequence_compare_cli",
                              "feature_raw_evidence_audit","feature_raw_evidence_audit_cli",
@@ -50,7 +51,7 @@ if __name__=="__main__":
     tools["rst19-signed-null-audit"]="native Rust single-frame signed-null detector audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate"
     tools["rst19-signed-null-sequence"]="native Rust multi-frame signed-null aggregation, recurrence audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate"
     tools["rst19-gaia-merge"]="native Rust layered Gaia CSV merge, standalone executable, and desktop worker route; Python console entrypoint removed"
-    tools["rst19-gaia"]="native Rust Gaia DR3 cone-query executable and desktop worker route; Python console entrypoint removed; offline frozen response and CSV parity verified"
+    tools["rst19-gaia"]="native Rust Gaia DR3 cone-query executable and desktop worker route; CSV/JSON/VOTable response parsing and Gaia-compatible A0/V extinction normalization; frozen Python output parity verified"
     tools["rst19-gaia-tiled"]="native Rust adaptive Gaia DR3 tiled-query executable and desktop worker route; Python console entrypoint removed; frozen planning, query-state, CSV, and metadata parity verified"
     tools["rst19-relative-photometry"]="native Rust relative photometry JSON CLI and desktop worker route; Python console entrypoint removed"
     tools["rst19-wcs-validation"]="native Rust FITS/catalog local WCS validation, artifact generation, standalone executable, and desktop worker route; Python console entrypoint removed"
@@ -142,7 +143,7 @@ if __name__=="__main__":
     contracts["rst19-signed-null-audit"]="reads one FITS frame, performs positive and sign-flipped detections, source feature summaries, SNR-threshold leakage counts, and raw aperture evidence in Rust; synthetic parity passed at 1e-10 numeric tolerance; package and cross-platform acceptance pending"
     contracts["rst19-signed-null-sequence"]="aggregates per-frame signed-null results, pooled and frame-level ratios, source recurrence groups, and five CSV/JSON artifacts in Rust; two-frame positive/negative FITS parity had zero JSON field differences at 1e-10 tolerance, max absolute numeric difference 1.71e-13, threshold CSV bytes identical, float-bearing CSV text differs at last digits; CLI and desktop worker pass with PATH disabled; package and cross-platform acceptance pending"
     contracts["rst19-gaia-merge"]="Rust standalone CLI and desktop worker merge layered Gaia CSV and preserve integrity audit behavior; Python console entrypoint removed"
-    contracts["rst19-gaia"]="Rust standalone CLI and desktop worker perform Gaia DR3 cone queries with dry-run ADQL, CSV/VOTable parsing, compatibility CSV, and metadata; frozen Python response and CSV bytes match; no live TAP request is part of parity tests"
+    contracts["rst19-gaia"]="Rust standalone CLI and desktop worker perform Gaia DR3 cone queries with safe ADQL, CSV/JSON/VOTable parsing, compatibility CSV, GSP-Phot and semantic extinction aliases; frozen Python CSV and JSON outputs match byte-for-byte; no live TAP request is part of parity tests"
     contracts["rst19-gaia-tiled"]="Rust standalone CLI and desktop worker implement spherical planning, adaptive subdivision, source de-duplication, scope filtering, completeness/error states, compatibility CSV, and metadata; frozen Python planning/query records match within 1e-12, production-shaped CSV bytes match exactly, CLI metadata matches within 1e-12; no live TAP request is part of parity tests"
     contracts["rst19-relative-photometry"]="Rust standalone CLI and desktop worker fit relative photometry from JSON observation rows; Python console entrypoint removed"
     contracts["rst19-wcs-validation"]="Rust standalone CLI and desktop worker perform per-frame FITS detection, offline catalog matching, WCS validation, and artifact generation; Python console entrypoint removed"
@@ -151,6 +152,7 @@ if __name__=="__main__":
     contracts["rst19-ablation"]="Rust standalone CLI and desktop native worker run point-source ablation from a shared float32 FITS background and reuse frozen target manifests. On the frozen real-FITS case, all four NPY hashes and all non-time summary fields match; 24 target rows differ only in detection_id labels and numeric deltas are at most 2.78e-17. B/C quality_count each differ by one and C output_count differs by one; full migration parity, packaging, and macOS/Linux acceptance remain pending"
     payload["native_cli_contracts"]=contracts
     payload["native_format_audit_execution"]=generated["native_format_audit_execution"]
+    payload["native_gaia_execution"]="rst19-gaia is implemented in Rust with rustls-backed HTTP, safe numeric ADQL construction, CSV/JSON/TABLEDATA VOTable parsing, response validation, duplicate/source-coordinate checks, CatalogSource-compatible aliases, GSP-Phot and A0/V extinction semantics, compatibility CSV and metadata. Frozen Python CSV and JSON response outputs match byte-for-byte; local TAP mock, VOTable status, numeric validation, offline CLI and native desktop worker tests pass. Live Gaia TAP requests are not part of parity tests."
     payload["native_sequence_feature_comparison_execution"]=generated["native_sequence_feature_comparison_execution"]
     payload["native_feature_raw_evidence_audit_execution"]=generated["native_feature_raw_evidence_audit_execution"]
     payload["native_implemented"]=list(dict.fromkeys([
@@ -172,10 +174,17 @@ if __name__=="__main__":
         [*payload.get("native_implemented",[]),
          "Gaia DR3 spherical tiled planning, adaptive saturation subdivision, de-duplication, scope filtering, completeness audit, compatibility CSV, and metadata with frozen Python parity"]
     ))
+    payload["native_implemented"]=list(dict.fromkeys(
+        [*payload.get("native_implemented",[]),
+         "Gaia DR3 cone-query CSV/JSON/VOTable parsing and CatalogSource-compatible normalization including A0/V extinction semantics"]
+    ))
     payload["verification"]=list(dict.fromkeys([
         *previous_payload.get("verification",[]),*generated.get("verification",[])]))
     payload["verification"]=list(dict.fromkeys([
         *payload["verification"],"verify_sequence_feature_comparison.py"]))
+    payload["verification"]=list(dict.fromkeys([
+        *payload["verification"],"cargo test --locked --manifest-path backend/Cargo.toml --lib gaia_remote",
+        "tests/test_gaia_remote.py"]))
     payload["verification"]=list(dict.fromkeys([
         *payload["verification"],"verify_feature_raw_evidence_audit.py"]))
     payload["verification"]=list(dict.fromkeys([

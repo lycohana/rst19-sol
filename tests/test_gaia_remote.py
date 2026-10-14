@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import io
+import hashlib
+import json
 import math
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import pytest
 
@@ -215,6 +218,19 @@ def test_parse_gaia_json_preserves_a0_semantics_without_treating_it_as_gaia_g() 
     assert rows[0]["extinction_band"] == "A0(541.4 nm)"
     assert rows[0]["extinction_system"] == "monochromatic"
     assert rows[0]["extinction_source"] == "response column: a0"
+
+
+def test_frozen_json_array_and_object_parity_fixtures_match_current_python_baseline(tmp_path) -> None:
+    fixture_dir = Path(__file__).resolve().parents[1] / "backend" / "tests" / "fixtures" / "gaia_remote_parity"
+    provenance = json.loads((fixture_dir / "json_parity_provenance.json").read_text(encoding="utf-8"))
+    source = Path(__file__).resolve().parents[1] / "src" / "rst19" / "gaia_remote.py"
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == provenance["source_sha256"]
+
+    for stem in ("json_a0_array", "json_a0_objects"):
+        payload = json.loads((fixture_dir / f"{stem}.json").read_text(encoding="utf-8"))
+        rows = parse_gaia_json(payload)
+        output = write_catalog_csv(rows, tmp_path / f"{stem}.csv")
+        assert output.read_bytes() == (fixture_dir / f"{stem}_reference.csv").read_bytes()
 
 
 def test_parse_gaia_response_reports_missing_columns_clearly() -> None:

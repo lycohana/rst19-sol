@@ -1,0 +1,124 @@
+{
+  "metadata": [
+    {
+      "name": "source_id"
+    },
+    {
+      "name": "ra"
+    },
+    {
+      "name": "dec"
+    },
+    {
+      "name": "ref_epoch"
+    },
+    {
+      "name": "pmra"
+    },
+    {
+      "name": "pmdec"
+    },
+    {
+      "name": "phot_g_mean_mag"
+    },
+    {
+      "name": "phot_g_mean_flux"
+    },
+    {
+      "name": "phot_g_mean_flux_error"
+    },
+    {
+      "name": "phot_g_mean_flux_over_error"
+    },
+    {
+      "name": "phot_bp_mean_mag"
+    },
+    {
+      "name": "phot_rp_mean_mag"
+    },
+    {
+      "name": "phot_bp_rp_excess_factor"
+    },
+    {
+      "name": "parallax"
+    },
+    {
+      "name": "parallax_error"
+    },
+    {
+      "name": "ruwe"
+    },
+    {
+      "name": "duplicated_source"
+    },
+    {
+      "name": "visibility_periods_used"
+    },
+    {
+      "name": "phot_variable_flag"
+    },
+    {
+      "name": "distance_gspphot"
+    },
+    {
+      "name": "distance_gspphot_lower"
+    },
+    {
+      "name": "distance_gspphot_upper"
+    },
+    {
+      "name": "ag_gspphot"
+    },
+    {
+      "name": "ag_gspphot_lower"
+    },
+    {
+      "name": "ag_gspphot_upper"
+    },
+    {
+      "name": "ebpminrp_gspphot"
+    },
+    {
+      "name": "a0"
+    },
+    {
+      "name": "a0_lower"
+    },
+    {
+      "name": "a0_upper"
+    }
+  ],
+  "data": [
+    [
+      "123",
+      "129.5",
+      "-1.25",
+      "2016.0",
+      "1.2",
+      "-2.3",
+      "15.4",
+      "1000",
+      "10",
+      "100",
+      "15.8",
+      "14.9",
+      "1.2",
+      "2.1",
+      "0.1",
+      "1.05",
+      "false",
+      "12",
+      "NOT_AVAILABLE",
+      "100.0",
+      "90.0",
+      "110.0",
+      "",
+      "",
+      "",
+      "0.08",
+      "0.3",
+      "0.2",
+      "0.4"
+    ]
+  ]
+}

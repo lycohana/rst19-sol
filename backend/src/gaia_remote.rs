@@ -67,6 +67,18 @@ const NUMERIC_COLUMNS: &[&str] = &[
     "ag_gspphot_lower",
     "ag_gspphot_upper",
     "ebpminrp_gspphot",
+    "azero_gspphot",
+    "a0_gspphot",
+    "a0",
+    "azero",
+    "a_v",
+    "av",
+    "a_band",
+    "a_g",
+    "ag",
+    "extinction_mag",
+    "azero_gspphot_lower",
+    "azero_gspphot_upper",
 ];
 const OUTPUT_COLUMNS: &[&str] = &[
     "source_id",
@@ -536,6 +548,200 @@ fn validate_headers(headers: &[String], format: &str) -> Result<(), String> {
     Ok(())
 }
 
+const EXTINCTION_VALUE_COLUMNS: &[&str] = &[
+    "ag_gspphot",
+    "azero_gspphot",
+    "a0_gspphot",
+    "a0",
+    "azero",
+    "a_v",
+    "av",
+    "a_band",
+    "a_g",
+    "ag",
+    "extinction_mag",
+];
+
+fn extinction_kind(field: &str) -> &'static str {
+    match field {
+        "ag_gspphot" => "gaia_g",
+        "azero_gspphot" | "a0_gspphot" | "a0" | "azero" => "a0",
+        "a_v" | "av" => "johnson_v",
+        _ => "unknown",
+    }
+}
+
+fn canonical_extinction_band(value: &str) -> String {
+    let key = value
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    match key.as_str() {
+        "g" | "gaiag" | "gaiadr3g" => "G".into(),
+        "v" | "johnsonv" | "johnsoncousinsv" => "V".into(),
+        "a0" | "azero" | "a05414nm" | "5414nm" => "A0(541.4 nm)".into(),
+        "unknown" | "unk" | "na" | "none" | "" => "unknown".into(),
+        _ => value.trim().to_owned(),
+    }
+}
+
+fn canonical_extinction_system(value: &str) -> String {
+    let key = value
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    match key.as_str() {
+        "gaia" | "gaiavega" | "gaiadr3" | "gaiadr3vega" => "Gaia".into(),
+        "johnson" | "johnsonv" | "johnsoncousins" | "johnsoncousinsv" => "Johnson".into(),
+        "monochromatic" | "monochromatic5414nm" | "a0" => "monochromatic".into(),
+        "unknown" | "unk" | "na" | "none" | "" => "unknown".into(),
+        _ => value.trim().to_owned(),
+    }
+}
+
+fn inferred_extinction_semantics(field: Option<&str>) -> (&'static str, &'static str, String) {
+    match field {
+        Some("ag_gspphot") => ("G", "Gaia", "Gaia DR3 GSP-Phot: ag_gspphot".into()),
+        Some("azero_gspphot" | "a0_gspphot") => (
+            "A0(541.4 nm)",
+            "monochromatic",
+            format!("Gaia DR3 GSP-Phot: {}", field.unwrap()),
+        ),
+        Some("a0" | "azero") => (
+            "A0(541.4 nm)",
+            "monochromatic",
+            format!("response column: {}", field.unwrap()),
+        ),
+        Some("a_v" | "av") => (
+            "V",
+            "Johnson",
+            format!("response column: {}", field.unwrap()),
+        ),
+        Some(field) => ("unknown", "unknown", format!("response column: {field}")),
+        None => ("unknown", "unknown", "unknown".into()),
+    }
+}
+
+fn extinction_error_fields(field: Option<&str>) -> Vec<&'static str> {
+    match field {
+        Some("ag_gspphot") => vec!["ag_gspphot_error", "ag_error"],
+        Some("azero_gspphot") => vec!["azero_gspphot_error", "azero_error", "a0_error"],
+        Some("a0_gspphot") => vec!["a0_gspphot_error", "azero_error", "a0_error"],
+        Some("a0") => vec!["a0_error", "azero_error"],
+        Some("azero") => vec!["azero_error", "a0_error"],
+        Some("a_v") => vec!["a_v_error", "av_error"],
+        Some("av") => vec!["av_error", "a_v_error"],
+        Some("a_band") => vec!["a_band_error"],
+        Some("a_g") => vec!["a_g_error"],
+        Some("ag") => vec!["ag_error"],
+        Some("extinction_mag") => vec!["extinction_mag_error"],
+        _ => Vec::new(),
+    }
+}
+
+fn numeric_values_equal(left: &str, right: &str) -> bool {
+    match (left.parse::<f64>(), right.parse::<f64>()) {
+        (Ok(left), Ok(right)) if left.is_finite() && right.is_finite() => {
+            (left - right).abs() <= 1e-12_f64.max(1e-9 * left.abs().max(right.abs()))
+        }
+        _ => left.trim() == right.trim(),
+    }
+}
+
+fn validate_extinction_semantics(
+    row: &HashMap<String, String>,
+    format: &str,
+    row_number: usize,
+) -> Result<(), String> {
+    let present = EXTINCTION_VALUE_COLUMNS
+        .iter()
+        .filter_map(|field| {
+            row.get(*field)
+                .map(|value| (*field, value.trim()))
+                .filter(|(_, value)| !value.is_empty())
+        })
+        .collect::<Vec<_>>();
+    let selected = present.first().copied();
+    let kinds = present
+        .iter()
+        .map(|(field, _)| extinction_kind(field))
+        .filter(|kind| *kind != "unknown")
+        .collect::<HashSet<_>>();
+    if kinds.len() > 1 {
+        let fields = present
+            .iter()
+            .map(|(field, _)| *field)
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!(
+            "Gaia {format} row {row_number}: conflicting extinction columns ({fields})"
+        ));
+    }
+    if let Some((field, value)) = selected {
+        let kind = extinction_kind(field);
+        if kind != "unknown" {
+            for (other_field, other_value) in present.iter().skip(1) {
+                let other_kind = extinction_kind(other_field);
+                if other_kind == "unknown" && !numeric_values_equal(value, other_value) {
+                    return Err(format!(
+                        "Gaia {format} row {row_number}: extinction column {other_field} conflicts with {field}"
+                    ));
+                }
+                if other_kind != "unknown" && other_kind != kind {
+                    return Err(format!(
+                        "Gaia {format} row {row_number}: extinction column {other_field} conflicts with {field}"
+                    ));
+                }
+            }
+        }
+        let (inferred_band, inferred_system, _) = inferred_extinction_semantics(Some(field));
+        if let Some(explicit) = row
+            .get("extinction_band")
+            .or_else(|| row.get("ext_band"))
+            .or_else(|| row.get("extinction_passband"))
+            .filter(|value| !value.trim().is_empty())
+        {
+            if inferred_band != "unknown"
+                && canonical_extinction_band(explicit) != canonical_extinction_band(inferred_band)
+            {
+                return Err(format!(
+                    "Gaia {format} row {row_number}: extinction_band={explicit:?} conflicts with {field}"
+                ));
+            }
+        }
+        if let Some(explicit) = row
+            .get("extinction_system")
+            .or_else(|| row.get("extinction_photometric_system"))
+            .or_else(|| row.get("ext_system"))
+            .filter(|value| !value.trim().is_empty())
+        {
+            if inferred_system != "unknown"
+                && canonical_extinction_system(explicit)
+                    != canonical_extinction_system(inferred_system)
+            {
+                return Err(format!(
+                    "Gaia {format} row {row_number}: extinction_system={explicit:?} conflicts with {field}"
+                ));
+            }
+        }
+    }
+    let mut error_fields = vec!["extinction_error_mag"];
+    error_fields.extend(extinction_error_fields(selected.map(|(field, _)| field)));
+    if let Some((field, value)) = first_cell(row, &error_fields) {
+        let parsed = value.parse::<f64>().map_err(|_| {
+            format!("Gaia {format} row {row_number}: invalid numeric {field}={value:?}")
+        })?;
+        if !parsed.is_finite() {
+            return Err(format!(
+                "Gaia {format} row {row_number}: non-finite numeric {field}={value:?}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_rows(
     rows: Vec<HashMap<String, String>>,
     format: &str,
@@ -568,6 +774,7 @@ fn validate_rows(
                 }
             }
         }
+        validate_extinction_semantics(row, format, row_number)?;
         let ra = row
             .get("ra")
             .and_then(|value| value.parse::<f64>().ok())
@@ -594,8 +801,12 @@ fn parse_response(bytes: &[u8]) -> Result<Vec<HashMap<String, String>>, String> 
     let text = std::str::from_utf8(bytes)
         .map_err(|_| "Gaia response is not valid UTF-8".to_owned())?
         .trim_start_matches('\u{feff}');
-    if text.trim_start().starts_with('<') {
+    let first = text.trim_start().chars().next();
+    if first == Some('<') {
         return parse_votable(text);
+    }
+    if matches!(first, Some('{') | Some('[')) {
+        return parse_json(text);
     }
     let mut reader = ReaderBuilder::new()
         .flexible(true)
@@ -637,8 +848,198 @@ fn parse_response(bytes: &[u8]) -> Result<Vec<HashMap<String, String>>, String> 
     validate_rows(rows, "CSV")
 }
 
+fn json_cell(value: &Value) -> String {
+    match value {
+        Value::Null => String::new(),
+        Value::Bool(value) => value.to_string(),
+        Value::String(value) => value.trim().to_owned(),
+        _ => value.to_string().trim().to_owned(),
+    }
+}
+
+fn json_metadata_columns(value: &Value) -> Result<Vec<String>, String> {
+    match value {
+        Value::Null => Ok(Vec::new()),
+        Value::Object(object) => {
+            if let Some(name) = object.get("name") {
+                Ok(vec![json_cell(name)])
+            } else {
+                Ok(object.keys().cloned().collect())
+            }
+        }
+        Value::Array(items) => items
+            .iter()
+            .map(|item| match item {
+                Value::Object(object) => object
+                    .get("name")
+                    .or_else(|| object.get("column"))
+                    .map(json_cell)
+                    .ok_or_else(|| "Gaia JSON metadata item has no column name".to_owned()),
+                other => Ok(json_cell(other)),
+            })
+            .collect(),
+        _ => Err("Gaia JSON metadata/columns must be a list or object".into()),
+    }
+}
+
+fn canonical_json_record(value: &Value) -> Result<HashMap<String, String>, String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "Gaia JSON row is not an object/table row".to_owned())?;
+    Ok(object
+        .iter()
+        .map(|(name, value)| (name.trim().to_ascii_lowercase(), json_cell(value)))
+        .collect())
+}
+
+fn parse_json(text: &str) -> Result<Vec<HashMap<String, String>>, String> {
+    let payload: Value = serde_json::from_str(text)
+        .map_err(|error| format!("Gaia JSON response is invalid JSON: {error}"))?;
+    parse_json_value(payload)
+}
+
+fn parse_json_value(payload: Value) -> Result<Vec<HashMap<String, String>>, String> {
+    let (raw_headers, records) = match payload {
+        Value::Array(rows) => {
+            if rows.is_empty() {
+                return Err("Gaia JSON response has no columns or rows".into());
+            }
+            if !rows.iter().all(Value::is_object) {
+                return Err("Gaia JSON row arrays require metadata/columns".into());
+            }
+            let mut headers = Vec::new();
+            let mut seen = HashSet::new();
+            for row in &rows {
+                for key in row.as_object().expect("checked object").keys() {
+                    let name = key.trim().to_ascii_lowercase();
+                    if !name.is_empty() && seen.insert(name) {
+                        headers.push(key.clone());
+                    }
+                }
+            }
+            (headers, rows)
+        }
+        Value::Object(object) => {
+            let data_key = ["data", "rows", "results"]
+                .iter()
+                .find(|key| object.contains_key(**key))
+                .copied();
+            if object.contains_key("error") && data_key.is_none() {
+                return Err(format!(
+                    "Gaia JSON response reports an error: {}",
+                    json_cell(&object["error"])
+                ));
+            }
+            if let Some(data_key) = data_key {
+                let data = object.get(data_key).expect("selected key exists");
+                let metadata_key = ["metadata", "columns", "fields", "schema"]
+                    .iter()
+                    .find(|key| object.contains_key(**key))
+                    .copied();
+                let mut headers = metadata_key
+                    .map(|key| json_metadata_columns(&object[key]))
+                    .transpose()?
+                    .unwrap_or_default();
+                let rows = data
+                    .as_array()
+                    .ok_or_else(|| format!("Gaia JSON {data_key} field must be a list"))?;
+                if rows.is_empty() {
+                    (headers, Vec::new())
+                } else if rows.iter().all(Value::is_object) {
+                    let mut seen = headers
+                        .iter()
+                        .map(|header| header.trim().to_ascii_lowercase())
+                        .collect::<HashSet<_>>();
+                    for row in rows {
+                        for key in row.as_object().expect("checked object").keys() {
+                            let name = key.trim().to_ascii_lowercase();
+                            if !name.is_empty() && seen.insert(name) {
+                                headers.push(key.clone());
+                            }
+                        }
+                    }
+                    (headers, rows.clone())
+                } else {
+                    if headers.is_empty() || !rows.iter().all(Value::is_array) {
+                        return Err("Gaia JSON array rows require metadata/columns".into());
+                    }
+                    let normalized_headers = headers
+                        .iter()
+                        .map(|header| header.trim().to_ascii_lowercase())
+                        .collect::<Vec<_>>();
+                    validate_headers(&normalized_headers, "JSON")?;
+                    let mut records = Vec::with_capacity(rows.len());
+                    for (index, row) in rows.iter().enumerate() {
+                        let values = row.as_array().expect("checked array");
+                        if values.len() != headers.len() {
+                            return Err(format!(
+                                "Gaia JSON row {} has {} values but {} columns",
+                                index + 2,
+                                values.len(),
+                                headers.len()
+                            ));
+                        }
+                        let record = headers
+                            .iter()
+                            .zip(values)
+                            .map(|(header, value)| (header.clone(), value.clone()))
+                            .collect::<serde_json::Map<String, Value>>();
+                        records.push(Value::Object(record));
+                    }
+                    (headers, records)
+                }
+            } else if object
+                .keys()
+                .any(|key| key.trim().eq_ignore_ascii_case("source_id"))
+            {
+                let headers = object.keys().cloned().collect::<Vec<_>>();
+                (headers, vec![Value::Object(object)])
+            } else {
+                let detail = object
+                    .get("message")
+                    .or_else(|| object.get("error"))
+                    .map(json_cell)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or_else(|| "no data/rows/results field".into());
+                return Err(format!("Gaia JSON response has no tabular data: {detail}"));
+            }
+        }
+        _ => return Err("Gaia JSON response must be an object or row list".into()),
+    };
+
+    let headers = raw_headers
+        .iter()
+        .map(|header| header.trim().to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    validate_headers(&headers, "JSON")?;
+    let mut normalized = Vec::with_capacity(records.len());
+    for record in records {
+        let raw_record = canonical_json_record(&record)?;
+        normalized.push(
+            headers
+                .iter()
+                .map(|header| {
+                    (
+                        header.clone(),
+                        raw_record.get(header).cloned().unwrap_or_default(),
+                    )
+                })
+                .collect(),
+        );
+    }
+    validate_rows(normalized, "JSON")
+}
+
 fn cell(row: &HashMap<String, String>, name: &str) -> String {
     row.get(name).cloned().unwrap_or_default()
+}
+fn first_cell(row: &HashMap<String, String>, names: &[&str]) -> Option<(String, String)> {
+    names.iter().find_map(|name| {
+        row.get(*name)
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(|value| ((*name).to_owned(), value.to_owned()))
+    })
 }
 fn numeric(row: &HashMap<String, String>, name: &str) -> Option<f64> {
     row.get(name)
@@ -651,24 +1052,76 @@ fn normalized_output_row(row: &HashMap<String, String>) -> HashMap<String, Strin
     let mag = cell(row, "phot_g_mean_mag");
     let flux = numeric(row, "phot_g_mean_flux");
     let flux_error = numeric(row, "phot_g_mean_flux_error");
-    let magnitude_error = match (flux, flux_error) {
-        (Some(flux), Some(error)) if flux > 0.0 && error >= 0.0 => {
-            fmt_float((2.5 / std::f64::consts::LN_10) * error / flux)
-        }
-        _ => String::new(),
-    };
+    let magnitude_error = first_cell(row, &["phot_g_mean_mag_error"])
+        .map(|(_, value)| value)
+        .unwrap_or_else(|| match (flux, flux_error) {
+            (Some(flux), Some(error)) if flux > 0.0 && error >= 0.0 => {
+                fmt_float((2.5 / std::f64::consts::LN_10) * error / flux)
+            }
+            _ => String::new(),
+        });
     let bp = numeric(row, "phot_bp_mean_mag");
     let rp = numeric(row, "phot_rp_mean_mag");
     let distance = cell(row, "distance_gspphot");
-    let ag = cell(row, "ag_gspphot");
-    let ag_error = match (
-        numeric(row, "ag_gspphot_lower"),
-        numeric(row, "ag_gspphot_upper"),
-    ) {
-        (Some(lower), Some(upper)) if upper >= lower => fmt_float(0.5 * (upper - lower)),
-        _ => String::new(),
+    let (extinction_field, extinction_mag) = first_cell(row, EXTINCTION_VALUE_COLUMNS)
+        .map(|(field, value)| (Some(field), value))
+        .unwrap_or((None, String::new()));
+    let (inferred_band, inferred_system, inferred_source) =
+        inferred_extinction_semantics(extinction_field.as_deref());
+    let extinction_band = first_cell(row, &["extinction_band", "ext_band", "extinction_passband"])
+        .map(|(_, value)| canonical_extinction_band(&value))
+        .unwrap_or_else(|| inferred_band.to_owned());
+    let extinction_system = first_cell(
+        row,
+        &[
+            "extinction_system",
+            "extinction_photometric_system",
+            "ext_system",
+        ],
+    )
+    .map(|(_, value)| canonical_extinction_system(&value))
+    .unwrap_or_else(|| inferred_system.to_owned());
+    let extinction_source = first_cell(
+        row,
+        &["extinction_source", "extinction_provenance", "ext_source"],
+    )
+    .map(|(_, value)| value)
+    .unwrap_or(inferred_source);
+    let mut extinction_error_names = vec!["extinction_error_mag"];
+    extinction_error_names.extend(extinction_error_fields(extinction_field.as_deref()));
+    let explicit_extinction_error =
+        first_cell(row, &extinction_error_names).map(|(_, value)| value);
+    let extinction_bounds: Option<(&str, &str)> = match extinction_field.as_deref() {
+        Some("ag_gspphot") => Some(("ag_gspphot_lower", "ag_gspphot_upper")),
+        Some("azero_gspphot") => Some(("azero_gspphot_lower", "azero_gspphot_upper")),
+        _ => None,
     };
-    let mg = cell(row, "mg_gspphot");
+    let extinction_error = explicit_extinction_error.unwrap_or_else(|| {
+        extinction_bounds
+            .and_then(|(lower, upper)| Some((numeric(row, lower)?, numeric(row, upper)?)))
+            .filter(|(lower, upper)| upper >= lower)
+            .map(|(lower, upper)| fmt_float(0.5 * (upper - lower)))
+            .unwrap_or_default()
+    });
+    let (model_field, mg) = first_cell(row, &["mg_gspphot", "mg_g", "gsp_phot_mg"])
+        .map(|(field, value)| (Some(field), value))
+        .unwrap_or((None, String::new()));
+    let mg_source = first_cell(
+        row,
+        &[
+            "mg_gspphot_source",
+            "mg_g_source",
+            "model_absolute_magnitude_source",
+        ],
+    )
+    .map(|(_, value)| value)
+    .unwrap_or_else(|| {
+        if model_field.as_deref() == Some("mg_gspphot") {
+            "Gaia DR3 GSP-Phot: mg_gspphot".into()
+        } else {
+            String::new()
+        }
+    });
     let fields = [
         ("ra_deg", cell(row, "ra")),
         ("dec_deg", cell(row, "dec")),
@@ -699,43 +1152,33 @@ fn normalized_output_row(row: &HashMap<String, String>) -> HashMap<String, Strin
             },
         ),
         ("mg_gspphot", mg.clone()),
+        ("mg_gspphot_source", mg_source),
+        ("extinction_mag", extinction_mag),
+        ("extinction_error_mag", extinction_error),
+        ("extinction_band", extinction_band),
+        ("extinction_system", extinction_system),
+        ("extinction_source", extinction_source),
         (
-            "mg_gspphot_source",
-            if mg.is_empty() {
-                String::new()
-            } else {
-                "Gaia DR3 GSP-Phot: mg_gspphot".into()
-            },
-        ),
-        ("extinction_mag", ag.clone()),
-        ("extinction_error_mag", ag_error),
-        (
-            "extinction_band",
-            if ag.is_empty() {
-                "unknown".into()
-            } else {
-                "G".into()
-            },
+            "catalog_name",
+            first_cell(row, &["catalog_name"])
+                .map(|(_, value)| value)
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "Gaia DR3".into()),
         ),
         (
-            "extinction_system",
-            if ag.is_empty() {
-                "unknown".into()
-            } else {
-                "Gaia".into()
-            },
+            "photometric_system",
+            first_cell(row, &["photometric_system"])
+                .map(|(_, value)| value)
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "Gaia Vega".into()),
         ),
         (
-            "extinction_source",
-            if ag.is_empty() {
-                "unknown".into()
-            } else {
-                "Gaia DR3 GSP-Phot: ag_gspphot".into()
-            },
+            "photometric_band",
+            first_cell(row, &["photometric_band"])
+                .map(|(_, value)| value)
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "G".into()),
         ),
-        ("catalog_name", "Gaia DR3".into()),
-        ("photometric_system", "Gaia Vega".into()),
-        ("photometric_band", "G".into()),
         (
             "color",
             match (bp, rp) {
@@ -746,9 +1189,12 @@ fn normalized_output_row(row: &HashMap<String, String>) -> HashMap<String, Strin
         (
             "color_name",
             if bp.is_some() && rp.is_some() {
-                "BP-RP".into()
+                first_cell(row, &["color_name"])
+                    .map(|(_, value)| value)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or_else(|| "BP-RP".into())
             } else {
-                String::new()
+                cell(row, "color_name")
             },
         ),
     ];
@@ -1059,6 +1505,52 @@ mod tests {
                 .unwrap_err()
                 .contains("not complete")
         );
+    }
+
+    #[test]
+    fn json_array_and_object_responses_match_frozen_python_csv() {
+        let cases: [(&[u8], &[u8]); 2] = [
+            (
+                include_bytes!("../tests/fixtures/gaia_remote_parity/json_a0_array.json"),
+                include_bytes!("../tests/fixtures/gaia_remote_parity/json_a0_array_reference.csv"),
+            ),
+            (
+                include_bytes!("../tests/fixtures/gaia_remote_parity/json_a0_objects.json"),
+                include_bytes!(
+                    "../tests/fixtures/gaia_remote_parity/json_a0_objects_reference.csv"
+                ),
+            ),
+        ];
+        let base =
+            std::env::temp_dir().join(format!("rst19-gaia-json-parity-{}", std::process::id()));
+        let output = base.join("catalog.csv");
+        for (index, (response, expected_csv)) in cases.into_iter().enumerate() {
+            let rows = parse_response(response).unwrap();
+            let normalized = normalized_output_row(&rows[0]);
+            assert_eq!(normalized["extinction_mag"], "0.3");
+            assert_eq!(normalized["extinction_error_mag"], "");
+            assert_eq!(normalized["extinction_band"], "A0(541.4 nm)");
+            assert_eq!(normalized["extinction_system"], "monochromatic");
+            assert_eq!(normalized["extinction_source"], "response column: a0");
+            write_catalog(&rows, &output).unwrap();
+            assert_eq!(fs::read(&output).unwrap(), expected_csv, "case {index}");
+            fs::remove_file(&output).unwrap();
+        }
+        let _ = fs::remove_dir(base);
+    }
+
+    #[test]
+    fn json_responses_reject_bad_array_shapes_and_error_objects() {
+        let headers = REQUIRED_COLUMNS
+            .iter()
+            .map(|name| json!({"name":name}))
+            .collect::<Vec<_>>();
+        let short_row = json!({"metadata":headers,"data":[["123"]]});
+        assert!(parse_json_value(short_row)
+            .unwrap_err()
+            .contains("1 values but 26 columns"));
+        let error = parse_json_value(json!({"error":"upstream unavailable"})).unwrap_err();
+        assert!(error.contains("upstream unavailable"));
     }
 
     #[test]
