@@ -3139,7 +3139,7 @@
     }
   ],
   "tools": {
-    "rst19-gaia": "rst19.gaia_remote_cli:main",
+    "rst19-gaia": "native:rst19-gaia",
     "rst19-gaia-tiled": "rst19.gaia_tiled_cli:main",
     "rst19-gaia-frame": "rst19.gaia_frame_cli:main",
     "rst19-photometric-auto": "rst19.photometric_workflow_cli:main",
@@ -3214,6 +3214,8 @@
     "f64 local background maps",
     "threshold and PSF FWHM sensitivity sweeps over shared raw FITS data, with native detector reuse and CSV/PNG artifacts",
     "TAN projection",
+    "Gaia DR3 TAP cone query with numeric-only ADQL input, CSV/TABLEDATA VOTable parsing, catalog-compatible aliases, optional GSP-Phot join, and query completeness metadata",
+    "Gaia DR3 TAP cone query with numeric-only ADQL inputs, CSV and TABLEDATA VOTable parsing, CatalogSource-compatible CSV aliases, GSP-Phot optional join, and completeness metadata",
     "quaternion boresight",
     "affine projection and velocity transform",
     "prior-WCS affine fitting with MAD clipping, geometry diagnostics, and leave-one-out residuals",
@@ -3320,7 +3322,9 @@
   "native_free_multipsf_audit_execution": "Rust rst19-free-multipsf-audit CLI and desktop native worker fit bounded continuous Gaussian positions, nonnegative amplitudes, and shared planar background for K=1..N; computes BIC/SNR, bound and optimizer diagnostics, and optional position-radius sweeps with CSV/JSON/PNG output. Three Rust tests cover defaults, injected-center recovery, and artifact contracts; no Python is invoked and no frozen Python parity comparison was run for this feature. Backend cargo test --locked passed 160 unit tests plus all integration/doc tests; desktop passed 4+32 tests. Windows release CLI wrote all artifacts with PATH limited to System32; binary SHA-256 9F5D8F2290A9C9DC8D4B47A5DBF01120C7FC9BBC9792D418787031CFAB93F462. Current inventory: 57 of 71 tools route natively, 14 remain Python; product Python runtime, full desktop package, and macOS/Linux acceptance remain pending",
   "native_source_photometry": "complete source table status/flags/reference/model magnitude separation; faintest ranking, ties, calibration consistency and partial selection scope; JSONL photometry.table/photometry.faintest",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
+  "native_gaia_execution": "rst19-gaia is implemented in Rust with rustls-backed HTTP, safe numeric ADQL construction, CSV and TABLEDATA VOTable parsing, duplicate/source-coordinate checks, CatalogSource-compatible CSV aliases, optional GSP-Phot joins, and metadata artifacts. Frozen Python CSV parity is byte-identical; local TAP mock, VOTable status, numeric validation, offline CLI, and native desktop worker tests pass. Windows release CLI was verified with PATH limited to System32; SHA-256 18c7b26de2e67c1fd92d5f8bb47763574c0c1aeb75c84e830db7a91918f906d6. Catalog: 58/71 tools native, 13 still route to Python; tiled and FITS-frame Gaia workflows remain Python routes.",
   "native_cli_contracts": {
+    "rst19-gaia": "Rust standalone CLI and native desktop worker perform Gaia DR3 cone queries with --dry-run ADQL output, optional GSP-Phot fields, CSV/VOTable parsing, compatibility CSV, and metadata; frozen Python CSV bytes match; Windows release CLI verified with PATH limited to System32",
     "rst19": "native rst19 executable is the public command; rst19-native alias retained; stdout/json-out/error contracts match across 89 parity invocations; standalone Windows executable opens help with PATH disabled; package build/verification and macOS/Linux package validation pending",
     "rst19-trails": "Rust standalone binary and native desktop worker route run the single-frame FITS audit; frozen Python result fields match for zero-trail and model-rejected line-geometry fixtures; PATH-disabled CLI tests check counts, CSV/PNG artifacts, and unchanged FITS input; Python console entrypoint removed from pyproject.toml; accepted-trail positive fixture, full runtime removal, package and cross-platform acceptance remain pending",
     "rst19-contaminated-pair-class": "Rust standalone CLI and native desktop worker run class-based anchor selection and contaminated-pair injection; full result fields, three class CSVs, injection JSON, and injection CSV values match Python within the established numeric tolerance; Python console entrypoint removed; release-package and macOS/Linux acceptance pending",

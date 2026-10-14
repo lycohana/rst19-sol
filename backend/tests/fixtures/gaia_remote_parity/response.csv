@@ -1,0 +1,2 @@
+source_id,ra,dec,ref_epoch,pmra,pmdec,phot_g_mean_mag,phot_g_mean_flux,phot_g_mean_flux_error,phot_g_mean_flux_over_error,phot_bp_mean_mag,phot_rp_mean_mag,phot_bp_rp_excess_factor,parallax,parallax_error,ruwe,duplicated_source,visibility_periods_used,phot_variable_flag,distance_gspphot,distance_gspphot_lower,distance_gspphot_upper,ag_gspphot,ag_gspphot_lower,ag_gspphot_upper,ebpminrp_gspphot,mg_gspphot,mg_gspphot_lower,mg_gspphot_upper
+123,45.5,-12.25,2016.0,1.2,-3.4,12.5,2000,20,100,13.1,11.8,1.2,2.5,0.1,1.01,false,10,NOT_AVAILABLE,100,80,120,0.2,0.1,0.3,0.4,1.5,1.4,1.6

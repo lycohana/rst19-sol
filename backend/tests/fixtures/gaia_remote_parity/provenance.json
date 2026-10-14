@@ -1,0 +1,7 @@
+{
+  "reference": "frozen output from src/rst19/gaia_remote.py::parse_gaia_csv + write_catalog_csv",
+  "source_sha256": "2636150706ba0d680ce84e0c02445271721d2ceccc27ec457e704c8789137779",
+  "response_sha256": "fa597b76e34a545d83e6361502a243884cf11f36c237c9906b5945042e4737cc",
+  "row_count": 1,
+  "runtime": "offline fixture generation only; Rust tests consume response.csv/reference.csv"
+}

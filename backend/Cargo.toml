@@ -45,6 +45,10 @@ name = "rst19-feature-audit-replicates"
 path = "src/bin/rst19-feature-audit-replicates.rs"
 
 [[bin]]
+name = "rst19-gaia"
+path = "src/bin/rst19-gaia.rs"
+
+[[bin]]
 name = "rst19-feature-raw-evidence-audit"
 path = "src/bin/rst19-feature-raw-evidence-audit.rs"
 
@@ -202,6 +206,8 @@ nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 sha2 = "0.10"
 png = "0.18"
 flate2 = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+roxmltree = "0.21"
 
 [profile.release]
 lto = "thin"

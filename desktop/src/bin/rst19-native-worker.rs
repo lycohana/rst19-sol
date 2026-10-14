@@ -334,6 +334,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::feature_audit_replicates::run_desktop(&args);
     }
+    if request["tool"] == "rst19-gaia" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out" || arg.starts_with("--out="))
+        {
+            args.push("--out".into());
+            args.push(out_dir.join("gaia.csv").to_string_lossy().into_owned());
+        }
+        return rst19_core::gaia_remote::run_desktop(&args);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1774,6 +1796,9 @@ mod tests {
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-feature-audit-replicates" && tool["native"] == true
         }));
+        assert!(tools
+            .iter()
+            .any(|tool| tool["name"] == "rst19-gaia" && tool["native"] == true));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-contaminated-pair-injection" && tool["native"] == true
         }));
@@ -2335,6 +2360,29 @@ mod tests {
         assert!(out_dir.join("innovation_delivery.csv").is_file());
         assert!(out_dir.join("innovation_delivery.md").is_file());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn gaia_cone_query_tool_uses_native_rust_and_dry_run_stays_offline() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-gaia-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        let out_dir = root.join("output");
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-gaia",
+            "out_dir":out_dir,
+            "args":["--ra", "12.5", "--dec", "-1.25", "--radius", "0.4", "--dry-run"]
+        }))
+        .unwrap();
+        assert_eq!(result["network"], false);
+        assert!(result["query"]
+            .as_str()
+            .unwrap()
+            .contains("CIRCLE('ICRS', 12.5, -1.25, 0.4)"));
+        assert!(out_dir.join("request.json").is_file());
     }
 
     #[test]
