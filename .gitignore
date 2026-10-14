@@ -25,6 +25,7 @@ temp/
 # Rust desktop / bundled runtime build artifacts
 desktop/target/
 desktop/.build-venv/
+desktop/.build-venv-*/
 desktop/.assets/
 desktop/build/
 dist/
