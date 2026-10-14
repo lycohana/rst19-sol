@@ -44,6 +44,7 @@ fn uses_native_worker(request: &Value) -> bool {
                 Some(
                     "rst19"
                         | "rst19-trails"
+                        | "rst19-sources"
                         | "rst19-format-audit"
                         | "rst19-feature-sequence-compare"
                         | "rst19-feature-raw-evidence-audit"
@@ -317,6 +318,9 @@ mod tests {
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-trails"})
+        ));
+        assert!(uses_native_worker(
+            &json!({"operation":"tool","tool":"rst19-sources"})
         ));
         assert!(uses_native_worker(
             &json!({"operation":"tool","tool":"rst19-feature-sequence-compare"})

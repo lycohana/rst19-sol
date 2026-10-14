@@ -393,8 +393,24 @@ pub fn similarity_metrics(
     source: &Detection,
     psf: &EmpiricalPsf,
 ) -> Result<Option<(f64, f64, f64, f64)>> {
+    let aux_mask = fits::auxiliary_mask(height, width)?;
+    similarity_metrics_with_mask(image, height, width, source, psf, &aux_mask)
+}
+
+/// Compare one source cutout with an empirical PSF using a reusable image mask.
+pub fn similarity_metrics_with_mask(
+    image: NumericPlane<'_>,
+    height: usize,
+    width: usize,
+    source: &Detection,
+    psf: &EmpiricalPsf,
+    aux_mask: &[bool],
+) -> Result<Option<(f64, f64, f64, f64)>> {
     if height == 0 || width == 0 || height.checked_mul(width) != Some(image.len()) {
         return Err("invalid empirical PSF image shape".into());
+    }
+    if aux_mask.len() != image.len() {
+        return Err("auxiliary mask shape does not match empirical PSF image".into());
     }
     let radius = psf.support_radius;
     let side = radius * 2 + 1;
@@ -420,7 +436,6 @@ pub fn similarity_metrics(
     {
         return Ok(None);
     }
-    let aux_mask = fits::auxiliary_mask(height, width)?;
     let mut valid = vec![false; side * side];
     let mut stamp = vec![0.0; side * side];
     for y in 0..side {

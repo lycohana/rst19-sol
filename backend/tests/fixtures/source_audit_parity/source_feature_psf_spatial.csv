@@ -1,0 +1,10 @@
+﻿feature_class,feature_class_label,grid_size,global_psf_source_count,local_template_cell_count,local_template_available_cell_count,local_template_source_count_median,sample_count,global_valid_count,local_valid_count,local_fallback_count,correlation_threshold,global_correlation_median,local_correlation_median,paired_correlation_count,local_correlation_improved_count,local_correlation_improved_fraction,global_residual_median,local_residual_median,paired_residual_count,local_residual_reduced_count,local_residual_reduced_fraction,median_correlation_delta_local_minus_global,median_residual_delta_local_minus_global,sample_detection_ids
+range_anomaly,数据有效性/范围异常邻域,4,4,0,0,,0,0,0,0,0.8,,,0,0,,,,0,0,,,,
+linear_artifact,线状/拖影候选,4,4,6,0,,8,8,0,8,0.8,0.5708736267548749,,0,0,,0.8210373175557757,,0,0,,,,5|14|4|12|11|9|2|8
+masked_or_edge,边缘/掩膜候选,4,4,0,0,,0,0,0,0,0.8,,,0,0,,,,0,0,,,,
+crowded_blend,拥挤/未分辨近邻,4,4,0,0,,0,0,0,0,0.8,,,0,0,,,,0,0,,,,
+spike_or_support,尖峰/PSF 支持不足,4,4,0,0,,0,0,0,0,0.8,,,0,0,,,,0,0,,,,
+weak_or_background,弱通量/背景不确定,4,4,0,0,,0,0,0,0,0.8,,,0,0,,,,0,0,,,,
+shape_outlier,形状异常,4,4,0,0,,0,0,0,0,0.8,,,0,0,,,,0,0,,,,
+compact_quality,质量通过的紧凑候选,4,4,4,0,,4,4,0,4,0.8,0.9958078870219775,,0,0,,0.09144939736685184,,0,0,,,,0|15|16|1
+other_rejected,其他拒绝候选,4,4,0,0,,0,0,0,0,0.8,,,0,0,,,,0,0,,,,

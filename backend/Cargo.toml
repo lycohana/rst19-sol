@@ -137,6 +137,10 @@ name = "rst19-trails"
 path = "src/bin/rst19-trails.rs"
 
 [[bin]]
+name = "rst19-sources"
+path = "src/bin/rst19-sources.rs"
+
+[[bin]]
 name = "rst19-aperture-peak-ratio"
 path = "src/bin/rst19-aperture-peak-ratio.rs"
 

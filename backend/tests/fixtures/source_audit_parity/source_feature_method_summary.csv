@@ -1,0 +1,10 @@
+﻿feature_class,feature_class_label,candidate_count,quality_count,gaussian_present_count,dog_narrow_present_count,dog_broad_present_count,all_three_count,gaussian_only_count,dog_only_count,partial_combination_count,no_gaussian_count,no_method_count,no_gaussian_quality_count,no_gaussian_median_flux_snr
+range_anomaly,数据有效性/范围异常邻域,0,0,0,0,0,0,0,0,0,0,0,0,
+linear_artifact,线状/拖影候选,13,0,9,8,6,3,2,4,4,4,0,0,206.74356185304094
+masked_or_edge,边缘/掩膜候选,0,0,0,0,0,0,0,0,0,0,0,0,
+crowded_blend,拥挤/未分辨近邻,0,0,0,0,0,0,0,0,0,0,0,0,
+spike_or_support,尖峰/PSF 支持不足,0,0,0,0,0,0,0,0,0,0,0,0,
+weak_or_background,弱通量/背景不确定,0,0,0,0,0,0,0,0,0,0,0,0,
+shape_outlier,形状异常,0,0,0,0,0,0,0,0,0,0,0,0,
+compact_quality,质量通过的紧凑候选,4,4,4,4,4,4,0,0,0,0,0,0,
+other_rejected,其他拒绝候选,0,0,0,0,0,0,0,0,0,0,0,0,

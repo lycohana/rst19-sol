@@ -1,0 +1,10 @@
+﻿feature_class,feature_class_label,psf_model,psf_source_count,correlation_threshold,sample_count,valid_count,valid_fraction,correlation_ge_threshold_count,correlation_ge_threshold_fraction,psf_correlation_p10,psf_correlation_median,psf_correlation_p90,relative_residual_p10,relative_residual_median,relative_residual_p90,central_energy_fraction_p10,central_energy_fraction_median,central_energy_fraction_p90,fitted_amplitude_adu_median,sample_detection_ids
+range_anomaly,数据有效性/范围异常邻域,empirical,4,0.8,0,0,,0,,,,,,,,,,,,
+linear_artifact,线状/拖影候选,empirical,4,0.8,8,8,1.0,0,0.0,0.5681736182169934,0.5708736267548749,0.6116712034129695,0.791111943995948,0.8210373175557757,0.8229085702926404,0.16626859537270883,0.16707754400648095,0.1926056722939027,219.99534131232122,5|14|4|12|11|9|2|8
+masked_or_edge,边缘/掩膜候选,empirical,4,0.8,0,0,,0,,,,,,,,,,,,
+crowded_blend,拥挤/未分辨近邻,empirical,4,0.8,0,0,,0,,,,,,,,,,,,
+spike_or_support,尖峰/PSF 支持不足,empirical,4,0.8,0,0,,0,,,,,,,,,,,,
+weak_or_background,弱通量/背景不确定,empirical,4,0.8,0,0,,0,,,,,,,,,,,,
+shape_outlier,形状异常,empirical,4,0.8,0,0,,0,,,,,,,,,,,,
+compact_quality,质量通过的紧凑候选,empirical,4,0.8,4,4,1.0,4,1.0,0.9952636736786403,0.9958078870219775,0.9972386037501652,0.07351439344093447,0.09144939736685184,0.09717968110925125,0.5353916758546727,0.5455091600727148,0.5735082405473997,99.5418395531849,0|15|16|1
+other_rejected,其他拒绝候选,empirical,4,0.8,0,0,,0,,,,,,,,,,,,

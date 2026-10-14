@@ -1,0 +1,33 @@
+{
+  "reference_implementation": "src/rst19/source_cli.py and src/rst19/experiments.py",
+  "source_sha256": {
+    "source_cli.py": "82854f25077d31b0f9fdc7773df39338e4a637a83c1c3fba498d08ac184927dc",
+    "experiments.py": "f0eb598408ab275024dd403aad7c09e8aadd898747d351bbff003be3a7c98d09"
+  },
+  "input_path": "backend/tests/fixtures/single_frame_trail_audit_streak.fits",
+  "input_sha256": "acbe7f5837cc3db6fbc603f0fc6aef81a7b5f1c11d0011605f28a646cbe6a8bf",
+  "options": {
+    "threshold_sigma": 4.0,
+    "min_distance": 4,
+    "aperture_radius": 4,
+    "psf_fwhm": 3.0,
+    "proposal_mode": "hybrid",
+    "dog_min_peak_sigma": 2.0,
+    "starlet_min_peak_sigma": 2.5,
+    "background_box_size": 128,
+    "min_flux_snr": 5.0,
+    "min_psf_support_pixels": 3,
+    "spatial_psf_per_class": 8,
+    "spatial_psf_grid_size": 4
+  },
+  "reference_environment": {
+    "numpy": "1.26.4",
+    "scipy": "1.17.1",
+    "Pillow": "12.2.0"
+  },
+  "comparison": {
+    "csv_numeric_absolute_tolerance": 1e-8,
+    "csv_text_fields": "exact",
+    "png_pixels": "not compared; Rust layout and dimensions are tested separately"
+  }
+}

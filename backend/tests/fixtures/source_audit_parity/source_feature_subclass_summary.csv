@@ -1,0 +1,12 @@
+﻿subclass,subclass_label,definition,candidate_count,quality_count,rejected_count,quality_fraction,high_flux_snr_threshold,high_snr_rejected_count,median_flux_snr,primary_feature_classes,common_flags
+range_code_pattern,数据有效性/重复码峰值,flags 含 CODE_PATTERN；与其他范围旗标可重叠,0,0,0,,10.0,0,,,
+range_negative_overflow,数据有效性/极端负值,flags 含 NEGATIVE_OVERFLOW；与其他范围旗标可重叠,0,0,0,,10.0,0,,,
+range_saturated,数据有效性/饱和标志,flags 含 SATURATED；不是设备满阱标定,0,0,0,,10.0,0,,,
+edge_only,边界截断,含 EDGE，但不含 PARTIAL_MASKED 或 MASKED,0,0,0,,10.0,0,,,
+partial_masked_only,部分掩膜（可容错候选）,含 PARTIAL_MASKED，但不含 EDGE 或 MASKED,0,0,0,,10.0,0,,,
+edge_partial_masked,边界 + 部分掩膜,同时含 EDGE 和 PARTIAL_MASKED，但不含 MASKED,0,0,0,,10.0,0,,,
+hard_masked,硬掩膜,含 MASKED，但不含 EDGE 或 PARTIAL_MASKED,0,0,0,,10.0,0,,,
+edge_hard_masked,边界 + 硬掩膜,同时含 EDGE 和 MASKED，但不含 PARTIAL_MASKED,0,0,0,,10.0,0,,,
+line_artifact,线状/拖影,flags 含 LINE_ARTIFACT,13,0,13,0.0,10.0,13,190.84342924232558,linear_artifact:13,LINE_ARTIFACT
+unresolved_blend,未分辨近邻,flags 含 UNRESOLVED_BLEND,0,0,0,,10.0,0,,,
+spike,尖峰,flags 含 SPIKE,0,0,0,,10.0,0,,,

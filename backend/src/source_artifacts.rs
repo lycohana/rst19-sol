@@ -192,6 +192,58 @@ const SOURCE_GRID_FIELDS: &[&str] = &[
 
 const QUALITY_SUMMARY_FIELDS: &[&str] = &["metric", "value", "definition"];
 
+const FEATURE_PSF_FIELDS: &[&str] = &[
+    "feature_class",
+    "feature_class_label",
+    "psf_model",
+    "psf_source_count",
+    "correlation_threshold",
+    "sample_count",
+    "valid_count",
+    "valid_fraction",
+    "correlation_ge_threshold_count",
+    "correlation_ge_threshold_fraction",
+    "psf_correlation_p10",
+    "psf_correlation_median",
+    "psf_correlation_p90",
+    "relative_residual_p10",
+    "relative_residual_median",
+    "relative_residual_p90",
+    "central_energy_fraction_p10",
+    "central_energy_fraction_median",
+    "central_energy_fraction_p90",
+    "fitted_amplitude_adu_median",
+    "sample_detection_ids",
+];
+
+const SPATIAL_PSF_FIELDS: &[&str] = &[
+    "feature_class",
+    "feature_class_label",
+    "grid_size",
+    "global_psf_source_count",
+    "local_template_cell_count",
+    "local_template_available_cell_count",
+    "local_template_source_count_median",
+    "sample_count",
+    "global_valid_count",
+    "local_valid_count",
+    "local_fallback_count",
+    "correlation_threshold",
+    "global_correlation_median",
+    "local_correlation_median",
+    "paired_correlation_count",
+    "local_correlation_improved_count",
+    "local_correlation_improved_fraction",
+    "global_residual_median",
+    "local_residual_median",
+    "paired_residual_count",
+    "local_residual_reduced_count",
+    "local_residual_reduced_fraction",
+    "median_correlation_delta_local_minus_global",
+    "median_residual_delta_local_minus_global",
+    "sample_detection_ids",
+];
+
 #[derive(Debug, Clone)]
 struct Chart {
     width: usize,
@@ -1606,9 +1658,9 @@ pub fn write_detection_source_cutouts(
         crate::statistics::median(&finite_frame)?
     };
     let groups = [
-        ("quality_near_threshold", "QUALITY 5<=flux SNR<6"),
-        ("quality_mid_snr", "QUALITY 6<=flux SNR<20"),
-        ("quality_bright", "QUALITY flux SNR>=20"),
+        ("quality_near_threshold", "QUALITY 5≤flux SNR<6"),
+        ("quality_mid_snr", "QUALITY 6≤flux SNR<20"),
+        ("quality_bright", "QUALITY flux SNR≥20"),
         (
             "quality_extra_only",
             "QUALITY proposed only by supplemental algorithms",
@@ -1806,6 +1858,50 @@ pub fn write_detection_source_cutouts(
         );
     }
     sheet.save(&out_dir.join("source_cutout_contact_sheet.png"))
+}
+
+/// Write frame-dependent empirical-PSF diagnostic tables.
+pub fn write_detection_source_psf_tables(
+    frame: &FitsFrame,
+    detection: &DetectionResult,
+    out_dir: &Path,
+    per_class: usize,
+    grid_size: usize,
+) -> Result<()> {
+    if out_dir.as_os_str().is_empty() {
+        return Err("output directory must not be empty".into());
+    }
+    std::fs::create_dir_all(out_dir).map_err(|error| error.to_string())?;
+    let tables = crate::source_psf::summarize(frame, detection, per_class, grid_size)?;
+    write_rows(
+        &out_dir.join("source_feature_psf_similarity.csv"),
+        FEATURE_PSF_FIELDS,
+        &tables.feature_rows,
+    )?;
+    write_rows(
+        &out_dir.join("source_feature_psf_spatial.csv"),
+        SPATIAL_PSF_FIELDS,
+        &tables.spatial_rows,
+    )
+}
+
+/// Write the source audit's current Rust table, chart, cutout and PSF layers.
+pub fn write_detection_source_artifacts(
+    frame: &FitsFrame,
+    detection: &DetectionResult,
+    out_dir: &Path,
+    spatial_psf_per_class: usize,
+    spatial_psf_grid_size: usize,
+) -> Result<()> {
+    write_detection_source_tables(detection, out_dir)?;
+    write_detection_source_cutouts(frame, detection, out_dir, 8, 20, 4)?;
+    write_detection_source_psf_tables(
+        frame,
+        detection,
+        out_dir,
+        spatial_psf_per_class,
+        spatial_psf_grid_size,
+    )
 }
 
 #[cfg(test)]

@@ -65,7 +65,7 @@ def build() -> None:
     package.mkdir(parents=True, exist_ok=False)
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(DESKTOP / "Cargo.toml"), "--bins"])
     command(["cargo", "build", "--release", "--locked", "--manifest-path", str(ROOT / "backend/Cargo.toml"),
-             "--bin", "rst19", "--bin", "rst19-format-audit", "--bin", "rst19-feature-sequence-compare", "--bin", "rst19-feature-raw-evidence-audit", "--bin", "rst19-signed-null-overlap", "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit", "--bin", "rst19-source-geometry-audit",
+             "--bin", "rst19", "--bin", "rst19-sources", "--bin", "rst19-format-audit", "--bin", "rst19-feature-sequence-compare", "--bin", "rst19-feature-raw-evidence-audit", "--bin", "rst19-signed-null-overlap", "--bin", "rst19-gaia-merge", "--bin", "rst19-aux-audit", "--bin", "rst19-source-geometry-audit",
               "--bin", "rst19-relative-photometry", "--bin", "rst19-wcs-validation",
               "--bin", "rst19-innovation-package",
               "--bin", "rst19-temporal-codes",
@@ -97,6 +97,8 @@ def build() -> None:
     shutil.copy2(DESKTOP / "target/release" / native_worker, package / "runtime" / native_worker)
     single_frame_cli = "rst19.exe" if os.name == "nt" else "rst19"
     shutil.copy2(ROOT / "backend/target/release" / single_frame_cli, package / "runtime" / single_frame_cli)
+    source_audit_cli = "rst19-sources.exe" if os.name == "nt" else "rst19-sources"
+    shutil.copy2(ROOT / "backend/target/release" / source_audit_cli, package / "runtime" / source_audit_cli)
     format_audit_cli = "rst19-format-audit.exe" if os.name == "nt" else "rst19-format-audit"
     shutil.copy2(ROOT / "backend/target/release" / format_audit_cli, package / "runtime" / format_audit_cli)
     sequence_feature_compare = "rst19-feature-sequence-compare.exe" if os.name == "nt" else "rst19-feature-sequence-compare"

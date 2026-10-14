@@ -1,0 +1,10 @@
+﻿feature_class,feature_class_label,candidate_count,quality_count,rejected_count,quality_fraction,median_flux_snr,max_flux_snr,common_flags
+range_anomaly,数据有效性/范围异常邻域,0,0,0,,,,
+linear_artifact,线状/拖影候选,13,0,13,0.0,190.84342924232558,239.16034009951872,LINE_ARTIFACT
+masked_or_edge,边缘/掩膜候选,0,0,0,,,,
+crowded_blend,拥挤/未分辨近邻,0,0,0,,,,
+spike_or_support,尖峰/PSF 支持不足,0,0,0,,,,
+weak_or_background,弱通量/背景不确定,0,0,0,,,,
+shape_outlier,形状异常,0,0,0,,,,
+compact_quality,质量通过的紧凑候选,4,4,0,1.0,50.7599512980214,72.4655367358651,
+other_rejected,其他拒绝候选,0,0,0,,,,
