@@ -38,7 +38,11 @@ fn sequence_core_returns_separate_unclassified_motion_component_tracks() {
     );
     assert_eq!(
         result["motion_component_tracks"]["scope"],
-        "temporal_residual_component_association_only"
+        "reviewed_motion_candidates_with_stitching_and_collinear_rescue"
+    );
+    assert_eq!(
+        result["motion_component_tracks"]["collinear_rescue_audit"]["rescued_group_count"],
+        0
     );
     assert_eq!(
         result["motion_component_tracks"]["frame_audits"]

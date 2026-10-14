@@ -1,6 +1,6 @@
 use rst19_core::sequence_motion_tracks::{
     review_temporal_components_against_raw_frames, sequence_line_model_review_supported,
-    supplement_with_coherent_raw_frame_candidates,
+    stitch_and_rescue_motion_component_tracks, supplement_with_coherent_raw_frame_candidates,
 };
 use serde_json::{json, Value};
 
@@ -263,4 +263,77 @@ fn isolated_raw_line_stays_in_unassociated_review_audit() {
         unassociated[0]["point"]["sequence_candidate_source"],
         "single_frame_trail_review_only"
     );
+}
+
+fn line_at(frame_index: usize, x: f64, length_px: f64) -> Value {
+    let mut point = raw_line("line");
+    point["frame_index"] = json!(frame_index);
+    point["x"] = json!(x);
+    point["aligned_x"] = json!(x);
+    point["length_px"] = json!(length_px);
+    point
+}
+
+#[test]
+fn short_review_supported_singleton_stitches_into_existing_candidate_track() {
+    let times = [0.0, 1.0, 2.0, 3.0];
+    let track_points = vec![
+        line_at(0, 0.0, 20.0),
+        line_at(2, 4.0, 20.0),
+        line_at(3, 6.0, 20.0),
+    ];
+    let mut missing = line_at(1, 2.0, 20.0);
+    missing["sequence_candidate_source"] = json!("single_frame_trail_review_only");
+    let component_tracks = json!({
+        "status":"analyzed",
+        "classification_performed":false,
+        "tracks":[{"track_id":0,"point_count":3,"points":track_points}],
+        "frame_audits":[]
+    });
+    let unassociated = json!([{"frame_index":1,"point":missing}]);
+
+    let stitched =
+        stitch_and_rescue_motion_component_tracks(&component_tracks, &unassociated, &times, 2.0)
+            .unwrap();
+    assert_eq!(stitched["tracks"].as_array().unwrap().len(), 1);
+    assert_eq!(stitched["tracks"][0]["point_count"], 4);
+    assert_eq!(stitched["stitching_audit"]["stitched_point_count"], 1);
+    assert!(stitched["unassociated_single_frame_points"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    let point = stitched["tracks"][0]["points"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|point| point["frame_index"] == 1)
+        .unwrap();
+    assert_eq!(point["sequence_stitched"], true);
+    assert_eq!(point["sequence_candidate_source"], "single_frame_shape");
+    assert_eq!(stitched["classification_performed"], false);
+}
+
+#[test]
+fn collinear_long_singletons_are_rescued_without_classification() {
+    let times = [0.0, 1.0, 2.0];
+    let component_tracks = json!({
+        "status":"analyzed",
+        "classification_performed":false,
+        "tracks":[
+            {"track_id":0,"point_count":1,"points":[line_at(0,0.0,40.0)]},
+            {"track_id":1,"point_count":1,"points":[line_at(1,40.0,40.0)]},
+            {"track_id":2,"point_count":1,"points":[line_at(2,80.0,40.0)]},
+        ],
+        "frame_audits":[]
+    });
+    let rescued =
+        stitch_and_rescue_motion_component_tracks(&component_tracks, &json!([]), &times, 2.0)
+            .unwrap();
+    assert_eq!(rescued["collinear_rescue_audit"]["rescued_group_count"], 1);
+    assert_eq!(rescued["collinear_rescue_audit"]["rescued_point_count"], 3);
+    assert_eq!(rescued["tracks"].as_array().unwrap().len(), 1);
+    assert_eq!(rescued["tracks"][0]["evidence_level"], "collinear_trail");
+    assert_eq!(rescued["tracks"][0]["point_count"], 3);
+    assert_eq!(rescued["tracks"][0]["candidate_only"], true);
+    assert_eq!(rescued["classification_performed"], false);
 }

@@ -565,6 +565,270 @@ pub fn supplement_with_coherent_raw_frame_candidates(
     Ok(result)
 }
 
+/// Apply the already ported short-line stitcher and collinear singleton rescue
+/// to Rust candidate tracks while keeping final classification separate.
+pub fn stitch_and_rescue_motion_component_tracks(
+    component_tracks: &Value,
+    unassociated_single_frame_points: &Value,
+    frame_times: &[f64],
+    psf_fwhm: f64,
+) -> Result<Value> {
+    if !psf_fwhm.is_finite() || psf_fwhm <= 0.0 {
+        return Err("motion feature psf_fwhm must be finite and positive".into());
+    }
+    if frame_times.iter().any(|time| !time.is_finite())
+        || frame_times.windows(2).any(|pair| pair[1] <= pair[0])
+    {
+        return Err("motion feature frame_times must be finite and strictly increasing".into());
+    }
+
+    let source_tracks = component_tracks
+        .get("tracks")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let unassociated = unassociated_single_frame_points
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let mut next_token = 0usize;
+    let mut stitch_tracks = Vec::<Value>::new();
+    let mut stitch_points = Vec::<Value>::new();
+    let mut stitch_tokens = std::collections::BTreeSet::<usize>::new();
+    let mut stitchable_singleton_count = 0usize;
+    for track in &source_tracks {
+        let mut history = track
+            .get("points")
+            .and_then(Value::as_array)
+            .cloned()
+            .ok_or_else(|| "motion candidate track must contain points".to_string())?;
+        for point in &mut history {
+            point["_sequence_point_token"] = json!(next_token);
+            next_token += 1;
+        }
+        let stitchable = if history.len() == 1 {
+            let point = &history[0];
+            finite_number(point, "length_px")
+                .is_some_and(|length| length < 32.0_f64.max(8.0 * psf_fwhm))
+                && sequence_line_model_review_supported(point, psf_fwhm)?
+                && finite_number(point, "line_artifact_overlap_fraction")
+                    .is_none_or(|overlap| overlap < 0.75)
+        } else {
+            false
+        };
+        if stitchable {
+            let point = history.remove(0);
+            let token = point["_sequence_point_token"]
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or("candidate point token is invalid")?;
+            stitch_tokens.insert(token);
+            stitch_points.push(point);
+            stitchable_singleton_count += 1;
+        } else {
+            stitch_tracks.push(json!(history));
+        }
+    }
+
+    for entry in &unassociated {
+        let mut point = entry
+            .get("point")
+            .cloned()
+            .ok_or_else(|| "unassociated point entry must contain point".to_string())?;
+        if point.get("frame_index").is_none() {
+            point["frame_index"] = entry.get("frame_index").cloned().unwrap_or(Value::Null);
+        }
+        point["_sequence_point_token"] = json!(next_token);
+        stitch_tokens.insert(next_token);
+        next_token += 1;
+        stitch_points.push(point);
+    }
+    let unassociated_input_count = unassociated.len();
+    let stitch_point_input_count = stitch_points.len();
+    let stitched = crate::sequence_trails::stitch_unassociated_single_frame_points(&json!({
+        "tracks":stitch_tracks,
+        "points":stitch_points,
+        "psf_fwhm":psf_fwhm,
+        "frame_times":frame_times,
+        "max_frame_gap":3,
+    }))?;
+    let mut stitched_tracks = stitched
+        .get("tracks")
+        .and_then(Value::as_array)
+        .cloned()
+        .ok_or_else(|| "stitching result must contain tracks".to_string())?;
+    let remaining_points = stitched
+        .get("remaining_points")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let remaining_tokens = remaining_points
+        .iter()
+        .filter_map(|point| {
+            point["_sequence_point_token"]
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    let stitched_tokens = stitch_tokens
+        .difference(&remaining_tokens)
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut stitched_point_count = 0usize;
+    for history in &mut stitched_tracks {
+        if let Some(points) = history.as_array_mut() {
+            for point in points {
+                let token = point["_sequence_point_token"]
+                    .as_u64()
+                    .and_then(|value| usize::try_from(value).ok());
+                if token.is_some_and(|token| stitched_tokens.contains(&token)) {
+                    point["sequence_stitched"] = Value::Bool(true);
+                    point["sequence_candidate_source"] = json!("single_frame_shape");
+                    stitched_point_count += 1;
+                }
+                if let Some(object) = point.as_object_mut() {
+                    object.remove("_sequence_point_token");
+                }
+            }
+        }
+    }
+    let mut remaining_single_frame_points = Vec::with_capacity(remaining_points.len());
+    for mut point in remaining_points {
+        let frame_index = point.get("frame_index").cloned().unwrap_or(Value::Null);
+        if let Some(object) = point.as_object_mut() {
+            object.remove("_sequence_point_token");
+        }
+        remaining_single_frame_points.push(json!({
+            "frame_index":frame_index,
+            "point":point,
+        }));
+    }
+
+    let mut intervals = frame_times
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .collect::<Vec<_>>();
+    intervals.sort_by(f64::total_cmp);
+    let reference_interval_s = if intervals.is_empty() {
+        1.0
+    } else if intervals.len() % 2 == 0 {
+        let middle = intervals.len() / 2;
+        0.5 * (intervals[middle - 1] + intervals[middle])
+    } else {
+        intervals[intervals.len() / 2]
+    };
+    let mut rescue_input_tracks = stitched_tracks.clone();
+    let mut rescue_token = 0usize;
+    for history in &mut rescue_input_tracks {
+        if let Some(points) = history.as_array_mut() {
+            for point in points {
+                point["_sequence_rescue_token"] = json!(rescue_token);
+                rescue_token += 1;
+            }
+        }
+    }
+    let rescue_result = crate::sequence_trails::rescue_collinear_motion_feature_groups(&json!({
+        "tracks":rescue_input_tracks,
+        "psf_fwhm":psf_fwhm,
+        "frame_times":frame_times,
+        "reference_interval_s":reference_interval_s,
+    }))?;
+    let rescued_groups = rescue_result
+        .get("groups")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut rescued_tokens = std::collections::BTreeSet::<usize>::new();
+    let mut rescued_groups_clean = Vec::with_capacity(rescued_groups.len());
+    let mut rescued_point_count = 0usize;
+    for mut group in rescued_groups {
+        let Some(points) = group.as_array_mut() else {
+            continue;
+        };
+        for point in points.iter_mut() {
+            if let Some(token) = point["_sequence_rescue_token"]
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+            {
+                rescued_tokens.insert(token);
+                point["sequence_rescued_collinear"] = Value::Bool(true);
+                rescued_point_count += 1;
+            }
+            if let Some(object) = point.as_object_mut() {
+                object.remove("_sequence_rescue_token");
+            }
+        }
+        rescued_groups_clean.push(group);
+    }
+    let mut final_tracks = Vec::<(Vec<Value>, bool)>::new();
+    let mut token_cursor = 0usize;
+    for history in stitched_tracks {
+        let points = history
+            .as_array()
+            .cloned()
+            .ok_or_else(|| "stitching track history must be an array".to_string())?;
+        let was_rescued = points.len() == 1 && rescued_tokens.contains(&token_cursor);
+        if !was_rescued {
+            final_tracks.push((points, false));
+        }
+        token_cursor += history.as_array().map_or(0, Vec::len);
+    }
+    let rescued_group_count = rescued_groups_clean.len();
+    for group in rescued_groups_clean {
+        let points = group
+            .as_array()
+            .cloned()
+            .ok_or_else(|| "rescued motion group must be an array".to_string())?;
+        final_tracks.push((points, true));
+    }
+    let rendered_tracks = final_tracks
+        .into_iter()
+        .enumerate()
+        .map(|(track_id, (points, rescued))| {
+            json!({
+                "track_id":track_id,
+                "point_count":points.len(),
+                "evidence_level":if rescued { "collinear_trail" } else { "center_motion" },
+                "candidate_only":true,
+                "points":points,
+            })
+        })
+        .collect::<Vec<_>>();
+    let remaining_unassociated_count = remaining_single_frame_points.len();
+    let mut result = component_tracks.clone();
+    if let Some(object) = result.as_object_mut() {
+        object.insert(
+            "scope".into(),
+            json!("reviewed_motion_candidates_with_stitching_and_collinear_rescue"),
+        );
+        object.insert("classification_performed".into(), Value::Bool(false));
+        object.insert("tracks".into(), json!(rendered_tracks));
+        object.insert(
+            "unassociated_single_frame_points".into(),
+            json!(remaining_single_frame_points),
+        );
+        object.insert(
+            "stitching_audit".into(),
+            json!({
+                "input_track_count":source_tracks.len(),
+                "input_unassociated_count":unassociated_input_count,
+                "stitchable_singleton_count":stitchable_singleton_count,
+                "stitch_point_count":stitch_point_input_count,
+                "stitched_point_count":stitched_point_count,
+                "remaining_unassociated_count":remaining_unassociated_count,
+            }),
+        );
+        object.insert(
+            "collinear_rescue_audit".into(),
+            json!({
+                "rescued_group_count":rescued_group_count,
+                "rescued_point_count":rescued_point_count,
+            }),
+        );
+    }
+    Ok(result)
+}
+
 /// Associate Rust temporal-residual component proposals without promoting
 /// them to confirmed motion features.
 pub fn associate_temporal_component_tracks(

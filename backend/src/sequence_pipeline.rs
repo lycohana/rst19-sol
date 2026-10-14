@@ -1258,7 +1258,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             &shifts,
             frame_options.detection.measurement.psf_fwhm,
         )?;
-    let motion_frame_model_review =
+    let mut motion_frame_model_review =
         crate::sequence_motion_tracks::supplement_with_coherent_raw_frame_candidates(
             &reviewed_motion_frame_components,
             &raw_motion_components,
@@ -1266,7 +1266,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             &motion_exposure_seconds,
             frame_options.detection.measurement.psf_fwhm,
         )?;
-    let motion_component_tracks =
+    let associated_motion_component_tracks =
         crate::sequence_motion_tracks::associate_temporal_component_tracks(
             &motion_frame_model_review,
             &frame_times,
@@ -1275,6 +1275,15 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             motion_line_link_radius_px,
             frame_options.detection.measurement.psf_fwhm,
         )?;
+    let motion_component_tracks =
+        crate::sequence_motion_tracks::stitch_and_rescue_motion_component_tracks(
+            &associated_motion_component_tracks,
+            &motion_frame_model_review["unassociated_single_frame_points"],
+            &frame_times,
+            frame_options.detection.measurement.psf_fwhm,
+        )?;
+    motion_frame_model_review["unassociated_single_frame_points"] =
+        motion_component_tracks["unassociated_single_frame_points"].clone();
     let candidate_peak_frames = frame_analysis_objects
         .iter()
         .zip(&temporal_candidate_frames)
@@ -1401,7 +1410,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
 
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
-        "scope":"frame_detection_quality_tracks_temporal_reference_candidates_fast_point_motion_candidate_proposals_candidate_consensus_raw_pixel_line_model_review_and_unverified_motion_component_association",
+        "scope":"frame_detection_quality_tracks_temporal_reference_candidates_fast_point_motion_candidate_proposals_candidate_consensus_raw_pixel_line_model_review_shape_fallback_stitching_and_collinear_rescue",
         "frame_analyses":frame_analyses,
         "tracking":tracking,
         "fast_point_tracks":fast_point_tracks,
