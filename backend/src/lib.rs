@@ -89,6 +89,7 @@ pub mod sequence_feature;
 pub mod sequence_feature_comparison;
 pub mod sequence_motion;
 pub mod sequence_motion_features;
+pub mod sequence_motion_tracks;
 pub mod sequence_photometry;
 pub mod sequence_pipeline;
 pub mod sequence_registration;

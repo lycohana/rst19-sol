@@ -1189,6 +1189,33 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             }
         }
     }
+    let motion_line_link_radius_px = optional_request_f64(request, "motion_line_link_radius_px")?
+        .unwrap_or_else(|| 48.0_f64.max(32.0 * frame_options.detection.measurement.psf_fwhm));
+    if !motion_line_link_radius_px.is_finite() || motion_line_link_radius_px <= 0.0 {
+        return Err("motion_line_link_radius_px must be finite and positive".into());
+    }
+    let motion_exposure_seconds = frame_analysis_objects
+        .iter()
+        .map(|analysis| {
+            fits::exposure_milliseconds(&analysis.frame.header).map(|value| {
+                value.and_then(|milliseconds| {
+                    (milliseconds.is_finite() && milliseconds > 0.0)
+                        .then_some(milliseconds / 1_000.0)
+                })
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let motion_component_tracks =
+        crate::sequence_motion_tracks::associate_temporal_component_tracks(
+            &motion_frame_components,
+            &frame_times,
+            &motion_exposure_seconds,
+            motion_frame_components["metadata_supported"]
+                .as_bool()
+                .unwrap_or(false),
+            motion_line_link_radius_px,
+            frame_options.detection.measurement.psf_fwhm,
+        )?;
     let candidate_peak_frames = frame_analysis_objects
         .iter()
         .zip(&temporal_candidate_frames)
@@ -1315,7 +1342,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
 
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
-        "scope":"frame_detection_quality_tracks_temporal_reference_candidates_fast_point_motion_candidate_proposals_and_candidate_consensus",
+        "scope":"frame_detection_quality_tracks_temporal_reference_candidates_fast_point_motion_candidate_proposals_candidate_consensus_and_unverified_motion_component_association",
         "frame_analyses":frame_analyses,
         "tracking":tracking,
         "fast_point_tracks":fast_point_tracks,
@@ -1331,6 +1358,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "temporal_proposal_mode":temporal_proposal_mode,
         "relative_photometry":relative_photometry_result,
         "motion_frame_components":motion_frame_components,
+        "motion_component_tracks":motion_component_tracks,
         "fixed_sentinel_audit":fixed_sentinel_audit,
         "fixed_sentinel_impact_audit":fixed_sentinel_impact_audit,
         "observation_time_axis":time_axis,
