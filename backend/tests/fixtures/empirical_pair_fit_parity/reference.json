@@ -1,0 +1,36 @@
+{
+  "reference_implementation": "src/rst19/empirical_pair_fit.py and src/rst19/empirical_pair_fit_cli.py",
+  "source_sha256": {
+    "empirical_pair_fit.py": "862132d536f55945072b94a3a7094ba47c617eb8fe0d5a4ce928de497f662e6b",
+    "empirical_pair_fit_cli.py": "9792076dab1b77121debc30f56e5f1b4cd12db073edc29940f75b12a5737b4b8"
+  },
+  "input_path": "backend/tests/fixtures/empirical_pair_audit_parity/frames/frame.fits",
+  "input_sha256": "acbe7f5837cc3db6fbc603f0fc6aef81a7b5f1c11d0011605f28a646cbe6a8bf",
+  "source_catalog_path": "backend/tests/fixtures/source_audit_parity/source_catalog.csv",
+  "source_catalog_sha256": "250064a3f3ade15d7bf90595f3112877c15daef7661ab149e37dcef611d63d66",
+  "reference_environment": "Python 3.11.9, NumPy 1.26.4, SciPy 1.17.1; one-time offline legacy oracle only",
+  "options": {
+    "primary_id": 0,
+    "secondary_id": 1,
+    "coordinate_mode": "centroid",
+    "support_radius": 7,
+    "max_template_sources": 64,
+    "patch_padding_px": null,
+    "best_single_search_radius_px": 2.0,
+    "best_single_grid_step_px": 0.5,
+    "mask_modes": [
+      "raw",
+      "range_masked",
+      "sentinel_masked"
+    ],
+    "confirmation_delta_bic": 10.0,
+    "confirmation_component_snr": 5.0
+  },
+  "comparison": {
+    "keys_and_text": "exact except normalized path values and numeric values embedded in conclusion",
+    "numeric_absolute_tolerance": 1E-05,
+    "numeric_relative_tolerance": 1E-08,
+    "kernel_sum_absolute_tolerance": 1E-06,
+    "png_pixels": "not compared; Rust PNG dimensions are tested"
+  }
+}

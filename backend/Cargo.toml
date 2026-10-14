@@ -145,6 +145,10 @@ name = "rst19-empirical-pair-audit"
 path = "src/bin/rst19-empirical-pair-audit.rs"
 
 [[bin]]
+name = "rst19-empirical-pair-fit"
+path = "src/bin/rst19-empirical-pair-fit.rs"
+
+[[bin]]
 name = "rst19-aperture-peak-ratio"
 path = "src/bin/rst19-aperture-peak-ratio.rs"
 

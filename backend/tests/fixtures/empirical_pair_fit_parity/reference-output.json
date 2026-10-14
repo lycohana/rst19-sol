@@ -1,0 +1,191 @@
+{
+  "frame_count": 1,
+  "coordinate_mode": "centroid",
+  "primary_detection_id": 0,
+  "secondary_detection_id": 1,
+  "primary_target_xy": [
+    25.000083907085937,
+    24.987415604020427
+  ],
+  "secondary_target_xy": [
+    90.00305086695778,
+    27.996434261718957
+  ],
+  "frame_shifts": [
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "template_frame_path": "<FRAME_PATH>",
+  "template_catalog_path": "<CATALOG_PATH>",
+  "mask_modes": [
+    "raw",
+    "range_masked",
+    "sentinel_masked"
+  ],
+  "support_radius": 7,
+  "patch_padding_px": 10.0,
+  "best_single_search_radius_px": 2.0,
+  "best_single_grid_step_px": 0.5,
+  "confirmation_delta_bic": 10.0,
+  "confirmation_component_snr": 5.0,
+  "empirical_psf": {
+    "model": "empirical",
+    "support_radius": 7,
+    "source_count": 4,
+    "median_fwhm_px": 2.8642299186099676,
+    "median_ellipticity": 0.01760675944773478,
+    "kernel_shape": [
+      15,
+      15
+    ],
+    "kernel_sum": 10.143577575683594
+  },
+  "parameters": {
+    "model": "shared planar background + fixed empirical PSF + nonnegative amplitudes",
+    "coordinate_mode": "centroid",
+    "mask_modes": [
+      "raw",
+      "range_masked",
+      "sentinel_masked"
+    ],
+    "repeated_code_values": [],
+    "support_radius": 7,
+    "max_template_sources": 64,
+    "patch_padding_px": 10.0,
+    "best_single_search_radius_px": 2.0,
+    "best_single_grid_step_px": 0.5,
+    "best_single_grid_center": [
+      57.50156738702186,
+      26.491924932869694
+    ],
+    "confirmation_delta_bic": 10.0,
+    "confirmation_component_snr": 5.0,
+    "frame_shifts": [
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "interpretation_boundary": "固定位置 BIC 是局部模型证据；最佳单源网格搜索是位置锚定控制；二者均不是星表身份、恒星概率或物理真值"
+  },
+  "rows": [
+    {
+      "frame_index": 1,
+      "path": "<FRAME_PATH>",
+      "coordinate_mode": "centroid",
+      "mask_mode": "raw",
+      "patch_x0": 15,
+      "patch_y0": 14,
+      "patch_width": 87,
+      "patch_height": 25,
+      "sample_count": 2175,
+      "masked_pixel_count": 0,
+      "fixed_single_rss": 94476.71460795873,
+      "fixed_double_rss": 8106.066626110678,
+      "fixed_single_bic": 8233.370430769128,
+      "fixed_double_bic": 2899.819300218777,
+      "fixed_delta_bic": 5333.551130550351,
+      "best_single_grid_rss": 124315.4757967967,
+      "best_single_grid_bic": 8830.340715633878,
+      "best_single_grid_x": 55.50156738702186,
+      "best_single_grid_y": 24.491924932869694,
+      "best_single_grid_evaluated_count": 81,
+      "best_single_grid_delta_bic": 5930.521415415102,
+      "double_amplitudes": [
+        80.40312788963391,
+        138.3916602634766
+      ],
+      "double_component_snr": [
+        88.23392062897013,
+        152.05750890225983
+      ],
+      "double_second_component_snr": 152.05750890225983,
+      "double_amplitude_correlation": -0.007486601282398439,
+      "double_design_condition_number": 1.0076163918817718,
+      "double_active_component_count": 2,
+      "fixed_confirmation_line": true,
+      "best_single_grid_control_line": true,
+      "note": "固定锚点和最佳单源位置控制均显示双源改善；仍非星表身份"
+    },
+    {
+      "frame_index": 1,
+      "path": "<FRAME_PATH>",
+      "coordinate_mode": "centroid",
+      "mask_mode": "range_masked",
+      "patch_x0": 15,
+      "patch_y0": 14,
+      "patch_width": 87,
+      "patch_height": 25,
+      "sample_count": 2175,
+      "masked_pixel_count": 0,
+      "fixed_single_rss": 94476.71460795873,
+      "fixed_double_rss": 8106.066626110678,
+      "fixed_single_bic": 8233.370430769128,
+      "fixed_double_bic": 2899.819300218777,
+      "fixed_delta_bic": 5333.551130550351,
+      "best_single_grid_rss": 124315.4757967967,
+      "best_single_grid_bic": 8830.340715633878,
+      "best_single_grid_x": 55.50156738702186,
+      "best_single_grid_y": 24.491924932869694,
+      "best_single_grid_evaluated_count": 81,
+      "best_single_grid_delta_bic": 5930.521415415102,
+      "double_amplitudes": [
+        80.40312788963391,
+        138.3916602634766
+      ],
+      "double_component_snr": [
+        88.23392062897013,
+        152.05750890225983
+      ],
+      "double_second_component_snr": 152.05750890225983,
+      "double_amplitude_correlation": -0.007486601282398439,
+      "double_design_condition_number": 1.0076163918817718,
+      "double_active_component_count": 2,
+      "fixed_confirmation_line": true,
+      "best_single_grid_control_line": true,
+      "note": "固定锚点和最佳单源位置控制均显示双源改善；仍非星表身份"
+    },
+    {
+      "frame_index": 1,
+      "path": "<FRAME_PATH>",
+      "coordinate_mode": "centroid",
+      "mask_mode": "sentinel_masked",
+      "patch_x0": 15,
+      "patch_y0": 14,
+      "patch_width": 87,
+      "patch_height": 25,
+      "sample_count": 2175,
+      "masked_pixel_count": 0,
+      "fixed_single_rss": 94476.71460795873,
+      "fixed_double_rss": 8106.066626110678,
+      "fixed_single_bic": 8233.370430769128,
+      "fixed_double_bic": 2899.819300218777,
+      "fixed_delta_bic": 5333.551130550351,
+      "best_single_grid_rss": 124315.4757967967,
+      "best_single_grid_bic": 8830.340715633878,
+      "best_single_grid_x": 55.50156738702186,
+      "best_single_grid_y": 24.491924932869694,
+      "best_single_grid_evaluated_count": 81,
+      "best_single_grid_delta_bic": 5930.521415415102,
+      "double_amplitudes": [
+        80.40312788963391,
+        138.3916602634766
+      ],
+      "double_component_snr": [
+        88.23392062897013,
+        152.05750890225983
+      ],
+      "double_second_component_snr": 152.05750890225983,
+      "double_amplitude_correlation": -0.007486601282398439,
+      "double_design_condition_number": 1.0076163918817718,
+      "double_active_component_count": 2,
+      "fixed_confirmation_line": true,
+      "best_single_grid_control_line": true,
+      "note": "固定锚点和最佳单源位置控制均显示双源改善；仍非星表身份"
+    }
+  ],
+  "conclusion": "经验 PSF 锚点敏感性审计完成：1 帧，坐标锚点=centroid；raw 固定位置 K=2 证据线 1/1 帧，加入局部最佳单源位置控制后 1/1 帧。后一个数不是形式化的自由位置 BIC，而是同窗网格搜索的保守诊断；若双源优势在该控制下消失，优先解释为单源位置锚定或非高斯残差的模型自由度，不能据此确认两颗真实恒星。",
+  "note": "固定位置 K=1/K=2 使用相同局部窗口和掩膜；最佳单源网格为位置锚定控制，不能直接当作自由位置模型的正式 BIC。经验 PSF 只表示模板帧的形状样本，所有结果均不是星表身份或物理真值。"
+}
