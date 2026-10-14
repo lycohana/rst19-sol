@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +18,15 @@ from rst19.gaia_tiled import (
     plan_small_circle_tiles,
     query_gaia_tiled,
 )
+
+
+def test_rust_parity_fixture_is_pinned_to_python_reference_source() -> None:
+    root = Path(__file__).resolve().parents[1]
+    reference_path = root / "backend/tests/fixtures/gaia_tiled_parity/reference.json"
+    reference = json.loads(reference_path.read_text(encoding="utf-8"))
+    source_hash = hashlib.sha256((root / "src/rst19/gaia_tiled.py").read_bytes()).hexdigest()
+
+    assert reference["provenance"]["source_sha256"] == source_hash
 
 
 def _destination(ra_deg: float, dec_deg: float, distance_deg: float, bearing_deg: float) -> tuple[float, float]:

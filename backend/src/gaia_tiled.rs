@@ -1044,6 +1044,39 @@ pub fn run_desktop(args: &[String]) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_json_matches_reference(actual: &Value, expected: &Value, path: &str) {
+        match (actual, expected) {
+            (Value::Number(actual), Value::Number(expected)) => {
+                let actual = actual.as_f64().expect("actual JSON number converts to f64");
+                let expected = expected
+                    .as_f64()
+                    .expect("reference JSON number converts to f64");
+                let tolerance = 1.0e-12;
+                assert!(
+                    (actual - expected).abs() <= tolerance,
+                    "{path}: Rust {actual:?} != Python reference {expected:?}"
+                );
+            }
+            (Value::Array(actual), Value::Array(expected)) => {
+                assert_eq!(actual.len(), expected.len(), "{path}: array lengths differ");
+                for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+                    assert_json_matches_reference(actual, expected, &format!("{path}[{index}]"));
+                }
+            }
+            (Value::Object(actual), Value::Object(expected)) => {
+                assert_eq!(actual.len(), expected.len(), "{path}: object fields differ");
+                for (key, expected) in expected {
+                    let actual = actual
+                        .get(key)
+                        .unwrap_or_else(|| panic!("{path}.{key}: Rust output is missing field"));
+                    assert_json_matches_reference(actual, expected, &format!("{path}.{key}"));
+                }
+            }
+            _ => assert_eq!(actual, expected, "{path}"),
+        }
+    }
+
     fn row(id: &str, ra: f64, dec: f64) -> Row {
         HashMap::from([
             ("source_id".into(), id.into()),
@@ -1052,6 +1085,44 @@ mod tests {
             ("phot_g_mean_mag".into(), "12".into()),
         ])
     }
+
+    fn reference_row(id: &str, ra: &str, dec: &str, magnitude: &str) -> Row {
+        HashMap::from([
+            ("source_id".into(), id.into()),
+            ("ra_deg".into(), ra.into()),
+            ("dec_deg".into(), dec.into()),
+            ("phot_g_mean_mag".into(), magnitude.into()),
+        ])
+    }
+
+    fn minimal_reference_row(id: &str, ra: &str, dec: &str) -> Row {
+        HashMap::from([
+            ("source_id".into(), id.into()),
+            ("ra_deg".into(), ra.into()),
+            ("dec_deg".into(), dec.into()),
+        ])
+    }
+
+    fn raw_gaia_response_fixture_row() -> Row {
+        let mut reader = csv::ReaderBuilder::new().from_reader(
+            include_bytes!("../tests/fixtures/gaia_remote_parity/response.csv").as_slice(),
+        );
+        let headers = reader
+            .headers()
+            .expect("frozen Gaia response has a CSV header")
+            .clone();
+        let record = reader
+            .records()
+            .next()
+            .expect("frozen Gaia response has one data row")
+            .expect("frozen Gaia response row is valid CSV");
+        headers
+            .iter()
+            .zip(record.iter())
+            .map(|(name, value)| (name.to_owned(), value.to_owned()))
+            .collect()
+    }
+
     fn options() -> Options {
         Options {
             ra: 359.8,
@@ -1072,6 +1143,150 @@ mod tests {
             dry_run: false,
         }
     }
+
+    #[test]
+    fn planner_and_adaptive_query_match_frozen_python_reference() {
+        let reference: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/gaia_tiled_parity/reference.json"
+        ))
+        .expect("frozen Python reference JSON is valid");
+        assert_eq!(
+            reference["provenance"]["source_sha256"],
+            "ec7508e0e05bc2445ded5172f789ddd82c135589466f9181b832947cee2e2a00"
+        );
+        let planning = &reference["planning"];
+        let planning_cases = [
+            ("small_circle_ra_360", 360.0, -1.0, 0.25, 0.5, "auto"),
+            ("grid_ra_seam_high_dec", 359.8, 70.0, 2.0, 0.5, "grid"),
+            ("grid_north_pole", 37.0, 88.0, 1.5, 0.6, "grid"),
+        ];
+        for (name, ra, dec, radius, tile_radius, strategy) in planning_cases {
+            let actual = plan_gaia_tiles(ra, dec, radius, tile_radius, strategy)
+                .expect("frozen planning case remains valid")
+                .iter()
+                .map(GaiaTile::value)
+                .collect::<Vec<_>>();
+            assert_json_matches_reference(
+                &json!(actual),
+                &planning[name],
+                &format!("planning.{name}"),
+            );
+        }
+
+        let mut adaptive_options = options();
+        adaptive_options.ra = 359.8;
+        adaptive_options.dec = 70.0;
+        adaptive_options.radius = 0.2;
+        adaptive_options.tile_radius = 0.2;
+        adaptive_options.limit = Some(4);
+        adaptive_options.strategy = "small_circle".into();
+        adaptive_options.max_depth = 1;
+        adaptive_options.max_queries = 100;
+        let mut calls = 0usize;
+        let result = run_with_query(
+            &adaptive_options,
+            |tile, _| {
+                calls += 1;
+                if tile.depth == 0 {
+                    Ok(vec![
+                        reference_row("10", "359.8", "70.0", "12"),
+                        reference_row("10", "359.8", "70.0", "99"),
+                        reference_row("20", "359.85", "70.02", "13"),
+                        reference_row("30", "5.0", "0.0", "14"),
+                    ])
+                } else {
+                    Ok(vec![reference_row("10", "359.8", "70.0", "12")])
+                }
+            },
+            false,
+        )
+        .expect("frozen adaptive query completes");
+        assert_eq!(calls, reference["query_result"]["queried_tile_count"]);
+        assert_json_matches_reference(&result.value(), &reference["query_result"], "query_result");
+        let mut cli_options = options();
+        cli_options.ra = 45.5;
+        cli_options.dec = -12.25;
+        cli_options.radius = 0.1;
+        cli_options.tile_radius = 1.0;
+        cli_options.limit = Some(10);
+        cli_options.strategy = "auto".into();
+        cli_options.max_queries = 10_000;
+        cli_options.endpoint = gaia_remote::DEFAULT_GAIA_TAP_SYNC_URL.into();
+        let cli_result = run_with_query(
+            &cli_options,
+            |_, _| Ok(vec![raw_gaia_response_fixture_row()]),
+            false,
+        )
+        .expect("CLI fixture query completes with a raw Gaia CSV row");
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock is after Unix epoch")
+            .as_nanos();
+        let csv_path = std::env::temp_dir().join(format!(
+            "rst19-gaia-tiled-parity-{}-{nonce}.csv",
+            std::process::id()
+        ));
+        cli_options.out = Some(csv_path.clone());
+        let (written_csv, written_metadata) = write_artifacts(&cli_result, &cli_options)
+            .expect("native CLI artifact writer accepts the frozen Gaia response");
+        assert_eq!(
+            fs::read(&written_csv).expect("native CSV artifact can be read"),
+            include_bytes!("../tests/fixtures/gaia_tiled_parity/catalog.csv")
+        );
+        let actual_metadata: Value = serde_json::from_slice(
+            &fs::read(&written_metadata).expect("native metadata artifact can be read"),
+        )
+        .expect("native metadata artifact is JSON");
+        let expected_metadata: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/gaia_tiled_parity/metadata.json"
+        ))
+        .expect("frozen Python CLI metadata is JSON");
+        assert_json_matches_reference(&actual_metadata, &expected_metadata, "cli_metadata");
+        fs::remove_file(written_csv).expect("remove native CSV test artifact");
+        fs::remove_file(written_metadata).expect("remove native metadata test artifact");
+
+        let mut unknown_options = options();
+        unknown_options.ra = 2.0;
+        unknown_options.dec = 3.0;
+        unknown_options.radius = 0.05;
+        unknown_options.tile_radius = 0.1;
+        unknown_options.limit = None;
+        unknown_options.strategy = "small_circle".into();
+        unknown_options.max_depth = 0;
+        unknown_options.max_queries = 10;
+        unknown_options.saturated_policy = "record".into();
+        let unknown_result = run_with_query(
+            &unknown_options,
+            |_, _| Ok(vec![minimal_reference_row("9", "2.0", "3.0")]),
+            false,
+        )
+        .expect("unknown-limit query returns its auditable partial result");
+        assert_json_matches_reference(
+            &unknown_result.value(),
+            &reference["unknown_limit_result"],
+            "unknown_limit_result",
+        );
+
+        let mut error_options = unknown_options.clone();
+        error_options.limit = Some(10);
+        let error_result = run_with_query(
+            &error_options,
+            |_, _| Err("synthetic TAP failure".into()),
+            false,
+        )
+        .expect("non-raising query mode returns its auditable error result");
+        // Python prefixes the exception class to query errors; the Rust
+        // transport keeps the source message. Normalize only that wrapper text.
+        let mut normalized_error_reference = reference["query_error_result"].clone();
+        normalized_error_reference["tile_records"][0]["error"] = json!("synthetic TAP failure");
+        normalized_error_reference["errors"][0] = json!("tile-00000: synthetic TAP failure");
+        assert_json_matches_reference(
+            &error_result.value(),
+            &normalized_error_reference,
+            "query_error_result",
+        );
+    }
+
     #[test]
     fn small_circle_and_ra_wrap_plans_are_stable() {
         let tiles = plan_gaia_tiles(360.0, 89.0, 0.1, 0.5, "auto").unwrap();
@@ -1130,9 +1345,16 @@ mod tests {
     #[test]
     fn dry_run_does_not_make_network_request() {
         let mut options = options();
+        options.radius = 2.0;
+        options.tile_radius = 0.5;
+        options.strategy = "grid".into();
         options.dry_run = true;
         let value = dry_run_value(&options).unwrap();
         assert_eq!(value["network"], false);
-        assert_eq!(value["initial_tile_count"], 1);
+        let reference: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/gaia_tiled_parity/reference.json"
+        ))
+        .unwrap();
+        assert_json_matches_reference(&value, &reference["dry_run_result"], "dry_run_result");
     }
 }

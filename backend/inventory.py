@@ -29,6 +29,7 @@ if __name__=="__main__":
         previous={item["python_module"]:item["migration_status"]
                   for item in previous_payload.get("modules",[])}
     native_complete_modules={"format_audit","format_audit_cli",
+                             "gaia_tiled","gaia_tiled_cli",
                              "sequence_feature_comparison","feature_sequence_compare_cli",
                              "feature_raw_evidence_audit","feature_raw_evidence_audit_cli",
                              "signed_null_forward_overlap","signed_null_forward_overlap_cli",
@@ -37,6 +38,10 @@ if __name__=="__main__":
                              "catalog_merge_cli","relative_photometry_cli","wcs_validation_cli",
                              "attitude_cli","source_geometry_audit_cli"}
     tools={name:target for name,target in scripts.items() if target not in ("rst19.gui:main","rst19.desktop_launcher:main")}
+    for name,route in previous_payload.get("tools",{}).items():
+        if name not in tools and isinstance(route,str) and (
+                route.startswith("native:") or "native" in route.lower() or route.startswith("Rust ")):
+            tools[name]=route
     tools["rst19"]="native Rust executable; Python CLI parser retained only for desktop form metadata"
     tools["rst19-format-audit"]="native Rust executable and desktop worker route; Python entrypoint/module import removed; static desktop schema remains"
     tools["rst19-feature-sequence-compare"]="native Rust JSONL operation, standalone executable, and desktop worker route; Python console entrypoint removed; comparison module retained as a parity baseline and shared class-order source"
@@ -45,6 +50,8 @@ if __name__=="__main__":
     tools["rst19-signed-null-audit"]="native Rust single-frame signed-null detector audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate"
     tools["rst19-signed-null-sequence"]="native Rust multi-frame signed-null aggregation, recurrence audit, standalone executable, and desktop worker route; Python console entrypoint removed; Python runtime packaging remains until all backend modules migrate"
     tools["rst19-gaia-merge"]="native Rust layered Gaia CSV merge, standalone executable, and desktop worker route; Python console entrypoint removed"
+    tools["rst19-gaia"]="native Rust Gaia DR3 cone-query executable and desktop worker route; Python console entrypoint removed; offline frozen response and CSV parity verified"
+    tools["rst19-gaia-tiled"]="native Rust adaptive Gaia DR3 tiled-query executable and desktop worker route; Python console entrypoint removed; frozen planning, query-state, CSV, and metadata parity verified"
     tools["rst19-relative-photometry"]="native Rust relative photometry JSON CLI and desktop worker route; Python console entrypoint removed"
     tools["rst19-wcs-validation"]="native Rust FITS/catalog local WCS validation, artifact generation, standalone executable, and desktop worker route; Python console entrypoint removed"
     tools["rst19-aux-audit"]="native Rust FITS auxiliary attitude audit, standalone executable, and desktop worker route; Python console entrypoint removed"
@@ -135,6 +142,8 @@ if __name__=="__main__":
     contracts["rst19-signed-null-audit"]="reads one FITS frame, performs positive and sign-flipped detections, source feature summaries, SNR-threshold leakage counts, and raw aperture evidence in Rust; synthetic parity passed at 1e-10 numeric tolerance; package and cross-platform acceptance pending"
     contracts["rst19-signed-null-sequence"]="aggregates per-frame signed-null results, pooled and frame-level ratios, source recurrence groups, and five CSV/JSON artifacts in Rust; two-frame positive/negative FITS parity had zero JSON field differences at 1e-10 tolerance, max absolute numeric difference 1.71e-13, threshold CSV bytes identical, float-bearing CSV text differs at last digits; CLI and desktop worker pass with PATH disabled; package and cross-platform acceptance pending"
     contracts["rst19-gaia-merge"]="Rust standalone CLI and desktop worker merge layered Gaia CSV and preserve integrity audit behavior; Python console entrypoint removed"
+    contracts["rst19-gaia"]="Rust standalone CLI and desktop worker perform Gaia DR3 cone queries with dry-run ADQL, CSV/VOTable parsing, compatibility CSV, and metadata; frozen Python response and CSV bytes match; no live TAP request is part of parity tests"
+    contracts["rst19-gaia-tiled"]="Rust standalone CLI and desktop worker implement spherical planning, adaptive subdivision, source de-duplication, scope filtering, completeness/error states, compatibility CSV, and metadata; frozen Python planning/query records match within 1e-12, production-shaped CSV bytes match exactly, CLI metadata matches within 1e-12; no live TAP request is part of parity tests"
     contracts["rst19-relative-photometry"]="Rust standalone CLI and desktop worker fit relative photometry from JSON observation rows; Python console entrypoint removed"
     contracts["rst19-wcs-validation"]="Rust standalone CLI and desktop worker perform per-frame FITS detection, offline catalog matching, WCS validation, and artifact generation; Python console entrypoint removed"
     contracts["rst19-aux-audit"]="Rust standalone CLI and desktop worker inspect FITS auxiliary attitude fields and produce CSV/JSON; Python console entrypoint removed"
@@ -159,6 +168,10 @@ if __name__=="__main__":
     payload["native_implemented"]=list(dict.fromkeys([
         *payload.get("native_implemented",[]),
         "point-source ablation with shared float32 FITS background, frozen target manifests, Gaussian/hybrid/ensemble detections, injection recovery, and native CSV/NPY/PNG/HTML artifacts"]))
+    payload["native_implemented"]=list(dict.fromkeys(
+        [*payload.get("native_implemented",[]),
+         "Gaia DR3 spherical tiled planning, adaptive saturation subdivision, de-duplication, scope filtering, completeness audit, compatibility CSV, and metadata with frozen Python parity"]
+    ))
     payload["verification"]=list(dict.fromkeys([
         *previous_payload.get("verification",[]),*generated.get("verification",[])]))
     payload["verification"]=list(dict.fromkeys([
@@ -175,6 +188,13 @@ if __name__=="__main__":
     payload["verification"]=list(dict.fromkeys([
         *payload["verification"],"cargo test --locked --manifest-path backend/Cargo.toml --lib point_source_ablation",
         "cargo test --locked --manifest-path desktop/Cargo.toml --bin rst19-native-worker point_source_ablation"]
+    ))
+    payload["verification"]=list(dict.fromkeys([
+        *payload["verification"],"backend/tests/fixtures/gaia_tiled_parity/reference.json",
+        "backend/tests/fixtures/gaia_tiled_parity/catalog.csv",
+        "backend/tests/fixtures/gaia_tiled_parity/metadata.json",
+        "cargo test --locked --manifest-path backend/Cargo.toml --lib gaia_tiled",
+        "tests/test_gaia_tiled.py"]
     ))
     target=ROOT/"backend/migration.json"
     target.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding="utf-8")
