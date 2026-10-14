@@ -1,0 +1,22 @@
+{
+  "reference_implementation": "src/rst19/empirical_pair_free.py and src/rst19/empirical_pair_free_cli.py",
+  "source_catalog_sha256": "250064a3f3ade15d7bf90595f3112877c15daef7661ab149e37dcef611d63d66",
+  "source_catalog_path": "backend/tests/fixtures/source_audit_parity/source_catalog.csv",
+  "input_sha256": "acbe7f5837cc3db6fbc603f0fc6aef81a7b5f1c11d0011605f28a646cbe6a8bf",
+  "reference_environment": "Python 3.11.9, NumPy 1.26.4, SciPy 1.17.1; offline oracle only",
+  "comparison": {
+    "BIC_absolute_tolerance": 0.6,
+    "double_positions_absolute_tolerance": 0.005,
+    "component_SNR_relative_tolerance": 0.05,
+    "discrete_fields": "exact",
+    "PNG": "dimensions checked, pixel equality not checked",
+    "optimizer_nfev": "implementation-specific and not compared",
+    "amplitude_absolute_tolerance": 0.5,
+    "RSS_absolute_tolerance": 2.0
+  },
+  "source_sha256": {
+    "empirical_pair_free_py": "0ff6df0831911eea7bfae2f7d1227086fb939e1785c24fa38a2631e9fb32befa",
+    "empirical_pair_free_cli_py": "6c20be13506bdad774f72f4ba5a5c2566792510a9848130bdd95bddfa75ea6ca"
+  },
+  "input_path": "backend/tests/fixtures/empirical_pair_audit_parity/frames/frame.fits"
+}

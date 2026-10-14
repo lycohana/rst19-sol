@@ -1,0 +1,316 @@
+{
+  "frame_count": 1,
+  "primary_detection_id": 0,
+  "secondary_detection_id": 1,
+  "primary_target_xy": [
+    25.000083907085937,
+    24.987415604020427
+  ],
+  "secondary_target_xy": [
+    90.00305086695778,
+    27.996434261718957
+  ],
+  "frame_shifts": [
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "template_frame_path": "C:\\Users\\lycohana\\Desktop\\rst19\\backend\\tests\\fixtures\\empirical_pair_audit_parity\\frames\\frame.fits",
+  "template_catalog_path": "C:\\Users\\lycohana\\Desktop\\rst19\\backend\\tests\\fixtures\\source_audit_parity\\source_catalog.csv",
+  "mask_modes": [
+    "raw",
+    "range_masked",
+    "sentinel_masked"
+  ],
+  "support_radius": 7,
+  "patch_padding_px": 10.0,
+  "single_position_radius_px": 2.0,
+  "double_position_radius_px": 1.25,
+  "confirmation_delta_bic": 10.0,
+  "confirmation_component_snr": 5.0,
+  "minimum_fitted_separation_px": 1.0,
+  "empirical_psf": {
+    "model": "empirical",
+    "support_radius": 7,
+    "source_count": 4,
+    "median_fwhm_px": 2.8642299186099676,
+    "median_ellipticity": 0.01760675944773478,
+    "kernel_shape": [
+      15,
+      15
+    ],
+    "kernel_sum": 10.143577575683594
+  },
+  "parameters": {
+    "model": "shared planar background + free-position empirical PSF + nonnegative amplitudes",
+    "mask_modes": [
+      "raw",
+      "range_masked",
+      "sentinel_masked"
+    ],
+    "repeated_code_values": [],
+    "support_radius": 7,
+    "max_template_sources": 64,
+    "patch_padding_px": 10.0,
+    "single_position_radius_px": 2.0,
+    "double_position_radius_px": 1.25,
+    "confirmation_delta_bic": 10.0,
+    "confirmation_component_snr": 5.0,
+    "minimum_fitted_separation_px": 1.0,
+    "frame_shifts": [
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "interpretation_boundary": "有边界自由位置 BIC 是局部模型证据；不是星表身份、恒星概率或物理真值"
+  },
+  "rows": [
+    {
+      "frame_index": 1,
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\backend\\tests\\fixtures\\empirical_pair_audit_parity\\frames\\frame.fits",
+      "mask_mode": "raw",
+      "patch_x0": 15,
+      "patch_y0": 14,
+      "patch_width": 87,
+      "patch_height": 25,
+      "sample_count": 2175,
+      "masked_pixel_count": 0,
+      "single_rss": 124315.47579679673,
+      "double_rss": 8095.066334708048,
+      "single_bic": 8845.710283520924,
+      "double_bic": 2927.6048601490925,
+      "delta_bic_single_minus_double": 5918.105423371831,
+      "single_initial_position": [
+        57.50156738702186,
+        25.491924932869694
+      ],
+      "single_fitted_position": [
+        57.50156738702186,
+        25.491924932869694
+      ],
+      "single_position_offset": [
+        0.0,
+        -1.0
+      ],
+      "single_position_at_bound": false,
+      "single_component_snr": 0.0,
+      "single_optimizer_success": true,
+      "single_optimizer_nfev": 2,
+      "double_initial_positions": [
+        [
+          25.000083907085937,
+          24.987415604020427
+        ],
+        [
+          90.00305086695778,
+          27.996434261718957
+        ]
+      ],
+      "double_fitted_positions": [
+        [
+          25.000000019820277,
+          25.012124756175343
+        ],
+        [
+          89.99812685210475,
+          27.996898701229593
+        ]
+      ],
+      "double_position_offsets": [
+        [
+          -8.388726566010973e-05,
+          0.02470915215491587
+        ],
+        [
+          -0.004924014853031622,
+          0.0004644395106367938
+        ]
+      ],
+      "double_positions_at_bound": [
+        false,
+        false
+      ],
+      "double_amplitudes": [
+        79.99239250245776,
+        138.06836330047855
+      ],
+      "double_component_snr": [
+        81.08116415654474,
+        139.98948242772866
+      ],
+      "double_second_component_snr": 139.98948242772866,
+      "double_active_component_count": 2,
+      "double_optimizer_success": true,
+      "double_optimizer_nfev": 24,
+      "fitted_separation_px": 65.06662252805822,
+      "confirmation_line": true,
+      "note": "自由位置模型达到当前工程证据线；仍需空间 PSF、注入和星表核验"
+    },
+    {
+      "frame_index": 1,
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\backend\\tests\\fixtures\\empirical_pair_audit_parity\\frames\\frame.fits",
+      "mask_mode": "range_masked",
+      "patch_x0": 15,
+      "patch_y0": 14,
+      "patch_width": 87,
+      "patch_height": 25,
+      "sample_count": 2175,
+      "masked_pixel_count": 0,
+      "single_rss": 124315.47579679673,
+      "double_rss": 8095.066334708048,
+      "single_bic": 8845.710283520924,
+      "double_bic": 2927.6048601490925,
+      "delta_bic_single_minus_double": 5918.105423371831,
+      "single_initial_position": [
+        57.50156738702186,
+        25.491924932869694
+      ],
+      "single_fitted_position": [
+        57.50156738702186,
+        25.491924932869694
+      ],
+      "single_position_offset": [
+        0.0,
+        -1.0
+      ],
+      "single_position_at_bound": false,
+      "single_component_snr": 0.0,
+      "single_optimizer_success": true,
+      "single_optimizer_nfev": 2,
+      "double_initial_positions": [
+        [
+          25.000083907085937,
+          24.987415604020427
+        ],
+        [
+          90.00305086695778,
+          27.996434261718957
+        ]
+      ],
+      "double_fitted_positions": [
+        [
+          25.000000019820277,
+          25.012124756175343
+        ],
+        [
+          89.99812685210475,
+          27.996898701229593
+        ]
+      ],
+      "double_position_offsets": [
+        [
+          -8.388726566010973e-05,
+          0.02470915215491587
+        ],
+        [
+          -0.004924014853031622,
+          0.0004644395106367938
+        ]
+      ],
+      "double_positions_at_bound": [
+        false,
+        false
+      ],
+      "double_amplitudes": [
+        79.99239250245776,
+        138.06836330047855
+      ],
+      "double_component_snr": [
+        81.08116415654474,
+        139.98948242772866
+      ],
+      "double_second_component_snr": 139.98948242772866,
+      "double_active_component_count": 2,
+      "double_optimizer_success": true,
+      "double_optimizer_nfev": 24,
+      "fitted_separation_px": 65.06662252805822,
+      "confirmation_line": true,
+      "note": "自由位置模型达到当前工程证据线；仍需空间 PSF、注入和星表核验"
+    },
+    {
+      "frame_index": 1,
+      "path": "C:\\Users\\lycohana\\Desktop\\rst19\\backend\\tests\\fixtures\\empirical_pair_audit_parity\\frames\\frame.fits",
+      "mask_mode": "sentinel_masked",
+      "patch_x0": 15,
+      "patch_y0": 14,
+      "patch_width": 87,
+      "patch_height": 25,
+      "sample_count": 2175,
+      "masked_pixel_count": 0,
+      "single_rss": 124315.47579679673,
+      "double_rss": 8095.066334708048,
+      "single_bic": 8845.710283520924,
+      "double_bic": 2927.6048601490925,
+      "delta_bic_single_minus_double": 5918.105423371831,
+      "single_initial_position": [
+        57.50156738702186,
+        25.491924932869694
+      ],
+      "single_fitted_position": [
+        57.50156738702186,
+        25.491924932869694
+      ],
+      "single_position_offset": [
+        0.0,
+        -1.0
+      ],
+      "single_position_at_bound": false,
+      "single_component_snr": 0.0,
+      "single_optimizer_success": true,
+      "single_optimizer_nfev": 2,
+      "double_initial_positions": [
+        [
+          25.000083907085937,
+          24.987415604020427
+        ],
+        [
+          90.00305086695778,
+          27.996434261718957
+        ]
+      ],
+      "double_fitted_positions": [
+        [
+          25.000000019820277,
+          25.012124756175343
+        ],
+        [
+          89.99812685210475,
+          27.996898701229593
+        ]
+      ],
+      "double_position_offsets": [
+        [
+          -8.388726566010973e-05,
+          0.02470915215491587
+        ],
+        [
+          -0.004924014853031622,
+          0.0004644395106367938
+        ]
+      ],
+      "double_positions_at_bound": [
+        false,
+        false
+      ],
+      "double_amplitudes": [
+        79.99239250245776,
+        138.06836330047855
+      ],
+      "double_component_snr": [
+        81.08116415654474,
+        139.98948242772866
+      ],
+      "double_second_component_snr": 139.98948242772866,
+      "double_active_component_count": 2,
+      "double_optimizer_success": true,
+      "double_optimizer_nfev": 24,
+      "fitted_separation_px": 65.06662252805822,
+      "confirmation_line": true,
+      "note": "自由位置模型达到当前工程证据线；仍需空间 PSF、注入和星表核验"
+    }
+  ],
+  "conclusion": "自由位置经验 PSF 审计完成：1 帧；raw K=2 达到当前证据线 1/1 帧，双源位置触碰边界 0/1 帧。该模型仍是有边界的局部研究模型；未通过不能排除真实近邻，达到证据线也不能替代空间 PSF、注入真值或星表/WCS 身份。",
+  "note": "K=1/K=2 在同一窗口和掩膜下联合优化位置、幅度与平面背景；位置有边界，因此 BIC 只表示局部研究模型证据，不是星表身份、恒星概率或物理真值。"
+}

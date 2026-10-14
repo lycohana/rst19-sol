@@ -478,7 +478,7 @@
         "run_empirical_pair_fit_audit",
         "write_empirical_pair_fit_artifacts"
       ],
-      "migration_status": "in_progress"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.empirical_pair_fit_cli",
@@ -512,7 +512,7 @@
         "_csv_value",
         "write_empirical_free_pair_artifacts"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.empirical_pair_free_cli",
@@ -525,7 +525,7 @@
         "_load_repeated_code_values",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.experiments",
@@ -3172,7 +3172,7 @@
     "rst19-forced-stability": "rst19.forced_stability:main",
     "rst19-empirical-pair-audit": "native:rst19-empirical-pair-audit",
     "rst19-empirical-pair-fit": "native:rst19-empirical-pair-fit",
-    "rst19-empirical-pair-free": "rst19.empirical_pair_free_cli:main",
+    "rst19-empirical-pair-free": "native:rst19-empirical-pair-free",
     "rst19-feature-evidence-axes": "native:rst19-feature-evidence-axes",
     "rst19-source-peak-consistency": "rst19.source_peak_consistency_cli:main",
     "rst19-source-proposal-peak-audit": "rst19.source_proposal_peak_audit_cli:main",
@@ -3324,7 +3324,8 @@
   "native_photometry_execution": "instrumental/apparent/legacy absolute arithmetic; structured parallax/model-distance/catalog absolute estimates; derived error/interval/strict gates; weighted zero point/color fit; clipping/holdout/catalog quality gates/sample roles; calibration application and error; native JSONL operations",
   "native_source_audit_execution": "Rust rst19-sources CLI and desktop native worker route perform FITS detection, all 11 source CSV tables, six PNG diagnostics and source cutouts/manifest; frozen Python source_cli.py and experiments.py baseline matches 17 candidates, 4 quality sources and 13 rejected, with CSV text fields exact and finite numeric fields within 1e-8 + 1e-12 relative tolerance; Windows release CLI generated all 11 CSV and 6 PNG with Python absent from PATH; source CLI and worker tests pass; full desktop package acceptance and macOS/Linux validation pending",
   "native_empirical_pair_audit_execution": "Rust rst19-empirical-pair-audit CLI and desktop worker load source catalogs, build global/local empirical PSFs, compute per-frame pair shape metrics, and write CSV/JSON/PNG; frozen Python reference JSON keys/text and discrete CSV values match, numeric values match within 1e-8 absolute + 1e-12 relative tolerance except kernel_sum within 1e-6 absolute for float32 reduction order; backend 149 tests and desktop 4+28 tests pass; Windows release CLI generated all three artifacts with Python absent from PATH (SHA-256 102bb1711080c80fec54d889122ffb98ced1fb5f403a879c5a7d0b77a14950b4); full release package and macOS/Linux validation pending",
-  "native_empirical_pair_fit_execution": "Rust rst19-empirical-pair-fit CLI and desktop native worker preserve fixed K=1/K=2 empirical-PSF fitting, nonnegative amplitudes, planar background, BIC/SNR/covariance diagnostics, mask modes, and best-single grid control; frozen Python JSON/CSV match with 1e-5 absolute + 1e-8 relative numeric tolerance, PNG dimensions verified; backend 150 tests and desktop 4+29 tests pass; Windows release CLI emits CSV/JSON/PNG with PATH limited to System32 (SHA-256 9f47936a7d2b6de6f3145dc17686a06610e995408775924da8cb3329b6cb7300); Python console route removed, legacy module remains shared by empirical-pair-free; full Python runtime removal and macOS/Linux package validation pending",
+  "native_empirical_pair_fit_execution": "Rust rst19-empirical-pair-fit CLI and desktop native worker preserve fixed K=1/K=2 empirical-PSF fitting, nonnegative amplitudes, planar background, BIC/SNR/covariance diagnostics, mask modes, and best-single grid control; frozen Python JSON/CSV match with 1e-5 absolute + 1e-8 relative numeric tolerance, PNG dimensions verified; backend 153 tests and desktop 4+30 tests pass; Windows release CLI emits CSV/JSON/PNG with PATH limited to System32 (SHA-256 9f47936a7d2b6de6f3145dc17686a06610e995408775924da8cb3329b6cb7300); Python console route removed and migrated desktop path dispatches Rust; 19 of 71 tools still use Python, so full runtime removal and macOS/Linux package validation remain pending",
+  "native_empirical_pair_free_execution": "Rust rst19-empirical-pair-free CLI and desktop native worker implement bounded continuous K=1/K=2 position/amplitude/background fitting with shared empirical PSF, masks, covariance, SNR, BIC, and artifacts; frozen Python discrete decisions match exactly, numeric tolerances are 0.005 px positions, 0.5 amplitude, 2 RSS, 0.6 BIC, and 5% component SNR; optimizer evaluation counts are implementation-specific and PNG dimensions (1200x680) were checked without pixel equality; backend 153 tests and desktop 4+30 tests pass; Windows release CLI generates CSV/JSON/PNG with PATH limited to System32 (SHA-256 C652304B0BE2A0FB160FA37F0AD4209FDF127E04FE0910EED3500C623209975F); 52 of 71 tool routes are native, 19 remain Python, and full package plus macOS/Linux validation is pending",
   "native_source_photometry": "complete source table status/flags/reference/model magnitude separation; faintest ranking, ties, calibration consistency and partial selection scope; JSONL photometry.table/photometry.faintest",
   "native_frame_pipeline": "direct FITS single-frame analysis through detection/matching/calibration/source rows/faintest; native library recalibration without repeating detection; JSONL pipeline.analyze",
   "native_cli_contracts": {

@@ -19,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const MASK_MODES: [&str; 8] = [
+pub(crate) const MASK_MODES: [&str; 8] = [
     "raw",
     "range_masked",
     "sentinel_masked",
@@ -292,7 +292,7 @@ fn parse_args(args: &[String]) -> Result<Options> {
     })
 }
 
-fn ordered_fits_paths(data_dir: &Path) -> Result<Vec<PathBuf>> {
+pub(crate) fn ordered_fits_paths(data_dir: &Path) -> Result<Vec<PathBuf>> {
     let mut paths = fs::read_dir(data_dir)
         .map_err(|error| format!("cannot read data directory {}: {error}", data_dir.display()))?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -308,7 +308,7 @@ fn ordered_fits_paths(data_dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn numeric_plane<T>(
+pub(crate) fn numeric_plane<T>(
     frame: &FitsFrame,
     operation: impl FnOnce(NumericPlane<'_>) -> Result<T>,
 ) -> Result<T> {
@@ -322,7 +322,7 @@ fn numeric_plane<T>(
     }
 }
 
-fn estimate_psf(
+pub(crate) fn estimate_psf(
     frame: &FitsFrame,
     sources: &[Detection],
     radius: usize,
@@ -351,7 +351,7 @@ fn negative_overflow_limit(data: &PixelData) -> Option<f64> {
     }
 }
 
-fn resolve_repeated_codes(sources: &[Detection], explicit: Option<&[i64]>) -> Vec<i64> {
+pub(crate) fn resolve_repeated_codes(sources: &[Detection], explicit: Option<&[i64]>) -> Vec<i64> {
     let mut codes = explicit.map_or_else(
         || {
             sources
@@ -366,7 +366,7 @@ fn resolve_repeated_codes(sources: &[Detection], explicit: Option<&[i64]>) -> Ve
     codes
 }
 
-fn mask_modes(
+pub(crate) fn mask_modes(
     frame: &FitsFrame,
     modes: &[String],
     codes: &[i64],
@@ -412,7 +412,12 @@ fn mask_modes(
     Ok(output)
 }
 
-fn patch_bounds(width: usize, height: usize, positions: &[[f64; 2]], padding: f64) -> [usize; 4] {
+pub(crate) fn patch_bounds(
+    width: usize,
+    height: usize,
+    positions: &[[f64; 2]],
+    padding: f64,
+) -> [usize; 4] {
     let x0 = positions
         .iter()
         .map(|point| point[0])
@@ -437,7 +442,7 @@ fn patch_bounds(width: usize, height: usize, positions: &[[f64; 2]], padding: f6
     ]
 }
 
-fn shifted_basis(
+pub(crate) fn shifted_basis(
     patch_width: usize,
     patch_height: usize,
     patch_origin: [usize; 2],
@@ -517,7 +522,7 @@ fn vector_dot(left: &[f64], right: &[f64]) -> f64 {
     left.iter().zip(right).map(|(a, b)| a * b).sum()
 }
 
-fn solve_nnls(source_residual: &[Vec<f64>], data_residual: &[f64]) -> Vec<f64> {
+pub(crate) fn solve_nnls(source_residual: &[Vec<f64>], data_residual: &[f64]) -> Vec<f64> {
     let count = source_residual.len();
     if count == 1 {
         let column = &source_residual[0];

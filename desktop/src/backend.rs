@@ -47,6 +47,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-sources"
                         | "rst19-empirical-pair-audit"
                         | "rst19-empirical-pair-fit"
+                        | "rst19-empirical-pair-free"
                         | "rst19-format-audit"
                         | "rst19-feature-sequence-compare"
                         | "rst19-feature-raw-evidence-audit"
