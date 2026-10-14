@@ -437,6 +437,33 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::plate_solver::run_desktop(&args, &out_dir);
     }
+    if request["tool"] == "rst19-photometric-auto" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out" || arg.starts_with("--out="))
+        {
+            args.push("--out".into());
+            args.push(
+                out_dir
+                    .join("photometric-auto.json")
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+        return rst19_core::photometric_workflow::run_desktop(&args, &out_dir);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1806,6 +1833,26 @@ mod tests {
         fs::write(path, bytes).unwrap();
     }
 
+    fn add_test_auxiliary(path: &Path, ra_deg: f64, dec_deg: f64) {
+        let mut values = [0.0; 26];
+        values[0] = 0.0;
+        values[1] = 0.0;
+        values[2] = ra_deg;
+        values[3] = dec_deg;
+        values[10] = 1.0;
+        let mut raw = Vec::with_capacity(26 * 8);
+        for value in values {
+            let mut bytes = value.to_le_bytes();
+            for pair in bytes.as_chunks_mut::<2>().0 {
+                pair.swap(0, 1);
+            }
+            raw.extend_from_slice(&bytes);
+        }
+        let mut fits = fs::read(path).unwrap();
+        fits[2880..2880 + raw.len()].copy_from_slice(&raw);
+        fs::write(path, fits).unwrap();
+    }
+
     #[test]
     fn embedded_catalog_marks_rust_and_pending_tools() {
         let catalog = catalog().unwrap();
@@ -1889,6 +1936,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| { tool["name"] == "rst19-plate-solver" && tool["native"] == true }));
+        assert!(tools
+            .iter()
+            .any(|tool| { tool["name"] == "rst19-photometric-auto" && tool["native"] == true }));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-contaminated-pair-injection" && tool["native"] == true
         }));
@@ -2569,6 +2619,39 @@ mod tests {
         assert!(result["plate_solution"]["valid"].is_boolean());
         assert!(out_dir.join("request.json").is_file());
         assert!(out_dir.join("solution.json").is_file());
+    }
+
+    #[test]
+    fn automatic_photometry_tool_dispatches_to_rust_and_writes_evidence() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-photometric-auto-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let fits = root.join("frame.fits");
+        let catalog = root.join("catalog.csv");
+        let out_dir = root.join("output");
+        write_single_frame_test_fits(&fits);
+        add_test_auxiliary(&fits, 10.0, 20.0);
+        fs::write(
+            &catalog,
+            "source_id,ra_deg,dec_deg,magnitude\nstar-a,10.0,20.0,8.5\nstar-b,10.02,20.01,9.0\n",
+        )
+        .unwrap();
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-photometric-auto",
+            "args":[fits.to_string_lossy(), "--catalog", catalog.to_string_lossy()],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+        assert!(result["status"].as_str().unwrap().starts_with("WCS_"));
+        assert_eq!(result["calibrated"], false);
+        assert_eq!(result["plate_solution"]["valid"], false);
+        assert_eq!(result["catalog_source_count"], 2);
+        assert!(out_dir.join("request.json").is_file());
+        assert!(out_dir.join("photometric-auto.json").is_file());
     }
 
     #[test]

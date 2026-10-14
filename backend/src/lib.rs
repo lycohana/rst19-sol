@@ -68,6 +68,7 @@ pub mod pair_response_attribution;
 pub mod pair_support_audit;
 pub mod photometric_calibration;
 pub mod photometric_report;
+pub mod photometric_workflow;
 pub mod photometry;
 pub mod pipeline;
 pub mod plate_solver;

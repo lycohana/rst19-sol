@@ -153,7 +153,7 @@
 
 ## 尚未完成
 
-当前迁移账本有 116 个 Python 模块标记为 Rust 迁移完成、3 个在迁移中、39 个待迁；按 `desktop/src/tool_catalog.json` 与 `desktop/src/backend.rs` 的实际 worker 路由核对，桌面工具共 71 项，其中 49 项走 Rust、22 项仍走 Python worker。生产运算链尚未全量切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍走 Python worker。
+当前迁移账本有 133 个 Python 模块标记为 Rust 迁移完成、3 个在迁移中、22 个待迁；按 `desktop/src/tool_catalog.json` 与 `desktop/src/backend.rs` 的实际 worker 路由核对，桌面工具共 71 项，其中 62 项走 Rust、9 项仍走 Python worker。生产运算链尚未全量切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍走 Python worker。
 
 序列 Rust 核心新增了注册中值／coadd 暗星恢复：从参考堆栈提出并去重候选，回到原始帧做强制测光、支持像素和形状门控，按出现帧数生成带 `stack_faint` 证据标记的轨迹并返回审计计数；同时输出合并轨迹列表，并按 `SequenceResult` 口径分开统计质量源、共识候选和暗星轨迹。五帧合成序列及已解释候选去重测试通过；这还没有完成与 Python 全字段对照，也没有切换公开 `rst19-sequence` 路由，该工具当前仍使用 Python。
 
@@ -213,3 +213,5 @@
 - 2026-10-14 `rst19-gaia-frame` 已迁到 Rust standalone CLI 和桌面 native worker：从 FITS auxiliary RA/DEC 取查询中心，默认半径是 9.78° 方形视场半对角，复用 Rust Gaia tiled query/饱和细分，并写 CatalogSource CSV 与 `.csv.meta.json`（含 frame path、CSV SHA-256 和完整性审计）。本地 TAP mock 核对 CSV/sidecar，offline dry-run 核对中心坐标和覆盖半径；完整 backend `cargo test --locked` 279 项通过，desktop 4+38 项通过，两端格式检查通过；backend Gaia frame 模块与 desktop native worker 默认 Clippy 无警告。Windows release CLI 在 PATH 仅含 `C:\Windows\System32` 且 `python`/`python3` 不可见时成功规划 1 个 tile，SHA-256 `36e2449f939d90fca1115b7342fe0d188610fd46279d703ec917ddf1e354258f`。没有发起真实 Gaia 网络查询，也没有做冻结 Python 全流程逐字段对照。目录为 60/71 native，11 项仍走 Python；完整安装包及 macOS/Linux 验收尚未完成。
 
 - 2026-10-14 rst19-plate-solver 的 FITS 检测、本地 CatalogSource CSV、TAN 投影、星对候选、镜像/非镜像相似变换、唯一匹配、稳健仿射细化、覆盖度/残差门和留一验证已迁到 Rust standalone CLI 与桌面 native worker；对应 Python console entry 已移除。4 项 Rust 测试覆盖旋转/反射/偏移、结构候选排除、留一门控及从合成 FITS 到有效 WCS 的端到端流程；backend 全部 188 项测试、desktop 4+39 项测试通过，两套格式检查通过。Windows release CLI 在 PATH 仅含 C:\Windows\System32 时运行；合成空场正确输出 INSUFFICIENT_POINTS，二进制 SHA-256 C3F19E6CACB3C1FB472005081DCAAA506EC50576A648005C655F3E26FC87732B。尚未与旧 Python 解算器做冻结结果逐字段 parity；rst19-photometric-auto 仍直接导入旧 Python solver，因此此模块迁移及整体 Python runtime 删除仍未完成。工具目录为 61/71 native，10 项仍走 Python；完整安装包和 macOS/Linux 验收仍待完成.
+
+- 2026-10-14 `rst19-photometric-auto` 已迁到 Rust 独立 CLI 和 desktop native worker：Rust 串接 FITS 检测、辅助视轴 TAN 先验、宽门/细门板解、仿射 WCS 验收、细半径光度重标定、颜色模型敏感性诊断与星表 sidecar SHA-256/行数审计；旧 Python console entry 已移除，desktop 工具标为 native。backend `cargo test --lib` 189/189、desktop `cargo test --locked` 4+40 项通过；worker 合成 FITS 路由测试实际运行并写出 JSON。Windows release CLI 在 PATH 仅含 `C:\Windows\System32` 时可显示帮助，SHA-256 `8C73F99CEFCFBA0BA682ED542E262D6162DBD339794B5694CA99A751F76658D1`。路由测试目前覆盖的是参考星不足导致的未校准分支；完整成功标定流程尚未做冻结 Python 全字段对照，整包/macOS/Linux 验收也未完成。当前 62/71 个桌面工具走 Rust，9 个仍走 Python，迁移总账保持未完成。

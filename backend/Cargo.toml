@@ -61,6 +61,10 @@ name = "rst19-plate-solver"
 path = "src/bin/rst19-plate-solver.rs"
 
 [[bin]]
+name = "rst19-photometric-auto"
+path = "src/bin/rst19-photometric-auto.rs"
+
+[[bin]]
 name = "rst19-feature-raw-evidence-audit"
 path = "src/bin/rst19-feature-raw-evidence-audit.rs"
 

@@ -84,7 +84,7 @@ def build() -> None:
               "--bin", "rst19-free-multipsf-audit", "--bin", "rst19-forced-stability",
               "--bin", "rst19-feature-sequence", "--bin", "rst19-feature-audit-replicates",
               "--bin", "rst19-gaia", "--bin", "rst19-gaia-tiled", "--bin", "rst19-gaia-frame",
-              "--bin", "rst19-plate-solver"])
+              "--bin", "rst19-plate-solver", "--bin", "rst19-photometric-auto"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
@@ -129,6 +129,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / gaia_frame_cli, package / "runtime" / gaia_frame_cli)
     plate_solver_cli = "rst19-plate-solver.exe" if os.name == "nt" else "rst19-plate-solver"
     shutil.copy2(ROOT / "backend/target/release" / plate_solver_cli, package / "runtime" / plate_solver_cli)
+    photometric_auto_cli = "rst19-photometric-auto.exe" if os.name == "nt" else "rst19-photometric-auto"
+    shutil.copy2(ROOT / "backend/target/release" / photometric_auto_cli, package / "runtime" / photometric_auto_cli)
     format_audit_cli = "rst19-format-audit.exe" if os.name == "nt" else "rst19-format-audit"
     shutil.copy2(ROOT / "backend/target/release" / format_audit_cli, package / "runtime" / format_audit_cli)
     sequence_feature_compare = "rst19-feature-sequence-compare.exe" if os.name == "nt" else "rst19-feature-sequence-compare"

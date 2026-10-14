@@ -2233,7 +2233,7 @@
         "_affine_wcs_rejection_reason",
         "run_auto_photometric_workflow"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.photometric_workflow_cli",
@@ -2243,7 +2243,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.photometry",
@@ -2340,7 +2340,7 @@
         "_candidate_key",
         "solve_plate"
       ],
-      "migration_status": "in_progress"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.plate_solver_cli",
@@ -3142,8 +3142,8 @@
     "rst19-gaia": "native:rst19-gaia",
     "rst19-gaia-tiled": "native:rst19-gaia-tiled",
     "rst19-gaia-frame": "native:rst19-gaia-frame",
-    "rst19-photometric-auto": "rst19.photometric_workflow_cli:main",
-    "rst19-plate-solver": "rst19.plate_solver_cli:main",
+    "rst19-photometric-auto": "native:rst19-photometric-auto",
+    "rst19-plate-solver": "native:rst19-plate-solver",
     "rst19-photometric-report": "Rust standalone CLI, JSONL photometry.report operation, and desktop worker; full JSON output matches the frozen Python reference for all four observability levels; strict absolute-distance and extinction gates, error/provenance summaries, CLI flags, and PATH-disabled execution verified; Python console entry removed; package and macOS/Linux acceptance pending",
     "rst19-sequence": "rst19.sequence_cli:main",
     "rst19-mosaic": "native:rst19-mosaic",
@@ -3304,7 +3304,7 @@
   ],
   "native_catalog_execution": "complete source fields and validation; offline CSV aliases/provenance/conflicts; Julian-year proper-motion propagation; JSONL catalog.load/catalog.propagate",
   "native_matching_execution": "TAN or full affine WCS projection; finite projected catalog gating; radius KD-tree; global/greedy assignment; all match fields and statistics; catalog arrays or direct CSV path; JSONL matching.catalog",
-  "native_astrometry_execution": "wcs.affine.fit, wcs.validate.matches, and wcs.validate.sequence; prior-WCS local affine refinement, robust clipping, per-frame leave-one-out checks; rst19-wcs-validation desktop worker and standalone CLI route FITS detection/matching and report artifact generation through Rust; not blind plate solving",
+  "native_astrometry_execution": "wcs.affine.fit, wcs.validate.matches, and wcs.validate.sequence; prior-WCS local affine refinement, robust clipping, per-frame leave-one-out checks; rst19-wcs-validation routes FITS detection/matching and artifact generation through Rust; rst19-plate-solver implements TAN catalog geometry, star-pair hypotheses, unique matching, robust affine refinement and acceptance gates in a standalone Rust CLI and desktop native worker; frozen Python output parity remains unverified",
   "native_attitude_execution": "attitude.audit.frames and attitude.audit.paths; quaternion/boresight residuals, header pointing consistency, missing-auxiliary handling, RA/Dec and attitude range summaries; rst19-aux-audit writes Python-byte-identical CSV and field-identical JSON",
   "native_format_audit_execution": "audit.format_paths and rst19-format-audit inspect FITS dimensions, storage types, scaling, special values, timestamps and auxiliary position/velocity consistency; JSON fields and CSV bytes match the Python baseline",
   "native_sequence_feature_comparison_execution": "sequence.feature_parameter_compare reads existing sequence JSON only; computes first-frame counts, per-class candidate/quality persistence and class transitions; Rust JSONL engine, standalone CLI, and desktop worker match Python result fields and three CSV artifacts byte-for-byte",
@@ -3313,6 +3313,7 @@
   "native_trail_proposals_execution": "trails.local_pixel_proposals and trails.single_frame_proposals; local path uses masked constant-boundary Gaussian whitening, spatially tiled maxima, per-length/angle line responses, local refinement, compact point/double-source controls, and geometry NMS; single-frame path uses the geometric length bank, multi-angle rotated finite-line responses, original-coordinate local refinement, point/double-source negative controls, and geometry NMS; both Python module APIs match frozen fixtures across 24 valid cases and 20 validation-error cases; rst19.single_frame_trails is fully translated to Rust; high-level sequence orchestration and trail audit parity remain pending",
   "native_trail_audit_execution": "Rust rst19-trails desktop route uses the native worker and Rust FITS/pipeline/model code; frozen Python result fields match for both a zero-trail contaminated-pair FITS and a synthetic frame with one line-geometry candidate rejected by the local model; the PATH-disabled standalone CLI writes CSV plus two PNG charts without mutating input; Python console entrypoint was removed from pyproject.toml; accepted-trail positive fixture, release packaging, and macOS/Linux acceptance remain pending",
   "native_photometry_execution": "instrumental/apparent/legacy absolute arithmetic; structured parallax/model-distance/catalog absolute estimates; derived error/interval/strict gates; weighted zero point/color fit; clipping/holdout/catalog quality gates/sample roles; calibration application and error; native JSONL operations",
+  "native_photometric_auto": "Rust FITS detection, auxiliary-pointing TAN prior, broad/fine local-catalog plate solve, affine WCS refinement and leave-one-out gates, strict-radius empirical photometry recalibration, calibration-model sensitivity diagnostics, catalog CSV/sidecar SHA-256 and row-count provenance, compact/full JSON evidence, standalone CLI and desktop native worker; backend 189/189 library tests and desktop 4+40 tests pass; Windows release CLI --help passes with PATH limited to System32 (SHA-256 8C73F99CEFCFBA0BA682ED542E262D6162DBD339794B5694CA99A751F76658D1); frozen Python output parity and packaged cross-platform acceptance remain pending",
   "native_source_audit_execution": "Rust rst19-sources CLI and desktop native worker route perform FITS detection, all 11 source CSV tables, six PNG diagnostics and source cutouts/manifest; frozen Python source_cli.py and experiments.py baseline matches 17 candidates, 4 quality sources and 13 rejected, with CSV text fields exact and finite numeric fields within 1e-8 + 1e-12 relative tolerance; Windows release CLI generated all 11 CSV and 6 PNG with Python absent from PATH; source CLI and worker tests pass; full desktop package acceptance and macOS/Linux validation pending",
   "native_empirical_pair_audit_execution": "Rust rst19-empirical-pair-audit CLI and desktop worker load source catalogs, build global/local empirical PSFs, compute per-frame pair shape metrics, and write CSV/JSON/PNG; frozen Python reference JSON keys/text and discrete CSV values match, numeric values match within 1e-8 absolute + 1e-12 relative tolerance except kernel_sum within 1e-6 absolute for float32 reduction order; backend 149 tests and desktop 4+28 tests pass; Windows release CLI generated all three artifacts with Python absent from PATH (SHA-256 102bb1711080c80fec54d889122ffb98ced1fb5f403a879c5a7d0b77a14950b4); full release package and macOS/Linux validation pending",
   "native_empirical_pair_fit_execution": "Rust rst19-empirical-pair-fit CLI and desktop native worker preserve fixed K=1/K=2 empirical-PSF fitting, nonnegative amplitudes, planar background, BIC/SNR/covariance diagnostics, mask modes, and best-single grid control; frozen Python JSON/CSV match with 1e-5 absolute + 1e-8 relative numeric tolerance, PNG dimensions verified; backend 153 tests and desktop 4+30 tests pass; Windows release CLI emits CSV/JSON/PNG with PATH limited to System32 (SHA-256 9f47936a7d2b6de6f3145dc17686a06610e995408775924da8cb3329b6cb7300); Python console route removed and migrated desktop path dispatches Rust; 19 of 71 tools still use Python, so full runtime removal and macOS/Linux package validation remain pending",
@@ -3566,12 +3567,12 @@
   ],
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",
-    "blind plate solving and remaining astrometric workflows",
+    "remaining astrometric workflows and frozen Python output parity for blind plate solving",
     "remaining sequence work: full multi-scale/raw/temporal candidate assembly and verification, motion/trail orchestration and complete stack-faint parity/assembly, full relative-photometry configuration/output compatibility, and full SequenceResult assembly/output compatibility",
     "all scientific audits and experiments",
     "mosaic still needs field-level parity verification for interpolation orders 0-3 and Pillow Lanczos preview scaling, Rust cache APIs, and removal of the legacy Tkinter call path",
     "remaining CLI input/output contracts and exhaustive parser edge coverage",
-    "route remaining research tools through Rust desktop workers; migrated routes include rst19-innovation-package, rst19-temporal-codes, rst19-sweep, rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19-sources, rst19-empirical-pair-audit, rst19-empirical-pair-fit, rst19 single-frame, rst19-aux-audit, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology/support, photometric report, feature parameter sensitivity, feature cross, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
+    "route remaining research tools through Rust desktop workers; migrated routes include rst19-innovation-package, rst19-temporal-codes, rst19-sweep, rst19-feature-evidence, rst19-feature-gate-temporal-route, rst19-feature-evidence-axes, rst19-direct-neighbor-audit, rst19-gaia-merge, rst19-sources, rst19-empirical-pair-audit, rst19-empirical-pair-fit, rst19 single-frame, rst19-aux-audit, rst19-plate-solver, rst19-photometric-auto, feature profile/interaction/gate-margin/gate-route/hard-negative/effect/context/correlation/transition-flow audits, pair mechanism context/sensitivity, pair pixel topology/support, photometric report, feature parameter sensitivity, feature cross, aperture peak-ratio, source geometry, relative photometry and photometric calibration sensitivity, feature cross-axis, source-group, source-group-sensitivity, source-separation, source-peak-consistency and source-proposal audits; manual threshold feedback storage is native, feature temporal-consistency audit, feature spatial-context audit, feature evidence matrix",
     "remove Python from runtime packaging",
     "full scientific and cross-platform acceptance"
   ],
