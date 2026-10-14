@@ -312,6 +312,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::sequence_feature::run_desktop(&args);
     }
+    if request["tool"] == "rst19-feature-audit-replicates" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::feature_audit_replicates::run_desktop(&args);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1611,6 +1633,33 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[test]
+    fn feature_audit_replicates_runs_through_the_native_worker_and_writes_artifacts() {
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-feature-audit-replicates-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let out_dir = root.join("output");
+        let result = run(json!({
+            "operation":"tool", "tool":"rst19-feature-audit-replicates",
+            "args":["--trials", "1", "--seed", "19019"],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+        assert_eq!(result["result"]["trial_count"], 1);
+        assert_eq!(result["result"]["rows"].as_array().unwrap().len(), 11);
+        for artifact in [
+            "request.json",
+            "feature_audit_replicates.csv",
+            "feature_audit_replicates.json",
+        ] {
+            assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn fits_card(key: &str, value: &str) -> [u8; 80] {
         let mut card = [b' '; 80];
         let text = format!("{key:<8}= {value:>20}");
@@ -1723,7 +1772,7 @@ mod tests {
             tool["name"] == "rst19-motion-crossing-ablation" && tool["native"] == true
         }));
         assert!(tools.iter().any(|tool| {
-            tool["name"] == "rst19-feature-audit-replicates" && tool["native"] == false
+            tool["name"] == "rst19-feature-audit-replicates" && tool["native"] == true
         }));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-contaminated-pair-injection" && tool["native"] == true

@@ -331,7 +331,7 @@ impl NumpyPcg64 {
             .wrapping_add(self.increment);
     }
 
-    fn next_u64(&mut self) -> u64 {
+    pub(crate) fn next_u64(&mut self) -> u64 {
         self.step();
         let high = (self.state >> 64) as u64;
         let low = self.state as u64;

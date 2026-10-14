@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "reference": "Python one-trial feature-audit-replicates baseline",
+  "python_module": "rst19.experiments.run_feature_audit + rst19.feature_audit_replicates.run_feature_audit_replicates",
+  "python_source_sha256": "f0eb598408ab275024dd403aad7c09e8aadd898747d351bbff003be3a7c98d09",
+  "numpy_version": "1.26.4",
+  "base_seed": 19019,
+  "trial_count": 1,
+  "scenario_seed_stride": 1009,
+  "scene_order": [
+    "isolated_fwhm2",
+    "weak_fwhm2_peak28",
+    "broad_fwhm6",
+    "narrow_fwhm0.8",
+    "pair_separation3",
+    "pair_separation6",
+    "single_pixel_spike",
+    "masked_source",
+    "edge_source",
+    "saturated_source",
+    "long_line_negative"
+  ],
+  "frame_shape": [
+    128,
+    128
+  ],
+  "frame_dtype": "little-endian float32",
+  "frozen_frames_file": "frames-f32le.bin",
+  "frozen_frames_sha256": "17111257becf169af77e102d89bc8a2f7f5ddb88e828cc662bf2bc860f4ef95c",
+  "reference_json_sha256": "315f4305c6b3d50d353d67f86d7a8ba41756b427a0d7b02bec37d56744585d54",
+  "reference_csv_sha256": "1cc79935896553e140cb00630d63121a56f463d21b34776042c33be617b5f557",
+  "interpretation": "Frozen injected detector inputs and output snapshot; positive injection recovery and negative structure leakage remain separate descriptive measurements."
+}

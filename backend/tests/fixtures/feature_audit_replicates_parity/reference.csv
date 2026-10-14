@@ -1,0 +1,12 @@
+﻿feature_class,scenario,control_type,trial_count,truth_count,candidate_true_hits,quality_true_hits,candidate_recall,quality_recall,candidate_recall_wilson95_low,candidate_recall_wilson95_high,quality_recall_wilson95_low,quality_recall_wilson95_high,mean_nearby_candidate_count,max_nearby_candidate_count,mean_nearby_quality_count,max_nearby_quality_count,mean_candidate_count,mean_quality_count,nearby_flags,note
+shape_outlier,broad_fwhm6,positive,1,1,1,1,1.0,1.0,0.20654931437723745,1.0,0.20654931437723745,1.0,1.0,1,1.0,1,1.0,1.0,,已知宽 PSF；不预设它一定是假源，观察模型失配代价
+masked_or_edge,edge_source,positive,1,1,1,0,1.0,0.0,0.20654931437723745,1.0,0.0,0.7934506856227626,1.0,1,0.0,0,3.0,0.0,EDGE:1,已知靠近边界的 PSF；检查不完整孔径不被当作普通星
+compact_quality,isolated_fwhm2,positive,1,1,1,1,1.0,1.0,0.20654931437723745,1.0,0.20654931437723745,1.0,1.0,1,1.0,1,2.0,1.0,,已知孤立 Gaussian PSF；检查标准紧凑源回收
+linear_artifact,long_line_negative,negative,1,0,0,0,,,,,,,16.0,16,0.0,0,16.0,0.0,ELONGATED:1|LINE_ARTIFACT:1|UNRESOLVED_BLEND:1,阴性样本：长线残差，不注入恒星；检查线状源泄漏
+masked_or_edge,masked_source,positive,1,1,1,0,1.0,0.0,0.20654931437723745,1.0,0.0,0.7934506856227626,1.0,1,0.0,0,2.0,0.0,MASKED:1,已知 PSF 的孔径外圈叠加显式掩膜；检查有效性拒绝
+spike_or_support,narrow_fwhm0.8,positive,1,1,1,0,1.0,0.0,0.20654931437723745,1.0,0.0,0.7934506856227626,1.0,1,0.0,0,1.0,0.0,INSUFFICIENT_PSF_SUPPORT:1,已知欠采样窄源；检查尖峰/PSF 支持审计是否生效
+crowded_blend,pair_separation3,positive,1,2,1,1,0.5,0.5,0.09453120573423074,0.9054687942657693,0.09453120573423074,0.9054687942657693,1.0,1,1.0,1,1.0,1.0,,已知 3 px 双源；低于/接近分辨尺度，允许合并结果
+crowded_blend,pair_separation6,positive,1,2,2,2,1.0,1.0,0.3423802275066532,1.0,0.3423802275066532,1.0,2.0,2,2.0,2,3.0,2.0,,已知 6 px 双源；与当前双源细筛证据线对照
+range_anomaly,saturated_source,positive,1,1,1,0,1.0,0.0,0.20654931437723745,1.0,0.0,0.7934506856227626,1.0,1,0.0,0,2.0,0.0,MASKED:1|SATURATED:1,已知高幅度 PSF，检测器显式设置饱和线；检查范围审计
+spike_or_support,single_pixel_spike,negative,1,0,0,0,,,,,,,1.0,1,0.0,0,1.0,0.0,INSUFFICIENT_PSF_SUPPORT:1,阴性样本：只有单像素尖峰，没有注入恒星
+weak_or_background,weak_fwhm2_peak28,positive,1,1,1,0,1.0,0.0,0.20654931437723745,1.0,0.0,0.7934506856227626,1.0,1,0.0,0,2.0,0.0,LOW_FLUX_SNR:1,已知弱 Gaussian PSF；检查候选层与质量层的差距
