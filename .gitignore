@@ -10,6 +10,10 @@ __pycache__/
 .venv/
 venv/
 .ipynb_checkpoints/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.hypothesis/
 
 # 本地分析输出与临时文件
 output/
@@ -24,6 +28,7 @@ temp/
 
 # Rust desktop / bundled runtime build artifacts
 desktop/target/
+target/
 desktop/.build-venv/
 desktop/.build-venv-*/
 desktop/.assets/
