@@ -1,13 +1,11 @@
 //! Native FITS-auxiliary-to-Gaia query workflow.
 
-use crate::{fits, gaia_remote, gaia_tiled};
-use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
-use std::{
-    fs::{self, File},
-    io::Read,
-    path::{Path, PathBuf},
+use crate::{
+    fits, gaia_remote, gaia_tiled,
+    public_catalog::{self, PublicCatalogOptions},
 };
+use serde_json::{json, Value};
+use std::path::{Path, PathBuf};
 
 const DEFAULT_FOV_WIDTH_DEG: f64 = 9.78;
 const DEFAULT_FOV_HEIGHT_DEG: f64 = 9.78;
@@ -192,73 +190,6 @@ pub fn camera_footprint_radius_deg() -> f64 {
     0.5 * DEFAULT_FOV_WIDTH_DEG.hypot(DEFAULT_FOV_HEIGHT_DEG)
 }
 
-fn sha256_and_size(path: &Path) -> Result<(String, u64), String> {
-    let mut file = File::open(path).map_err(|error| error.to_string())?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
-    let mut byte_count = 0_u64;
-    loop {
-        let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
-        if count == 0 {
-            break;
-        }
-        hasher.update(&buffer[..count]);
-        byte_count += count as u64;
-    }
-    Ok((format!("{:x}", hasher.finalize()), byte_count))
-}
-
-fn audit_value(
-    options: &Options,
-    frame_path: &Path,
-    output_path: &Path,
-    center_ra: f64,
-    center_dec: f64,
-    radius: f64,
-    tiled: &Value,
-) -> Result<Value, String> {
-    let (csv_sha256, csv_byte_count) = sha256_and_size(output_path)?;
-    let row_count = tiled["rows"].as_array().map_or(0, Vec::len);
-    let mut tiled_audit = tiled.clone();
-    tiled_audit
-        .as_object_mut()
-        .ok_or("tiled result is not an object")?
-        .remove("rows");
-    let audit_path = PathBuf::from(format!("{}.meta.json", output_path.to_string_lossy()));
-    Ok(json!({
-        "catalog":"Gaia DR3",
-        "endpoint":options.endpoint,
-        "table":if options.include_model {"gaiadr3.gaia_source LEFT OUTER JOIN gaiadr3.astrophysical_parameters"} else {"gaiadr3.gaia_source"},
-        "frame_path":frame_path.to_string_lossy(),
-        "output_path":output_path.to_string_lossy(),
-        "audit_path":audit_path.to_string_lossy(),
-        "center_ra_deg":center_ra,
-        "center_dec_deg":center_dec,
-        "search_radius_deg":radius,
-        "min_g_mag":options.min_g.parse::<f64>().map_err(|_| "min-g must be numeric")?,
-        "max_g_mag":options.max_g.parse::<f64>().map_err(|_| "max-g must be numeric")?,
-        "row_count":row_count,
-        "csv_row_count":row_count,
-        "csv_sha256":csv_sha256,
-        "csv_byte_count":csv_byte_count,
-        "complete":tiled["complete"],
-        "initial_tile_count":tiled["initial_tile_count"],
-        "queried_tile_count":tiled["queried_tile_count"],
-        "duplicate_count":tiled["duplicate_count"],
-        "outside_scope_count":tiled["outside_scope_count"],
-        "tiled":tiled_audit,
-        "include_gspphot_model":options.include_model,
-        "provenance":{
-            "source":"Gaia DR3 gaiadr3.gaia_source",
-            "photometric_system":"Gaia Vega",
-            "photometric_band":"G",
-            "magnitude_error":"local first-order approximation from phot_g_mean_flux_error; Gaia does not publish a symmetric phot_g_mean_mag_error column",
-            "gspphot_fields":if options.include_model {"distance_gspphot and ag_gspphot, with 16th/84th percentile bounds; these are Gaia DR3 GSP-Phot model estimates under a single-star assumption; mg_gspphot and its 16th/84th percentile bounds are included"} else {"distance_gspphot and ag_gspphot, with 16th/84th percentile bounds; these are Gaia DR3 GSP-Phot model estimates under a single-star assumption; mg_gspphot is not requested"}
-        },
-        "interpretation":"This is an external reference catalog for identity and apparent-magnitude calibration. It is not the camera-specific 450-750 nm response or an absolute photometric zero point."
-    }))
-}
-
 pub fn run_desktop(args: &[String], default_out_dir: &Path) -> Result<Value, String> {
     let options = Options::parse(args)?;
     let fits_path = options
@@ -295,42 +226,46 @@ pub fn run_desktop(args: &[String], default_out_dir: &Path) -> Result<Value, Str
         }));
     }
     let output_path = options.output.as_ref().ok_or("--out is required")?;
-    let tiled_args = options.tiled_args(center_ra, center_dec, default_out_dir);
-    let tiled = gaia_tiled::run_desktop(&tiled_args)?;
-    let output_path = output_path
-        .canonicalize()
-        .map_err(|error| format!("output CSV cannot be resolved: {error}"))?;
-    let tiled_result = tiled
-        .get("result")
-        .ok_or("Gaia tiled runner did not return a result")?;
-    let audit = audit_value(
-        &options,
-        &fits_path,
-        &output_path,
-        center_ra,
-        center_dec,
-        radius,
-        tiled_result,
-    )?;
-    let audit_path = PathBuf::from(format!("{}.meta.json", output_path.to_string_lossy()));
-    if let Some(metadata_path) = tiled.get("metadata").and_then(Value::as_str) {
-        let _ = fs::remove_file(metadata_path);
-    }
-    let mut bytes = serde_json::to_vec_pretty(&audit).map_err(|error| error.to_string())?;
-    bytes.push(b'\n');
-    if let Some(parent) = audit_path
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-    {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(&audit_path, bytes).map_err(|error| error.to_string())?;
-    let complete = audit["complete"].as_bool().unwrap_or(false);
+    let catalog_options = PublicCatalogOptions {
+        center_ra_deg: center_ra,
+        center_dec_deg: center_dec,
+        output_path: output_path.clone(),
+        frame_path: Some(fits_path.clone()),
+        search_radius_deg: Some(radius),
+        min_g_mag: Some(options.min_g.parse().map_err(|_| "min-g must be numeric")?),
+        max_g_mag: Some(options.max_g.parse().map_err(|_| "max-g must be numeric")?),
+        tile_radius_deg: options
+            .tile_radius
+            .parse()
+            .map_err(|_| "tile-radius must be numeric")?,
+        tile_limit: Some(
+            options
+                .tile_limit
+                .parse()
+                .map_err(|_| "tile-limit must be a positive integer")?,
+        ),
+        max_subdivide_depth: options
+            .max_depth
+            .parse()
+            .map_err(|_| "max-depth must be a non-negative integer")?,
+        max_queries: options
+            .max_queries
+            .parse()
+            .map_err(|_| "max-queries must be a positive integer")?,
+        include_gspphot_model: options.include_model,
+        timeout_seconds: options
+            .timeout
+            .parse()
+            .map_err(|_| "timeout must be numeric")?,
+        endpoint: options.endpoint,
+        ..Default::default()
+    };
+    let audit = public_catalog::download_public_gaia_catalog(&catalog_options)?;
     Ok(json!({
-        "csv":output_path.to_string_lossy(),
-        "audit":audit_path.to_string_lossy(),
+        "csv":audit["output_path"],
+        "audit":audit["audit_path"],
         "row_count":audit["row_count"],
-        "complete":complete,
+        "complete":audit["complete"],
         "frame_path":fits_path.to_string_lossy(),
         "center_ra_deg":center_ra,
         "center_dec_deg":center_dec,
@@ -378,6 +313,7 @@ pub fn run_cli(args: &[String]) -> i32 {
 mod tests {
     use super::*;
     use std::{
+        fs,
         io::{Read, Write},
         net::TcpListener,
         thread,

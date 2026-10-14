@@ -153,7 +153,7 @@
 
 ## 尚未完成
 
-当前迁移账本有 133 个 Python 模块标记为 Rust 迁移完成、3 个在迁移中、22 个待迁；按 `desktop/src/tool_catalog.json` 与 `desktop/src/backend.rs` 的实际 worker 路由核对，桌面工具共 71 项，其中 62 项走 Rust、9 项仍走 Python worker。生产运算链尚未全量切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍走 Python worker。
+当前迁移账本有 136 个 Python 模块标记为 Rust 迁移完成、3 个在迁移中、19 个待迁；按 `desktop/src/tool_catalog.json` 与 `desktop/src/backend.rs` 的实际 worker 路由核对，桌面工具共 71 项，其中 63 项走 Rust、8 项仍走 Python worker。生产运算链尚未全量切换，`migration.json` 的 `complete` 与 `python_runtime_removed` 仍为 false，未迁工具仍走 Python worker。
 
 序列 Rust 核心新增了注册中值／coadd 暗星恢复：从参考堆栈提出并去重候选，回到原始帧做强制测光、支持像素和形状门控，按出现帧数生成带 `stack_faint` 证据标记的轨迹并返回审计计数；同时输出合并轨迹列表，并按 `SequenceResult` 口径分开统计质量源、共识候选和暗星轨迹。五帧合成序列及已解释候选去重测试通过；这还没有完成与 Python 全字段对照，也没有切换公开 `rst19-sequence` 路由，该工具当前仍使用 Python。
 
@@ -211,6 +211,8 @@
 - 2026-10-14 `rst19-gaia-tiled` 的球面分块规划、赤经跨界/高赤纬处理、饱和块自适应细分、source_id 去重、半径范围过滤、完整性审计及 CSV/metadata 输出已迁到 Rust standalone CLI 与 desktop native worker；Python console entry 已移除。Rust 规划/细分单测与桌面 dry-run 路由测试通过；没有发起真实 TAP 请求，也没有完成整条旧 Python 工作流的冻结输出对照。Backend `cargo test --locked` 全量通过 277 项，desktop `cargo test --locked` 通过 4+37 项；两套 `cargo fmt --check`、JSON 解析和 `git diff --check` 通过。Windows release CLI 在 PATH 仅含 `C:\Windows\System32` 时成功规划 144 个 tile，SHA-256 `3fbc0d59603d36b2a87646a34fd136dcc790cb7c593173f41e162a85abd1d1c0`。工具目录为 59/71 native，12 项仍走 Python；完整桌面包、macOS/Linux 验收仍未完成。
 - Gaia tiled 补充 lint 记录：默认 `cargo clippy --locked --manifest-path backend/Cargo.toml --lib` 退出码 0，`gaia_tiled.rs` 与 `gaia_remote.rs` 无 Clippy 告警；当前 Rust/Clippy `-D warnings` 全仓检查仍被其他模块约 544 条既有告警阻断，因此不记为 strict Clippy 通过。
 - 2026-10-14 `rst19-gaia-frame` 已迁到 Rust standalone CLI 和桌面 native worker：从 FITS auxiliary RA/DEC 取查询中心，默认半径是 9.78° 方形视场半对角，复用 Rust Gaia tiled query/饱和细分，并写 CatalogSource CSV 与 `.csv.meta.json`（含 frame path、CSV SHA-256 和完整性审计）。本地 TAP mock 核对 CSV/sidecar，offline dry-run 核对中心坐标和覆盖半径；完整 backend `cargo test --locked` 279 项通过，desktop 4+38 项通过，两端格式检查通过；backend Gaia frame 模块与 desktop native worker 默认 Clippy 无警告。Windows release CLI 在 PATH 仅含 `C:\Windows\System32` 且 `python`/`python3` 不可见时成功规划 1 个 tile，SHA-256 `36e2449f939d90fca1115b7342fe0d188610fd46279d703ec917ddf1e354258f`。没有发起真实 Gaia 网络查询，也没有做冻结 Python 全流程逐字段对照。目录为 60/71 native，11 项仍走 Python；完整安装包及 macOS/Linux 验收尚未完成。
+
+- 2026-10-14 `rst19.public_catalog` 已由共享 Rust `public_catalog` 模块实现，并被 `rst19-gaia-frame` 调用：覆盖相机视场半对角、坐标或 FITS auxiliary RA/DEC 查询、Gaia tiled 请求、可选 GSP-Phot 联表、CatalogSource CSV 与紧凑完整性/SHA-256 sidecar。三个 Rust 单元测试覆盖默认单锥规划、TAP mock 下载、与冻结 Python CSV fixture 逐字节相同、sidecar/行数/哈希契约和 GSP-Phot 字段。全量 `cargo test --locked --manifest-path backend/Cargo.toml` 通过（库单元测试 197/197，所有集成和文档测试通过）；`cargo fmt --check` 通过。尚未逐字段比对完整 Python sidecar，也没有发起真实 Gaia 查询。迁移账本现为 136/158 模块完成，桌面路由为 63/71 native；整体 Python runtime、其余 8 条 Python 路由及完整 macOS/Linux 验收仍未完成。
 
 - 2026-10-14 rst19-plate-solver 的 FITS 检测、本地 CatalogSource CSV、TAN 投影、星对候选、镜像/非镜像相似变换、唯一匹配、稳健仿射细化、覆盖度/残差门和留一验证已迁到 Rust standalone CLI 与桌面 native worker；对应 Python console entry 已移除。4 项 Rust 测试覆盖旋转/反射/偏移、结构候选排除、留一门控及从合成 FITS 到有效 WCS 的端到端流程；backend 全部 188 项测试、desktop 4+39 项测试通过，两套格式检查通过。Windows release CLI 在 PATH 仅含 C:\Windows\System32 时运行；合成空场正确输出 INSUFFICIENT_POINTS，二进制 SHA-256 C3F19E6CACB3C1FB472005081DCAAA506EC50576A648005C655F3E26FC87732B。尚未与旧 Python 解算器做冻结结果逐字段 parity；rst19-photometric-auto 仍直接导入旧 Python solver，因此此模块迁移及整体 Python runtime 删除仍未完成。工具目录为 61/71 native，10 项仍走 Python；完整安装包和 macOS/Linux 验收仍待完成.
 

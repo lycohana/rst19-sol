@@ -74,6 +74,7 @@ pub mod pipeline;
 pub mod plate_solver;
 pub mod precision;
 pub mod psf;
+pub mod public_catalog;
 pub mod relative_photometry;
 pub mod sequence;
 pub mod sequence_assignment;
