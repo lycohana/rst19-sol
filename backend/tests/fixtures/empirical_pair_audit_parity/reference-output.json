@@ -1,0 +1,91 @@
+{
+  "frame_count": 1,
+  "primary_detection_id": 0,
+  "secondary_detection_id": 1,
+  "primary_target_xy": [
+    25.000083907085937,
+    24.987415604020427
+  ],
+  "secondary_target_xy": [
+    90.00305086695778,
+    27.996434261718957
+  ],
+  "frame_shifts": [
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "template_frame_path": "<FRAME_PATH>",
+  "template_catalog_path": "<CATALOG_PATH>",
+  "support_radius": 7,
+  "grid_size": 4,
+  "local_padding_px": 18.0,
+  "global_psf": {
+    "model": "empirical",
+    "support_radius": 7,
+    "source_count": 4,
+    "median_fwhm_px": 2.8642299186099676,
+    "median_ellipticity": 0.01760675944773478,
+    "kernel_shape": [
+      15,
+      15
+    ],
+    "kernel_sum": 10.143577575683594
+  },
+  "local_psf": null,
+  "parameters": {
+    "support_radius": 7,
+    "max_template_sources": 64,
+    "grid_size": 4,
+    "pair_cell": [
+      0,
+      1
+    ],
+    "local_padding_px": 18.0,
+    "background_estimator": "median of valid pixels outside the PSF support radius",
+    "frame_shifts": [
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "interpretation_boundary": "empirical PSF shape diagnostic, not catalog identity or probability"
+  },
+  "rows": [
+    {
+      "frame_index": 1,
+      "path": "<FRAME_PATH>",
+      "frame_shift_x_px": 0.0,
+      "frame_shift_y_px": 0.0,
+      "primary_x": 25.000083907085937,
+      "primary_y": 24.987415604020427,
+      "secondary_x": 90.00305086695778,
+      "secondary_y": 27.996434261718957,
+      "primary_background_adu": 99.91425704956055,
+      "secondary_background_adu": 99.81436157226562,
+      "global_psf_source_count": 4,
+      "local_psf_source_count": 0,
+      "local_template_available": false,
+      "primary_global_correlation": 0.9948584023774671,
+      "primary_global_relative_residual": 0.101275659558226,
+      "primary_global_central_energy_fraction": 0.5288946856463086,
+      "primary_global_fitted_amplitude_adu": 80.23376458894428,
+      "secondary_global_correlation": 0.9977929725435056,
+      "secondary_global_relative_residual": 0.06640168629481377,
+      "secondary_global_central_energy_fraction": 0.5839314318602538,
+      "secondary_global_fitted_amplitude_adu": 138.13581350631273,
+      "primary_local_correlation": null,
+      "primary_local_relative_residual": null,
+      "primary_local_central_energy_fraction": null,
+      "primary_local_fitted_amplitude_adu": null,
+      "secondary_local_correlation": null,
+      "secondary_local_relative_residual": null,
+      "secondary_local_central_energy_fraction": null,
+      "secondary_local_fitted_amplitude_adu": null,
+      "note": "局部隔离模板不足；仅报告全局 PSF 形状诊断，不等于星表身份"
+    }
+  ],
+  "conclusion": "经验 PSF 对照完成：1 帧；全局模板 4 个，局部模板 0 个。两个目标均得到全局形状指标的帧数为 1/1，局部模板可用帧数为 0/1。全局相关中位数 primary=0.9948584023774671, secondary=0.9977929725435056；相对残差中位数 primary=0.101275659558226, secondary=0.06640168629481377。这些指标受混叠、背景估计、空间 PSF 变化和模板选择影响，只能支持形状复核，不能单独确认或否定星表身份。",
+  "note": "经验 PSF 由模板帧的质量通过、未饱和、未掩膜且隔离源构造；局部模板不足时保持 None。所有 correlation/residual/central_fraction 均为形状诊断，不是星表身份、恒星概率或独立去混叠通量。"
+}

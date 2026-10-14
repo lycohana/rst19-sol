@@ -1,0 +1,29 @@
+{
+  "reference_implementation": "src/rst19/empirical_pair.py and src/rst19/empirical_pair_cli.py",
+  "source_sha256": {
+    "empirical_pair.py": "ea34c6c00c2480d839aecb483f42f66fcd55cc1043b7baab9a336f79d46d9555",
+    "empirical_pair_cli.py": "f0130c79f85a1e7df33521538dd8ef1afc80af7b0c73125a6a4b3b261419dbd2"
+  },
+  "input_path": "backend/tests/fixtures/empirical_pair_audit_parity/frames/frame.fits",
+  "input_sha256": "acbe7f5837cc3db6fbc603f0fc6aef81a7b5f1c11d0011605f28a646cbe6a8bf",
+  "source_catalog_path": "backend/tests/fixtures/source_audit_parity/source_catalog.csv",
+  "source_catalog_sha256": "250064a3f3ade15d7bf90595f3112877c15daef7661ab149e37dcef611d63d66",
+  "reference_environment": "Python 3.11 offline legacy parity oracle; this Rust tool does not invoke Python",
+  "options": {
+    "primary_id": 0,
+    "secondary_id": 1,
+    "coordinate_mode": "centroid",
+    "support_radius": 7,
+    "max_template_sources": 64,
+    "grid_size": 4,
+    "frame_shifts": null
+  },
+  "comparison": {
+    "json_keys_and_text": "keys and wording exact; numeric fields and numeric values embedded in conclusion use documented tolerances; path fields ignored because oracle used a temporary directory",
+    "csv_headers_and_text": "exact; path column ignored for the same reason",
+    "numeric_absolute_tolerance": 1E-08,
+    "numeric_relative_tolerance": 1E-12,
+    "kernel_sum_absolute_tolerance": 1E-06,
+    "png_pixels": "not compared; Rust PNG dimensions are tested"
+  }
+}

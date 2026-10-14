@@ -78,7 +78,8 @@ def build() -> None:
               "--bin", "rst19-feature-cross",
               "--bin", "rst19-signed-null-audit", "--bin", "rst19-signed-null-sequence",
               "--bin", "rst19-contaminated-pair-injection", "--bin", "rst19-contaminated-pair-class",
-              "--bin", "rst19-aperture-sensitivity", "--bin", "rst19-motion-crossing-ablation"])
+              "--bin", "rst19-aperture-sensitivity", "--bin", "rst19-motion-crossing-ablation",
+              "--bin", "rst19-empirical-pair-audit"])
     entries = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     modules = sorted({target.split(":")[0] for target in entries.values()
                       if target not in ("rst19.gui:main", "rst19.desktop_launcher:main")}
@@ -99,6 +100,8 @@ def build() -> None:
     shutil.copy2(ROOT / "backend/target/release" / single_frame_cli, package / "runtime" / single_frame_cli)
     source_audit_cli = "rst19-sources.exe" if os.name == "nt" else "rst19-sources"
     shutil.copy2(ROOT / "backend/target/release" / source_audit_cli, package / "runtime" / source_audit_cli)
+    empirical_pair_cli = "rst19-empirical-pair-audit.exe" if os.name == "nt" else "rst19-empirical-pair-audit"
+    shutil.copy2(ROOT / "backend/target/release" / empirical_pair_cli, package / "runtime" / empirical_pair_cli)
     format_audit_cli = "rst19-format-audit.exe" if os.name == "nt" else "rst19-format-audit"
     shutil.copy2(ROOT / "backend/target/release" / format_audit_cli, package / "runtime" / format_audit_cli)
     sequence_feature_compare = "rst19-feature-sequence-compare.exe" if os.name == "nt" else "rst19-feature-sequence-compare"

@@ -915,7 +915,7 @@ fn parse_bool(value: Option<&str>, line: usize) -> Result<bool> {
     }
 }
 
-fn load_detection_catalog(path: &Path) -> Result<Vec<Detection>> {
+pub(crate) fn load_detection_catalog(path: &Path) -> Result<Vec<Detection>> {
     let bytes = fs::read(path)
         .map_err(|error| format!("cannot read source catalog {}: {error}", path.display()))?;
     let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes);

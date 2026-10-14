@@ -158,6 +158,28 @@ fn run(request: Value) -> Result<Value, String> {
         }
         return rst19_core::source_audit::run_desktop(&args);
     }
+    if request["tool"] == "rst19-empirical-pair-audit" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        return rst19_core::empirical_pair_audit::run_desktop(&args);
+    }
     if request["tool"] == "rst19-mosaic" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1213,6 +1235,46 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[test]
+    fn empirical_pair_audit_runs_through_the_native_worker_and_writes_artifacts() {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let fixtures = workspace.join("backend/tests/fixtures");
+        let frames = fixtures.join("empirical_pair_audit_parity/frames");
+        let catalog = fixtures.join("source_audit_parity/source_catalog.csv");
+        let root = std::env::temp_dir().join(format!(
+            "rst19-native-empirical-pair-dispatch-{}-{}",
+            std::process::id(),
+            NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        let out_dir = root.join("output");
+        let result = run(json!({
+            "operation":"tool",
+            "tool":"rst19-empirical-pair-audit",
+            "args":[
+                frames.to_string_lossy(),
+                "--source-catalog",
+                catalog.to_string_lossy(),
+                "--primary-id",
+                "0",
+                "--secondary-id",
+                "1"
+            ],
+            "out_dir":out_dir
+        }))
+        .unwrap();
+
+        assert!(result["frame_count"].as_u64().is_some());
+        for artifact in [
+            "request.json",
+            "empirical_pair_psf_audit.csv",
+            "empirical_pair_psf_audit.json",
+            "empirical_pair_psf_similarity.png",
+        ] {
+            assert!(out_dir.join(artifact).is_file(), "missing {artifact}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn fits_card(key: &str, value: &str) -> [u8; 80] {
         let mut card = [b' '; 80];
         let text = format!("{key:<8}= {value:>20}");
@@ -1270,6 +1332,9 @@ mod tests {
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-temporal-codes" && tool["native"] == true));
+        assert!(tools.iter().any(|tool| {
+            tool["name"] == "rst19-empirical-pair-audit" && tool["native"] == true
+        }));
         assert!(tools
             .iter()
             .any(|tool| tool["name"] == "rst19-sweep" && tool["native"] == true));

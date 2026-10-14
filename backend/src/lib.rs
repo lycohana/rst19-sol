@@ -17,6 +17,7 @@ pub mod deblend;
 pub mod detection;
 pub mod detection_sweep;
 pub mod direct_neighbor_audit;
+pub mod empirical_pair_audit;
 pub mod empirical_psf;
 pub mod feature_class_context;
 pub mod feature_correlation_audit;
