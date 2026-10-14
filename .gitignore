@@ -50,3 +50,14 @@ desktop/build/
 dist/
 build/
 backend/target/
+
+# Frontend dependency and bundler artifacts
+**/node_modules/
+**/.next/
+**/.nuxt/
+**/.vite/
+**/.turbo/
+**/.parcel-cache/
+**/.svelte-kit/
+**/storybook-static/
+*.tsbuildinfo

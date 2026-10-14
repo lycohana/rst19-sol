@@ -74,6 +74,7 @@ pub mod photometric_workflow;
 pub mod photometry;
 pub mod pipeline;
 pub mod plate_solver;
+pub mod point_source_ablation;
 pub mod precision;
 pub mod psf;
 pub mod public_catalog;

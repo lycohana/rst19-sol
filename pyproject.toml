@@ -43,7 +43,6 @@ rst19-feature-flag-interaction = "rst19.feature_flag_interaction_cli:main"
 rst19-feature-gate-margin = "rst19.feature_gate_margin_cli:main"
 rst19-feature-gate-route = "rst19.feature_gate_route_cli:main"
 rst19-feature-cross-axis-audit = "rst19.feature_cross_axis_audit_cli:main"
-rst19-ablation = "rst19.ablation_cli:main"
 rst19-motion-proposal-ablation = "rst19.motion_proposal_ablation_cli:main"
 
 [tool.setuptools.packages.find]

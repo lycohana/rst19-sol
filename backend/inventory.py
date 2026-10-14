@@ -49,6 +49,7 @@ if __name__=="__main__":
     tools["rst19-wcs-validation"]="native Rust FITS/catalog local WCS validation, artifact generation, standalone executable, and desktop worker route; Python console entrypoint removed"
     tools["rst19-aux-audit"]="native Rust FITS auxiliary attitude audit, standalone executable, and desktop worker route; Python console entrypoint removed"
     tools["rst19-source-geometry-audit"]="native Rust source-catalog geometry audit, standalone executable, and desktop worker route; Python console entrypoint removed"
+    tools["rst19-ablation"]="native Rust point-source ablation, standalone CLI, and desktop worker route; Python console entrypoint removed; Python source retained only as an offline parity reference"
     administrative={"gui.py","desktop_worker.py","desktop_launcher.py","__init__.py","__main__.py"}
     modules=[]
     for path in sorted((ROOT/"src/rst19").glob("*.py")):
@@ -138,6 +139,7 @@ if __name__=="__main__":
     contracts["rst19-wcs-validation"]="Rust standalone CLI and desktop worker perform per-frame FITS detection, offline catalog matching, WCS validation, and artifact generation; Python console entrypoint removed"
     contracts["rst19-aux-audit"]="Rust standalone CLI and desktop worker inspect FITS auxiliary attitude fields and produce CSV/JSON; Python console entrypoint removed"
     contracts["rst19-source-geometry-audit"]="Rust standalone CLI and desktop worker audit source-catalog detector-coordinate geometry with NumPy-compatible sampling; Python console entrypoint removed"
+    contracts["rst19-ablation"]="Rust standalone CLI and desktop native worker run point-source ablation from a shared float32 FITS background and reuse frozen target manifests. On the frozen real-FITS case, all four NPY hashes and all non-time summary fields match; 24 target rows differ only in detection_id labels and numeric deltas are at most 2.78e-17. B/C quality_count each differ by one and C output_count differs by one; full migration parity, packaging, and macOS/Linux acceptance remain pending"
     payload["native_cli_contracts"]=contracts
     payload["native_format_audit_execution"]=generated["native_format_audit_execution"]
     payload["native_sequence_feature_comparison_execution"]=generated["native_sequence_feature_comparison_execution"]
@@ -154,6 +156,9 @@ if __name__=="__main__":
     payload["native_implemented"]=list(dict.fromkeys([
         *payload.get("native_implemented",[]),
         "multi-frame signed-null aggregation with pooled/frame ratios, SNR thresholds, feature/source rows, and connected-component recurrence diagnostics"]))
+    payload["native_implemented"]=list(dict.fromkeys([
+        *payload.get("native_implemented",[]),
+        "point-source ablation with shared float32 FITS background, frozen target manifests, Gaussian/hybrid/ensemble detections, injection recovery, and native CSV/NPY/PNG/HTML artifacts"]))
     payload["verification"]=list(dict.fromkeys([
         *previous_payload.get("verification",[]),*generated.get("verification",[])]))
     payload["verification"]=list(dict.fromkeys([
@@ -166,6 +171,10 @@ if __name__=="__main__":
         *payload["verification"],"cargo test --lib signed_null","tests/test_signed_null.py","tests/test_desktop_worker.py"]))
     payload["verification"]=list(dict.fromkeys([
         *payload["verification"],"cargo test --lib signed_null_sequence","tests/test_signed_null_sequence.py"]
+    ))
+    payload["verification"]=list(dict.fromkeys([
+        *payload["verification"],"cargo test --locked --manifest-path backend/Cargo.toml --lib point_source_ablation",
+        "cargo test --locked --manifest-path desktop/Cargo.toml --bin rst19-native-worker point_source_ablation"]
     ))
     target=ROOT/"backend/migration.json"
     target.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding="utf-8")

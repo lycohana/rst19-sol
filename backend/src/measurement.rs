@@ -140,7 +140,7 @@ pub fn source_from_peak(
         if float32 {
             statistics32::pairwise_sum(&values.iter().map(|v| *v as f32).collect::<Vec<_>>()) as f64
         } else {
-            values.iter().sum()
+            statistics::pairwise_sum(values)
         }
     };
     let scalar = |value: f64| -> f64 {
@@ -274,42 +274,42 @@ pub fn source_from_peak(
             weights = positive.clone();
             sum = positive_sum;
         }
-        x = weights
+        let centroid_x: Vec<_> = weights
             .iter()
             .zip(&positions)
             .map(|(w, p)| w * p[0])
-            .sum::<f64>()
-            / sum;
-        y = weights
+            .collect();
+        let centroid_y: Vec<_> = weights
             .iter()
             .zip(&positions)
             .map(|(w, p)| w * p[1])
-            .sum::<f64>()
-            / sum;
-        let shape_x = positive
+            .collect();
+        x = statistics::pairwise_sum(&centroid_x) / sum;
+        y = statistics::pairwise_sum(&centroid_y) / sum;
+        let shape_x_terms: Vec<_> = positive
             .iter()
             .zip(&positions)
             .map(|(w, p)| w * p[0])
-            .sum::<f64>()
-            / positive_sum;
-        let shape_y = positive
+            .collect();
+        let shape_y_terms: Vec<_> = positive
             .iter()
             .zip(&positions)
             .map(|(w, p)| w * p[1])
-            .sum::<f64>()
-            / positive_sum;
-        let vx = positive
+            .collect();
+        let shape_x = statistics::pairwise_sum(&shape_x_terms) / positive_sum;
+        let shape_y = statistics::pairwise_sum(&shape_y_terms) / positive_sum;
+        let variance_x_terms: Vec<_> = positive
             .iter()
             .zip(&positions)
             .map(|(w, p)| w * (p[0] - shape_x).powi(2))
-            .sum::<f64>()
-            / positive_sum;
-        let vy = positive
+            .collect();
+        let variance_y_terms: Vec<_> = positive
             .iter()
             .zip(&positions)
             .map(|(w, p)| w * (p[1] - shape_y).powi(2))
-            .sum::<f64>()
-            / positive_sum;
+            .collect();
+        let vx = statistics::pairwise_sum(&variance_x_terms) / positive_sum;
+        let vy = statistics::pairwise_sum(&variance_y_terms) / positive_sum;
         let fx = 2.35482 * vx.max(0.0).sqrt();
         let fy = 2.35482 * vy.max(0.0).sqrt();
         let fm = 2.35482 * ((vx + vy) / 2.0).max(0.0).sqrt();

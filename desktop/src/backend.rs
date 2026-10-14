@@ -104,6 +104,7 @@ fn uses_native_worker(request: &Value) -> bool {
                         | "rst19-mosaic"
                         | "rst19-motion-ablation"
                         | "rst19-crowded-ablation"
+                        | "rst19-ablation"
                         | "rst19-motion-crossing-ablation"
                         | "rst19-contaminated-pair-injection"
                         | "rst19-contaminated-pair-class"
