@@ -15,6 +15,15 @@ venv/
 **/.mypy_cache/
 **/.hypothesis/
 
+# Browser / test-run artifacts
+.playwright-cli/
+playwright-report/
+test-results/
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+
 # 本地分析输出与临时文件
 output/
 results/
@@ -25,6 +34,11 @@ temp/
 
 # 本地编辑器工作区配置
 .obsidian/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
 
 # Rust desktop / bundled runtime build artifacts
 desktop/target/
