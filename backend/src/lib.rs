@@ -56,6 +56,7 @@ pub mod matching;
 pub mod measurement;
 pub mod models;
 pub mod mosaic;
+pub mod motion_association_ablation;
 pub mod motion_crossing_ablation;
 pub mod multipsf_audit;
 pub(crate) mod numpy_ziggurat;

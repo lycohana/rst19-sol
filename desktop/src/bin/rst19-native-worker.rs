@@ -501,6 +501,29 @@ fn run(request: Value) -> Result<Value, String> {
         .map_err(|error| error.to_string())?;
         return Ok(result);
     }
+    if request["tool"] == "rst19-motion-ablation" {
+        let out_dir = PathBuf::from(
+            request["out_dir"]
+                .as_str()
+                .ok_or("missing output directory")?,
+        );
+        fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+        let mut args = string_args(&request)?;
+        if !args
+            .iter()
+            .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+        {
+            args.push("--out-dir".into());
+            args.push(out_dir.to_string_lossy().into_owned());
+        }
+        let result = rst19_core::motion_association_ablation::run_desktop(&args)?;
+        fs::write(
+            out_dir.join("request.json"),
+            serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        return Ok(result);
+    }
     if request["tool"] == "rst19-feature-flag-profile" {
         let out_dir = PathBuf::from(
             request["out_dir"]
@@ -1978,6 +2001,9 @@ mod tests {
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-motion-crossing-ablation" && tool["native"] == true
         }));
+        assert!(tools
+            .iter()
+            .any(|tool| { tool["name"] == "rst19-motion-ablation" && tool["native"] == true }));
         assert!(tools.iter().any(|tool| {
             tool["name"] == "rst19-feature-audit-replicates" && tool["native"] == true
         }));
@@ -2203,6 +2229,27 @@ mod tests {
             assert!(run_dir.join(artifact).is_file(), "missing {artifact}");
         }
         assert!(out_dir.join("request.json").is_file());
+        fs::remove_dir_all(out_dir).unwrap();
+    }
+
+    #[test]
+    fn motion_ablation_is_dispatched_to_the_native_rust_parser() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let out_dir = std::env::temp_dir().join(format!(
+            "rst19-motion-ablation-native-dispatch-{}-{nonce}",
+            std::process::id()
+        ));
+        let error = run(json!({
+            "operation":"tool",
+            "tool":"rst19-motion-ablation",
+            "args":[],
+            "out_dir":out_dir
+        }))
+        .unwrap_err();
+        assert_eq!(error, "--cache is required");
         fs::remove_dir_all(out_dir).unwrap();
     }
 

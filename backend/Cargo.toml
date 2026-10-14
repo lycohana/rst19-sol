@@ -221,6 +221,10 @@ name = "rst19-spatial-injection"
 path = "src/bin/rst19-spatial-injection.rs"
 
 [[bin]]
+name = "rst19-motion-ablation"
+path = "src/bin/rst19-motion-ablation.rs"
+
+[[bin]]
 name = "rst19-motion-crossing-ablation"
 path = "src/bin/rst19-motion-crossing-ablation.rs"
 

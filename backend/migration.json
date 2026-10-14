@@ -1786,7 +1786,7 @@
         "_save_track_plot",
         "run_motion_association_ablation"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.motion_ablation_cli",
@@ -1796,7 +1796,7 @@
         "build_parser",
         "main"
       ],
-      "migration_status": "pending"
+      "migration_status": "complete"
     },
     {
       "python_module": "rst19.motion_crossing_ablation",
@@ -3189,7 +3189,7 @@
     "rst19-contaminated-pair-injection": "rst19.contaminated_pair_injection_cli:main",
     "rst19-contaminated-pair-class": "native:rst19-contaminated-pair-class",
     "rst19-ablation": "rst19.ablation_cli:main",
-    "rst19-motion-ablation": "rst19.motion_ablation_cli:main",
+    "rst19-motion-ablation": "native:rst19-motion-ablation",
     "rst19-motion-crossing-ablation": "native:rst19-motion-crossing-ablation",
     "rst19-motion-proposal-ablation": "rst19.motion_proposal_ablation_cli:main",
     "rst19-crowded-ablation": "rst19.crowded_ablation_cli:main",
@@ -3225,6 +3225,7 @@
     "sparse connected-component track-to-source assignment with gate and soft-cost hooks",
     "point-sequence translation registration, affine drift correction, track construction, and classification",
     "supplemental high-SNR quality-point fast-motion association with existing-track reservation and one-frame-gap prediction",
+    "frozen-cache motion ablation with SHA-256-verified FITS identities, Python-seeded MT19937 truth placement, ordinary and fast-point association, and per-target contamination metrics",
     "candidate-consensus anchoring and mutual-nearest matching, temporal SNR channels, quality-track overlap, motion-fit rejection, and optional raw-image validity/aperture support/shape/PSF-correlation/line-artifact gates",
     "registered temporal median and MAD-clipped coadd reference construction with masking and bilinear registration",
     "temporal-reference candidate proposals with multiscale Gaussian filtering, reference-shape checks, and per-frame forced PSF response with masks/saturation",
@@ -3377,7 +3378,8 @@
     "rst19-feature-temporal-consistency-audit": "Rust standalone CLI, JSONL audit.feature_temporal_consistency, and desktop worker; full result fields and BOM CSV bytes match the Python reference; PATH-disabled CLI and routing tests pass; release-package and macOS/Linux acceptance pending; Python console entrypoint removed",
     "rst19-feature-spatial-context": "Rust standalone CLI, JSONL audit.feature_spatial_context, and desktop worker; result fields match the Python reference within 2e-7 absolute plus 2e-8 relative tolerance; three BOM CSV artifacts match byte-for-byte; PATH-disabled CLI and engine tests pass; release-package and macOS/Linux acceptance pending; Python console entrypoint removed",
     "rst19-feature-evidence": "Rust standalone CLI, JSONL audit.feature_evidence_matrix, and desktop worker route read morphology, feature-cross, PSF leaveout, and optional spatial-PSF CSVs; result fields match Python within 2e-7 absolute plus 2e-8 relative tolerance and the BOM CSV is byte-identical; PATH-disabled standalone CLI/JSONL checks, desktop worker dispatch tests, and parity fixtures pass; Python console entrypoint removed, package and macOS/Linux validation pending",
-    "rst19-feature-gate-temporal-route": "Rust standalone CLI, JSONL audit.feature_gate_temporal_route, and desktop worker join existing route/diagnostic CSVs with persistence JSON; result fields and all four BOM CSV artifacts match Python; PATH-disabled CLI/JSONL and desktop dispatch tests pass; Python console entrypoint removed; packaged and macOS/Linux validation pending"
+    "rst19-feature-gate-temporal-route": "Rust standalone CLI, JSONL audit.feature_gate_temporal_route, and desktop worker join existing route/diagnostic CSVs with persistence JSON; result fields and all four BOM CSV artifacts match Python; PATH-disabled CLI/JSONL and desktop dispatch tests pass; Python console entrypoint removed; packaged and macOS/Linux validation pending",
+    "rst19-motion-ablation": "Rust standalone CLI and desktop native worker validate a frozen sequence cache and every FITS SHA-256, reproduce Python MT19937 truth placement, run baseline and fast-point association, and emit CSV/JSON/PNG/report artifacts; frozen fixture and real 15-frame cache outputs match Python; Python console entry removed; full package and macOS/Linux acceptance pending"
   },
   "verification": [
     "tests/feature_psf_leaveout_parity.rs",
@@ -3570,7 +3572,17 @@
     "cargo test --locked --manifest-path backend/Cargo.toml --lib",
     "cargo test --locked --manifest-path backend/Cargo.toml",
     "backend/tests/fixtures/public_catalog_parity/reference.json",
-    "backend/tests/fixtures/public_catalog_parity/provenance.json"
+    "backend/tests/fixtures/public_catalog_parity/provenance.json",
+    "backend/src/motion_association_ablation.rs",
+    "backend/src/bin/rst19-motion-ablation.rs",
+    "backend/tests/fixtures/motion_association_ablation/cache_template.json",
+    "backend/tests/fixtures/motion_association_ablation/python_reference.json",
+    "desktop/src/backend.rs",
+    "desktop/src/bin/rst19-native-worker.rs",
+    "desktop/src/tool_catalog.json",
+    "cargo test --locked --manifest-path backend/Cargo.toml",
+    "cargo test --locked --manifest-path desktop/Cargo.toml --bin rst19-native-worker",
+    "tmp/native-motion-association-rust-final-20261014/verification.json"
   ],
   "remaining": [
     "full-image and sequence float32 detection acceptance coverage",
@@ -3629,9 +3641,11 @@
   "native_temporal_code_audit": "compares raw integer FITS pixels across frames, reports exact/low-variation masks, deterministic 8-connected components, focus time series, and BOM CSV/JSON outputs; CLI and JSONL engine verified without Python in PATH; interpretation remains detector-level evidence",
   "native_mosaic": "Rust JSONL engine, standalone rst19-mosaic CLI, and desktop native worker now read registered FITS frames, perform valid-weight normalized interpolation for orders 0-3, median/MAD robust fusion, and write NPY arrays, grayscale footprint PNG, RGBA previews with Lanczos3 large-image resampling, and metadata; fixed Rust fixtures reproduce the existing Python mosaic contract for union bounds, coverage, masks, median and clipping; SciPy interpolation and Pillow 12.2.0 RGBA resize parity are verified, while Rust cache APIs and legacy Tkinter integration remain pending",
   "native_motion_crossing_ablation": "Rust standalone CLI and desktop native worker generate frozen synthetic slow and fast crossing sequences, run base association plus the fast-point supplement, and write Python-parity truth, summary, track, target, and point CSVs with deterministic gzip inputs and PNG/manifest artifacts; the Rust sequence RANSAC reproduces NumPy PCG64 and no-replacement sampling, verified against frozen Python rows; package and macOS/Linux acceptance pending",
+  "native_motion_association_ablation": "Rust standalone CLI and desktop native worker validate the frozen sequence cache and all source FITS SHA-256 identities, reproduce Python MT19937 truth placement, run both Rust association algorithms, and emit the same truth JSON, frozen source CSV, per-target results, pairing summary, manifest, plot, and report section; fixed-cache outputs match the frozen Python reference; package and macOS/Linux acceptance pending",
   "native_empirical_psf": "peak-normalized median PSF extraction from raw FITS and quality detections, including full-frame isolation pool, excluded template IDs, auxiliary masking, subpixel bilinear alignment, median FWHM/ellipticity, and full kernel output; exposed as psf.empirical.estimate through the Rust JSONL engine and desktop native worker; synthetic Python-reference kernel and similarity metrics match within tolerance; shared rst19.experiments consumers and remaining Python workflows are still pending",
   "native_single_frame_command": "rst19 FITS detection and optional offline-catalog/WCS matching execute through the Rust CLI and desktop native worker; Python desktop-worker fallback is disabled and the tool catalog identifies the route as native; worker end-to-end result equals the Rust pipeline result, while pipeline fixtures cover numerical parity with the Python reference",
   "native_sequence_feature_execution": "Rust rst19-feature-sequence CLI and desktop worker run FITS detection, robust translation registration, reciprocal nearest-neighbor persistence, feature transitions, diagnostic/proposal subgroup persistence, and temporal summaries; Python CLI route removed. Two-frame duplicate-FITS parity matches all JSON and CSV values; two real FITS frames match every CSV/JSON value within 1e-9 absolute tolerance (maximum numeric delta 9.83e-11). Diagnostic source rows are keyed-identical, with 26 row-order differences among 58,111 caused by floating-point tie sorting. Windows release CLI generates all artifacts with PATH limited to System32 and no Python available; see backend/verification.md for binary hash and test record. Current catalog: 63 of 71 tools are native and 8 still route to Python, so removing the product Python runtime and full package/macOS/Linux validation remain pending.",
   "native_feature_audit_replicates_execution": "Rust rst19-feature-audit-replicates standalone CLI and desktop worker reproduce NumPy 1.26.4 PCG64 and Ziggurat normal inputs, run the native detector for all 11 feature controls, and preserve positive injection recall versus negative structure leakage with Wilson intervals. Frozen one-trial inputs (11 little-endian float32 frames) match byte-for-byte; all reference JSON fields match within 1e-12. The complete 16-trial run matches Python JSON/CSV fields within 1e-12 (maximum numeric delta 3.33e-16). Four route unit tests, the frozen-result integration test, and one NumPy RNG parity test pass; Windows release and native-worker/package validation pending. NumPy BSD-3-Clause attribution is in backend/third_party/NUMPY-1.26.4-BSD-3-CLAUSE.txt.",
-  "native_public_catalog_execution": "Rust public_catalog module implements explicit-coordinate and FITS-auxiliary Gaia DR3 queries, conservative camera half-diagonal defaults, optional GSP-Phot join, CatalogSource CSV, and compact completeness/SHA-256 audit sidecar. A local TAP mock matches a frozen Python reference for every sidecar field after normalizing only output/audit paths and the dynamic endpoint; CSV bytes, SHA-256, and size match exactly. Provenance is in backend/tests/fixtures/public_catalog_parity/provenance.json. Full backend cargo test passes with 197 library unit tests plus all integration/doc tests. Live Gaia service behavior remains unverified."
+  "native_public_catalog_execution": "Rust public_catalog module implements explicit-coordinate and FITS-auxiliary Gaia DR3 queries, conservative camera half-diagonal defaults, optional GSP-Phot join, CatalogSource CSV, and compact completeness/SHA-256 audit sidecar. A local TAP mock matches a frozen Python reference for every sidecar field after normalizing only output/audit paths and the dynamic endpoint; CSV bytes, SHA-256, and size match exactly. Provenance is in backend/tests/fixtures/public_catalog_parity/provenance.json. Full backend cargo test passes with 197 library unit tests plus all integration/doc tests. Live Gaia service behavior remains unverified.",
+  "native_motion_association_ablation_execution": "Rust rst19-motion-ablation standalone CLI and desktop native worker validate all 15 source FITS SHA-256 identities, reproduce Python MT19937 truth placement, and run Rust baseline plus fast-point association. The portable frozen cache fixture passes Python-reference output tests; a real 15-frame cache with 41,484 quality points matched Python exactly for all four trajectory CSV rows, pairing CSV, truth JSON values, and decompressed frozen-source CSV bytes. Backend cargo test --locked passed 201 library tests plus all integration/doc tests; desktop native-worker tests passed 42/42. Full release package and macOS/Linux acceptance remain pending; 64/71 desktop tools are native and 7 still use Python, so global Python runtime removal is incomplete."
 }
