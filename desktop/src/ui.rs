@@ -425,6 +425,8 @@ impl Desktop {
             return;
         }
         let progress_label = job_label(&request);
+        let single_frame_job = request["operation"] == "tool" && request["tool"] == "rst19";
+        let sequence_job = request["operation"] == "tool" && request["tool"] == "rst19-sequence";
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -455,6 +457,11 @@ impl Desktop {
             .and_then(|b| b.start(Some(request), &out))
         {
             Ok(job) => {
+                if single_frame_job || sequence_job {
+                    self.sequence = Value::Null;
+                    self.analysis = Value::Null;
+                    self.analysis_path = None;
+                }
                 self.job = Some(job);
                 self.job_progress = Some(JobProgress::new(progress_label));
                 self.job_dir = Some(out);
@@ -580,11 +587,14 @@ impl Desktop {
                     }
                 }
                 if p["tool"] == "rst19" {
+                    self.sequence = Value::Null;
                     self.analysis = p["result"].clone();
                     self.analysis_path = self.analysis["path"].as_str().map(PathBuf::from);
                     self.selected_frame = self.analysis_path.clone();
                 } else if p["tool"] == "rst19-sequence" {
                     self.sequence = p["result"].clone();
+                    self.analysis = Value::Null;
+                    self.analysis_path = None;
                 }
                 self.payload = p.clone();
                 self.status = "任务完成 · 产物已保存".into();
@@ -698,6 +708,26 @@ impl Desktop {
                     ui.label(format!("最暗质量源 m_inst {magnitude:.3}"));
                 }
             });
+            let trails = &self.analysis["single_frame_trails"];
+            if let Some(error) = trails["error"].as_str() {
+                ui.colored_label(GOLD, format!("单帧曝光线形提取失败：{error}"));
+            } else if trails.is_object() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.colored_label(
+                        Color32::from_rgb(255, 154, 92),
+                        format!(
+                            "单帧曝光线形 {} 条 · 实线 {} · 虚线待复核 {}",
+                            trails["overlay_count"], trails["solid_count"], trails["review_count"]
+                        ),
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "仅当前曝光；总览短线使用方向指示，放大后按像素长度显示",
+                        )
+                        .small(),
+                    );
+                });
+            }
         }
         ui.horizontal(|ui| {
             ui.heading("观测视场");
@@ -733,7 +763,7 @@ impl Desktop {
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.overlay, "质量通过源");
             ui.checkbox(&mut self.rejected, "被拒候选");
-            ui.checkbox(&mut self.motion, "运动轨迹");
+            ui.checkbox(&mut self.motion, "曝光线形 / 运动轨迹");
             ui.label(egui::RichText::new("滚轮缩放 · 拖动平移 · 点击查看源").small());
         });
         let (rect, response) = ui.allocate_exact_size(
@@ -822,6 +852,54 @@ impl Desktop {
             }
         }
         if self.motion {
+            if exact && self.sequence.is_null() {
+                if let Some(tracks) = self.analysis["single_frame_trails"]["tracks"].as_array() {
+                    for track in tracks {
+                        if let Some(points) = track["points"].as_array() {
+                            for point in points
+                                .iter()
+                                .filter(|point| point["display"]["visible"] == true)
+                            {
+                                let Some(line) = crate::motion_overlay::line_geometry(
+                                    point, image_rect, rect, scale, self.zoom, true,
+                                ) else {
+                                    continue;
+                                };
+                                let display = &point["display"];
+                                let label = if display["artifact_review"] == true {
+                                    "ARTIFACT?"
+                                } else if display["solid"] == true {
+                                    "EXP TRAIL"
+                                } else {
+                                    "EXP TRAIL?"
+                                };
+                                crate::motion_overlay::draw_line(
+                                    &painter,
+                                    &line,
+                                    Color32::from_rgb(255, 154, 92),
+                                    display["solid"] == true,
+                                    &format!("{label} {}", track["track_id"]),
+                                );
+                                if let Some(pointer) = response.hover_pos() {
+                                    let distance =
+                                        crate::motion_overlay::distance_to_line(pointer, &line);
+                                    if distance < (line.width * 0.5 + 5.0).max(8.0)
+                                        && nearest
+                                            .as_ref()
+                                            .is_none_or(|(d, _)| distance <= *d + 1.0)
+                                    {
+                                        nearest = Some((
+                                            distance,
+                                            json!({"track":track,"point":point,
+                                            "single_frame":true,"indicator_enlarged":line.indicator_enlarged}),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             let frame_index = self.sequence["frames"].as_array().and_then(|frames| {
                 frames.iter().position(|frame| {
                     frame["path"].as_str().map(PathBuf::from).as_ref()
@@ -831,6 +909,16 @@ impl Desktop {
             if let Some(index) = frame_index {
                 if let Some(tracks) = self.sequence["tracks"].as_array() {
                     for track in tracks.iter().filter(|t| t["classification"] == "moving") {
+                        for line in crate::motion_overlay::projected_track_segments(
+                            track,
+                            &self.sequence,
+                            index,
+                            image_rect,
+                            rect,
+                            scale,
+                        ) {
+                            crate::motion_overlay::draw_line(&painter, &line, GOLD, true, "");
+                        }
                         if let Some(points) = track["points"].as_array() {
                             for point in points
                                 .iter()
@@ -855,31 +943,47 @@ impl Desktop {
                 }
                 if let Some(tracks) = self.sequence["motion_features"].as_array() {
                     for track in tracks.iter().filter(|t| t["classification"] == "moving") {
+                        for line in crate::motion_overlay::projected_track_segments(
+                            track,
+                            &self.sequence,
+                            index,
+                            image_rect,
+                            rect,
+                            scale,
+                        ) {
+                            crate::motion_overlay::draw_line(
+                                &painter,
+                                &line,
+                                Color32::from_rgb(255, 107, 214),
+                                true,
+                                "",
+                            );
+                        }
                         if let Some(points) = track["points"].as_array() {
                             for point in points
                                 .iter()
                                 .filter(|p| p["frame_index"].as_u64() == Some(index as u64))
                             {
-                                let position = image_rect.min
-                                    + Vec2::new(
-                                        point["x"].as_f64().unwrap_or(0.0) as f32,
-                                        point["y"].as_f64().unwrap_or(0.0) as f32,
-                                    ) * scale;
+                                let Some(line) = crate::motion_overlay::line_geometry(
+                                    point, image_rect, rect, scale, self.zoom, false,
+                                ) else {
+                                    continue;
+                                };
                                 let color = Color32::from_rgb(255, 107, 214);
-                                painter.circle_stroke(position, 8.0, (1.5, color));
-                                painter.text(
-                                    position + Vec2::new(12.0, 0.0),
-                                    egui::Align2::LEFT_CENTER,
-                                    format!(
+                                crate::motion_overlay::draw_line(
+                                    &painter,
+                                    &line,
+                                    color,
+                                    true,
+                                    &format!(
                                         "L{} · {:.1} px",
                                         track["track_id"],
                                         point["length_px"].as_f64().unwrap_or(0.0)
                                     ),
-                                    egui::FontId::monospace(12.0),
-                                    color,
                                 );
                                 if let Some(pointer) = response.hover_pos() {
-                                    let distance = pointer.distance(position);
+                                    let distance =
+                                        crate::motion_overlay::distance_to_line(pointer, &line);
                                     if distance < 12.0
                                         && nearest.as_ref().is_none_or(|(d, _)| distance < *d)
                                     {
@@ -894,15 +998,28 @@ impl Desktop {
             }
         }
         if let Some((_, source)) = nearest {
-            response.clone().on_hover_text(format!(
-                "ID {} · ({:.2}, {:.2})\n孔径 SNR {} · FWHM {}\n{}",
-                source["detection_id"],
-                source["x"].as_f64().unwrap_or(0.0),
-                source["y"].as_f64().unwrap_or(0.0),
-                source["flux_snr"],
-                source["fwhm"],
-                source["flags"]
-            ));
+            let hover = if source["point"].is_object() {
+                let point = &source["point"];
+                format!("{} {} · 原图 ({:.2}, {:.2})\n长度 {:.2} px · 宽度 {:.2} px · 轴角 {:.1}°\n模型 {} · 线段 SNR {}\n连续支撑 {} · 中段填充 {}\n{}{}",
+                    if source["single_frame"] == true { "当前曝光线形候选" } else { "跨帧线形轨迹" },
+                    source["track"]["track_id"],point["x"].as_f64().unwrap_or(0.0),point["y"].as_f64().unwrap_or(0.0),
+                    point["length_px"].as_f64().unwrap_or(0.0),point["width_px"].as_f64().unwrap_or(0.0),
+                    point["angle_deg"].as_f64().unwrap_or(0.0),point["single_frame_model"],point["line_template_snr"],
+                    point["continuity_ratio"],point["profile_fill_ratio"],
+                    point["display"]["reason"].as_str().unwrap_or("局部线段模型与形态通过"),
+                    if source["indicator_enlarged"] == true { "\n总览指示线已放大；以上数值为原始测量，不表示运动方向。" } else { "" })
+            } else {
+                format!(
+                    "ID {} · ({:.2}, {:.2})\n孔径 SNR {} · FWHM {}\n{}",
+                    source["detection_id"],
+                    source["x"].as_f64().unwrap_or(0.0),
+                    source["y"].as_f64().unwrap_or(0.0),
+                    source["flux_snr"],
+                    source["fwhm"],
+                    source["flags"]
+                )
+            };
+            response.clone().on_hover_text(hover);
             if response.clicked() {
                 self.active_source = Some(source);
             }
@@ -1169,8 +1286,16 @@ impl eframe::App for Desktop {
                         if let Some(path) = rfd::FileDialog::new().add_filter("JSON", &["json"]).pick_file() {
                             match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str::<Value>(&s).map_err(|e| e.to_string())) {
                                 Ok(result) => {
-                                    if result.get("detection").is_some() { self.analysis_path = result["path"].as_str().map(PathBuf::from); self.analysis = result.clone(); }
-                                    if result.get("frames").is_some() { self.sequence = result.clone(); }
+                                    if result.get("detection").is_some() {
+                                        self.sequence = Value::Null;
+                                        self.analysis_path = result["path"].as_str().map(PathBuf::from);
+                                        self.selected_frame = self.analysis_path.clone();
+                                        self.analysis = result.clone();
+                                        self.texture = None;
+                                        self.active_source = None;
+                                        self.preview();
+                                    }
+                                    if result.get("frames").is_some() { self.sequence = result.clone(); self.analysis = Value::Null; self.analysis_path = None; }
                                     self.payload = json!({"result":result}); self.status = "已导入结果".into();
                                 }, Err(e) => self.status = e,
                             }
@@ -1180,7 +1305,7 @@ impl eframe::App for Desktop {
             }
         });
         if let Some(path) = self.smoke.clone() {
-            if self.started.elapsed() > Duration::from_secs(55) {
+            if self.started.elapsed() > Duration::from_secs(180) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
             if self.job.is_none()

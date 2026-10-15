@@ -240,23 +240,38 @@ pub fn run(args: &[String]) -> Result<()> {
     let projection = wcs.clone().map(Projection::Tan);
     eprintln!("16.0% · 参数校验完成，开始单帧检测与质量筛选");
     let mut progress = |fraction: f32, stage: &str| {
-        eprintln!("{:.1}% · {stage}", 18.0 + fraction.clamp(0.0, 1.0) * 70.0);
+        eprintln!("{:.1}% · {stage}", 18.0 + fraction.clamp(0.0, 1.0) * 60.0);
     };
-    let mut value = pipeline::analyze_frame_with_progress(
+    let analysis = pipeline::analyze_frame_with_progress(
         frame,
         catalog.as_deref(),
         projection.as_ref(),
         &options,
         None,
         &mut progress,
-    )?
-    .as_dict();
+    )?;
+    let mut trail_progress = |fraction: f32, stage: &str| {
+        eprintln!("{:.1}% · {stage}", 80.0 + fraction.clamp(0.0, 1.0) * 16.0);
+    };
+    let trails = match crate::single_frame_overlay::analyze(
+        &analysis,
+        options.detection.measurement.psf_fwhm,
+        &mut trail_progress,
+    ) {
+        Ok(trails) => trails,
+        Err(error) => {
+            eprintln!("96.0% · 单帧曝光线形提取失败：{error}；星点结果仍保留");
+            json!({"error":error,"tracks":[],"path":analysis.frame.path})
+        }
+    };
+    let mut value = analysis.as_dict();
+    value["single_frame_trails"] = trails;
     if let Some(wcs) = wcs {
         value["wcs"] = serde_json::to_value(wcs).map_err(|e| e.to_string())?;
     }
     let mut rendered = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
     rendered.push('\n');
-    eprintln!("92.0% · 单帧检测完成，写入结果与 WCS 元数据");
+    eprintln!("98.0% · 单帧检测与曝光线形完成，写入结果与 WCS 元数据");
     if let Some(output) = output {
         if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;

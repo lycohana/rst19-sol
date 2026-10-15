@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod backend;
+mod motion_overlay;
 mod ui;
 
 fn main() -> eframe::Result {

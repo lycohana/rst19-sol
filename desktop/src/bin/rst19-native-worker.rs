@@ -2107,6 +2107,37 @@ mod tests {
         fs::write(path, fits).unwrap();
     }
 
+    fn write_exposure_line_test_fits(path: &Path) {
+        let mut bytes = Vec::new();
+        for (key, value) in [
+            ("SIMPLE", "T"),
+            ("BITPIX", "16"),
+            ("NAXIS", "2"),
+            ("NAXIS1", "256"),
+            ("NAXIS2", "256"),
+            ("EXPOSURE", "1500"),
+        ] {
+            bytes.extend_from_slice(&fits_card(key, value));
+        }
+        let mut end = [b' '; 80];
+        end[..3].copy_from_slice(b"END");
+        bytes.extend_from_slice(&end);
+        bytes.resize(2880, b' ');
+        for y in 0..256 {
+            for x in 0..256 {
+                let background = 1000.0 + ((x * 17 + y * 31) % 9) as f64 * 2.0 - 8.0;
+                let line = if (28..=228).contains(&x) {
+                    400.0 * (-0.5 * ((y as f64 - 128.0) / 1.25).powi(2)).exp()
+                } else {
+                    0.0
+                };
+                bytes.extend_from_slice(&((background + line).round() as i16).to_be_bytes());
+            }
+        }
+        bytes.resize(bytes.len().div_ceil(2880) * 2880, 0);
+        fs::write(path, bytes).unwrap();
+    }
+
     #[test]
     fn embedded_catalog_marks_rust_and_pending_tools() {
         let catalog = catalog().unwrap();
@@ -2253,7 +2284,20 @@ mod tests {
         let expected = rst19_core::pipeline::analyze_frame(frame, None, None, &options, None)
             .unwrap()
             .as_dict();
-        assert_eq!(result["result"], expected);
+        let mut star_result = result["result"].clone();
+        let trails = star_result
+            .as_object_mut()
+            .unwrap()
+            .remove("single_frame_trails")
+            .unwrap();
+        assert!(trails.get("error").is_none(), "{trails}");
+        assert_eq!(trails["frame_count"], 1);
+        assert!(trails["tracks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|track| track["classification"] == "candidate"));
+        assert_eq!(star_result, expected);
         assert!(
             result["result"]["detection"]["quality_count"]
                 .as_u64()
@@ -2262,6 +2306,47 @@ mod tests {
         );
         assert!(Path::new(result["preview"].as_str().unwrap()).is_file());
         assert_eq!(fs::read(&fits_path).unwrap(), source_bytes);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn single_frame_tool_exports_visible_exposure_line_and_preserves_input() {
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "rst19-exposure-overlay-{}-{sequence}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let input = root.join("exposure.fits");
+        write_exposure_line_test_fits(&input);
+        let original = fs::read(&input).unwrap();
+        let result = run(
+            json!({"operation":"tool","tool":"rst19","args":[input],"out_dir":root.join("result")}),
+        )
+        .unwrap();
+        let trails = &result["result"]["single_frame_trails"];
+        assert!(trails.get("error").is_none(), "{trails}");
+        let track = trails["tracks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|track| track["points"][0]["display"]["visible"] == true)
+            .expect("exposure line must reach the viewport payload");
+        assert_eq!(track["classification"], "candidate");
+        assert_eq!(track["evidence_level"], "single_frame_trail");
+        let point = &track["points"][0];
+        assert!(
+            (point["y"].as_f64().unwrap() - 128.0).abs() < 2.0,
+            "{point}"
+        );
+        assert!(point["length_px"].as_f64().unwrap() > 180.0, "{point}");
+        assert_eq!(point["display"]["artifact_review"], true);
+        assert_eq!(point["display"]["solid"], false);
+        let saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(result["result_path"].as_str().unwrap()).unwrap())
+                .unwrap();
+        assert_eq!(&saved["single_frame_trails"], trails);
+        assert_eq!(fs::read(&input).unwrap(), original);
         fs::remove_dir_all(root).unwrap();
     }
 
