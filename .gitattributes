@@ -1,0 +1,5 @@
+# Freeze golden CSV fixtures to the line endings used by their Rust writers on
+# every runner; Git's platform defaults otherwise rewrite their bytes.
+backend/tests/fixtures/gaia_remote_parity/*.csv text eol=lf
+backend/tests/fixtures/gaia_tiled_parity/catalog.csv text eol=lf
+backend/tests/fixtures/source_tables/*.csv text eol=crlf

@@ -12,8 +12,7 @@ use std::{
 
 pub const HELP:&str="Build: cargo run --locked --manifest-path backend/Cargo.toml --bin rst19-package -- build [--skip-build] [--compact]\nVerify: rst19-package verify PACKAGE_DIR [--out DIR]";
 const FONT_URL:&str="https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf";
-const LICENSE_URL: &str =
-    "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE";
+const LICENSE_URL: &str = "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE";
 fn executable(name: &str) -> String {
     format!("{name}{}", if cfg!(windows) { ".exe" } else { "" })
 }
