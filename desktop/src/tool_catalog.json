@@ -1486,7 +1486,7 @@
         "repeat": false
       }
     ],
-    "native": false
+    "native": true
   },
   {
     "name": "rst19-mosaic",
@@ -1638,7 +1638,7 @@
         "repeat": false
       }
     ],
-    "native": false
+    "native": true
   },
   {
     "name": "rst19-injection",
@@ -2063,7 +2063,7 @@
         "repeat": false
       }
     ],
-    "native": false
+    "native": true
   },
   {
     "name": "rst19-sweep",
@@ -3107,7 +3107,7 @@
         "repeat": false
       }
     ],
-    "native": false
+    "native": true
   },
   {
     "name": "rst19-multipsf-audit",
@@ -7906,7 +7906,7 @@
         "repeat": false
       }
     ],
-    "native": false
+    "native": true
   },
   {
     "name": "rst19-crowded-ablation",

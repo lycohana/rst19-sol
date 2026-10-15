@@ -245,14 +245,17 @@ const SPATIAL_PSF_FIELDS: &[&str] = &[
 ];
 
 #[derive(Debug, Clone)]
-struct Chart {
+pub(crate) struct Chart {
     width: usize,
     height: usize,
     pixels: Vec<u8>,
 }
 
 impl Chart {
-    fn new(width: usize, height: usize, background: [u8; 3]) -> Self {
+    pub(crate) fn rgb_data(&self) -> &[u8] {
+        &self.pixels
+    }
+    pub(crate) fn new(width: usize, height: usize, background: [u8; 3]) -> Self {
         let mut pixels = vec![0; width * height * 3];
         for pixel in pixels.chunks_exact_mut(3) {
             pixel.copy_from_slice(&background);
@@ -264,7 +267,7 @@ impl Chart {
         }
     }
 
-    fn pixel(&mut self, x: i32, y: i32, color: [u8; 3]) {
+    pub(crate) fn pixel(&mut self, x: i32, y: i32, color: [u8; 3]) {
         if x < 0 || y < 0 || x >= self.width as i32 || y >= self.height as i32 {
             return;
         }
@@ -272,7 +275,7 @@ impl Chart {
         self.pixels[offset..offset + 3].copy_from_slice(&color);
     }
 
-    fn rect(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, color: [u8; 3]) {
+    pub(crate) fn rect(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, color: [u8; 3]) {
         for y in y0.min(y1)..=y0.max(y1) {
             for x in x0.min(x1)..=x0.max(x1) {
                 self.pixel(x, y, color);
@@ -280,7 +283,7 @@ impl Chart {
         }
     }
 
-    fn line(&mut self, start: (i32, i32), end: (i32, i32), color: [u8; 3]) {
+    pub(crate) fn line(&mut self, start: (i32, i32), end: (i32, i32), color: [u8; 3]) {
         let (mut x0, mut y0) = start;
         let (x1, y1) = end;
         let dx = (x1 - x0).abs();
@@ -305,7 +308,7 @@ impl Chart {
         }
     }
 
-    fn text(&mut self, x: i32, y: i32, text: &str, color: [u8; 3]) {
+    pub(crate) fn text(&mut self, x: i32, y: i32, text: &str, color: [u8; 3]) {
         for (character_index, character) in text.chars().enumerate() {
             let rows = glyph(character.to_ascii_uppercase());
             for (row_index, row) in rows.into_iter().enumerate() {
@@ -322,7 +325,22 @@ impl Chart {
         }
     }
 
-    fn save(&self, path: &Path) -> Result<()> {
+    pub(crate) fn paste(&mut self, other: &Self, x: i32, y: i32) {
+        for row in 0..other.height {
+            for column in 0..other.width {
+                let offset = (row * other.width + column) * 3;
+                self.pixel(
+                    x + column as i32,
+                    y + row as i32,
+                    other.pixels[offset..offset + 3]
+                        .try_into()
+                        .expect("RGB pixel"),
+                );
+            }
+        }
+    }
+
+    pub(crate) fn save(&self, path: &Path) -> Result<()> {
         let file = File::create(path).map_err(|error| error.to_string())?;
         let mut encoder = png::Encoder::new(file, self.width as u32, self.height as u32);
         encoder.set_color(png::ColorType::Rgb);

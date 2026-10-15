@@ -700,7 +700,11 @@ fn single_frame_components_from_analysis_with_limits(
     )
 }
 
-fn sample_registered_reference(reference: &RegisteredReference, x: f64, y: f64) -> Option<f32> {
+pub(crate) fn sample_registered_reference(
+    reference: &RegisteredReference,
+    x: f64,
+    y: f64,
+) -> Option<f32> {
     if reference.height == 0
         || reference.width == 0
         || !x.is_finite()

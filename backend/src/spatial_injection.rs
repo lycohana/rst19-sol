@@ -329,7 +329,7 @@ fn quantile(values: &mut [f64], q: f64) -> Option<f64> {
     Some(values[lo] + (values[hi] - values[lo]) * (position - lo as f64))
 }
 
-fn local_patch_stats(
+pub(crate) fn local_patch_stats(
     image: &PixelData,
     height: usize,
     width: usize,
@@ -364,7 +364,7 @@ fn local_patch_stats(
     Some((center, mad, upper))
 }
 
-fn special_mask(image: &PixelData) -> Vec<bool> {
+pub(crate) fn special_mask(image: &PixelData) -> Vec<bool> {
     (0..image.len())
         .map(|index| {
             let value = image.value(index);
@@ -593,7 +593,7 @@ fn empirical_patch(
     Ok((y0, y1, x0, x1, patch))
 }
 
-fn inject_signal(
+pub(crate) fn inject_signal(
     image: &mut [f32],
     height: usize,
     width: usize,

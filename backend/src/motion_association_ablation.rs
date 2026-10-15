@@ -1440,6 +1440,7 @@ fn render_report(
         html.push_str("</main></body></html>");
     }
     fs::write(&report, html).map_err(|error| error.to_string())?;
+    crate::ablation_report::decorate(&report)?;
     Ok(report)
 }
 

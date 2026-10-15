@@ -1,100 +1,64 @@
-# Rust 运算层迁移
+# RST19 原生运算核心
 
-目标是把全部运算实现移到 Rust，并从生产运行包中移除 Python。
-本目录为原生核心库 `rst19-core` 与隔离算法进程 `rst19-engine`，运行时不嵌入 Python、不通过 FFI 或子进程调用 Python。
+`rst19-core` 实现 FITS 读取、原始整数码、辅助遥测、稳健背景、Gaussian /
+DoG / Starlet 提案、孔径测光、质量规则、PSF/BIC 去混叠、WCS/星表、相对
+与绝对星等证据、序列配准与轨迹、线状运动、注入实验、合成图和报告导出。
+所有生产运算直接执行 Rust，没有解释器或跨语言回退。
 
-迁移尚未完成。完整后端模块、函数、源码指纹和 78 个工具入口列在 `migration.json`。
-已开始原生实现 FITS、辅助遥测、曝光单位、稳健背景统计、TAN 坐标和四元数几何。
-检测链中的 Gaussian/Starlet 掩膜归一化滤波、滑动极大值、候选 NMS、多通道合并、连通域 PCA 线结构审计和 KD-tree 空间检索也已建立原生实现。float64 与 float32 检测已通过当前固定样例和原生进程的合成图／ROI 对照；完全重合的 PSF 模板现在被明确视作不可辨识双源，Python 与 Rust 都返回空证据，避免奇异线性求解依赖 BLAS 分支。
-float64 的 Gaussian / hybrid / ensemble 已串成完整检测链，包含孔径测光、PSF 加权定位、质量规则、双 PSF/BIC 证据、近邻 Gaussian 门控和可选局部残差去混叠。共享背景模型核验二维形状，不同形状会回退逐帧背景。
-`rst19-engine` 已支持 `detection.array`、`detection.fits`、`measurement.source` 和 `psf.pair` JSONL 操作。单帧 `rst19` 现在是独立 Rust 命令，`rst19-native` 暂作兼容别名；Python 项目入口已移除该命令，桌面表单仍从 Python 参数定义读取字段并由 Rust worker 执行算法。其他研究工具入口与桌面路由仍在迁移。
-`rst19-format-audit` 也已提供 Rust JSONL 操作、独立 CLI 与桌面 Rust worker 路由；Python 控制台入口和算法模块的发布导入已移除，兼容目录只保留静态表单字段，计算由 Rust 执行。其余尚未迁移的工具仍会使用 Python worker。
-`rst19-feature-sequence-compare` 已迁入 Rust JSONL engine、独立 CLI 和桌面 worker。它仅读取已生成的序列 JSON，不读 FITS、不运行检测；JSON 结果字段一致，三份 CSV 逐字节一致。Python 控制台入口已移除，Python 比较实现暂留作迁移对照，并为仍未迁移的类别流向模块提供共享类别排序常量。
-`rst19-feature-psf-leaveout` 已迁入 Rust：直接读取 FITS 和源级 CSV，重建全局与逐源留一经验 PSF，完成类别抽样、相似度指标和汇总，并提供独立 CLI、JSONL 操作及桌面 Rust worker 路由。合成图所有结果字段与 Python 基线在 `5e-6` 绝对和 `2e-6` 相对容差内一致；Python 控制台入口已移除。
-`rst19-feature-raw-evidence-audit` 已迁入 Rust JSONL engine、独立 CLI 和桌面 worker。它按 `detection_id` 连接已有源目录和原始抽样 CSV，保留类别/指标选择顺序并计算线性分位数，不重新读取 FITS；JSON 结果字段和摘要 CSV 与 Python 对照一致。
-`rst19-signed-null-overlap` 已迁入 Rust detector、KD-tree 邻域查询、独立 CLI 和桌面 worker，直接读取原始 FITS 并生成反相质量源的正向候选/质量层局部交叉表；Python 控制台入口已删除。原 Python 实现仍保留作迁移对照，全量迁移和 Python 运行时移除尚未完成。
-`rst19-signed-null-audit` 已迁入 Rust，直接读取单帧 FITS 完成正向与符号反相检测、源分类、SNR 泄漏分档、极值范围转移排除和原始孔径证据，提供独立 CLI 与桌面 worker 路由。合成 FITS 的 JSON 字段逐项一致（数值容差 `1e-10`）；阈值 CSV 字节一致，特征 CSV 的浮点文本末位存在舍入差异。全量 Python 运行时仍在，迁移尚未完成。
-`rst19-signed-null-sequence` 现在也由 Rust 按帧执行上述对照，并生成逐帧、pooled、源重复簇和类别摘要；独立 CLI 与桌面 worker 已接线。双帧含负向源的 FITS 对照有 0 个 JSON 字段差异，最大绝对数值差 `1.71e-13`；阈值 CSV 逐字节一致，其余含浮点的 CSV 末位文本有舍入差异；空源 CSV 字节一致。禁用系统 `PATH` 后，CLI 与 worker 均通过。跨帧重复簇只表示 1 px 邻域的重复测量，不作为物理身份判断。发布包和跨平台验收仍待完成。
-Gaia 分层合并、相对测光、逐帧局部 WCS 验证、FITS 辅助姿态审计和源目录几何审计均已有 Rust CLI 与桌面 worker；本次移除了它们残留的 Python 控制台入口，并改由 Rust 工具注册表提供静态表单字段。
-星表链已原生实现源模型、CSV 读取、自行历元传播、TAN／完整仿射投影及一对一匹配，支持 `catalog.load`、`catalog.propagate` 和 `matching.catalog`；匹配入口可直接读取 CSV。分配核心支持 `assignment.solve` 和 `matching.assign`，包括矩形最小代价求解、稀疏连通分量全局分配及历史贪心分配。固定样例与原生进程对照覆盖来源、消光语义、质量字段、空值、冲突及返回排序。
-先验 WCS 的局部仿射细化已迁入 Rust：wcs.affine.fit 执行几何条件检查、MAD 离群剔除和匹配点留一验证；wcs.validate.matches 汇总逐帧结果，wcs.validate.sequence 直接读取 FITS 并调用原生检测／匹配。`rst19-wcs-validation` 桌面 worker 与独立 Rust CLI 均逐帧读取目录 FITS 和离线 CSV 星表，运行原生检测、匹配与仿射验证，并生成 JSON、CSV 和残差／尺度 PNG；Windows 包禁用外部 Python 后，worker 与 CLI 的四份产物逐字节一致。23 个原生请求与双帧 FITS 全链路均与 Python 基线逐字段通过；它使用已有先验 WCS 与星表匹配，不是全天空盲解算。
-辅助姿态审计的计算与命令行入口已迁入 Rust：`attitude.audit.frames` 检查内存中的辅助字段，`attitude.audit.paths` 直接读 FITS；独立 `rst19-aux-audit` CLI 接受单个 FITS 或目录并生成 CSV/JSON，发布包内附带此原生二进制。缺失辅助块、RA 跨零、替代相机轴和 FITS 路径均有 Python 对照；CSV 与 Python 输出逐字节一致，JSON 逐字段一致。该审计只检查辅助字段约定，不提供完整 WCS 或物理指向结论。
-源级坐标几何审计已迁入 Rust：`audit.source_geometry`、桌面 `rst19-source-geometry-audit` worker 路由和独立 CLI 共用同一实现。它复刻 NumPy 1.26.4 的 SeedSequence、PCG64 和无放回抽样，以 PCA 轴比、方向及垂直残差描述类别坐标；Python 对照覆盖默认与指定类别、64 位种子、错误输入及 CSV/JSON 数值产物。对照结果的数值容差为 `2e-12`；Windows 包含原生 CLI，并在禁用外部 Python 搜索后完成 worker/CLI 验收。该审计仍只描述 detector 坐标，不证明运动或伪影真值。
-相对测光 `photometry.relative.fit` 已迁入 Rust，覆盖加权帧零点/源星等拟合、迭代 MAD 剔除、可选空间项、协方差不确定度和独立源块留出验证。Rust JSONL 引擎、桌面 worker 工具路由和 `rst19-relative-photometry` 独立 CLI 在七种拟合、异常数据和可迭代输入场景中与 Python 输出对齐；Windows 发布包在禁用外部 Python 搜索后通过 worker 与 CLI 核验。结果始终标注为相对星等，不表示目录或绝对星等校准；macOS/Linux 尚未构建验收。
-点源序列的若干关联层已迁入 Rust：`sequence.track_detections` 串联高 SNR 互为最近邻平移注册、稀疏连通分量一对一轨迹关联、仿射残差 RANSAC 与稳健细化，并按观测时间分类；`sequence.fast_point_movers` 补充已有质量点源中的高速常速度轨迹；`sequence.fast_candidate_associate` 将已筛选的匹配滤波候选按实际时间轴做三点常速度种子、单帧缺测追踪、拟合门和重复种子去重；`sequence.candidate_consensus` 实现重复候选的几何锚定、互为最近邻关联、时间中值 SNR 通道和质量轨迹去重，并可按帧核验原图有效孔径、局部背景、3×3 支持、二阶矩形状、PSF 模板相关和线伪迹重叠。新操作 `sequence.reference.median` 与 `sequence.reference.coadd` 构建注册中值和 MAD 裁剪稳健叠加参考图；`sequence.temporal_reference_candidates` 从参考图提出时间候选，再逐帧搜索并计算多尺度强制 PSF 响应；`sequence.line_profile_metrics` 复现线状残差沿主轴的连续支撑度与剖面填充度；`sequence.trail_shape_evidence` 给出单帧线形候选的拒绝原因、局部模型支持和跨帧形状准入；`sequence.motion_feature_track_gates` 复现跨帧形状/长度/角度一致性、运动轴多数门、固定伪影兼容性和边缘截断门；`sequence.motion_feature_continuity_gates` 检查最长连续观测段和受限内部缺帧回接；`sequence.motion_feature_exposure_evidence` 将 PSF 去卷积后的曝光线长度与帧间位移按实际曝光/时间间隔比较；`sequence.motion_feature_confirmation_evidence` 提供序列长度对应的最低确认帧数和稳定拒绝原因代码；`sequence.motion_proposal_thresholds` 根据已验证的 1.5 秒曝光元数据调整候选线长与短拖影连通面积下限。 `sequence.motion_time_axis` 校验相对帧时间，非法或缺失输入回退到帧序号，并计算中位参考间隔。 `sequence.observation_time_axis` 将 FITS `DATE-OBS` 解析为 UTC 相对秒；无效或非递增时间戳组整体回退到帧序号。 `sequence.motion_feature_pair_geometry` 计算候选线段的方向、预计步长、平移端点与边缘权重软代价，用于配对排序而非硬门控。 `sequence.fit_collinear_motion_geometry` 对候选线中心做 PCA，返回运动跨度、垂直 RMS、主轴角和按参考帧间隔折算的速度。 `sequence.best_collinear_motion_feature_group` 从未关联长线中选择跨帧、单调推进且共线的一组候选。`sequence.stitch_unassociated_single_frame_points` 复核后回接孤立单帧候选；`sequence.link_motion_evidence_tracks` 去重关联点源轨迹与曝光线轨迹；`sequence.rescue_collinear_motion_feature_groups` 从未关联长线恢复互不重叠的共线候选组；`sequence.coherent_raw_motion_point_indices` 连接相邻帧原始线候选。单帧原始像素检测由 `trails.local_pixel_proposals` 提供。上述层均有 Python 基线对照。`sequence.analyze_core` 现已在 Rust 内完成高响应候选峰的 SNR/工作集筛选、边界与线伪影排除、已解释质量轨迹排除、常速度候选关联，以及原始 FITS 像素上的强制孔径测光、3×3 支持、FWHM/椭圆度与运动门控；同时直接读取内存中的 FITS 像素执行原图门控，将稳定的匹配滤波候选轨迹及其拒绝/准入审计纳入核心输出。通过门控的高速点源进入 `fast_point_tracks` 并保留 `fast_point_motion` 算法证据级别，不代表物理身份。可选相对测光已按静态质量轨迹、曝光时间与通量率口径接入 Rust 拟合器，并与 Python 结果逐字段对照。时间参考候选和堆叠暗源恢复及完整 `SequenceResult` 兼容仍待迁移；仿射采样仍使用 SplitMix64，未复现 NumPy PCG64 样本序列。所有这些数量仍是图像平面算法证据，不代表物理身份。
-`sequence.stitch_unassociated_single_frame_points` 将通过线模型复核的单帧候选按常速度预测、时间间隔、运动轴方向、线长比例和伪影重叠门回接到既有轨迹，并按帧号恢复输出顺序。该操作只补充图像平面候选轨迹证据，不确认物理身份；多尺度候选装配与高层序列编排仍待迁移。
-`sequence.link_motion_evidence_tracks` 将移动点源轨迹和曝光线轨迹按共同观测帧、运动方向、位移比例和垂直距离做一对一证据关联；链接只用于去重和审计，不删去任一轨迹或确认物理身份。
-`sequence.rescue_collinear_motion_feature_groups` 在常规中心关联失败时，从长单帧线候选中迭代恢复互不重叠的共线运动组；结果仍是图像平面候选，需要后续轨迹门复核。
-`sequence.coherent_raw_motion_point_indices` 将相邻帧原始线候选按实测时间、曝光时长、位移方向和线形支持连成短链；少数弱形态帧可以由强点桥接，但整条链至少需要两个强形态点。它只输出候选帧/点索引，后续关联与运动确认仍需独立运行；完整多尺度候选装配和多帧编排尚未迁入 Rust。
-`sequence.brief` 已迁入 Rust JSONL 引擎和桌面 worker，可从现有序列结果生成字段等价的结构化简报与中文展示文本，覆盖时间跨度、帧间隔、图像平面运动拟合、候选排序、科学结论边界和合成图覆盖说明。它只整理既有证据，不替代 `analyze_sequence` 检测/关联编排，也不将算法候选升级为真实天体；Windows 包 worker 在禁用外部 Python 搜索后通过验收。
-`sequence.analyze_core` 将 FITS 读取、序列快速路径的首帧共享背景、逐帧检测、观测时间轴、质量源关联、补充高速点源轨迹、候选峰坐标提议和静态候选共识接入同一个 Rust JSONL/桌面 worker 入口。三帧合成 FITS 与 Python 的逐帧 `FrameAnalysis`、质量轨迹、高速点源轨迹，以及稳定候选的原图门控、轨迹字段和审计逐字段对照通过；另以被 `max_sources` 截断的移动源验证原图测光和质量/运动门控。该入口仍不包含时间参考候选恢复、拖影审计、叠加暗星恢复及完整 `SequenceResult` 兼容层，正式 `rst19-sequence` 工具仍由 Python 执行。
-`sequence.motion_feature_frame_components` 将序列拖影检测的单帧阈值支撑图分成连通候选，支持一像素缺口分组，并返回 PCA 长宽/方向、沿线连续度、边缘和线伪影重叠审计。它只提供几何候选；原图点/双源模型复核与跨帧运动确认仍由后续阶段完成。
-`trails.local_pixel_proposals` 已将单帧原始像素线候选检测迁入 Rust：保留掩膜归一化 Gaussian 平滑、局部峰值预算、方向/长度扫描、局部复核、点源/双星负例控制和线段几何去重。输出仍只是单帧线形候选，不代表跨帧运动；完整序列候选装配仍待迁移。
+`desktop/src/bin/rst19-native-worker.rs` 内嵌 71 项工具目录，为原生桌面
+提供 JSONL 事件和可取消的隔离任务。`rst19-engine` 提供细粒度算法 JSONL
+操作；各 `rst19-*` binary 提供独立 CLI。构建与包核验同样使用 Rust。
 
-测光层已原生实现仪器／表观星等算术，带状态的视差／模型距离／星表绝对星等，以及加权零点和颜色项拟合、离群点剔除、确定性留出验证、目录质量门控、样本角色和标定应用。支持 `photometry.evaluate`、`photometry.calibration.fit`、`photometry.calibration.apply`、`photometry.calibration.error` 和颜色模型敏感性审计 `photometry.calibration.sensitivity`；最后一项由 JSONL 引擎与 Rust 桌面 worker 执行，并对 Python 基线做逐字段对照。绝对星等保留消光语义、距离区间和误差完整性门控。
-逐源光度表与最暗源选择支持 `photometry.table`、`photometry.faintest`；保留目录模型星等、图像推导绝对星等、残差拒绝和部分标定集合的区别。`pipeline.analyze` 直接读取 FITS，串联检测、匹配、标定、逐源光度表和最暗源；原生库支持不重复检测的再标定。
-新增 `rst19-native` 单帧 CLI，兼容原 `rst19` 参数入口、默认 hybrid、标准输出与 `--json-out`。已通过合成输入和有返回上限的真实首帧对照；原 CLI 帮助文本布局与全部解析边界仍需扩展核验。
-`rst19-pair-mechanism-context` 已原生计算候选源的质心/整数峰距离、无序近邻对、类别组合与双质量通过背景，并生成与 Python 字节一致的三份 CSV。`rst19-pair-mechanism-sensitivity` 在预先声明的几何窗口内重复该审计，保存窗口参数、目标 pair 状态及对照总体计数；窗口变化不解释成物理概率。两项工具均支持 Rust JSONL engine 与桌面 worker，覆盖 BOM、可选旗标列、目标去重、几何边界和自定义窗口。
-
-`rst19-pair-pixel-topology` 对局部原始 ADU patch 计算 raw 与特殊像素排除后的 8 连通分量、峰值成员关系及滑动局部极大值；结果 JSON、CSV 和 SVG 与 Python 基线逐项/逐字节核对。该审计描述像素拓扑，不单独确认物理源身份；Rust JSONL engine、独立 CLI 与桌面 worker 均已接入，Python 控制台入口已移除。
-
-`rst19-aperture-peak-ratio` 按 `feature_class` 与提议器来源组统计有限 `flux / peak` 的中位数和高分位数，并在请求候选所在类别中给出经验百分位。三份 CSV 与 Python 输出逐字节一致；这些数值受孔径、背景和 PSF 影响，只是描述性审计，不是真星概率或误报率。
-
-`rst19-feature-correlation` 对请求字段逐对计算 Spearman 相关、按首次出现顺序计算类别中位数与类内相关；保留并列秩、缺失值成对剔除、强相关阈值和 UTF-8 CSV/JSON 输出。它只描述当前源表中的字段依赖，不表示因果或分类准确率。
-
-`rst19-feature-transition-flow` 直接读取已有的类别转移 CSV，按层级和首帧类别汇总任意响应、同类响应与最大跨类流向，并检查各响应行的锚点元数据一致性。它不重新读取 FITS 或运行检测器，CSV/JSON 产物对照 Python 基线。
-
-`rst19-feature-gate-route` 按候选拆分数值质量门越界与结构旗标，去重已由数值门解释的同名旗标，再按特征类别汇总拒绝路径。它复用默认质量门阈值，只描述检测器规则，不构成反事实或物理类别结论。
-
-`rst19-feature-hard-negative` 在每个算法类别内按通量 SNR、滤波 SNR 或峰值排序质量层落选候选，保留类别计数和形态字段，并可选择纳入 `other_rejected`。这些记录是供后续复核的样本入口，不是物理恒星或误报真值。
-
-`rst19-gaia-merge` 的去重、字段补齐、关键字段冲突检查和输入 sidecar 完整性继承已由 Rust 引擎、桌面 worker 与独立原生 CLI 实现。只有输入 CSV 哈希与行数仍匹配、各层天空覆盖一致且没有关键字段冲突时，合并结果才标记为 `complete=true`；诊断性合并仍会输出，但会保留 `complete=false` 和原因列表。
-
-`rst19-feature-evidence-axes` 只读取已有 feature evidence matrix，按类别汇总候选持久性、质量邻域响应与局部 PSF 相关度，并检查五组预设阈值的模式敏感性。Q|P 是 detector-level 描述量，不是逐源精度、FDR 或恒星概率。
-
-`rst19-direct-neighbor-audit` 保留源表里每条质心半径内的直接近邻边，不做传递合并；按类别组合汇总距离、质量状态和双 PSF 工程证据，并可单独查询目标 pair。独立候选仍需真实 PSF、注入、星表/WCS 或人工真值确认。
-
-`rst19-feature-cross-axis-audit` 严格按 `detection_id` 对齐源目录、raw 局部摘要、raw 峰审计和逐帧响应，输出逐源证据并置、类别中位数、模式计数及输入 SHA-256。模式只描述共享检测器中的证据组合，不是分类器、精度、FDR、伪影率或恒星概率。
-
-`rst19-source-group-audit` 在 Rust 中按质心半径建立传递近邻组，输出组成员、代表候选、质量/结构旗标、类别统计和目标回查。`independent_group_candidate` 仍是工程候选标签，不代表物理星组已确认。
-
-`rst19-source-group-sensitivity` 对同一源表按用户给定半径重复分组，保留半径顺序并汇总全图组数和目标去向；可并行执行多个半径。半径扫描描述 detector-level 分流变化，不代表光学分辨率或双星概率。
-
-`rst19-source-separation-audit` 分别按质心与峰坐标计算每个候选的最近其它候选，汇总半径端点比例、质量通过端点比例、类别分位数和指定目标邻居。近邻统计只描述候选几何，不构成无序源对计数或物理身份判断。
-
-`rst19-source-peak-consistency` 直接读取 FITS，在辅助掩膜下按 nearest-edge 局部最大值规则检查目录峰坐标，并统计三种半径中的局部峰数量、差值、类别分位数和指定目标附近最大值。CSV 与 JSON 对照 Python 基线；这些结果描述图像像素与候选目录的一致性，不确认物理源身份。
-
-`rst19-source-proposal-peak-audit` 按 `detection_id` 连接源目录与 raw 峰一致性 CSV，再按 `feature_class × method_group` 汇总质量通过率、局部峰比例、非局部峰差值和 SNR 中位数，并可保留指定目标的输入顺序。它只读取已有 CSV；提议器来源彼此相关，不是独立投票，也不表示物理身份。
-
-`rst19-source-proposal-temporal-audit` 将来源目录与非紧凑候选的逐源时序、紧凑候选的 proposal subgroup 聚合连接起来，分别生成逐源行、类别×来源汇总和有序目标结果。紧凑来源只有子组聚合，指定目标的空逐源时序值表示证据不可用，不是零响应。
-
-人工阈值反馈以版本化 UTF-8 JSONL 保存；`feedback.append` 与 `feedback.load` 由 Rust 引擎和桌面 worker 实现，保留旧记录默认值和损坏行定位。反馈仅用于人工复核和调参记录，不会在线训练或自动改变检测器。
-
-桌面主入口 `rst19` 的单帧检测、星表匹配与光度流程，以及 `rst19-aux-audit`、`rst19-gaia-merge`、`rst19-feature-evidence-axes`、`rst19-direct-neighbor-audit`、`rst19-feature-cross-axis-audit`、`rst19-source-group-audit`、`rst19-source-group-sensitivity`、`rst19-source-separation-audit`、`rst19-source-peak-consistency`、`rst19-source-proposal-peak-audit`、`rst19-source-proposal-temporal-audit`、`rst19-source-geometry-audit`、`rst19-feature-flag-profile`、`rst19-feature-flag-interaction`、`rst19-feature-gate-margin`、`rst19-feature-gate-route`、`rst19-feature-hard-negative`、`rst19-feature-effect-size`、`rst19-feature-class-context`、`rst19-pair-mechanism-context`、`rst19-pair-mechanism-sensitivity`、`rst19-pair-pixel-topology`、`rst19-aperture-peak-ratio`、`rst19-feature-correlation`、`rst19-feature-transition-flow`、`rst19-sweep` 和 `rst19-feature-psf-leaveout` 已由原生 Rust worker 执行；其余尚未迁移的研究工具仍使用 Python worker。`rst19-sweep` 的阈值与 PSF-FWHM 扫描结果字段匹配 Python 基线。尚未支持的工具不会被静默替换为近似实现。
+## 构建、测试和发布
 
 ```powershell
-cargo test --locked --manifest-path backend/Cargo.toml
-cargo build --release --locked --manifest-path backend/Cargo.toml --bins
-cargo build --release --locked --manifest-path desktop/Cargo.toml --bins
-$worker = "desktop/target/release/rst19-native-worker.exe"
-$engine = "backend/target/release/rst19-engine.exe"
-$verificationDir = "tmp/native-feature-cross-axis-audit-v1"
-python backend/verify_feature_cross_axis_audit.py $worker $engine --out $verificationDir
-python backend/verify_source_group_audit.py $worker $engine --out tmp/native-source-group-audit-v1
-python backend/verify_source_group_sensitivity.py $worker $engine --out tmp/native-source-group-sensitivity-v1
-python backend/verify_source_separation_audit.py $worker $engine --out tmp/native-source-separation-audit-v1
-python backend/verify_source_peak_consistency.py $worker $engine --out tmp/native-source-peak-consistency-v1
-python backend/verify_source_proposal_peak_audit.py $worker $engine --out tmp/native-source-proposal-peak-audit-v1
-python backend/verify_source_proposal_temporal_audit.py $worker $engine --out tmp/native-source-proposal-temporal-audit-v1
-python backend/verify_source_geometry_audit.py $worker $engine --cli backend/target/release/rst19-source-geometry-audit.exe --out tmp/native-source-geometry-audit-v1
-python backend/verify_feedback.py $worker $engine --out tmp/native-feedback-v1
-$verificationDir = "tmp/native-sequence-chain-verification-$((Get-Date).ToString('yyyyMMdd-HHmmss'))"
-python backend/verify_sequence_chain.py backend/target/release/rst19-engine.exe --out $verificationDir
-python backend/verify_fits.py backend/target/release/rst19-engine.exe --out tmp/native-fits-verification --data-dir "doc/00-项目资料/原始数据"
+cargo build -j4 --locked --release --manifest-path backend/Cargo.toml --bins
+cargo test -j4 --locked --manifest-path backend/Cargo.toml
+cargo run --locked --manifest-path backend/Cargo.toml --bin rst19-package -- build
 ```
 
-`generate_reference.py` 仅用于捕获 Python 基线，生成固定的 Rust 对照测试样例，不在生产运算链中运行。
-对照覆盖曝光优先级、MAD/标准差回退、采样、旧版网格插值坐标、RA 跨零、旋转、奇偶性与四元数归一化。
-`verify_fits.py` 覆盖六种 FITS 存储类型、显式 BSCALE/BZERO、64 位整数原始值、遥测识别、异常文件与可选真实数据。
+独立 CLI 位于 `backend/target/release/`。开发桌面需要同时构建
+`desktop/target` 下的 worker，具体命令见 [桌面说明](../desktop/README.md)。
+三平台 CI 对同一套 Rust 代码进行测试、构建与包核验。
 
-只有全部算法、工具输出和界面路由完成对照验证后，才移除原有 Python 运行时并将迁移标记为完成。
+## 序列与运动
+
+`sequence_pipeline` 使用同一批原始 FITS 完成共享背景、检测、平移配准、
+质量点源关联、快速点源补充、候选共识、时间参考与叠加暗星恢复、相对测光、
+固定码审计、运动残差提案、原图模型复核、跨帧关联、断段回接和预测 ROI
+恢复，随后装配公开序列结果。原图复核、候选关联和最终运动门相互分开。
+
+`sequence_cli` 保留研究命令参数并导出原图序列源审计。`--workers` 接受
+并记录调用意图，当前原生逐帧检测编排按序执行；它不改变阈值或科学结果。
+缺失观测不作为真实检测加入轨迹。候选轨迹与物理天体身份不等价。
+
+## 注入与证据导出
+
+`injection` 覆盖合成噪声、十一类特征控制、真实背景、背景分层、同像素
+提案比较、双源强弱比与拥挤组。冻结 NPZ 文件由 Rust 写出，保留输入
+哈希、真值坐标或场景条件和有效参数；真实 FITS 始终不被注入修改。
+源回收率、组解析率、合并响应和背景数量分别报告。
+
+`source_pair_audit` 保留原始整数的唯一值/重复码统计、极端范围码、
+孔径共享通量及原始/范围掩膜/哨兵掩膜 PSF 比较。两个目标未同时被独立
+候选找到时不报告成对证据，避免回退坐标造成虚假双源结论。
+
+`innovation` 与其测光/绘图模块导出运动拟合、平均轨迹置信区间、遥测
+差分与单位待核验状态、注册差分图、原图候选切片、源表和严格测光证据。
+各消融报告可在同一 HTML 展示 CSV、冻结输入、哈希清单与场景图。
+
+## 缓存和科学边界
+
+原生缓存采用独立命名空间与版本，使用原始文件内容 SHA-256、输入顺序、
+科学参数和相关星表/WCS/背景参考绑定结果。损坏或不完整缓存按未命中处理；
+原子写入保留完整候选工作集。Mosaic 缓存保留 float32 位模式和 uint16
+覆盖计数。旧版缓存字节/键格式不作为原生兼容承诺。
+
+冻结旧版输出作为离线数据进入 Rust 数值回归，测试不执行旧版语言。
+`tests/fixtures/legacy_sources/*.txt` 仅用于旧结果的来源指纹校验；不编译、
+解释或分发。每项数值容差与已执行的验证层记录在 [verification.md](verification.md)。
+图表字体、布局和图像编码不宣称与旧版逐像素相同。
+
+算法候选、质量通过源、注入回收和物理身份始终分开；相对测光、未声明
+光度系统/波段的数值以及缺乏距离/消光来源的绝对星等保持诊断状态。
+Windows、macOS 与 Linux 的实际包/窗口验收范围以验证记录和 CI 结果为准。

@@ -2,7 +2,7 @@ name: Rust desktop packages
 on:
   workflow_dispatch:
   push:
-    paths: ['desktop/**', 'src/rst19/**', 'pyproject.toml', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'backend/**', '.github/workflows/desktop.yml']
 jobs:
   package:
     strategy:
@@ -12,20 +12,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev
-      - run: cargo test --locked --manifest-path desktop/Cargo.toml
-      - run: python desktop/build.py
-      - name: Exercise bundled worker
-        shell: python
-        run: |
-          import pathlib, subprocess, sys
-          package = sorted(p for p in pathlib.Path('dist').glob('RST19-*') if p.is_dir())[-1]
-          subprocess.run([sys.executable, 'desktop/verify_package.py', str(package), '--out', 'tmp/package-verification'], check=True)
+      - run: cargo test -j4 --locked --manifest-path backend/Cargo.toml
+      - run: cargo build -j4 --locked --manifest-path desktop/Cargo.toml --bin rst19-native-worker
+      - run: cargo test -j4 --locked --manifest-path desktop/Cargo.toml
+      - name: Build and verify native package
+        run: cargo run --locked --manifest-path backend/Cargo.toml --bin rst19-package -- build
       - uses: actions/upload-artifact@v4
         with:
           name: RST19-${{ runner.os }}

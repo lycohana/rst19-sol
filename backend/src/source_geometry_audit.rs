@@ -350,7 +350,7 @@ impl NumpyPcg64 {
         }
     }
 
-    fn bounded(&mut self, maximum: usize) -> usize {
+    pub(crate) fn bounded(&mut self, maximum: usize) -> usize {
         let maximum = maximum as u64;
         if maximum == 0 {
             return 0;

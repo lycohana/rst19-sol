@@ -174,7 +174,9 @@ fn verify_reference_inputs() {
     assert_eq!(
         format!(
             "{:x}",
-            Sha256::digest(fs::read(root.join("../src/rst19/spatial_injection.py")).unwrap())
+            Sha256::digest(
+                fs::read(root.join("tests/fixtures/legacy_sources/spatial_injection.txt")).unwrap()
+            )
         ),
         PYTHON_REFERENCE_SHA256,
         "Python reference changed; refresh frozen outputs before accepting parity"

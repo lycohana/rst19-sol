@@ -5,7 +5,7 @@ use rst19_core::sequence_motion_tracks::{
 use serde_json::{json, Value};
 
 #[test]
-fn raw_line_model_review_gate_matches_frozen_python_cases() {
+fn raw_line_model_review_gate_matches_source_derived_boundaries() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/sequence_motion_raw_review.json")).unwrap();
     let psf_fwhm = fixture["psf_fwhm"].as_f64().unwrap();
@@ -14,6 +14,20 @@ fn raw_line_model_review_gate_matches_frozen_python_cases() {
         let actual = sequence_line_model_review_supported(&case["point"], psf_fwhm).unwrap();
         assert_eq!(actual, case["expected"].as_bool().unwrap(), "{label}");
     }
+}
+
+#[test]
+fn strong_quantized_ellipse_can_pass_without_beating_the_elliptical_template() {
+    let mut point = json!({"single_frame_model":"elliptical_point", "width_px":1.0,"length_px":8.0,
+        "line_template_snr":5.0,"line_vs_point_delta_bic":6.0,"line_vs_double_delta_bic":6.0,
+        "line_vs_background_delta_bic":6.0,"line_vs_elliptical_delta_bic":-100.0,
+        "continuity_ratio":0.80,"profile_fill_ratio":0.80});
+    assert!(sequence_line_model_review_supported(&point, 2.0).unwrap());
+    point["width_px"] = json!(1.000001);
+    assert!(!sequence_line_model_review_supported(&point, 2.0).unwrap());
+    point["width_px"] = json!(1.0);
+    point["line_vs_double_delta_bic"] = json!(5.999999);
+    assert!(!sequence_line_model_review_supported(&point, 2.0).unwrap());
 }
 
 fn temporal_point() -> Value {

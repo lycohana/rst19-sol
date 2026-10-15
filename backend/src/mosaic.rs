@@ -22,10 +22,13 @@ struct Frame {
     path: String,
 }
 
-#[derive(Debug)]
-struct Mosaic {
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct Mosaic {
+    #[serde(skip)]
     image: Vec<f32>,
+    #[serde(skip)]
     coverage: Vec<u16>,
+    #[serde(skip)]
     scatter: Vec<f32>,
     source_height: usize,
     source_width: usize,
@@ -45,6 +48,140 @@ struct Mosaic {
 }
 
 type MosaicBounds = (usize, usize, f64, f64, Vec<[f64; 2]>);
+
+pub fn mosaic_cache_key(paths: &[PathBuf], shifts: &[[f64; 2]], options: &Value) -> Result<String> {
+    if paths.len() != shifts.len() || shifts.iter().flatten().any(|v| !v.is_finite()) {
+        return Err("mosaic cache requires finite shifts matching frame paths".into());
+    }
+    crate::cache::sequence_cache_key(
+        paths,
+        &json!({"mosaic_cache_version":CACHE_VERSION,"cumulative_shifts":shifts,"options":options}),
+        &json!({"kind":"native-registered-mosaic"}),
+    )
+}
+pub fn mosaic_cache_path(directory: &Path, key: &str) -> Result<PathBuf> {
+    if key.len() != 64 || !key.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return Err("mosaic cache key must be SHA-256".into());
+    }
+    Ok(directory.join(format!("{key}.native.mosaic.gz")))
+}
+pub fn save_mosaic_cache(directory: &Path, key: &str, mosaic: &Mosaic) -> Result<PathBuf> {
+    use flate2::{write::GzEncoder, Compression};
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let length = mosaic
+        .output_height
+        .checked_mul(mosaic.output_width)
+        .ok_or("mosaic cache dimensions overflow")?;
+    if length != mosaic.image.len()
+        || length != mosaic.coverage.len()
+        || length != mosaic.scatter.len()
+    {
+        return Err("mosaic cache arrays have mismatched shapes".into());
+    }
+    let path = mosaic_cache_path(directory, key)?;
+    fs::create_dir_all(directory).map_err(|e| e.to_string())?;
+    let temporary = directory.join(format!(
+        ".native-cache-mosaic-{}-{}.tmp",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let result = (|| {
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|e| e.to_string())?;
+        let mut writer = GzEncoder::new(file, Compression::default());
+        let metadata = serde_json::to_vec(
+            &json!({"native_mosaic_cache_version":1,"cache_key":key,"mosaic":mosaic}),
+        )
+        .map_err(|e| e.to_string())?;
+        writer
+            .write_all(b"RST19-MOSAIC\x01")
+            .map_err(|e| e.to_string())?;
+        writer
+            .write_all(&(metadata.len() as u32).to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        writer.write_all(&metadata).map_err(|e| e.to_string())?;
+        for value in &mosaic.image {
+            writer
+                .write_all(&value.to_bits().to_le_bytes())
+                .map_err(|e| e.to_string())?;
+        }
+        for value in &mosaic.coverage {
+            writer
+                .write_all(&value.to_le_bytes())
+                .map_err(|e| e.to_string())?;
+        }
+        for value in &mosaic.scatter {
+            writer
+                .write_all(&value.to_bits().to_le_bytes())
+                .map_err(|e| e.to_string())?;
+        }
+        writer
+            .finish()
+            .map_err(|e| e.to_string())?
+            .sync_all()
+            .map_err(|e| e.to_string())?;
+        fs::rename(&temporary, &path).map_err(|e| e.to_string())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result?;
+    Ok(path)
+}
+pub fn load_mosaic_cache(directory: &Path, key: &str) -> Option<Mosaic> {
+    use flate2::read::GzDecoder;
+    use std::io::Read;
+    let file = fs::File::open(mosaic_cache_path(directory, key).ok()?).ok()?;
+    let mut bytes = Vec::new();
+    GzDecoder::new(file)
+        .take(512 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() > 512 * 1024 * 1024 || bytes.get(..13) != Some(b"RST19-MOSAIC\x01") {
+        return None;
+    }
+    let metadata_len = u32::from_le_bytes(bytes.get(13..17)?.try_into().ok()?) as usize;
+    let start = 17usize.checked_add(metadata_len)?;
+    let metadata: Value = serde_json::from_slice(bytes.get(17..start)?).ok()?;
+    if metadata["native_mosaic_cache_version"] != 1 || metadata["cache_key"] != key {
+        return None;
+    }
+    let mut mosaic: Mosaic = serde_json::from_value(metadata["mosaic"].clone()).ok()?;
+    let length = mosaic.output_height.checked_mul(mosaic.output_width)?;
+    if length == 0
+        || length.checked_mul(10)?.checked_add(start)? != bytes.len()
+        || mosaic.shifts.len() != mosaic.frame_origins.len()
+        || mosaic.shifts.len() != mosaic.frame_paths.len()
+        || mosaic.shifts.len() != mosaic.frame_valid_counts.len()
+        || mosaic.shifts.iter().flatten().any(|v| !v.is_finite())
+    {
+        return None;
+    }
+    let pixels = bytes.get(start..)?;
+    mosaic.image = pixels[..length * 4]
+        .chunks_exact(4)
+        .map(|b| f32::from_bits(u32::from_le_bytes(b.try_into().expect("four byte chunk"))))
+        .collect();
+    mosaic.coverage = pixels[length * 4..length * 6]
+        .chunks_exact(2)
+        .map(|b| u16::from_le_bytes(b.try_into().expect("two byte chunk")))
+        .collect();
+    mosaic.scatter = pixels[length * 6..]
+        .chunks_exact(4)
+        .map(|b| f32::from_bits(u32::from_le_bytes(b.try_into().expect("four byte chunk"))))
+        .collect();
+    if mosaic
+        .coverage
+        .iter()
+        .any(|v| *v as usize > mosaic.shifts.len())
+    {
+        return None;
+    }
+    Some(mosaic)
+}
 
 fn median(values: &mut [f32]) -> f32 {
     values.sort_by(f32::total_cmp);
@@ -604,7 +741,7 @@ fn resize_rgba_axis(
     Ok(output)
 }
 
-fn resize_rgba_lanczos3(
+pub(crate) fn resize_rgba_lanczos3(
     rgba: &[u8],
     width: usize,
     height: usize,
@@ -1034,6 +1171,59 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT_TEST_DIR: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn native_mosaic_cache_preserves_float_bits_and_rejects_corrupt_payloads() {
+        let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target/test-artifacts")
+            .join(format!("mosaic-cache-{}", std::process::id()));
+        let key = "a".repeat(64);
+        let mosaic = build_with_shape(
+            vec![
+                frame(&[1., 2., 3., f32::NAN], "one.fits"),
+                frame(&[2., 3., 4., 5.], "two.fits"),
+            ],
+            2,
+            2,
+            vec![[0., 0.], [1., 0.]],
+            "median",
+            3.,
+            1,
+            false,
+            false,
+        )
+        .unwrap();
+        let path = save_mosaic_cache(&directory, &key, &mosaic).unwrap();
+        let cached = load_mosaic_cache(&directory, &key).unwrap();
+        assert_eq!(metadata(&cached), metadata(&mosaic));
+        assert_eq!(
+            cached.image.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            mosaic.image.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+        );
+        assert_eq!(cached.coverage, mosaic.coverage);
+        assert_eq!(
+            cached
+                .scatter
+                .iter()
+                .map(|v| v.to_bits())
+                .collect::<Vec<_>>(),
+            mosaic
+                .scatter
+                .iter()
+                .map(|v| v.to_bits())
+                .collect::<Vec<_>>()
+        );
+        fs::write(&path, b"corrupt cache").unwrap();
+        assert!(load_mosaic_cache(&directory, &key).is_none());
+        assert!(mosaic_cache_path(&directory, "../outside").is_err());
+        assert!(directory.canonicalize().unwrap().starts_with(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("target/test-artifacts")
+                .canonicalize()
+                .unwrap()
+        ));
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     fn frame(values: &[f32], path: &str) -> Frame {
         Frame {

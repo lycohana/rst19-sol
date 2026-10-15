@@ -1506,7 +1506,7 @@ fn html_escape(text: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-fn write_report(run_dir: &Path, report_path: &Path) -> Result<PathBuf> {
+pub fn write_report(run_dir: &Path, report_path: &Path) -> Result<PathBuf> {
     let manifest_path = run_dir.join("manifest.json");
     let manifest: Value =
         serde_json::from_slice(&fs::read(&manifest_path).map_err(|e| e.to_string())?)
@@ -1573,6 +1573,7 @@ fn write_report(run_dir: &Path, report_path: &Path) -> Result<PathBuf> {
         html.push_str(&section);
     }
     fs::write(&report, html).map_err(|e| e.to_string())?;
+    crate::ablation_report::decorate(&report)?;
     Ok(report)
 }
 

@@ -30,6 +30,10 @@ results/
 tmp/
 temp/
 .rst19-cache/
+*.native.json.gz
+*.native.sequence.json.gz
+*.native.mosaic.gz
+.native-cache-*.tmp
 *.log
 
 # 本地编辑器工作区配置

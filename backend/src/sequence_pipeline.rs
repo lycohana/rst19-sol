@@ -1,8 +1,8 @@
 //! Native FITS-to-tracks orchestration for the sequence core.
 //!
-//! This module exposes the migrated detection and quality-track stages
-//! separately from temporal candidate recovery, trail analysis, and relative
-//! photometry, which remain later sequence stages.
+//! Detection, registration, temporal recovery, raw line review and motion
+//! classification share the same loaded FITS frames. The diagnostic stage
+//! outputs accompany the assembled public sequence result.
 use crate::{
     detection::{self, BackgroundModel},
     fits,
@@ -844,6 +844,12 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         .and_then(Value::as_f64)
         .unwrap_or_else(|| FastPointOptions::default().min_flux_snr);
     let frame_options = sequence_frame_options(request)?;
+    let frame_cache_directory = match request.get("cache_dir") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(path)) => Some(PathBuf::from(path).join("frames")),
+        Some(_) => return Err("cache_dir must be a path string".into()),
+    };
+    let mut frame_cache_hits = 0usize;
     let mut stack_options = StackFaintOptions::default();
     stack_options.enabled = optional_request_bool(request, "stack_faint_recovery", true)?;
     stack_options.reference_mode = request
@@ -960,6 +966,15 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     let frame_times: Vec<f64> = serde_json::from_value(time_axis["frame_times"].clone())
         .map_err(|error| error.to_string())?;
 
+    let frame_cache_parameters = json!({
+        "effective_detector_options":serde_json::to_value(&frame_options.detection).map_err(|error|error.to_string())?,
+        "frame_options":request.get("frame_options").cloned().unwrap_or_else(||json!({})),
+    });
+    let frame_cache_context = json!({
+        "shared_background_frame_path":shared_background.as_ref().map(|_|paths[0].to_string_lossy().into_owned()),
+        "scientific_context":request.get("scientific_context").cloned().unwrap_or(Value::Null),
+    });
+
     for (frame_index, frame) in frames.into_iter().enumerate() {
         let background = shared_background
             .as_ref()
@@ -969,8 +984,28 @@ pub fn handle_request(request: &Value) -> Result<Value> {
                 height: *height,
                 width: *width,
             });
-        let analysis =
-            pipeline::analyze_frame(frame, None, None, &frame_options, background.as_ref())?;
+        let cache_key = frame_cache_directory
+            .as_ref()
+            .map(|_| {
+                crate::cache::cache_key(&frame.path, &frame_cache_parameters, &frame_cache_context)
+            })
+            .transpose()?;
+        let cached = if let (Some(directory), Some(key)) = (&frame_cache_directory, &cache_key) {
+            crate::cache::load_analysis(directory, key, frame.clone())
+        } else {
+            None
+        };
+        let analysis = if let Some(analysis) = cached {
+            frame_cache_hits += 1;
+            analysis
+        } else {
+            let analysis =
+                pipeline::analyze_frame(frame, None, None, &frame_options, background.as_ref())?;
+            if let (Some(directory), Some(key)) = (&frame_cache_directory, &cache_key) {
+                crate::cache::save_analysis(directory, key, &analysis)?;
+            }
+            analysis
+        };
         fixed_sentinel_impact_audit.add_frame(frame_index, &analysis)?;
         if fast_point_motion && paths.len() >= 3 {
             let (prepared, audit) = prefilter_fast_candidate_peaks(
@@ -1130,6 +1165,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     let mut temporal_candidate_frames = vec![Vec::<[f32; 5]>::new(); paths.len()];
     let mut temporal_reference_candidate_count = 0usize;
     let mut temporal_coadd_candidate_count = 0usize;
+    let mut motion_temporal_reference = None;
     let mut motion_frame_components = json!({
         "status":"insufficient_frames",
         "scope":"registered_temporal_residual_components_only",
@@ -1164,6 +1200,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
                 None,
                 true,
             )?;
+        motion_temporal_reference = median_reference;
         if matches!(temporal_proposal_mode.as_str(), "coadd" | "both") {
             let coadd_result =
                 crate::sequence_temporal::temporal_reference_candidates_from_analyses(
@@ -1212,6 +1249,11 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         .as_f64()
         .unwrap_or_else(|| 8.0_f64.max(3.0 * frame_options.detection.measurement.psf_fwhm));
     let mut raw_motion_components = Vec::with_capacity(frame_analysis_objects.len());
+    let motion_multiscale = match request.get("motion_multiscale_line_proposals") {
+        None => true,
+        Some(Value::Bool(value)) => *value,
+        Some(_) => return Err("motion_multiscale_line_proposals must be a boolean".into()),
+    };
     if paths.len() >= 2 {
         for (frame_index, analysis) in frame_analysis_objects.iter().enumerate() {
             let frame_thresholds = crate::sequence_trails::motion_proposal_thresholds(&json!({
@@ -1248,6 +1290,17 @@ pub fn handle_request(request: &Value) -> Result<Value> {
                     point["aligned_y"] = json!(y - shifts[frame_index][1]);
                 }
             }
+            if motion_multiscale {
+                crate::sequence_motion_recovery::augment_multiscale_raw_components(
+                    &mut raw_components,
+                    analysis,
+                    motion_temporal_reference.as_ref(),
+                    frame_index,
+                    shifts[frame_index],
+                    frame_options.detection.measurement.psf_fwhm,
+                    motion_min_length_px,
+                )?;
+            }
             raw_motion_components.push(raw_components);
         }
     }
@@ -1275,15 +1328,33 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             motion_line_link_radius_px,
             frame_options.detection.measurement.psf_fwhm,
         )?;
-    let motion_component_tracks =
+    let mut motion_component_tracks =
         crate::sequence_motion_tracks::stitch_and_rescue_motion_component_tracks(
             &associated_motion_component_tracks,
             &motion_frame_model_review["unassociated_single_frame_points"],
             &frame_times,
             frame_options.detection.measurement.psf_fwhm,
         )?;
+    crate::sequence_motion_recovery::recover_predicted_roi_points(
+        &mut motion_component_tracks,
+        &frame_analysis_objects,
+        &shifts,
+        &frame_times,
+        frame_options.detection.measurement.psf_fwhm,
+    )?;
     motion_frame_model_review["unassociated_single_frame_points"] =
         motion_component_tracks["unassociated_single_frame_points"].clone();
+    let motion_frame_shapes = frame_analysis_objects
+        .iter()
+        .map(|analysis| [analysis.frame.height, analysis.frame.width])
+        .collect::<Vec<_>>();
+    let motion_feature_result = crate::sequence_motion_tracks::classify_motion_component_tracks(
+        &motion_component_tracks,
+        &frame_times,
+        &headers,
+        &motion_frame_shapes,
+        frame_options.detection.measurement.psf_fwhm,
+    )?;
     let candidate_peak_frames = frame_analysis_objects
         .iter()
         .zip(&temporal_candidate_frames)
@@ -1380,6 +1451,12 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             .unwrap_or_default(),
     );
     all_tracks.extend(stack_faint.tracks.iter().cloned());
+    let motion_features =
+        crate::sequence_motion_tracks::public_motion_feature_tracks(&motion_feature_result)?;
+    let motion_evidence_links = crate::sequence_trails::link_motion_evidence_tracks(&json!({
+        "point_tracks":all_tracks,"line_tracks":motion_features,
+    }))?["links"]
+        .clone();
     let track_counts = sequence_track_counts(&all_tracks);
     for key in [
         "candidate_consensus_count",
@@ -1407,10 +1484,102 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         None
     };
     let fixed_sentinel_impact_audit = fixed_sentinel_impact_audit.finish();
+    let mut sequence_result = tracking.clone();
+    for (key, value) in track_counts
+        .as_object()
+        .ok_or("invalid sequence track counts")?
+    {
+        sequence_result[key] = value.clone();
+    }
+    sequence_result["tracks"] = json!(all_tracks);
+    sequence_result["motion_features"] = json!(motion_features);
+    sequence_result["motion_evidence_links"] = motion_evidence_links.clone();
+    let link_count = motion_evidence_links.as_array().map_or(0, Vec::len);
+    let moving_line_count = motion_features
+        .iter()
+        .filter(|track| track["classification"] == "moving")
+        .count();
+    sequence_result["motion_evidence_link_count"] = json!(link_count);
+    sequence_result["motion_evidence_group_count"] = json!((track_counts["moving_track_count"]
+        .as_u64()
+        .unwrap_or(0) as usize
+        + moving_line_count)
+        .saturating_sub(link_count));
+    sequence_result["motion_line_link_radius_px"] = json!(motion_line_link_radius_px);
+    sequence_result["detector_parameters"] = frame_analysis_objects[0].detection.parameters.clone();
+    sequence_result["source_working_limit"] = json!(frame_options.detection.max_sources);
+    sequence_result["calculation_dtype"] = json!(if frame_options.detection.use_float32 {
+        "float32"
+    } else {
+        "float64"
+    });
+    sequence_result["background_sample_limit"] =
+        json!(frame_options.detection.background_sample_limit);
+    sequence_result["fast_sequence"] = json!(frame_options.detection.fast_sequence);
+    let shared_frame_count = frame_analysis_objects
+        .iter()
+        .filter(|analysis| {
+            analysis.detection.parameters["background_model_mode"] == "shared_sequence_pilot"
+        })
+        .count();
+    sequence_result["background_model_mode"] = json!(if shared_frame_count == paths.len() {
+        "shared_sequence_pilot"
+    } else if shared_frame_count > 0 {
+        "shared_sequence_pilot_with_fallback"
+    } else {
+        "per_frame_local"
+    });
+    sequence_result["temporal_candidate_min_snr"] = json!(temporal_candidate_min_snr);
+    sequence_result["temporal_reference_min_snr"] = json!(temporal_reference_min_snr);
+    sequence_result["temporal_multiscale"] = json!(temporal_multiscale);
+    sequence_result["temporal_min_psf_correlation"] = json!(temporal_min_psf_correlation);
+    sequence_result["candidate_consensus_audit"] = candidate_consensus["audit"].clone();
+    sequence_result["fixed_sentinel_audit"] = fixed_sentinel_audit.clone();
+    sequence_result["fixed_sentinel_impact_audit"] = fixed_sentinel_impact_audit.clone();
+    sequence_result["relative_photometry"] = json!(relative_photometry_result);
+    let thresholds = motion_frame_components["thresholds_adu"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_f64)
+        .collect::<Vec<_>>();
+    sequence_result["motion_residual_threshold_adu"] = json!(if thresholds.is_empty() {
+        100.0
+    } else {
+        crate::statistics::median(&thresholds)?
+    });
+    sequence_result["motion_reference_mode"] = json!(if paths.len() < 2 {
+        "per_frame_background"
+    } else if shifts.iter().flatten().all(|value| value.abs() <= 0.75) {
+        "temporal_median_small_shift"
+    } else {
+        "registered_median"
+    });
+    sequence_result["motion_frame_audits"] = json!(motion_frame_model_review["frames"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|frame| {
+            let mut audit = frame["audit"].clone();
+            if let Some(fields) = audit.as_object_mut() {
+                fields.remove("raw_fallback_added_count");
+            }
+            audit
+        })
+        .collect::<Vec<_>>());
+    sequence_result["frames"] = json!(frame_analysis_objects.iter().enumerate().map(|(index, analysis)| {
+        let exposure = fits::exposure_milliseconds(&analysis.frame.header)?;
+        Ok(json!({"frame_index":index,"path":analysis.frame.path.to_string_lossy(),
+            "candidate_count":analysis.detection.candidate_count,"returned_count":analysis.detection.sources.len(),
+            "quality_count":analysis.detection.quality_count,"timestamp":analysis.frame.header.get("DATE-OBS").and_then(Value::as_str),
+            "exposure_ms":exposure,"auxiliary":analysis.frame.auxiliary.as_ref().map(|value| value.as_dict()).unwrap_or_default(),
+            "width_px":analysis.frame.width,"height_px":analysis.frame.height}))
+    }).collect::<Result<Vec<_>>>()?);
 
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
-        "scope":"frame_detection_quality_tracks_temporal_reference_candidates_fast_point_motion_candidate_proposals_candidate_consensus_raw_pixel_line_model_review_shape_fallback_stitching_and_collinear_rescue",
+        "sequence_result":sequence_result,
+        "scope":"frame_detection_quality_tracks_temporal_recovery_raw_pixel_line_review_multiscale_stitching_collinear_rescue_predicted_roi_motion_classification_and_public_sequence_result",
         "frame_analyses":frame_analyses,
         "tracking":tracking,
         "fast_point_tracks":fast_point_tracks,
@@ -1428,11 +1597,15 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "motion_frame_components":motion_frame_components,
         "motion_frame_model_review":motion_frame_model_review,
         "motion_component_tracks":motion_component_tracks,
+        "motion_feature_tracks":motion_features,
+        "motion_evidence_links":motion_evidence_links,
+        "motion_feature_classification":motion_feature_result,
         "fixed_sentinel_audit":fixed_sentinel_audit,
         "fixed_sentinel_impact_audit":fixed_sentinel_impact_audit,
         "observation_time_axis":time_axis,
         "detector_options":serde_json::to_value(&frame_options.detection).map_err(|error| error.to_string())?,
         "shared_background_model":shared_background.is_some(),
+        "frame_cache_hits":frame_cache_hits,
     }))
 }
 

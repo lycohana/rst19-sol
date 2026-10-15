@@ -48,8 +48,7 @@ fn compare_json(actual: &Value, expected: &Value, path: &str) {
 fn contaminated_pair_injection_matches_frozen_python_reference() {
     let fixture_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let frame_path = fixture_dir.join("contaminated_pair_injection_parity.fits");
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    let reference_path = root.join("src/rst19/contaminated_pair_injection.py");
+    let reference_path = fixture_dir.join("legacy_sources/contaminated_pair_injection.txt");
     let reference_hash = format!("{:x}", Sha256::digest(fs::read(reference_path).unwrap()));
     assert_eq!(
         reference_hash, PYTHON_REFERENCE_SHA256,

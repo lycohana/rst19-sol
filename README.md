@@ -2,11 +2,13 @@
 
 面向太空天基图像星图识别、星图分析与创新分析赛项的方案仓库。
 
-桌面前端已使用 **Rust 原生界面**，目标是将全部后端运算也迁入 Rust，并从发布运行时移除 Python。迁移尚未完成：未迁移的工具仍由包内 Python 环境执行。`rst19-gui` / `rst19-ui` 启动 Rust 工作台，旧工作台可通过 `rst19-tk` 打开；进度见 [Rust 迁移清单](backend/migration.json) 与 [桌面说明](desktop/README.md)。
+桌面前端、71 项工具和后端运算均使用 **Rust**。原生 worker 直接调用 rst19-core，发布构建不再包含 Python 解释器或回退环境。运行、构建和包核验命令见 [桌面说明](desktop/README.md)，数值与科学证据边界见 [验证记录](backend/verification.md)，原始模块指纹见 [迁移清单](backend/migration.json)。
 
-当前仓库已完成比赛规则、数据格式和本地数据集边界整理，并开始落地可离线运行的 Python 基线。本文档和 `doc/` 只把已经从比赛材料、实际 FITS 文件或可复现实验中确认的信息写成事实，不把规划内容写成已完成能力。
+当前仓库已完成比赛规则、数据格式和本地数据集边界整理，并提供可离线运行的 Rust 算法实现。本文档和 `doc/` 只把已经从比赛材料、实际 FITS 文件或可复现实验中确认的信息写成事实，不把规划内容写成已完成能力。
 
 详细的资料分类、方法调研、验证清单和参考链接见 [`doc/README.md`](./doc/README.md)；第一次使用软件请先看 [`软件使用说明`](./doc/软件使用说明.md)。如果要给队友讲清楚从图像识别、测光、星表到 15 帧运动分析的完整路线，可直接打开 [`RST19 研究教程`](./deliverables/rst19-研究教程.html)。
+
+> **历史资料说明：** 下方“当前实现路线”“本地使用”和旧界面章节记录 2026-10-14 之前的 Python/Tkinter 版本，保留为研究历史；其中旧文件路径和命令不适用于当前版本。当前 Rust 桌面版的构建、运行和验证命令以 [`desktop/README.md`](desktop/README.md) 为准。
 
 ## 赛题概览
 
@@ -158,7 +160,7 @@ cargo run --release --manifest-path backend/Cargo.toml --bin rst19-format-audit 
 
 ## 当前实现路线
 
-当前已实现 FITS 读取、首行辅助数据解码、局部背景/RMS、Gaussian/DoG/Starlet 多提案宽筛、候选来源追踪、双 PSF/BIC 去混叠、统一点源质量细筛、重复高位码/异常负值数据有效性审计、线状结构审计、最暗可信源筛选、用户提供 CSV 星表加载、切平面 WCS、先验 WCS 下的全局一对一匹配、匹配后的局部仿射 WCS 校准、15 帧平移配准/普通轨迹关联、高速点源完整候选宽筛与原始 ADU 细筛、15 帧注册中值/稳健叠加暗星恢复层和 Python 桌面工作台。Starlet 当前是有完整负结果记录的实验模式，不替代 GUI 的 `hybrid` 默认口径；完整比赛能力仍按以下顺序推进：
+当前已实现 FITS 读取、首行辅助数据解码、局部背景/RMS、Gaussian/DoG/Starlet 多提案宽筛、候选来源追踪、双 PSF/BIC 去混叠、统一点源质量细筛、重复高位码/异常负值数据有效性审计、线状结构审计、最暗可信源筛选、用户提供 CSV 星表加载、切平面 WCS、先验 WCS 下的全局一对一匹配、匹配后的局部仿射 WCS 校准、15 帧平移配准/普通轨迹关联、高速点源完整候选宽筛与原始 ADU 细筛、15 帧注册中值/稳健叠加暗星恢复层和 Rust 原生桌面工作台。Starlet 当前是有完整负结果记录的实验模式，不替代 GUI 的 `hybrid` 默认口径；完整比赛能力仍按以下顺序推进：
 
 1. **数据校验**：批量读取 FITS 头，检查尺寸、位深、曝光时间、时间顺序和辅助数据解码结果；当前已具备单帧读取校验基线。
 2. **星点识别**：GUI 当前默认以 `hybrid`（Gaussian + 双尺度 DoG）在 `4σ` 取得候选，以 `PSF FWHM=2 px`、通量 SNR/形状/掩膜规则形成质量层；单图不设置候选源数量上限。已完成第一轮参数扫描、按需注入实验和星表核验 UI，仍需可靠星表/WCS 与人工抽检，才可冻结比赛星点计数。
@@ -359,7 +361,7 @@ rst19-source-separation-audit tmp/source-quality-audit-code-pattern-current-v3/s
 如果还要检查两个框在同一几何背景下是否属于同一种检测机制，可运行：
 
 ~~~powershell
-python -m rst19.pair_mechanism_context_cli `
+rst19-pair-mechanism-context `
   tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
   --target-id 82931 --target-id 82934 `
   --out-dir tmp/pair-mechanism-context-code-pattern-current-v1
@@ -370,7 +372,7 @@ python -m rst19.pair_mechanism_context_cli `
 要保存这组窗口敏感性对照，可运行：
 
 ~~~powershell
-python -m rst19.pair_mechanism_sensitivity_cli `
+rst19-pair-mechanism-sensitivity `
   tmp/source-quality-audit-code-pattern-current-v3/source_catalog.csv `
   --target-id 82931 --target-id 82934 `
   --out-dir tmp/pair-mechanism-sensitivity-code-pattern-current-v1
@@ -660,12 +662,12 @@ rst19-signed-null-overlap doc/00-项目资料/原始数据 --reverse-source-csv 
 
 ## 本地使用
 
-克隆仓库并安装实现模块：
+克隆仓库并构建原生工具：
 
 ```powershell
 git clone https://github.com/lycohana/rst19-sol.git
 Set-Location rst19-sol
-python -m pip install -e ".[dev]"
+cargo build -j4 --locked --release --manifest-path backend/Cargo.toml --bins
 ```
 
 只检测一帧并输出 JSON：
@@ -844,7 +846,7 @@ rst19-injection --pair-flux-ratio-audit `
 对截图的三个候选位置还可以做固定位置 `K=1/2/3` 多源 PSF 审计：
 
 ```powershell
-python -m rst19.multipsf_cli `
+rst19-multipsf-audit `
   doc/00-项目资料/原始数据 `
   --positions "1269,3465;1274,3467;1272,3453" `
   --psf-fwhm 2 `
@@ -856,7 +858,7 @@ python -m rst19.multipsf_cli `
 为检查固定中心误差和自由度过拟合，再运行有界自由位置及半径敏感性审计：
 
 ```powershell
-python -m rst19.free_multipsf_cli `
+rst19-free-multipsf-audit `
   doc/00-项目资料/原始数据 `
   --radius-sweep --mask-modes raw `
   --position-radii 0.25 0.5 0.75 1.0 1.25 `
@@ -880,23 +882,20 @@ rst19-sweep doc/00-项目资料/原始数据/20260330163205413_9901.fits `
 
 模块设计、参数边界和当前限制见 [`src/README.md`](./src/README.md) 与 [`src/DESIGN.md`](./src/DESIGN.md)。
 
-运行单元测试（测试文件位于 [`tests/`](./tests/)）：
+运行 Rust 单元与冻结参考回归测试（测试文件位于 [`backend/tests/`](./backend/tests/)）：
 
 ```powershell
-python -m pytest
+cargo test -j4 --locked --manifest-path backend/Cargo.toml
 ```
 
-启动 Python 桌面界面：
+启动 Rust 原生桌面：
 
-```powershell
-rst19-gui
-```
+~~~powershell
+cargo build -j4 --locked --manifest-path desktop/Cargo.toml --bin rst19-native-worker
+cargo run --locked --manifest-path desktop/Cargo.toml --bin rst19-desktop
+~~~
 
-也可以使用同一个 Python/Tkinter 入口：
-
-```powershell
-rst19-ui
-```
+生产发布包及 Windows/macOS/Linux 构建方法见 [桌面说明](desktop/README.md)。以下早期界面说明属于研究版本记录，当前按钮、布局和能力以原生桌面与验证记录为准。
 
 面向非开发用户的按钮、图层、缓存和“稳定星场/叠加暗星”解释见 [`doc/软件使用说明.md`](./doc/软件使用说明.md)。
 

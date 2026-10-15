@@ -111,6 +111,74 @@ fn run(request: Value) -> Result<Value, String> {
                 .into(),
         );
     }
+    if matches!(
+        request["tool"].as_str(),
+        Some(
+            "rst19-sequence"
+                | "rst19-innovation"
+                | "rst19-injection"
+                | "rst19-pair-audit"
+                | "rst19-motion-proposal-ablation"
+        )
+    ) {
+        let mut args = string_args(&request)?;
+        let out = request["out_dir"].as_str().map(PathBuf::from);
+        if request["tool"] == "rst19-sequence" {
+            return rst19_core::sequence_cli::run_desktop(
+                &args,
+                out.as_deref().unwrap_or(Path::new("tmp/sequence")),
+            );
+        }
+        if let Some(out) = &out {
+            if !args
+                .iter()
+                .any(|arg| arg == "--out-dir" || arg.starts_with("--out-dir="))
+            {
+                args.extend(["--out-dir".into(), out.to_string_lossy().into_owned()]);
+            }
+        }
+        let result = match request["tool"].as_str().unwrap_or("") {
+            "rst19-innovation" => rst19_core::innovation_cli::run_desktop(&args),
+            "rst19-injection" => rst19_core::injection::run_desktop(&args),
+            "rst19-pair-audit" => rst19_core::source_pair_audit::run_desktop(&args),
+            "rst19-motion-proposal-ablation" => {
+                rst19_core::motion_proposal_ablation::run_desktop(&args)
+            }
+            _ => unreachable!(),
+        }?;
+        if let Some(out) = out {
+            fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+            fs::write(
+                out.join("request.json"),
+                serde_json::to_vec_pretty(&request).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        let tool = request["tool"].as_str().unwrap_or("");
+        let artifact = match tool {
+            "rst19-innovation" => Some("innovation_report.json"),
+            "rst19-pair-audit" => Some("source_pair_audit.json"),
+            "rst19-motion-proposal-ablation" => Some("manifest.json"),
+            _ => None,
+        };
+        let directory = result["output"]
+            .as_str()
+            .or_else(|| result["run_dir"].as_str())
+            .map(PathBuf::from);
+        let artifact_path = directory
+            .as_ref()
+            .zip(artifact)
+            .map(|(dir, file)| dir.join(file));
+        let payload = if let Some(path) = &artifact_path {
+            serde_json::from_slice::<Value>(&fs::read(path).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?
+        } else {
+            result.clone()
+        };
+        return Ok(
+            json!({"tool":tool,"out_dir":directory,"result_path":artifact_path,"result":payload,"summary":result}),
+        );
+    }
     if request["tool"] == "rst19-photometric-report" {
         return rst19_core::photometric_report::run_desktop(&string_args(&request)?);
     }
@@ -1460,6 +1528,66 @@ fn catalog() -> Result<Value, String> {
 }
 
 fn main() {
+    let cli = std::env::args().skip(1).collect::<Vec<_>>();
+    if cli.first().map(String::as_str) == Some("--tool") {
+        let Some(name) = cli.get(1) else {
+            eprintln!("--tool requires a native tool name");
+            std::process::exit(2);
+        };
+        if cli[2..].iter().any(|arg| arg == "--help" || arg == "-h") {
+            match catalog().and_then(|catalog| {
+                catalog["tools"]
+                    .as_array()
+                    .and_then(|tools| {
+                        tools
+                            .iter()
+                            .find(|tool| tool["name"].as_str() == Some(name.as_str()))
+                    })
+                    .cloned()
+                    .ok_or_else(|| format!("unknown native tool {name}"))
+            }) {
+                Ok(tool) => {
+                    println!("{name}: {}", tool["description"].as_str().unwrap_or(""));
+                    for field in tool["fields"].as_array().into_iter().flatten() {
+                        println!(
+                            "{}  {}",
+                            field["flag"].as_str().unwrap_or(""),
+                            field["help"].as_str().unwrap_or("")
+                        );
+                    }
+                    return;
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        let args = cli[2..].to_vec();
+        let out = args
+            .iter()
+            .position(|arg| arg == "--out-dir")
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+            .or_else(|| {
+                args.iter()
+                    .find_map(|arg| arg.strip_prefix("--out-dir=").map(str::to_owned))
+            })
+            .unwrap_or_else(|| format!("tmp/{name}"));
+        match run(json!({"operation":"tool","tool":name,"args":args,"out_dir":out})) {
+            Ok(payload) => {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&payload).expect("native tool result")
+                );
+                return;
+            }
+            Err(error) => {
+                eprintln!("{name}: {error}");
+                std::process::exit(2);
+            }
+        }
+    }
     if std::env::args().any(|arg| arg == "--catalog") {
         let (event, exit_code) = match catalog() {
             Ok(payload) => (json!({"event":"done","ok":true,"payload":payload}), 0),
@@ -2079,7 +2207,7 @@ mod tests {
         }));
         assert!(tools
             .iter()
-            .any(|tool| tool["name"] == "rst19-sequence" && tool["native"] == false));
+            .any(|tool| tool["name"] == "rst19-sequence" && tool["native"] == true));
     }
 
     #[test]

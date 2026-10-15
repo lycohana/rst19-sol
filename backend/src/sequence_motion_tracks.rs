@@ -56,7 +56,7 @@ fn finite_number(point: &Value, key: &str) -> Option<f64> {
         .filter(|value| value.is_finite())
 }
 
-fn model_is_supported(point: &Value) -> bool {
+pub(crate) fn model_is_supported(point: &Value) -> bool {
     let model = point.get("single_frame_model").and_then(Value::as_str);
     let line_snr = finite_number(point, "line_template_snr");
     match model {
@@ -82,7 +82,25 @@ pub fn sequence_line_model_review_supported(point: &Value, psf_fwhm: f64) -> Res
     if !psf_fwhm.is_finite() || psf_fwhm <= 0.0 {
         return Err("psf_fwhm must be finite and positive".into());
     }
-    if model_is_supported(point) {
+    let strong_thin_ellipse = point["single_frame_model"] == "elliptical_point"
+        && finite_number(point, "width_px")
+            .is_some_and(|width| width <= 0.75_f64.max(0.5 * psf_fwhm))
+        && finite_number(point, "length_px")
+            .is_some_and(|length| length >= 8.0_f64.max(3.0 * psf_fwhm))
+        && finite_number(point, "line_template_snr").is_some_and(|snr| snr >= 5.0)
+        && [
+            "line_vs_point_delta_bic",
+            "line_vs_double_delta_bic",
+            "line_vs_background_delta_bic",
+        ]
+        .iter()
+        .all(|key| finite_number(point, key).is_some_and(|delta| delta >= 6.0))
+        && ["continuity_ratio", "profile_fill_ratio"]
+            .iter()
+            .all(|key| finite_number(point, key).is_some_and(|ratio| ratio >= 0.80));
+    // A quantized one-pixel streak can favor the ellipse over a PSF-width line.
+    // The strong sequence gate deliberately does not require beating that ellipse.
+    if model_is_supported(point) || strong_thin_ellipse {
         return Ok(true);
     }
     let model = point.get("single_frame_model").and_then(Value::as_str);
@@ -129,7 +147,7 @@ pub fn sequence_line_model_review_supported(point: &Value, psf_fwhm: f64) -> Res
     Ok(true)
 }
 
-fn line_geometries_overlap(first: &Value, second: &Value) -> bool {
+pub(crate) fn line_geometries_overlap(first: &Value, second: &Value) -> bool {
     let (
         Some(mut first_x),
         Some(mut first_y),
@@ -827,6 +845,332 @@ pub fn stitch_and_rescue_motion_component_tracks(
         );
     }
     Ok(result)
+}
+
+/// Apply Python's final track-level motion gates to the assembled observations.
+/// Serialize classified line evidence using the public sequence contract.
+/// Internal proposal tags remain in the diagnostic result, outside this view.
+pub fn public_motion_feature_tracks(classification: &Value) -> Result<Vec<Value>> {
+    classification["tracks"]
+        .as_array()
+        .ok_or_else(|| "motion classification requires a tracks array".to_string())?
+        .iter()
+        .map(|track| {
+            let points = track["points"]
+                .as_array()
+                .ok_or_else(|| "motion track requires a points array".to_string())?;
+            let indices = points
+                .iter()
+                .map(point_frame_index)
+                .collect::<Result<std::collections::BTreeSet<_>>>()?;
+            let mut ranges = Vec::<[usize; 2]>::new();
+            for index in &indices {
+                if let Some(range) = ranges
+                    .last_mut()
+                    .filter(|range| range[1].checked_add(1) == Some(*index))
+                {
+                    range[1] = *index;
+                } else {
+                    ranges.push([*index, *index]);
+                }
+            }
+            let mut public = serde_json::Map::new();
+            for key in [
+                "track_id",
+                "classification",
+                "displacement_px",
+                "speed_px_per_frame",
+                "fit_rms_px",
+                "evidence_level",
+                "geometry_rms_px",
+                "exposure_velocity_ratio",
+                "exposure_velocity_log_mad",
+                "exposure_consistency_fraction",
+                "rejection_reasons",
+            ] {
+                public.insert(key.into(), track[key].clone());
+            }
+            public.insert("presence".into(), json!(points.len()));
+            public.insert("observed_frame_indices".into(), json!(indices));
+            public.insert("observed_frame_ranges".into(), json!(ranges));
+            let public_points = points
+                .iter()
+                .map(|point| {
+                    let mut public = serde_json::Map::new();
+                    for key in [
+                        "frame_index",
+                        "x",
+                        "y",
+                        "aligned_x",
+                        "aligned_y",
+                        "residual_snr",
+                        "area_pixels",
+                        "length_px",
+                        "width_px",
+                        "angle_deg",
+                        "bbox",
+                        "touches_edge",
+                        "continuity_ratio",
+                        "profile_fill_ratio",
+                        "line_artifact_overlap_fraction",
+                        "line_template_snr",
+                        "line_vs_point_delta_bic",
+                        "line_vs_double_delta_bic",
+                        "line_vs_background_delta_bic",
+                        "line_vs_elliptical_delta_bic",
+                        "single_frame_model",
+                        "single_frame_model_margin_bic",
+                    ] {
+                        public.insert(key.into(), point[key].clone());
+                    }
+                    public.insert(
+                        "observation_source".into(),
+                        point
+                            .get("observation_source")
+                            .cloned()
+                            .unwrap_or_else(|| json!("detected")),
+                    );
+                    Value::Object(public)
+                })
+                .collect::<Vec<_>>();
+            public.insert("points".into(), json!(public_points));
+            Ok(Value::Object(public))
+        })
+        .collect()
+}
+
+pub fn classify_motion_component_tracks(
+    candidates: &Value,
+    frame_times: &[f64],
+    frame_headers: &[Value],
+    frame_shapes: &[[usize; 2]],
+    psf_fwhm: f64,
+) -> Result<Value> {
+    if frame_times.is_empty()
+        || frame_headers.len() != frame_times.len()
+        || frame_shapes.len() != frame_times.len()
+        || frame_times.iter().any(|value| !value.is_finite())
+        || frame_times.windows(2).any(|pair| pair[1] <= pair[0])
+        || !psf_fwhm.is_finite()
+        || psf_fwhm <= 0.0
+    {
+        return Err(
+            "motion classification requires matching frames, increasing times, and positive PSF"
+                .into(),
+        );
+    }
+    let axis = sequence_trails::motion_time_axis(&json!({
+        "frame_count":frame_times.len(), "frame_times":frame_times,
+    }))?;
+    let reference_interval = axis["reference_interval_s"].as_f64().unwrap_or(1.0);
+    let required_presence = if frame_times.len() < 8 {
+        3usize.min(frame_times.len())
+    } else {
+        3usize.max(frame_times.len().div_ceil(2))
+    };
+    let min_displacement = 20.0_f64.max(6.0 * psf_fwhm);
+    let mut rendered = Vec::new();
+    for candidate in candidates["tracks"].as_array().into_iter().flatten() {
+        let mut points = candidate["points"].as_array().cloned().unwrap_or_default();
+        points.sort_by_key(|point| point["frame_index"].as_u64().unwrap_or(0));
+        for point in &points {
+            if point_frame_index(point)? >= frame_times.len() {
+                return Err("motion classification point is outside the frame axis".into());
+            }
+        }
+        let collinear = candidate["evidence_level"] == "collinear_trail";
+        let max_rms = if collinear {
+            12.0
+        } else {
+            4.0_f64.max(1.5 * psf_fwhm)
+        };
+        let (displacement, speed, rms, geometry_rms) = if collinear {
+            let fit = sequence_trails::fit_collinear_motion_geometry(&json!({
+                "points":points, "frame_times":frame_times,
+                "reference_interval_s":reference_interval,
+            }))?;
+            (
+                fit["projected_span"].as_f64().unwrap_or(0.0),
+                fit["mean_speed_px_per_frame"].as_f64().unwrap_or(0.0),
+                fit["rms_px"].as_f64(),
+                fit["rms_px"].as_f64(),
+            )
+        } else {
+            let observations = points
+                .iter()
+                .map(|point| {
+                    Ok(crate::sequence_motion::TrackObservation {
+                        frame_index: point_frame_index(point)? as i64,
+                        aligned_x: number(point, "aligned_x")?,
+                        aligned_y: number(point, "aligned_y")?,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let selected_times = observations
+                .iter()
+                .map(|point| frame_times[point.frame_index as usize])
+                .collect::<Vec<_>>();
+            let fit =
+                crate::sequence_motion::fit_track_motion(&observations, Some(&selected_times))?;
+            let selected_axis = sequence_trails::motion_time_axis(&json!({
+                "frame_count":selected_times.len(), "frame_times":selected_times,
+            }))?;
+            let selected_interval = selected_axis["reference_interval_s"]
+                .as_f64()
+                .unwrap_or(1.0);
+            (
+                fit.displacement_px,
+                fit.speed_px_per_frame * reference_interval / selected_interval,
+                fit.fit_rms_px,
+                None,
+            )
+        };
+        let mut gate_request = json!({"points":points,"frame_shapes":frame_shapes});
+        let gates = sequence_trails::motion_feature_track_gates(&gate_request)?;
+        let shape = gates["track_shape_supported"].as_bool().unwrap_or(false);
+        let motion_axis = gates["motion_axis_supported"].as_bool().unwrap_or(false);
+        let artifact = gates["artifact_supported_as_moving"]
+            .as_bool()
+            .unwrap_or(false);
+        let edge = gates["edge_truncation_supported"]
+            .as_bool()
+            .unwrap_or(false);
+        let presence = points.len() >= required_presence
+            || (edge && points.len() >= 3usize.max(required_presence.saturating_sub(1)));
+        let continuity = sequence_trails::motion_feature_continuity_gates(&json!({
+            "points":points,"min_presence":required_presence,"edge_truncated":edge,
+        }))?;
+        let continuous = continuity["temporal_continuity_supported"]
+            .as_bool()
+            .unwrap_or(false);
+        let bridge = continuity["internal_gap_bridge_supported"]
+            .as_bool()
+            .unwrap_or(false);
+        let exposure = sequence_trails::motion_feature_exposure_evidence(&json!({
+            "points":points,"frame_headers":frame_headers,"frame_times":frame_times,"psf_fwhm":psf_fwhm,
+        }))?;
+        let exposure_supported = exposure["supported"].as_bool().unwrap_or(false);
+        let passed_models = points
+            .iter()
+            .map(|point| sequence_line_model_review_supported(point, psf_fwhm))
+            .collect::<Result<Vec<_>>>()?;
+        let model = points.len() >= 3
+            && passed_models.iter().filter(|passed| **passed).count()
+                >= 2usize.max(points.len().div_ceil(2));
+        let fit_supported = rms.is_some_and(|value| value.is_finite() && value <= max_rms);
+        let mut moving = presence
+            && displacement >= min_displacement
+            && fit_supported
+            && shape
+            && model
+            && motion_axis
+            && continuous
+            && exposure_supported
+            && artifact;
+        let strict_bridge = !continuous
+            && bridge
+            && presence
+            && shape
+            && motion_axis
+            && exposure_supported
+            && artifact
+            && displacement >= min_displacement
+            && fit_supported
+            && passed_models.iter().all(|passed| *passed);
+        gate_request["artifact_compatibility"] = json!({
+            "presence_supported":presence,"displacement_px":displacement,"min_displacement_px":min_displacement,
+            "fit_rms_px":rms,"max_fit_rms_px":max_rms,"shape_supported":shape,"model_supported":model,
+            "motion_axis_supported":motion_axis,"temporal_continuity_supported":continuous,"exposure_supported":exposure_supported,
+        });
+        let artifact_override = !artifact
+            && sequence_trails::motion_feature_track_gates(&gate_request)?
+                ["artifact_overlap_compatible_with_motion"]
+                == true;
+        moving |= strict_bridge || artifact_override;
+        let mut evidence = if collinear {
+            "collinear_trail"
+        } else {
+            "center_motion"
+        }
+        .to_string();
+        for (present, suffix) in [
+            (strict_bridge, "interior_gap_bridged"),
+            (edge, "edge_truncated"),
+            (artifact_override, "line_artifact_overlap_reviewed"),
+            (!artifact && !artifact_override, "line_artifact_overlap"),
+            (
+                points
+                    .iter()
+                    .any(|point| point["sequence_candidate_source"] == "single_frame_shape"),
+                "single_frame_shape",
+            ),
+            (
+                points
+                    .iter()
+                    .any(|point| point["sequence_stitched"] == true),
+                "single_frame_stitched",
+            ),
+            (
+                points
+                    .iter()
+                    .any(|point| point["observation_source"] == "recovered_by_predicted_roi"),
+                "recovered_by_predicted_roi",
+            ),
+        ] {
+            if present {
+                evidence.push('+');
+                evidence.push_str(suffix);
+            }
+        }
+        let mut track = json!({
+            "track_id":rendered.len(),"classification":if moving { "moving" } else { "candidate" },
+            "points":points,"displacement_px":displacement,"speed_px_per_frame":speed,"fit_rms_px":rms,
+            "evidence_level":evidence,"geometry_rms_px":geometry_rms,
+            "exposure_velocity_ratio":exposure["ratio"],"exposure_velocity_log_mad":exposure["log_mad"],
+            "exposure_consistency_fraction":exposure["in_range_fraction"],
+            "presence_supported":presence,"shape_supported":shape,"model_supported":model,
+            "motion_axis_supported":motion_axis,"temporal_continuity_supported":continuous,
+            "exposure_supported":exposure_supported,"artifact_supported":artifact,"edge_truncated":edge,
+            "min_displacement_px":min_displacement,"max_fit_rms_px":max_rms,
+        });
+        track["rejection_reasons"] =
+            sequence_trails::motion_feature_confirmation_evidence(&json!({
+                "frame_count":frame_times.len(),"track":track,
+            }))?["rejection_reasons"]
+                .clone();
+        rendered.push(track);
+    }
+    for entry in candidates["unassociated_single_frame_points"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let point = &entry["point"];
+        let duplicate = rendered.iter().any(|track| {
+            track["points"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|existing| {
+                    existing["frame_index"] == point["frame_index"]
+                        && line_geometries_overlap(point, existing)
+                })
+        });
+        if !duplicate {
+            rendered.push(json!({
+                "track_id":rendered.len(),"classification":"candidate","points":[point],
+                "displacement_px":0.0,"speed_px_per_frame":0.0,"fit_rms_px":null,
+                "evidence_level":"single_frame_trail","geometry_rms_px":null,
+                "exposure_velocity_ratio":null,"exposure_velocity_log_mad":null,"exposure_consistency_fraction":null,
+                "rejection_reasons":["SINGLE_FRAME_ONLY","NO_CROSS_FRAME_ASSOCIATION"],
+            }));
+        }
+    }
+    Ok(
+        json!({"status":candidates["status"],"classification_performed":true,
+        "required_presence":required_presence,"tracks":rendered,
+        "scope":"assembled_observation_track_motion_classification"}),
+    )
 }
 
 /// Associate Rust temporal-residual component proposals without promoting

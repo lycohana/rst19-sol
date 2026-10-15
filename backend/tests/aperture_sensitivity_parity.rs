@@ -124,7 +124,7 @@ fn compare_csv(actual: &[u8], expected: &[u8]) {
 fn aperture_sensitivity_cli_matches_frozen_python_outputs_without_python_on_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let fixture = root.join("tests/fixtures/contaminated_pair_injection_parity.fits");
-    let python_source = root.join("../src/rst19/aperture_sensitivity.py");
+    let python_source = root.join("tests/fixtures/legacy_sources/aperture_sensitivity.txt");
     assert_eq!(
         format!("{:x}", Sha256::digest(fs::read(python_source).unwrap())),
         PYTHON_REFERENCE_SHA256,

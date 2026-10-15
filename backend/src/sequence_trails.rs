@@ -719,7 +719,7 @@ fn days_from_civil(mut year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + day_of_era
 }
 
-fn parse_utc_microseconds(value: &str) -> Option<i128> {
+pub(crate) fn parse_utc_microseconds(value: &str) -> Option<i128> {
     let text = value.trim().replace('Z', "+00:00");
     if text.len() < 10 || !text.is_ascii() {
         return None;

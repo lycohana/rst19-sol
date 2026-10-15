@@ -437,7 +437,6 @@ fn inject_gaussian(
 }
 
 fn detect_scenario(seed: u128, scenario: &Scenario) -> Result<FeatureAuditRow> {
-    let (image, mask) = build_image(seed, scenario)?;
     let mut options = DetectionOptions::default();
     options.threshold_sigma = 4.0;
     options.min_distance = 4;
@@ -454,6 +453,17 @@ fn detect_scenario(seed: u128, scenario: &Scenario) -> Result<FeatureAuditRow> {
         refine_local_background: true,
         ..MeasurementOptions::default()
     };
+    detect_scenario_with_options(seed, scenario, options)
+}
+
+fn detect_scenario_with_options(
+    seed: u128,
+    scenario: &Scenario,
+    mut options: DetectionOptions,
+) -> Result<FeatureAuditRow> {
+    let (image, mask) = build_image(seed, scenario)?;
+    options.measurement.saturation_level = scenario.saturation_level;
+    let matching_radius = 3.0_f64.max(options.measurement.psf_fwhm);
     let result = detection::detect_sources(
         &PixelData::F32(image),
         Some(&mask),
@@ -485,7 +495,7 @@ fn detect_scenario(seed: u128, scenario: &Scenario) -> Result<FeatureAuditRow> {
         .map(|(flag, count)| format!("{flag}:{count}"))
         .collect::<Vec<_>>()
         .join("|");
-    let radius = 3.0_f64.max(PSF_FWHM);
+    let radius = matching_radius;
     let candidate_hits = greedy_match_count(&scenario.truth_positions, &result.sources, radius);
     let quality_sources = result
         .sources
@@ -511,6 +521,17 @@ fn detect_scenario(seed: u128, scenario: &Scenario) -> Result<FeatureAuditRow> {
         nearby_flags,
         note: scenario.note.to_owned(),
     })
+}
+
+/// Single-trial feature controls share the existing eleven source-derived scenes.
+pub fn run_feature_audit(options: &DetectionOptions, seed: u128) -> Result<Vec<FeatureAuditRow>> {
+    standard_scenarios()
+        .iter()
+        .enumerate()
+        .map(|(index, scenario)| {
+            detect_scenario_with_options(seed + index as u128 * 1009, scenario, options.clone())
+        })
+        .collect()
 }
 
 fn greedy_match_count(targets: &[(f64, f64)], detections: &[Detection], radius: f64) -> usize {

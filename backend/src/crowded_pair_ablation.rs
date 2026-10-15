@@ -1602,6 +1602,7 @@ fn write_report(
         html.push_str(&section);
     }
     fs::write(&report, html).map_err(|error| error.to_string())?;
+    crate::ablation_report::decorate(&report)?;
     Ok(report)
 }
 

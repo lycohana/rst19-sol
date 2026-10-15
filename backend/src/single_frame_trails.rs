@@ -815,7 +815,54 @@ fn top_local_peaks(
 
 /// Return local-pixel finite-line proposals for one image.
 pub fn local_pixel_trail_proposals(request: &Value) -> Result<Value> {
-    let (image, usable, background, noise, height, width, fwhm) = validate(request)?;
+    local_pixel_trail_proposals_inner(request, validate(request)?)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn local_pixel_trail_proposals_for_plane(
+    image: Vec<f64>,
+    valid: Vec<bool>,
+    height: usize,
+    width: usize,
+    background: f64,
+    noise: f64,
+    psf_fwhm: f64,
+    options: &Value,
+) -> Result<Value> {
+    let count = height.saturating_mul(width);
+    if height.min(width) < 8
+        || image.len() != count
+        || valid.len() != count
+        || !noise.is_finite()
+        || noise <= 0.0
+        || !background.is_finite()
+        || !psf_fwhm.is_finite()
+        || psf_fwhm < 0.5
+        || psf_fwhm > height.min(width) as f64 / 2.0
+    {
+        return Err("invalid local trail image plane or parameters".into());
+    }
+    let usable = image
+        .iter()
+        .zip(valid)
+        .map(|(value, valid)| valid && value.is_finite())
+        .collect();
+    local_pixel_trail_proposals_inner(
+        options,
+        (
+            image,
+            usable,
+            vec![background; count],
+            vec![noise; count],
+            height,
+            width,
+            psf_fwhm,
+        ),
+    )
+}
+
+fn local_pixel_trail_proposals_inner(request: &Value, input: ValidatedInput) -> Result<Value> {
+    let (image, usable, background, noise, height, width, fwhm) = input;
     let angle_step = match request.get("angle_step_deg") {
         None => 10.0,
         Some(value) => {

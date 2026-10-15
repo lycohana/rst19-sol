@@ -173,6 +173,8 @@ impl Desktop {
             .ok()
             .and_then(|p| p.parent().map(|p| p.to_owned()));
         let font_paths = [
+            root.as_ref()
+                .map(|r| r.join("assets/NotoSansSC-Regular.otf")),
             root.map(|r| r.join("assets/NotoSansSC-Regular.ttf")),
             Some(PathBuf::from("C:/Windows/Fonts/msyh.ttc")),
             Some(PathBuf::from("/System/Library/Fonts/PingFang.ttc")),
@@ -418,7 +420,7 @@ impl Desktop {
                             self.select_tool(0);
                             let native_count = self.tools.iter().filter(|tool| tool.native).count();
                             self.environment = format!(
-                                "Rust UI · Rust 原生 {native_count}/{} 项研究工具，其余待迁移",
+                                "Rust 原生 UI · {native_count}/{} 项研究工具",
                                 self.tools.len()
                             );
                             self.status = "环境已就绪".into();
