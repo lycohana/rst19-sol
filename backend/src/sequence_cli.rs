@@ -243,6 +243,7 @@ pub fn analyze_command(command: &SequenceCommand) -> Result<Value> {
     let mut request = command.request.clone();
     request["paths"] = json!(paths);
     let result = sequence_pipeline::handle_request(&request)?["sequence_result"].clone();
+    eprintln!("98.5% · 写入序列分析结果与源级审计文件");
     if let Some(path) = &command.json_out {
         if let Some(parent) = path
             .parent()
@@ -257,6 +258,7 @@ pub fn analyze_command(command: &SequenceCommand) -> Result<Value> {
     if let Some(path) = &command.audit_out_dir {
         sequence_source_audit::write_sequence_source_audit(&result, path, 6, 10, 2)?;
     }
+    eprintln!("99.0% · 序列结果与审计文件已保存");
     Ok(result)
 }
 

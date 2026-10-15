@@ -263,6 +263,10 @@ fn random_positions(
     Ok(result)
 }
 pub fn synthetic(o: &Options, inputs: &mut Vec<Value>) -> Result<Vec<Value>> {
+    let total_trials = o.peaks.len().saturating_mul(o.trials).max(1);
+    let report_stride = total_trials.div_ceil(30).max(1);
+    let mut completed_trials = 0usize;
+    eprintln!("12.0% · 生成固定随机种子的合成背景与注入布局");
     let mut rng = NumpyPcg64::new(o.seed);
     let mut rows = Vec::new();
     let mut detector = o.detector.clone();
@@ -308,6 +312,11 @@ pub fn synthetic(o: &Options, inputs: &mut Vec<Value>) -> Result<Vec<Value>> {
             q += hits(&positions, &good, radius);
             counts.push(d.sources.len() as f64);
             quality_counts.push(good.len() as f64);
+            completed_trials += 1;
+            if completed_trials % report_stride == 0 || completed_trials == total_trials {
+                let percent = 12.0 + 68.0 * completed_trials as f32 / total_trials as f32;
+                eprintln!("{percent:.1}% · 注入回收试验 {completed_trials}/{total_trials}，峰值档位 {}/{}, 候选/质量筛选已完成", level + 1, o.peaks.len());
+            }
         }
         let total = o.trials * o.sources;
         rows.push(json!({"proposal_mode":detector.proposal_mode,"detector_psf_fwhm_px":detector.measurement.psf_fwhm,"injected_psf_fwhm_px":o.injected_psf.unwrap_or(detector.measurement.psf_fwhm),"peak_excess_adu":peak,"injected_count":total,"candidate_recovered_count":c,"quality_recovered_count":q,"candidate_recall":c as f64/total as f64,"quality_recall":q as f64/total as f64,"mean_candidate_count":mean(&counts),"mean_quality_count":mean(&quality_counts)}));
@@ -322,6 +331,7 @@ fn real_context(
     DetectionOptions,
     Option<EmpiricalPsf>,
 )> {
+    eprintln!("8.0% · 读取真实背景 FITS 并建立注入前检测基线");
     let frame = fits::read_fits(
         o.real_fits
             .as_ref()
@@ -329,6 +339,7 @@ fn real_context(
         false,
     )?;
     let baseline = detect(&frame, &frame.data, &o.detector)?;
+    eprintln!("12.0% · 基线候选与质量源已计算，估计局部 PSF");
     let options = injected_options(&o.detector, &baseline);
     let empirical = psf(&frame, &baseline, &o.psf_model)?;
     Ok((frame, baseline, options, empirical))
@@ -370,6 +381,15 @@ pub fn real(o: &Options, stratified: bool, inputs: &mut Vec<Value>) -> Result<Ve
         }
         layouts.push((stratum, trials));
     }
+    let total_trials = layouts
+        .iter()
+        .map(|(_, trials)| trials.len())
+        .sum::<usize>()
+        .saturating_mul(o.peaks.len())
+        .max(1);
+    let report_stride = total_trials.div_ceil(30).max(1);
+    let mut completed_trials = 0usize;
+    eprintln!("18.0% · 注入位置已按背景条件选定，开始真实图像回收试验");
     let mut rows = Vec::new();
     let radius = 3f64.max(psf);
     let protection = 8f64.max(2. * psf);
@@ -451,6 +471,11 @@ pub fn real(o: &Options, stratified: bool, inputs: &mut Vec<Value>) -> Result<Ve
                         nearest.push(d);
                     }
                 }
+                completed_trials += 1;
+                if completed_trials % report_stride == 0 || completed_trials == total_trials {
+                    let percent = 18.0 + 62.0 * completed_trials as f32 / total_trials as f32;
+                    eprintln!("{percent:.1}% · 真实背景注入试验 {completed_trials}/{total_trials}，当前分层 {stratum}、峰值档位 {}/{}", level + 1, o.peaks.len());
+                }
             }
             let total = o.trials * o.sources;
             let mut row = json!({"source_path":frame.path,"proposal_mode":detector.proposal_mode,"peak_excess_adu":peak,"injected_count":total,"candidate_recovered_count":c,"quality_recovered_count":q,"candidate_recall":c as f64/total as f64,"quality_recall":q as f64/total as f64,"baseline_candidate_count":baseline.candidate_count,"baseline_quality_count":baseline.quality_count,"mean_candidate_count":mean(&cc),"mean_quality_count":mean(&qc),"mean_background_candidate_count":mean(&bc),"mean_background_quality_count":mean(&bq),"net_candidate_delta":mean(&cc)-baseline.candidate_count as f64,"net_quality_delta":mean(&qc)-baseline.quality_count as f64,"local_background_adu":mean(&bg),"local_noise_adu":mean(&noise),"trial_count":o.trials});
@@ -527,6 +552,10 @@ pub fn comparison(o: &Options, inputs: &mut Vec<Value>) -> Result<Vec<Value>> {
         layouts.push(positions);
     }
     let mut rows = Vec::new();
+    let total_trials = layouts.len().saturating_mul(o.peaks.len()).max(1);
+    let report_stride = total_trials.div_ceil(30).max(1);
+    let mut completed_trials = 0usize;
+    eprintln!("18.0% · 注入方案对照开始，逐试验比较 Gaussian、Hybrid 与 Ensemble");
     for (level, peak) in o.peaks.iter().enumerate() {
         let mut row = json!({"source_path":frame.path,"detector_psf_fwhm_px":psf,"injected_psf_fwhm_px":o.injected_psf.unwrap_or(psf),"pair_separation_px":o.pair_separation,"peak_excess_adu":peak,"injected_count":o.trials*o.sources,"trial_count":o.trials});
         let mut sums = [[0f64; 4]; 3];
@@ -556,6 +585,11 @@ pub fn comparison(o: &Options, inputs: &mut Vec<Value>) -> Result<Vec<Value>> {
                 sums[i][1] += hits(positions, &good, 3f64.max(psf)) as f64;
                 sums[i][2] += d.candidate_count as f64;
                 sums[i][3] += good.len() as f64;
+            }
+            completed_trials += 1;
+            if completed_trials % report_stride == 0 || completed_trials == total_trials {
+                let percent = 18.0 + 62.0 * completed_trials as f32 / total_trials as f32;
+                eprintln!("{percent:.1}% · 方案对照试验 {completed_trials}/{total_trials}，峰值档位 {}/{}, 三种检测器已复算", level + 1, o.peaks.len());
             }
         }
         for (i, mode) in ["gaussian", "hybrid", "ensemble"].iter().enumerate() {
@@ -639,6 +673,16 @@ pub fn pairs_or_crowded(o: &Options, crowded: bool, inputs: &mut Vec<Value>) -> 
     }
     let levels = if crowded { &o.blend_levels } else { &o.peaks };
     let ratios = if crowded { vec![1.] } else { o.ratios.clone() };
+    let total_trials = layouts
+        .iter()
+        .map(|(_, _, trials)| trials.len())
+        .sum::<usize>()
+        .saturating_mul(levels.len())
+        .saturating_mul(ratios.len())
+        .max(1);
+    let report_stride = total_trials.div_ceil(30).max(1);
+    let mut completed_trials = 0usize;
+    eprintln!("18.0% · 注入布局完成，开始拥挤混合与双星分辨回收");
     let mut rows = Vec::new();
     for (size, sep, trials) in layouts {
         for (level, total_signal) in levels.iter().enumerate() {
@@ -722,6 +766,12 @@ pub fn pairs_or_crowded(o: &Options, crowded: bool, inputs: &mut Vec<Value>) -> 
                     for s in sites {
                         background.push(s.local_background_adu);
                         noise.push(s.local_noise_adu);
+                    }
+                    completed_trials += 1;
+                    if completed_trials % report_stride == 0 || completed_trials == total_trials {
+                        let percent = 18.0 + 62.0 * completed_trials as f32 / total_trials as f32;
+                        let label = if crowded { "拥挤组" } else { "双星比例" };
+                        eprintln!("{percent:.1}% · {label}注入试验 {completed_trials}/{total_trials}，组大小 {size}、间距 {sep:.2}px、信号档位 {}/{}", level + 1, levels.len());
                     }
                 }
                 let n = total_groups as f64;
@@ -963,11 +1013,14 @@ fn validate(o: &Options) -> Result<()> {
 }
 pub fn run(o: &Options) -> Result<Value> {
     validate(o)?;
+    eprintln!("3.0% · 校验注入回收参数与实验输出目录");
     fs::create_dir_all(&o.out_dir).map_err(|e| e.to_string())?;
+    eprintln!("8.0% · 参数通过，准备执行所选注入实验");
     let mut inputs = Vec::new();
     let rows = match o.mode {
         Mode::Synthetic => synthetic(o, &mut inputs)?,
         Mode::Feature => {
+            eprintln!("12.0% · 构建特征正控与负控复现实验");
             let mut detector = o.detector.clone();
             detector.background_box_size = 32;
             feature_audit_replicates::run_feature_audit(&detector, o.seed)?
@@ -981,6 +1034,7 @@ pub fn run(o: &Options) -> Result<Value> {
         Mode::PairRatio => pairs_or_crowded(o, false, &mut inputs)?,
         Mode::Crowded => pairs_or_crowded(o, true, &mut inputs)?,
     };
+    eprintln!("82.0% · 注入回收计算完成，汇总召回与质量筛选结果");
     let name = match o.mode {
         Mode::Synthetic => "injection_recovery",
         Mode::Feature => "feature_audit",
@@ -990,6 +1044,7 @@ pub fn run(o: &Options) -> Result<Value> {
         Mode::PairRatio => "pair_flux_ratio_audit",
         Mode::Crowded => "crowded_blend_audit",
     };
+    eprintln!("86.0% · 写出逐试验 CSV 与汇总 JSON");
     innovation_artifacts::write_csv(&o.out_dir.join(format!("{name}.csv")), &rows, &[])?;
     let mut payload = json!({"row_count":rows.len(),"rows":rows,"note":"注入真值回收与候选/质量层分开报告；背景检测数、净数量变化和合并响应不能解释成物理身份或真实 precision。"});
     if o.mode == Mode::Feature {
@@ -1103,12 +1158,14 @@ pub fn run(o: &Options) -> Result<Value> {
         &series,
         false,
     )?;
+    eprintln!("96.0% · 回收率图表生成完成，写出冻结输入清单");
     let manifest = json!({"schema_version":1,"implementation":"Rust","experiment":name,"seed":o.seed.to_string(),"source_fits":o.real_fits,"detector_options":o.detector,"injected_psf_fwhm":o.injected_psf,"frozen_inputs":inputs,"rows":rows,"limitations":["Injected truth is synthetic, not a physical star catalog.","Background counts do not estimate false-positive rate without independent truth."]});
     fs::write(
         o.out_dir.join("manifest.json"),
         serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
+    eprintln!("99.0% · 注入回收实验结果与清单已保存");
     Ok(
         json!({"output":o.out_dir.canonicalize().map_err(|e|e.to_string())?,"experiment":name,"row_count":rows.len(),"rows":rows}),
     )

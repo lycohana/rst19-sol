@@ -198,10 +198,24 @@ pub fn analyze_frame(
     o: &FrameOptions,
     background: Option<&BackgroundModel<'_>>,
 ) -> Result<FrameAnalysis> {
+    let mut progress = |_: f32, _: &str| {};
+    analyze_frame_with_progress(frame, catalog, wcs, o, background, &mut progress)
+}
+
+pub fn analyze_frame_with_progress(
+    frame: FitsFrame,
+    catalog: Option<&[CatalogSource]>,
+    wcs: Option<&Projection>,
+    o: &FrameOptions,
+    background: Option<&BackgroundModel<'_>>,
+    progress: &mut dyn FnMut(f32, &str),
+) -> Result<FrameAnalysis> {
     if catalog.is_some() && wcs.is_none() {
         return Err("catalog matching requires a WCS".into());
     }
+    progress(0.05, "准备图像掩膜");
     let mask = fits::auxiliary_mask(frame.height, frame.width)?;
+    progress(0.12, "掩膜完成，开始候选检测与质量筛选");
     let detection = detection::detect_sources(
         &frame.data,
         Some(&mask),
@@ -210,6 +224,7 @@ pub fn analyze_frame(
         &o.detection,
         background,
     )?;
+    progress(0.78, "候选检测完成，整理检测结果");
     let mut analysis = FrameAnalysis {
         frame,
         detection,
@@ -218,7 +233,9 @@ pub fn analyze_frame(
         photometric_calibration: None,
         source_photometry: Vec::new(),
     };
+    progress(0.82, "计算星表匹配与光度信息");
     finish(&mut analysis, catalog, wcs, o, false)?;
+    progress(0.97, "单帧分析结果已整理");
     Ok(analysis)
 }
 #[derive(Debug, Clone, Deserialize)]

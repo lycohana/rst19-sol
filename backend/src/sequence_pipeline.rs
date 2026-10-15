@@ -929,7 +929,9 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     let mut prepared_candidates_by_frame = Vec::with_capacity(paths.len());
     let mut candidate_frame_audits = Vec::with_capacity(paths.len());
 
+    eprintln!("3.0% · 读取序列首帧并准备共享背景模型");
     let first_frame = fits::read_fits(&paths[0], false)?;
+    eprintln!("6.0% · 首帧已载入，检查序列尺寸并准备检测背景");
     let shared_background = if paths.len() >= 2
         && frame_options.detection.fast_sequence
         && frame_options.detection.use_float32
@@ -946,9 +948,17 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     } else {
         None
     };
+    eprintln!("10.0% · 背景准备完成，继续载入其余 FITS 帧");
     frames.push(first_frame);
-    for path in paths.iter().skip(1) {
+    for (index, path) in paths.iter().enumerate().skip(1) {
         frames.push(fits::read_fits(path, false)?);
+        let read_percent = 10.0 + 3.0 * frames.len() as f32 / paths.len() as f32;
+        eprintln!(
+            "{read_percent:.1}% · 已载入序列帧 {}/{}, 读取 {}",
+            index + 1,
+            paths.len(),
+            path.file_name().unwrap_or_default().to_string_lossy()
+        );
     }
 
     let headers = frames
@@ -975,6 +985,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "scientific_context":request.get("scientific_context").cloned().unwrap_or(Value::Null),
     });
 
+    eprintln!("14.0% · 开始逐帧候选检测、质量筛选与缓存读取");
     for (frame_index, frame) in frames.into_iter().enumerate() {
         let background = shared_background
             .as_ref()
@@ -1029,6 +1040,13 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         quality_frames.push(detections);
         frame_analyses.push(analysis.as_dict());
         frame_analysis_objects.push(analysis);
+        let frame_percent = 14.0 + 42.0 * (frame_index + 1) as f32 / paths.len() as f32;
+        eprintln!(
+            "{frame_percent:.1}% · 完成帧检测 {}/{}, 合格源 {}",
+            frame_index + 1,
+            paths.len(),
+            quality_frames.last().map_or(0, Vec::len)
+        );
     }
 
     let mut tracking_options =
@@ -1065,6 +1083,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     let tracking_options: TrackSequenceOptions =
         serde_json::from_value(Value::Object(tracking_options))
             .map_err(|error| error.to_string())?;
+    eprintln!("59.0% · 逐帧检测完成，关联跨帧星点轨迹");
     let mut tracking = sequence::track_detections(&quality_frames, &tracking_options)?;
     let mut fast_point_options = fast_point_options_input;
     if fast_point_options
@@ -1095,6 +1114,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         serde_json::from_value(Value::Object(fast_point_options))
             .map_err(|error| error.to_string())?;
     let mut fast_point_tracks = if fast_point_motion && quality_frames.len() >= 2 {
+        eprintln!("64.0% · 关联快速点源运动轨迹与候选提案");
         let shifts: Vec<[f64; 2]> = serde_json::from_value(tracking["cumulative_shifts"].clone())
             .map_err(|error| error.to_string())?;
         let existing_tracks: Vec<Value> = serde_json::from_value(tracking["tracks"].clone())
@@ -1172,6 +1192,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         "frames":[]
     });
     if paths.len() >= 2 {
+        eprintln!("69.0% · 构建时间参考图并搜索时域候选与运动分量");
         let (median_result, median_reference) =
             crate::sequence_temporal::temporal_reference_candidates_and_reference_from_analyses(
                 &frame_analysis_objects,
@@ -1255,6 +1276,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
         Some(_) => return Err("motion_multiscale_line_proposals must be a boolean".into()),
     };
     if paths.len() >= 2 {
+        eprintln!("75.0% · 逐帧复核原始像素运动分量");
         for (frame_index, analysis) in frame_analysis_objects.iter().enumerate() {
             let frame_thresholds = crate::sequence_trails::motion_proposal_thresholds(&json!({
                 "psf_fwhm":frame_options.detection.measurement.psf_fwhm,
@@ -1311,6 +1333,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             &shifts,
             frame_options.detection.measurement.psf_fwhm,
         )?;
+    eprintln!("80.0% · 汇总运动分量、线迹关联与预测区域回收");
     let mut motion_frame_model_review =
         crate::sequence_motion_tracks::supplement_with_coherent_raw_frame_candidates(
             &reviewed_motion_frame_components,
@@ -1373,6 +1396,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             json!(rows)
         })
         .collect::<Vec<_>>();
+    eprintln!("85.0% · 计算多帧候选共识与持续性证据");
     let mut candidate_consensus = if paths.len() >= 3 {
         crate::sequence_consensus::candidate_consensus_from_analyses(
             &candidate_peak_frames,
@@ -1431,6 +1455,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             .cloned()
             .unwrap_or_default(),
     );
+    eprintln!("90.0% · 检索叠加图中的微弱源并合并轨迹层");
     let mut stack_faint = sequence_stack::recover_stack_faint_tracks(
         &frame_analysis_objects,
         &shifts,
@@ -1472,6 +1497,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
     tracking["stack_frame_min_flux_snr"] = json!(stack_options.frame_min_flux_snr);
     tracking["stack_min_presence"] = json!(stack_options.min_presence);
     tracking["stack_faint_audit"] = stack_faint.audit.clone();
+    eprintln!("94.0% · 汇总轨迹、质量审计与相对测光");
     let relative_photometry_result = if relative_photometry {
         Some(fit_sequence_relative_photometry(
             &quality_frames,
@@ -1576,6 +1602,7 @@ pub fn handle_request(request: &Value) -> Result<Value> {
             "width_px":analysis.frame.width,"height_px":analysis.frame.height}))
     }).collect::<Result<Vec<_>>>()?);
 
+    eprintln!("98.0% · 序列分析完成，整理结果与审计字段");
     Ok(json!({
         "schema":"rst19.sequence.core.v1",
         "sequence_result":sequence_result,

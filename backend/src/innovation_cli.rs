@@ -23,8 +23,11 @@ pub fn run_desktop(args: &[String]) -> Result<Value> {
         index += 1;
     }
     let input = input.ok_or("missing sequence JSON")?;
+    eprintln!("4.0% · 读取序列分析结果并准备创新证据报告");
     let report = innovation::build_innovation_report(&input)?;
+    eprintln!("38.0% · 创新证据与运动、测光、遥测摘要已计算");
     let output = innovation_artifacts::write_innovation_artifacts(&report, &output)?;
+    eprintln!("98.0% · 创新证据报告、图表与图像附件已保存");
     Ok(
         json!({"output":output,"frames":report["relation"]["frame_count"],"duration_s":report["relation"]["duration_s"],"motion":report["motion"]["moving_count"],"candidates":report["motion"]["candidate_count"]}),
     )

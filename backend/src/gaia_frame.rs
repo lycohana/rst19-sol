@@ -192,11 +192,13 @@ pub fn camera_footprint_radius_deg() -> f64 {
 
 pub fn run_desktop(args: &[String], default_out_dir: &Path) -> Result<Value, String> {
     let options = Options::parse(args)?;
+    eprintln!("2.0% · 解析单帧 Gaia 星表任务参数");
     let fits_path = options
         .fits
         .canonicalize()
         .map_err(|error| format!("FITS cannot be resolved: {error}"))?;
     let frame = fits::read_fits(&fits_path, false).map_err(|error| error.to_string())?;
+    eprintln!("8.0% · FITS 已载入，读取辅助 RA/Dec 指向坐标");
     let auxiliary = frame
         .auxiliary
         .as_ref()
@@ -214,6 +216,7 @@ pub fn run_desktop(args: &[String], default_out_dir: &Path) -> Result<Value, Str
         .transpose()?
         .unwrap_or_else(camera_footprint_radius_deg);
     if options.dry_run {
+        eprintln!("95.0% · 生成 Gaia 瓦片查询计划");
         let args = options.tiled_args(center_ra, center_dec, default_out_dir);
         let plan = gaia_tiled::run_desktop(&args)?;
         return Ok(json!({
@@ -260,7 +263,9 @@ pub fn run_desktop(args: &[String], default_out_dir: &Path) -> Result<Value, Str
         endpoint: options.endpoint,
         ..Default::default()
     };
+    eprintln!("18.0% · 坐标与搜索范围就绪，开始查询 Gaia DR3 瓦片");
     let audit = public_catalog::download_public_gaia_catalog(&catalog_options)?;
+    eprintln!("99.0% · 星表与完整性审计已写入，整理单帧结果");
     Ok(json!({
         "csv":audit["output_path"],
         "audit":audit["audit_path"],

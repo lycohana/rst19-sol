@@ -167,7 +167,9 @@ pub fn run(args: &[String]) -> Result<()> {
         i += 1;
     }
     let path = path.ok_or("missing FITS path")?;
+    eprintln!("3.0% · 读取 FITS 图像：{}", path.display());
     let frame = fits::read_fits(&path, false)?;
+    eprintln!("10.0% · FITS 已载入，解析先验星表与坐标参数");
     let catalog_path = fields.get("catalog").and_then(Value::as_str);
     let catalog = catalog_path
         .map(catalog_csv::load_catalog_csv)
@@ -236,12 +238,17 @@ pub fn run(args: &[String]) -> Result<()> {
     let options: FrameOptions =
         serde_json::from_value(Value::Object(fields)).map_err(|e| e.to_string())?;
     let projection = wcs.clone().map(Projection::Tan);
-    let mut value = pipeline::analyze_frame(
+    eprintln!("16.0% · 参数校验完成，开始单帧检测与质量筛选");
+    let mut progress = |fraction: f32, stage: &str| {
+        eprintln!("{:.1}% · {stage}", 18.0 + fraction.clamp(0.0, 1.0) * 70.0);
+    };
+    let mut value = pipeline::analyze_frame_with_progress(
         frame,
         catalog.as_deref(),
         projection.as_ref(),
         &options,
         None,
+        &mut progress,
     )?
     .as_dict();
     if let Some(wcs) = wcs {
@@ -249,6 +256,7 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     let mut rendered = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
     rendered.push('\n');
+    eprintln!("92.0% · 单帧检测完成，写入结果与 WCS 元数据");
     if let Some(output) = output {
         if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -260,5 +268,6 @@ pub fn run(args: &[String]) -> Result<()> {
             .write_all(rendered.as_bytes())
             .map_err(|e| e.to_string())?;
     }
+    eprintln!("99.0% · 单帧结果已写入");
     Ok(())
 }

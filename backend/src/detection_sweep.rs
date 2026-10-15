@@ -280,6 +280,7 @@ fn detect_level(
 }
 
 fn run_levels(options: &Options) -> Result<(Vec<SweepRow>, bool)> {
+    eprintln!("3.0% · 读取 FITS 图像并准备检测参数扫描");
     let frame = fits::read_fits(&options.input, false)?;
     let mask = fits::auxiliary_mask(frame.height, frame.width)?;
     let (levels, psf) = options
@@ -287,8 +288,9 @@ fn run_levels(options: &Options) -> Result<(Vec<SweepRow>, bool)> {
         .as_ref()
         .map(|values| (values.as_slice(), true))
         .unwrap_or((&options.thresholds, false));
+    eprintln!("10.0% · 图像与掩膜就绪，共 {} 个参数点", levels.len());
     let mut rows = Vec::with_capacity(levels.len());
-    for &level in levels {
+    for (index, &level) in levels.iter().enumerate() {
         rows.push(detect_level(
             &frame.data,
             frame.height,
@@ -298,6 +300,13 @@ fn run_levels(options: &Options) -> Result<(Vec<SweepRow>, bool)> {
             level,
             psf,
         )?);
+        let percent = 12.0 + 72.0 * (index + 1) as f32 / levels.len().max(1) as f32;
+        let parameter = if psf { "PSF FWHM" } else { "检测阈值 σ" };
+        eprintln!(
+            "{percent:.1}% · 完成参数点 {}/{}, {parameter}={level}",
+            index + 1,
+            levels.len()
+        );
     }
     Ok((rows, psf))
 }
@@ -627,7 +636,9 @@ fn write_artifacts(rows: &[SweepRow], out_dir: &Path, psf: bool) -> Result<PathB
 pub fn run_desktop(args: &[String]) -> Result<Value> {
     let options = parse_args(args)?;
     let (rows, psf) = run_levels(&options)?;
+    eprintln!("88.0% · 参数扫描计算完成，写出 CSV 与趋势图");
     let output = write_artifacts(&rows, &options.out_dir, psf)?;
+    eprintln!("99.0% · 扫描结果和图表已保存");
     Ok(json!({
         "tool":"rst19-sweep",
         "mode":if psf { "psf_fwhm" } else { "threshold" },

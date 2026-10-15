@@ -3,13 +3,116 @@ use eframe::egui::{self, Color32, Pos2, Rect, Sense, Vec2};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     path::PathBuf,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 const CYAN: Color32 = Color32::from_rgb(99, 232, 255);
 const GOLD: Color32 = Color32::from_rgb(255, 209, 102);
+const SOURCE_DOT_ZOOM: f32 = 1.35;
+const SOURCE_RING_ZOOM: f32 = 2.1;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SourceMarkerStyle {
+    dot_radius: f32,
+    dot_alpha: u8,
+    ring_radius: f32,
+    ring_width: f32,
+    ring_alpha: u8,
+}
+
+fn source_marker_style(zoom: f32) -> SourceMarkerStyle {
+    let ring_progress =
+        ((zoom - SOURCE_DOT_ZOOM) / (SOURCE_RING_ZOOM - SOURCE_DOT_ZOOM)).clamp(0.0, 1.0);
+    SourceMarkerStyle {
+        dot_radius: 1.15 * (1.0 - ring_progress),
+        dot_alpha: (210.0 * (1.0 - ring_progress)).round() as u8,
+        ring_radius: 1.7 + 0.8 * ring_progress,
+        ring_width: 1.0,
+        ring_alpha: (220.0 * ring_progress).round() as u8,
+    }
+}
+
+fn marker_color(color: Color32, alpha: u8) -> Color32 {
+    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
+}
+
+struct JobProgress {
+    label: String,
+    fraction: Option<f32>,
+    recent_steps: VecDeque<String>,
+    started_at: Instant,
+}
+
+impl JobProgress {
+    fn new(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            fraction: None,
+            recent_steps: VecDeque::from(["任务已启动，等待算法输出".into()]),
+            started_at: Instant::now(),
+        }
+    }
+
+    fn record(&mut self, line: &str) {
+        let line = line.trim();
+        if line.is_empty() {
+            return;
+        }
+
+        let step = match parse_progress_line(line) {
+            Some((fraction, description)) => {
+                self.fraction = Some(fraction);
+                format!("{:.0}% · {description}", fraction * 100.0)
+            }
+            None => line.to_owned(),
+        };
+        let step = compact_log_line(&step);
+        if self.recent_steps.back() == Some(&step) {
+            return;
+        }
+        self.recent_steps.push_back(step);
+        while self.recent_steps.len() > 5 {
+            self.recent_steps.pop_front();
+        }
+    }
+}
+
+fn parse_progress_line(line: &str) -> Option<(f32, String)> {
+    let line = line.trim_start();
+    let (value, suffix) = line.split_once('%')?;
+    let percent = value.trim().parse::<f32>().ok()?;
+    if !percent.is_finite() || !(0.0..=100.0).contains(&percent) {
+        return None;
+    }
+    let step = suffix
+        .trim_start_matches(|character: char| {
+            character.is_whitespace() || ['·', '|', '-', '—'].contains(&character)
+        })
+        .trim();
+    Some((percent / 100.0, step.to_owned()))
+}
+
+fn compact_log_line(line: &str) -> String {
+    let mut chars = line.chars();
+    let mut compact = chars.by_ref().take(180).collect::<String>();
+    if chars.next().is_some() {
+        compact.push('…');
+    }
+    compact
+}
+
+fn job_label(request: &Value) -> String {
+    match request["operation"].as_str() {
+        Some("tool") => request["tool"]
+            .as_str()
+            .map(|name| title(name).to_owned())
+            .unwrap_or_else(|| "算法任务".into()),
+        Some("preview") => "读取 FITS 预览".into(),
+        _ => "算法任务".into(),
+    }
+}
 
 #[derive(Clone, Deserialize)]
 struct Field {
@@ -36,6 +139,7 @@ struct Tool {
 pub struct Desktop {
     backend: Result<Backend, String>,
     job: Option<Job>,
+    job_progress: Option<JobProgress>,
     tools: Vec<Tool>,
     selected_tool: usize,
     values: HashMap<String, String>,
@@ -226,6 +330,7 @@ impl Desktop {
         let mut app = Self {
             backend,
             job: None,
+            job_progress: None,
             tools: vec![],
             selected_tool: 0,
             values: HashMap::new(),
@@ -262,7 +367,10 @@ impl Desktop {
         app.scan_frames();
         match &app.backend {
             Ok(b) => match b.start(None, b.root()) {
-                Ok(job) => app.job = Some(job),
+                Ok(job) => {
+                    app.job = Some(job);
+                    app.job_progress = Some(JobProgress::new("检查算法环境"));
+                }
                 Err(e) => app.status = e,
             },
             Err(e) => app.status = e.clone(),
@@ -316,6 +424,7 @@ impl Desktop {
         if self.job.is_some() {
             return;
         }
+        let progress_label = job_label(&request);
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -347,6 +456,7 @@ impl Desktop {
         {
             Ok(job) => {
                 self.job = Some(job);
+                self.job_progress = Some(JobProgress::new(progress_label));
                 self.job_dir = Some(out);
                 self.logs.clear();
                 self.status = "任务运行中…".into();
@@ -370,7 +480,14 @@ impl Desktop {
             .unwrap_or_default();
         for event in events {
             if event["event"] == "log" {
-                self.logs.push_str(event["text"].as_str().unwrap_or(""));
+                let line = event["text"].as_str().unwrap_or("");
+                if let Some(progress) = &mut self.job_progress {
+                    progress.record(line);
+                    if let Some(fraction) = progress.fraction {
+                        self.status = format!("任务运行中 · {:.0}%", fraction * 100.0);
+                    }
+                }
+                self.logs.push_str(line);
                 self.logs.push('\n');
                 if self.logs.len() > 150_000 {
                     let mut boundary = self.logs.len() - 100_000;
@@ -650,6 +767,7 @@ impl Desktop {
             self.pan += ui.input(|i| i.pointer.delta());
         }
         let scale = fit * self.zoom;
+        let marker_style = source_marker_style(self.zoom);
         let image_rect = Rect::from_center_size(rect.center() + self.pan, self.image_size * scale);
         painter.image(
             texture.id(),
@@ -672,18 +790,28 @@ impl Desktop {
                     if !rect.contains(point) {
                         continue;
                     }
-                    painter.circle_stroke(
-                        point,
-                        2.5,
-                        (
-                            0.9,
-                            if quality {
-                                CYAN
-                            } else {
-                                Color32::from_rgb(195, 165, 255)
-                            },
-                        ),
-                    );
+                    let color = if quality {
+                        CYAN
+                    } else {
+                        Color32::from_rgb(195, 165, 255)
+                    };
+                    if marker_style.dot_alpha > 0 {
+                        painter.circle_filled(
+                            point,
+                            marker_style.dot_radius,
+                            marker_color(color, marker_style.dot_alpha),
+                        );
+                    }
+                    if marker_style.ring_alpha > 0 {
+                        painter.circle_stroke(
+                            point,
+                            marker_style.ring_radius,
+                            (
+                                marker_style.ring_width,
+                                marker_color(color, marker_style.ring_alpha),
+                            ),
+                        );
+                    }
                     if let Some(pointer) = response.hover_pos() {
                         let distance = pointer.distance(point);
                         if distance < 10.0 && nearest.as_ref().is_none_or(|(d, _)| distance < *d) {
@@ -946,6 +1074,63 @@ impl eframe::App for Desktop {
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
+            let mut show_full_logs = false;
+            if self.job.is_some() {
+                if let Some(progress) = &self.job_progress {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("任务运行中").strong().color(CYAN));
+                            ui.separator();
+                            ui.label(egui::RichText::new(&progress.label).strong());
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let elapsed = progress.started_at.elapsed().as_secs();
+                                    ui.label(format!("已运行 {:02}:{:02}", elapsed / 60, elapsed % 60));
+                                },
+                            );
+                        });
+                        if let Some(fraction) = progress.fraction {
+                            ui.add(
+                                egui::ProgressBar::new(fraction)
+                                    .desired_height(9.0)
+                                    .text(format!("{:.0}%", fraction * 100.0)),
+                            );
+                        } else {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label("算法尚未报告百分比；正在显示实时运行步骤");
+                            });
+                        }
+                        if !progress.recent_steps.is_empty() {
+                            ui.label(egui::RichText::new("最近运行步骤 / 消息").small().weak());
+                            let last = progress.recent_steps.len() - 1;
+                            for (index, step) in progress.recent_steps.iter().enumerate() {
+                                let color = if index == last {
+                                    CYAN
+                                } else {
+                                    Color32::from_rgb(150, 165, 187)
+                                };
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} {step}",
+                                        if index == last { "›" } else { "·" }
+                                    ))
+                                    .small()
+                                    .color(color),
+                                );
+                            }
+                        }
+                        if self.tab != 3 && ui.small_button("打开完整运行日志").clicked() {
+                            show_full_logs = true;
+                        }
+                    });
+                    ui.add_space(6.0);
+                }
+            }
+            if show_full_logs {
+                self.tab = 3;
+            }
             ui.horizontal(|ui| {
                 for (i, tab) in ["观测视场", "检测源表", "结构化证据", "运行日志", "产物浏览"].iter().enumerate() { ui.selectable_value(&mut self.tab, i, *tab); }
             });
@@ -1111,6 +1296,42 @@ fn artifacts(ui: &mut egui::Ui, dir: &std::path::Path, depth: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progress_panel_uses_reported_percentages_and_keeps_recent_steps() {
+        let (fraction, step) = parse_progress_line(" 67.0% · 检测完成").unwrap();
+        assert!((fraction - 0.67).abs() < f32::EPSILON);
+        assert_eq!(step, "检测完成");
+        assert!(parse_progress_line("loading stage 67%").is_none());
+        assert!(parse_progress_line("101% · invalid").is_none());
+
+        let mut progress = JobProgress::new("单帧星点检测");
+        progress.record("读取 FITS");
+        assert!(progress.fraction.is_none());
+        for index in 0..7 {
+            progress.record(&format!("处理分块 {index}"));
+        }
+        assert_eq!(progress.recent_steps.len(), 5);
+        assert_eq!(progress.recent_steps.back().unwrap(), "处理分块 6");
+    }
+
+    #[test]
+    fn source_markers_adapt_from_overview_dots_to_zoomed_rings() {
+        let overview = source_marker_style(1.0);
+        assert!(overview.dot_radius > 1.0);
+        assert!(overview.dot_alpha > 0);
+        assert_eq!(overview.ring_alpha, 0);
+
+        let transition = source_marker_style(1.7);
+        assert!(transition.dot_alpha > 0);
+        assert!(transition.ring_alpha > 0);
+
+        let close_up = source_marker_style(3.0);
+        assert_eq!(close_up.dot_alpha, 0);
+        assert!(close_up.ring_alpha > 0);
+        assert!(close_up.ring_radius > overview.dot_radius);
+    }
+
     #[test]
     fn paths_and_arrays_do_not_become_shell_commands() {
         let tool: Tool = serde_json::from_value(json!({"name":"test", "description":"", "fields":[

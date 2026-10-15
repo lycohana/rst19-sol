@@ -547,6 +547,7 @@ where
         partial: None,
     })?;
     let initial_count = initial.len();
+    eprintln!("20.0% · Gaia 查询计划完成，初始瓦片数 {initial_count}，进入联网查询阶段");
     let mut pending = VecDeque::from(initial);
     let mut records = Vec::new();
     let mut rows_by_id = HashMap::<String, Row>::new();
@@ -582,6 +583,12 @@ where
             return Ok(partial);
         }
         let adql = tile_adql(&tile, options).unwrap_or_default();
+        eprintln!(
+            "24.0% · 请求 Gaia 瓦片 {}（已完成 {} 次，待处理 {} 块，动态细分中）",
+            tile.tile_id,
+            records.len(),
+            pending.len()
+        );
         match query(&tile, options) {
             Err(error) => {
                 let error_text = error;
@@ -601,6 +608,10 @@ where
                     adql,
                     error: Some(error_text),
                 });
+                eprintln!(
+                    "24.0% · 瓦片 {} 请求失败，已记录审计并继续可用查询",
+                    tile.tile_id
+                );
                 if raise_on_error {
                     let message = format!("tile {} query failed", tile.tile_id);
                     let partial = assemble(
@@ -714,6 +725,7 @@ where
                     adql,
                     error: None,
                 });
+                eprintln!("24.0% · 瓦片 {} 返回 {returned} 行，范围内新增 {new_rows} 行；累计完成 {} 次，队列剩余 {} 块", tile.tile_id, records.len(), pending.len());
                 if saturated && options.saturated_policy == "raise" {
                     let message = if let Some(limit) = options.limit {
                         format!(
@@ -742,6 +754,7 @@ where
             }
         }
     }
+    eprintln!("74.0% · Gaia 瓦片查询结束，汇总覆盖范围、重复行与未解决区域");
     Ok(assemble(
         rows_by_id,
         records,
@@ -1070,7 +1083,9 @@ pub fn run_desktop(args: &[String]) -> Result<Value, String> {
         Ok(result) => result,
         Err(error) => *error.partial.ok_or(error.message)?,
     };
+    eprintln!("82.0% · 瓦片结果已汇总，写出 Gaia CSV 与查询审计");
     let (csv, metadata) = write_artifacts(&result, &options)?;
+    eprintln!("98.0% · Gaia 星表与瓦片审计已保存");
     Ok(
         json!({"csv":csv.to_string_lossy(),"metadata":metadata.to_string_lossy(),"result":result.value()}),
     )

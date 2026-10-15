@@ -377,6 +377,7 @@ fn merge_row(
 
 /// Merge two or more Gaia CSV files and emit the merged CSV plus integrity sidecar.
 pub fn merge_catalog_csvs(input_paths: &[PathBuf], output_path: &Path) -> Result<Value> {
+    eprintln!("3.0% · 校验 Gaia 星表输入与输出路径");
     let paths = input_paths
         .iter()
         .map(|path| absolute_path(path))
@@ -408,8 +409,11 @@ pub fn merge_catalog_csvs(input_paths: &[PathBuf], output_path: &Path) -> Result
     let mut input_audits_complete = true;
     let mut input_audit_bindings_valid = true;
 
-    for path in &paths {
+    eprintln!("8.0% · 开始逐表校验、读取审计并合并 source_id");
+    for (index, path) in paths.iter().enumerate() {
         let input = read_csv(path)?;
+        let input_row_count = input.rows.len();
+        let input_report_stride = input_row_count.div_ceil(20).max(1);
         catalog_csv::load_catalog_csv(path).map_err(|error| {
             format!("星表无法按 CatalogSource 读取：{}：{error}", path.display())
         })?;
@@ -455,8 +459,22 @@ pub fn merge_catalog_csvs(input_paths: &[PathBuf], output_path: &Path) -> Result
             "min_g_mag": audit.as_ref().and_then(|value| value.get("min_g_mag")).cloned().unwrap_or(Value::Null),
             "max_g_mag": audit.as_ref().and_then(|value| value.get("max_g_mag")).cloned().unwrap_or(Value::Null),
         }));
-        for row in input.rows {
+        for (row_index, row) in input.rows.into_iter().enumerate() {
             duplicate_count += usize::from(merge_row(&mut rows_by_id, row, &mut conflict_ids));
+            if (row_index + 1) % input_report_stride == 0 || row_index + 1 == input_row_count {
+                let within_file = (row_index + 1) as f32 / input_row_count.max(1) as f32;
+                let completed_files = index as f32 + within_file;
+                let percent = 10.0 + 35.0 * completed_files / paths.len() as f32;
+                eprintln!("{percent:.1}% · 合并输入星表 {}/{}, 当前行 {}/{input_row_count}，唯一 source_id {}", index + 1, paths.len(), row_index + 1, rows_by_id.len());
+            }
+        }
+        if input_row_count == 0 {
+            let percent = 10.0 + 35.0 * (index + 1) as f32 / paths.len() as f32;
+            eprintln!(
+                "{percent:.1}% · 已校验空星表 {}/{}，继续处理其余输入",
+                index + 1,
+                paths.len()
+            );
         }
     }
 
@@ -481,7 +499,13 @@ pub fn merge_catalog_csvs(input_paths: &[PathBuf], output_path: &Path) -> Result
     writer
         .write_record(&fields)
         .map_err(|error| error.to_string())?;
-    for row in rows_by_id.values() {
+    eprintln!(
+        "48.0% · 输入表合并完成，写出 {} 条唯一星源记录",
+        rows_by_id.len()
+    );
+    let output_row_count = rows_by_id.len();
+    let output_stride = output_row_count.div_ceil(20).max(1);
+    for (index, row) in rows_by_id.values().enumerate() {
         writer
             .write_record(
                 fields
@@ -489,6 +513,13 @@ pub fn merge_catalog_csvs(input_paths: &[PathBuf], output_path: &Path) -> Result
                     .map(|field| row.get(field).map(String::as_str).unwrap_or("")),
             )
             .map_err(|error| error.to_string())?;
+        if (index + 1) % output_stride == 0 || index + 1 == output_row_count {
+            let percent = 50.0 + 37.0 * (index + 1) as f32 / output_row_count.max(1) as f32;
+            eprintln!(
+                "{percent:.1}% · 已写出合并星表记录 {}/{output_row_count}",
+                index + 1
+            );
+        }
     }
     writer.flush().map_err(|error| error.to_string())?;
     drop(writer);
@@ -502,6 +533,7 @@ pub fn merge_catalog_csvs(input_paths: &[PathBuf], output_path: &Path) -> Result
     if merged_sources.len() != rows_by_id.len() {
         return Err("合并结果行数与唯一 source_id 数量不一致".into());
     }
+    eprintln!("90.0% · 合并 CSV 行数校验通过，生成绑定 SHA-256 的来源审计");
 
     let audit_path = PathBuf::from(format!("{}.meta.json", output.display()));
     let conflicting_source_ids = conflict_ids.iter().cloned().collect::<Vec<_>>();
@@ -553,6 +585,7 @@ pub fn merge_catalog_csvs(input_paths: &[PathBuf], output_path: &Path) -> Result
         )
         .and_then(|_| audit_file.write_all(b"\n"))
         .map_err(|error| error.to_string())?;
+    eprintln!("99.0% · Gaia 星表合并与审计写入完成");
     Ok(payload)
 }
 

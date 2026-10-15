@@ -357,7 +357,33 @@ fn mosaic_bounds(height: usize, width: usize, shifts: &[[f64; 2]]) -> Result<Mos
     ))
 }
 
+#[cfg(test)]
 fn build_with_shape(
+    frames: Vec<Frame>,
+    source_height: usize,
+    source_width: usize,
+    shifts: Vec<[f64; 2]>,
+    mode: &str,
+    clip_sigma: f64,
+    interpolation_order: usize,
+    mask_zero_pixels: bool,
+    mask_auxiliary_pixels: bool,
+) -> Result<Mosaic> {
+    build_with_shape_reported(
+        frames,
+        source_height,
+        source_width,
+        shifts,
+        mode,
+        clip_sigma,
+        interpolation_order,
+        mask_zero_pixels,
+        mask_auxiliary_pixels,
+        None,
+    )
+}
+
+fn build_with_shape_reported(
     mut frames: Vec<Frame>,
     source_height: usize,
     source_width: usize,
@@ -367,6 +393,7 @@ fn build_with_shape(
     interpolation_order: usize,
     mask_zero_pixels: bool,
     mask_auxiliary_pixels: bool,
+    mut progress: Option<&mut dyn FnMut(usize, usize)>,
 ) -> Result<Mosaic> {
     if frames.is_empty() {
         return Err("at least one frame is required".into());
@@ -424,6 +451,11 @@ fn build_with_shape(
     let mut kept = Vec::with_capacity(frames.len());
 
     for out_y in 0..output_height {
+        if out_y % output_height.div_ceil(40).max(1) == 0 || out_y + 1 == output_height {
+            if let Some(callback) = progress.as_mut() {
+                (**callback)(out_y + 1, output_height);
+            }
+        }
         let common_y = (out_y as f32) + (origin_y as f32);
         for out_x in 0..output_width {
             let common_x = (out_x as f32) + (origin_x as f32);
@@ -1006,9 +1038,10 @@ fn run_paths(
             paths.len()
         ));
     }
+    eprintln!("3.0% · 读取注册大图所需的 FITS 帧");
     let mut frames = Vec::with_capacity(paths.len());
     let mut shape = None;
-    for path in paths {
+    for (index, path) in paths.iter().enumerate() {
         let fits = fits::read_fits(path, false)?;
         if shape.is_some_and(|expected| expected != (fits.height, fits.width)) {
             return Err("all mosaic frames must have the same image shape".into());
@@ -1023,9 +1056,21 @@ fn run_paths(
             values,
             path: resolved.to_string_lossy().into_owned(),
         });
+        let percent = 5.0 + 13.0 * (index + 1) as f32 / paths.len() as f32;
+        eprintln!(
+            "{percent:.1}% · 已载入 FITS 帧 {}/{}, {}",
+            index + 1,
+            paths.len(),
+            path.file_name().unwrap_or_default().to_string_lossy()
+        );
     }
     let (height, width) = shape.ok_or("at least one frame is required")?;
-    let mosaic = build_with_shape(
+    eprintln!("20.0% · 输入帧就绪，开始逐行配准、插值与像素合成");
+    let mut row_progress = |row: usize, total: usize| {
+        let percent = 22.0 + 65.0 * row as f32 / total.max(1) as f32;
+        eprintln!("{percent:.1}% · 合成输出图像行 {row}/{total}");
+    };
+    let mosaic = build_with_shape_reported(
         frames,
         height,
         width,
@@ -1035,9 +1080,12 @@ fn run_paths(
         interpolation_order,
         true,
         true,
+        Some(&mut row_progress),
     )?;
     let summary = metadata(&mosaic);
+    eprintln!("91.0% · 像素合成完成，写入星图、覆盖图与元数据");
     write_artifacts(out_dir, &mosaic, &summary, raw_preview)?;
+    eprintln!("99.0% · 注册合成大图及配套证据已保存");
     Ok(json!({
         "tool":"rst19-mosaic",
         "out_dir":out_dir,

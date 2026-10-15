@@ -845,6 +845,7 @@ fn motion_cutouts(report: &Value, output: &Path) -> Result<()> {
 }
 
 pub fn write_innovation_artifacts(report: &Value, output: &Path) -> Result<PathBuf> {
+    eprintln!("40.0% · 创建报告目录并写出帧、运动、测光证据表");
     fs::create_dir_all(output).map_err(|error| error.to_string())?;
     let output = fs::canonicalize(output).map_err(|error| error.to_string())?;
     let frames = report["frames"]
@@ -925,7 +926,9 @@ pub fn write_innovation_artifacts(report: &Value, output: &Path) -> Result<PathB
         ],
         true,
     )?;
+    eprintln!("55.0% · 证据 CSV 与运动审计图已写入，生成运动源切图");
     motion_cutouts(report, &output)?;
+    eprintln!("64.0% · 运动源切图完成，构建配准参考栈与差分证据");
     let stack = registered_stack(frames, 1200, false)?;
     let reference = reference(&stack)?;
     let differences = difference_rows(frames, &stack, &reference)?;
@@ -942,6 +945,7 @@ pub fn write_innovation_artifacts(report: &Value, output: &Path) -> Result<PathB
         serde_json::to_vec_pretty(&rendered).map_err(|error| error.to_string())?,
     )
     .map_err(|error| error.to_string())?;
+    eprintln!("76.0% · 配准差分证据已保存，绘制质量、配准和遥测图表");
     let x = frames
         .iter()
         .enumerate()
@@ -1024,6 +1028,7 @@ pub fn write_innovation_artifacts(report: &Value, output: &Path) -> Result<PathB
         frames,
         &report["telemetry_predictions"]["predictions"],
     )?;
+    eprintln!("89.0% · 质量与遥测图表完成，生成注册合成预览图");
     let normalized = registered_stack(frames, 1200, true)?;
     let composite = self::reference(&normalized)?;
     if let Some(first) = normalized.first() {
@@ -1041,5 +1046,6 @@ pub fn write_innovation_artifacts(report: &Value, output: &Path) -> Result<PathB
         }
         mosaic.save(&output.join("registered_mosaic.png"))?;
     }
+    eprintln!("97.0% · 创新报告附件全部整理完成");
     Ok(output)
 }
