@@ -2,7 +2,7 @@ name: Rust desktop packages
 on:
   workflow_dispatch:
   push:
-    paths: ['desktop/**', 'backend/**', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'backend/**', '.github/workflows/desktop.yml', '.gitattributes']
 jobs:
   package:
     strategy:

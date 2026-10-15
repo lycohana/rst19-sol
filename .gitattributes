@@ -3,3 +3,6 @@
 backend/tests/fixtures/gaia_remote_parity/*.csv text eol=lf
 backend/tests/fixtures/gaia_tiled_parity/catalog.csv text eol=lf
 backend/tests/fixtures/source_tables/*.csv text eol=crlf
+
+# Frozen legacy source fingerprints include their Windows-style CRLF bytes.
+backend/tests/fixtures/legacy_sources/*.txt text eol=crlf
