@@ -253,6 +253,10 @@ flate2 = "1"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 roxmltree = "0.21"
 
+[[bin]]
+name = "rst19-photometric-pairs"
+path = "src/bin/rst19-photometric-pairs.rs"
+
 [profile.release]
 lto = "thin"
 strip = true
