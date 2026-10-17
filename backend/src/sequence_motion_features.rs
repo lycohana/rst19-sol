@@ -593,6 +593,38 @@ pub fn single_frame_components_from_analysis(
     )
 }
 
+/// Standalone single-frame inputs use independently estimated global
+/// background/noise and masks, rather than the point-detector's local model.
+pub(crate) fn standalone_components_for_planes(
+    residual: &[Vec<f32>],
+    valid: &[Vec<bool>],
+    artifact: &[Vec<bool>],
+    psf_fwhm: f64,
+    noise: f64,
+    min_length: f64,
+    short_min_area: usize,
+) -> Result<Value> {
+    motion_feature_frame_components_for_planes(
+        residual,
+        valid,
+        artifact,
+        Options {
+            frame_index: 0,
+            shift_x: 0.0,
+            shift_y: 0.0,
+            threshold: 60.0_f64.max(10.0 * noise),
+            residual_noise: noise,
+            psf_fwhm,
+            min_length,
+            min_feature_area: 20,
+            min_axis_ratio: 2.5,
+            bridge_gaps: false,
+            short_min_pixels: short_min_area.max((2.0 * psf_fwhm * psf_fwhm).ceil() as usize),
+            fit_line_model: true,
+        },
+    )
+}
+
 /// Extract and model-review a raw frame using the metadata-aware proposal
 /// floors used by the multi-frame sequence detector.
 #[allow(clippy::too_many_arguments)]

@@ -114,6 +114,7 @@ pub mod sequence_trails;
 pub mod signed_null;
 pub mod signed_null_forward_overlap;
 pub mod signed_null_sequence;
+mod single_frame_extraction;
 pub mod single_frame_model;
 pub mod single_frame_overlay;
 pub mod single_frame_trail_audit;

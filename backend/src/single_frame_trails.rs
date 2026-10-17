@@ -829,6 +829,39 @@ pub(crate) fn local_pixel_trail_proposals_for_plane(
     psf_fwhm: f64,
     options: &Value,
 ) -> Result<Value> {
+    local_pixel_trail_proposals_inner(
+        options,
+        scalar_plane_input(image, valid, height, width, background, noise, psf_fwhm)?,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn single_frame_trail_proposals_for_plane(
+    image: Vec<f64>,
+    valid: Vec<bool>,
+    height: usize,
+    width: usize,
+    background: f64,
+    noise: f64,
+    psf_fwhm: f64,
+    options: &Value,
+) -> Result<Value> {
+    single_frame_trail_proposals_inner(
+        options,
+        scalar_plane_input(image, valid, height, width, background, noise, psf_fwhm)?,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn scalar_plane_input(
+    image: Vec<f64>,
+    valid: Vec<bool>,
+    height: usize,
+    width: usize,
+    background: f64,
+    noise: f64,
+    psf_fwhm: f64,
+) -> Result<ValidatedInput> {
     let count = height.saturating_mul(width);
     if height.min(width) < 8
         || image.len() != count
@@ -847,18 +880,15 @@ pub(crate) fn local_pixel_trail_proposals_for_plane(
         .zip(valid)
         .map(|(value, valid)| valid && value.is_finite())
         .collect();
-    local_pixel_trail_proposals_inner(
-        options,
-        (
-            image,
-            usable,
-            vec![background; count],
-            vec![noise; count],
-            height,
-            width,
-            psf_fwhm,
-        ),
-    )
+    Ok((
+        image,
+        usable,
+        vec![background; count],
+        vec![noise; count],
+        height,
+        width,
+        psf_fwhm,
+    ))
 }
 
 fn local_pixel_trail_proposals_inner(request: &Value, input: ValidatedInput) -> Result<Value> {
@@ -1094,7 +1124,11 @@ fn local_pixel_trail_proposals_inner(request: &Value, input: ValidatedInput) -> 
 /// Return the native-resolution, multi-angle single-frame line proposals.
 /// The operation is restricted to one image and carries no sequence evidence.
 pub fn single_frame_trail_proposals(request: &Value) -> Result<Value> {
-    let (image, usable, background, noise, height, width, fwhm) = validate(request)?;
+    single_frame_trail_proposals_inner(request, validate(request)?)
+}
+
+fn single_frame_trail_proposals_inner(request: &Value, input: ValidatedInput) -> Result<Value> {
+    let (image, usable, background, noise, height, width, fwhm) = input;
     let angle_step = match request.get("angle_step_deg") {
         None => 10.0,
         Some(value) => {

@@ -1,9 +1,6 @@
 //! Current-exposure line evidence for the desktop single-frame view.
 //! No temporal reference, cross-frame association, or moving classification.
-use crate::{
-    pipeline::FrameAnalysis, sequence_motion_features, sequence_motion_tracks, sequence_trails,
-    Result,
-};
+use crate::{pipeline::FrameAnalysis, sequence_motion_tracks, sequence_trails, Result};
 use serde_json::{json, Value};
 
 fn number(point: &Value, key: &str) -> Option<f64> {
@@ -36,6 +33,10 @@ pub fn display_evidence(point: &Value) -> Result<Value> {
         visible && model_supported && shape["single_frame_supported"] == true && !artifact_review;
     Ok(
         json!({"visible":visible,"solid":solid,"artifact_review":artifact_review,
+        // All incoming points already passed connected-component geometry or
+        // original-pixel proposal review. Keep rejected geometry inspectable,
+        // without changing the line-model acceptance or solid-line gates.
+        "geometry_review":!visible,
         "model_supported":model_supported,"shape_supported":shape["single_frame_supported"],
         "reason":shape["single_frame_reason"]}),
     )
@@ -55,7 +56,6 @@ pub fn analyze(
     psf_fwhm: f64,
     progress: &mut dyn FnMut(f32, &str),
 ) -> Result<Value> {
-    progress(0.0, "提取当前曝光的连通线形与局部模型证据");
     let exposure_s = crate::fits::exposure_milliseconds(&analysis.frame.header)?
         .filter(|value| value.is_finite() && *value > 0.0)
         .map(|value| value / 1000.0);
@@ -69,25 +69,14 @@ pub fn analyze(
     let short_area = thresholds["short_min_area"]
         .as_u64()
         .ok_or("missing trail area floor")? as usize;
-    let mut components = sequence_motion_features::sequence_single_frame_components_from_analysis(
-        analysis, psf_fwhm, 10.0, 60.0, 20, 2.5, min_length, short_area,
+    let components = crate::single_frame_extraction::extract(
+        &analysis.frame,
+        psf_fwhm,
+        min_length,
+        short_area,
+        &mut |fraction: f32, label: &str| progress(fraction * 0.95, label),
     )?;
-    if analysis.frame.height.min(analysis.frame.width) >= 512 {
-        progress(
-            0.45,
-            "在当前原图上补充多尺度线段提案并复核单星、双星和线段模型",
-        );
-        crate::sequence_motion_recovery::augment_multiscale_raw_components(
-            &mut components,
-            analysis,
-            None,
-            0,
-            [0.0, 0.0],
-            psf_fwhm,
-            min_length,
-        )?;
-    }
-    progress(0.90, "合并共线重复片段并确定实线、虚线显示证据");
+    progress(0.97, "合并共线重复片段并确定实线、虚线显示证据");
     let mut points = components["points"]
         .as_array()
         .cloned()
@@ -128,6 +117,10 @@ pub fn analyze(
         .iter()
         .filter(|point| point["display"]["solid"] == true)
         .count();
+    let geometry_review_count = kept
+        .iter()
+        .filter(|point| point["display"]["geometry_review"] == true)
+        .count();
     let tracks = kept.into_iter().map(|point| json!({
         "track_id":point["overlay_id"],"classification":"candidate","evidence_level":"single_frame_trail",
         "presence":1,"points":[point]
@@ -137,10 +130,12 @@ pub fn analyze(
         json!({"schema":"rst19.single_frame_trails.v1","path":analysis.frame.path,
         "frame_count":1,"exposure_s":exposure_s,"candidate_count":tracks.len(),
         "overlay_count":overlay_count,"solid_count":solid_count,"review_count":overlay_count-solid_count,
-        "tracks":tracks,"audit":components["audit"],"parameters":{
+        "geometry_review_count":geometry_review_count,"displayed_count":overlay_count+geometry_review_count,
+        "tracks":tracks,"audit":components["audit"],"preprocessing":components["standalone_preprocessing"],
+        "proposal_profile":components["proposal_profile"],"parameters":{
             "psf_fwhm":psf_fwhm,"residual_sigma":10.0,"min_residual_adu":60.0,
             "min_feature_area":20,"min_axis_ratio":2.5,"min_length_px":min_length,"short_min_area":short_area},
-        "interpretation":"仅当前曝光的线形候选；实线表示局部线段模型和形态通过，虚线表示待复核；不确认跨帧运动或物理身份。"}),
+        "interpretation":"仅当前曝光的线形候选；橙色实线表示局部线段模型和形态通过，橙色虚线表示线模型待复核；紫色几何虚线保留模型未通过的短线形，可能是双星、椭圆星像或伪影，不确认跨帧运动或物理身份。"}),
     )
 }
 
@@ -167,6 +162,10 @@ mod tests {
         assert_eq!(weak["solid"], false);
         point["single_frame_model"] = json!("double");
         assert_eq!(display_evidence(&point).unwrap()["visible"], false);
+        let double = display_evidence(&point).unwrap();
+        assert_eq!(double["geometry_review"], true);
+        assert_eq!(double["solid"], false);
+        assert_eq!(double["model_supported"], false);
         point = line();
         point["line_artifact_overlap_fraction"] = json!(0.95);
         assert_eq!(display_evidence(&point).unwrap()["visible"], false);
@@ -236,7 +235,11 @@ mod tests {
         assert!(
             tracks.iter().any(|track| {
                 let point = &track["points"][0];
-                point["display"]["solid"] == true
+                // The standalone artifact mask correctly catches this uniform
+                // horizontal line; retain it for review rather than asserting
+                // the point detector's previous empty artifact mask was truth.
+                point["display"]["geometry_review"] == true
+                    && point["display"]["model_supported"] == true
                     && (point["y"].as_f64().unwrap() - 82.0).abs() < 2.0
                     && point["length_px"].as_f64().unwrap() > 45.0
             }),

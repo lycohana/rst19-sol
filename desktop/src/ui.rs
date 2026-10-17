@@ -157,6 +157,7 @@ pub struct Desktop {
     overlay: bool,
     rejected: bool,
     motion: bool,
+    geometry_review: bool,
     payload: Value,
     analysis: Value,
     analysis_path: Option<PathBuf>,
@@ -348,6 +349,7 @@ impl Desktop {
             overlay: true,
             rejected: false,
             motion: true,
+            geometry_review: true,
             payload: Value::Null,
             analysis: Value::Null,
             analysis_path: None,
@@ -716,13 +718,16 @@ impl Desktop {
                     ui.colored_label(
                         Color32::from_rgb(255, 154, 92),
                         format!(
-                            "单帧曝光线形 {} 条 · 实线 {} · 虚线待复核 {}",
-                            trails["overlay_count"], trails["solid_count"], trails["review_count"]
+                            "曝光线形 {} · 实线 {} · 线模型待复核 {} · 几何待复核 {}",
+                            trails["displayed_count"],
+                            trails["solid_count"],
+                            trails["review_count"],
+                            trails["geometry_review_count"]
                         ),
                     );
                     ui.label(
                         egui::RichText::new(
-                            "仅当前曝光；总览短线使用方向指示，放大后按像素长度显示",
+                            "橙：线模型 · 紫：几何候选，模型未通过；放大后显示实测长度",
                         )
                         .small(),
                     );
@@ -760,10 +765,19 @@ impl Desktop {
                 self.pan = Vec2::ZERO;
             }
         });
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.checkbox(&mut self.overlay, "质量通过源");
             ui.checkbox(&mut self.rejected, "被拒候选");
             ui.checkbox(&mut self.motion, "曝光线形 / 运动轨迹");
+            if self.sequence.is_null() {
+                ui.add_enabled(
+                    self.motion,
+                    egui::Checkbox::new(&mut self.geometry_review, "几何待复核"),
+                )
+                .on_hover_text(
+                    "默认保留短线几何提案；紫色虚线可能是双星、椭圆星像或伪影，悬停查看模型原因。",
+                );
+            }
             ui.label(egui::RichText::new("滚轮缩放 · 拖动平移 · 点击查看源").small());
         });
         let (rect, response) = ui.allocate_exact_size(
@@ -856,17 +870,21 @@ impl Desktop {
                 if let Some(tracks) = self.analysis["single_frame_trails"]["tracks"].as_array() {
                     for track in tracks {
                         if let Some(points) = track["points"].as_array() {
-                            for point in points
-                                .iter()
-                                .filter(|point| point["display"]["visible"] == true)
-                            {
+                            for point in points.iter().filter(|point| {
+                                point["display"]["visible"] == true
+                                    || (self.geometry_review
+                                        && point["display"]["geometry_review"] == true)
+                            }) {
                                 let Some(line) = crate::motion_overlay::line_geometry(
                                     point, image_rect, rect, scale, self.zoom, true,
                                 ) else {
                                     continue;
                                 };
                                 let display = &point["display"];
-                                let label = if display["artifact_review"] == true {
+                                let geometry_review = display["geometry_review"] == true;
+                                let label = if geometry_review {
+                                    "GEOM?"
+                                } else if display["artifact_review"] == true {
                                     "ARTIFACT?"
                                 } else if display["solid"] == true {
                                     "EXP TRAIL"
@@ -876,7 +894,11 @@ impl Desktop {
                                 crate::motion_overlay::draw_line(
                                     &painter,
                                     &line,
-                                    Color32::from_rgb(255, 154, 92),
+                                    if geometry_review {
+                                        Color32::from_rgb(213, 169, 255)
+                                    } else {
+                                        Color32::from_rgb(255, 154, 92)
+                                    },
                                     display["solid"] == true,
                                     &format!("{label} {}", track["track_id"]),
                                 );
