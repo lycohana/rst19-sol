@@ -1,0 +1,87 @@
+{
+  "schema": "xcheck-frame1/config/v1",
+  "note": "独立交叉验证工具，非生产实现。所有可调参数集中于此文件。",
+  "input": {
+    "fits_relative": "doc/00-项目资料/原始数据/20260330163205413_9901.fits",
+    "expected_sha256": "6D6926A0546A5E2D28C6E76762BF72127FF3F0E37B589993EB381881BFE0ACC6"
+  },
+  "output_root_relative": "tmp/xcheck-frame1",
+  "e0": {
+    "worst_n": 20,
+    "neighbour_radius": 1,
+    "bright_core_neighbour_median_adu": 200,
+    "medium_core_neighbour_median_adu": 40,
+    "plateau_band_low": 32760,
+    "plateau_band_high": 32767,
+    "plateau_min_run": 3,
+    "code_spike_top_n": 4,
+    "cutout_half": 32,
+    "cutout_upscale": 8,
+    "neg_map_size": 512
+  },
+  "e1": {
+    "box": 128,
+    "macro_grid": 4,
+    "aperture_radii": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "n_sample_positions": 2000,
+    "patch_half": 8,
+    "clean_sigma_mult": 5,
+    "dilate_px": 8,
+    "edge_margin": 12,
+    "tile": 512,
+    "clip_sigma": 3,
+    "clip_iters": 3
+  },
+  "e6": {
+    "fwhm_px": 3,
+    "kernel_truncate_sigma": 3,
+    "background_box": 128,
+    "proposal_sigma": 4,
+    "snr_cut": 5,
+    "min_distance_px": 3,
+    "morphology_window": 7,
+    "fwhm_accept_px": [
+      1.5,
+      6
+    ],
+    "ellip_max": 0.6,
+    "n_synthetic": 3,
+    "synthetic_seed": 20260330,
+    "production_probe_xy": [
+      2929.8555143839876,
+      3915.2170822163916
+    ],
+    "probe_match_radius_px": 3
+  },
+  "e2": {
+    "flux_adu": 219,
+    "flux_snr_reported": 5.110702614293284,
+    "instrumental_magnitude_reported": -5.410882139461092,
+    "instrumental_magnitude_error_reported": 0.21244362795080515,
+    "exposure_s": 1.5,
+    "aperture_radius": 4,
+    "annulus_inner_radius": 6,
+    "annulus_outer_radius": 8,
+    "gain_grid": [
+      null,
+      0.5,
+      1,
+      2,
+      4
+    ],
+    "read_noise_adu_grid": [
+      0,
+      2,
+      5
+    ]
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "schema": "xcheck-frame1/phase1b-config/v1",
+  "note": "第 1 帧阶段一第二批（E3/E4/E10/E7-lite）冻结配置。只读原始 FITS，不改生产代码。所有可调参数集中于此。",
+  "input": {
+    "fits_relative": "doc/00-项目资料/原始数据",
+    "reference_fits": "20260330163205413_9901.fits",
+    "expected_sha256_reference": "6D6926A0546A5E2D28C6E76762BF72127FF3F0E37B589993EB381881BFE0ACC6",
+    "expected_n_frames": 15
+  },
+  "output_root_relative": "tmp/xcheck-frame1",
+  "prior_results": {
+    "runid": "20261017T100431650_2C449A5B",
+    "sigma_pix_adu": 7.338,
+    "sigma_pix_note": "相邻像元差分+MAD/sqrt2, 342214 对 (Lead 已复核)",
+    "kappa_production_estimator": 1.18,
+    "sigma_ap_r4_adu_from_e1": 7.617112849581876,
+    "sigma_ap_r4_var_adu2_from_e1": 58.02040816326532,
+    "n_ap_r4_geo": 49,
+    "probe_flux_adu": 219,
+    "probe_matched_filter_snr": 7.51,
+    "probe_fwhm_px": 3.4,
+    "probe_ellipticity": 0.035,
+    "exposure_s": 1.5
+  },
+  "mask": {
+    "telemetry_rows": 1,
+    "telemetry_cols": 104,
+    "note": "dn[0, 0:104] 是遥测区，永久掩膜（全帧 min=-32746 落在此区）"
+  },
+  "detect": {
+    "fwhm_px": 3.4,
+    "kernel_truncate_sigma": 3,
+    "background_box": 128,
+    "mf_threshold_snr": 8,
+    "nms_min_distance_px": 3,
+    "morphology_window": 7,
+    "fwhm_accept_px": [
+      1.5,
+      6
+    ],
+    "ellip_max": 0.6
+  },
+  "aperture": {
+    "r_ap": 4,
+    "r_in": 6,
+    "r_out": 8,
+    "frac_weight_note": "w = clip(r_ap + 0.5 - d, 0, 1) 为分数像元权重方案"
+  },
+  "e4": {
+    "ap_snr_min": 50,
+    "peak_max_dn": 20000,
+    "isolation_px_growth": 16,
+    "r_max": 14,
+    "sky_in": 17,
+    "sky_out": 21,
+    "analytic_sky_in": 14.5,
+    "analytic_sky_out": 21,
+    "plateau_r": [
+      12,
+      14
+    ],
+    "extrap_r": [
+      8,
+      14
+    ],
+    "n_bright_bins": 3,
+    "n_pos_quadrants": 4,
+    "psf_half_px": 10,
+    "psf_oversample": 5,
+    "psf_grid_cells": 16,
+    "fwhm_grid": [
+      4,
+      4
+    ],
+    "max_stars_growth": 4000,
+    "max_stars_psf": 3000,
+    "psf_moment_rmax": 5.5,
+    "psf_box_consistency_note": "|盒子通量/A(10) - 1| < 该值才进入 PSF 叠加，用于剔除邻星污染",
+    "psf_box_sigma_mult": 4,
+    "psf_box_systematic_frac": 0.03,
+    "psf_box_note": "盒子通量 vs A(10) 的允许差 = sigma_mult*sqrt(N_box+N_ap)*sigma_pix + systematic_frac*A(10)",
+    "ac_measurable_frac_err_max": 0.05,
+    "sigma_ap_r_r_gt_8_adu": 7.8,
+    "sigma_ap_note": "前批 E1 实测 r=4..8 孔径和 RMS 7.617/7.657/7.685/7.711/7.724 ADU；r>8 取 7.8 为上界外推"
+  },
+  "e3": {
+    "ap_snr_min": 50,
+    "peak_max_dn": 20000,
+    "isolation_px": 10.2,
+    "isolation_note": "3 x FWHM(=3.40px)",
+    "n_phase_buckets": 10,
+    "phase_bucket_axis": "frac(centroid_x)",
+    "min_stars_per_bucket": 20,
+    "inject_phases": 5,
+    "inject_phase_grid": [
+      0,
+      0.2,
+      0.4,
+      0.6,
+      0.8
+    ],
+    "n_inject_positions": 60,
+    "inject_flux_grid_adu": [
+      219,
+      1095,
+      5475
+    ],
+    "inject_seed": 20260331,
+    "inject_sky_sigma_mult": 5,
+    "inject_clean_dilate_px": 12,
+    "inject_flux_note": "三个通量级：219=生产探针源同量级；1095/5475 用于把测量噪声压到几何效应以下"
+  },
+  "e10": {
+    "ap_snr_min": 20,
+    "n_sources_max": 3000,
+    "n_regstars": 400,
+    "regstar_mf_snr_min": 40,
+    "regstar_isolation_px": 20,
+    "regstar_peak_max_dn": 20000,
+    "phasecorr_crop": 1280,
+    "phasecorr_max_shift": 64,
+    "local_search_px": 6,
+    "centroid_window_r": 3,
+    "stationary_frac_min": 0.8,
+    "drift_px_max": 1,
+    "flux_sigma_mult": 3,
+    "registration_resid_max_px": 0.3,
+    "min_frames_for_flux_test": 5,
+    "max_frames": 15,
+    "sample_seed": 20260333,
+    "peak_max_dn_e10": 20000,
+    "sample_note": "从 SNR>20 且 peak<20000 且 r<=9 内无负像元的源里做有种子随机抽样，不取最亮的（最亮的一批被饱和/溢出污染）",
+    "flux_rel_floor": 0.05,
+    "flux_rel_floor_note": "相对通量散布下限（5%）：明亮源在 206 ADU 的纯背景阈值下会被系统性误判，因为真实噪声还含未知泊松项"
+  },
+  "e7": {
+    "bins_background": 3,
+    "bins_crowding": 3,
+    "n_injections_per_bin": 240,
+    "n_realizations": 5,
+    "inject_flux_rel_to_219": [
+      0.15,
+      0.3,
+      0.5,
+      0.7,
+      1,
+      1.4,
+      2,
+      3
+    ],
+    "detect_snr_recover_min": 5,
+    "flux_recover_sigma_mult": 3,
+    "pos_recover_px": 2,
+    "sky_sigma_mult": 5,
+    "clean_dilate_px": 12,
+    "seed": 20260332,
+    "exposure_s": 1.5,
+    "rel_flux_tolerance": 0.5
+  }
+}
