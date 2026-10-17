@@ -240,6 +240,10 @@ path = "src/bin/rst19-motion-crossing-ablation.rs"
 name = "rst19-feature-evidence-axes"
 path = "src/bin/rst19-feature-evidence-axes.rs"
 
+[[bin]]
+name = "rst19-astrometry-blind"
+path = "src/bin/rst19-astrometry-blind.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
