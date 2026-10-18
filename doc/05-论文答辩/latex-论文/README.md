@@ -12,6 +12,8 @@
 | 图 4/5/6 零点与残差 | figs/zp_vs_g.csv, res_vs_g.csv, zp_vs_r.csv | `tmp/rust-pairs/deep-20261017T142347Z/pairs.csv` |
 | 图 7 帧间散度 vs 光子预期 | figs/delta_vs_snr.csv | `tmp/rust-pairs/f15_summary/delta_vs_snr.csv` |
 | 图 8 拖影标注图 | figs/trail_annotated.png | `tmp/paper/motion/`（measure_trail.py 等） |
+| 图 9 拖影剖面（沿走向/垂直走向） | figs/trail_along.csv, figs/trail_width.csv | `tmp/paper/motion/trail_profile.csv`、`trail_width_profile.csv` |
+| 表 5 可判定性 | 正文 | 由 §5.2–§5.5 的实测量推出 |
 | 表 2 饱和判据 | 正文 | 同一星表口径（在线 G≤15.5）的两次运行 |
 | 表 3 门限三档 | 正文 | `审计/thresholds.md` |
 
@@ -47,3 +49,12 @@
 - 拖影通量为下界，峰值只给量级。
 - 单帧不能定运动方向、真实速率与天体类别。
 - 112 条门限中 46% 无出处，47 条仅对本帧/本机成立。
+## 第 5 节（运动轨迹）重写说明
+
+原稿是"测量清单"，缺论证主线。重写后按"判据量纲 → 单事件测量 → 形态学判据 → 宽度解释 → 多帧零结果 → 可判定性"组织，并新增三项可检验内容：
+
+1. **拖影模式的灵敏度窗口**：由线状判据反解 $L_{\min}\approx14$\,px，得 $\omega_{\min}\approx0.0217^\circ/{\rm s}$；更慢的目标不形成拖影而是进入普通源表。
+2. **速率上限**：15 帧 × 1.5 s、95.65 deg²、观测 1 个事件 ⇒ 95% CL 上限 $<7.9\,{\rm deg}^{-2}{\rm h}^{-1}$（式 10）。这是"没有运动目标"这句定性结论的定量版本。
+3. **宽度三解释的分离程度**：目标角径 / 饱和晕 / 读出拖影，本文只能排除"读出拖影为主"（静止星 PSF 仍为 1.329 px），前两者不可分离 ⇒ 不据此推断目标尺寸。
+
+另修：Markdown 星号泄漏进 LaTeX（`**0.147**` → `\textbf{}`）、拖影标注图改为 `height=0.52\textheight` 以免独占整页。
