@@ -1,25 +1,49 @@
-# 论文稿（LaTeX）数据来源
+# 论文稿（LaTeX）数据来源与审计链
 
-编译：`xelatex main.tex`（两遍，MiKTeX 25.12 + ctexart）。成品 `main.pdf`（11 页）。
+编译：`xelatex main.tex`（两遍，MiKTeX 25.12 + ctexart）。成品 `main.pdf`（13 页）。
+
+## 图/表数据来源
 
 | 图/表 | 数据文件 | 来源（可复算） |
 |---|---|---|
-| 图 1 峰值分布（含 3992 DN 台阶） | figs/peak_hist.csv, figs/peak_zoom.csv | `tmp/rust-sources-prod/source_catalog.csv`（第 1 帧，66,469 行） |
+| 图 1 峰值分布（含 3992 DN 台阶） | figs/peak_hist.csv, figs/peak_zoom.csv | `tmp/rust-sources-prod/source_catalog.csv`（全部 66,469 个候选） |
 | 图 2 FWHM 分布 | figs/fwhm_hist.csv | 同上，按 `quality_passed` 分列 |
-| 图 3 信噪比分布 | figs/snr_hist.csv | 同上，质量通过子集 |
-| 图 4/5 零点与残差随 G | figs/zp_vs_g.csv, figs/res_vs_g.csv | `tmp/rust-pairs/deep-20261017T142347Z/pairs.csv`（20,906 未饱和内点） |
-| 图 6 零点随半径 | figs/zp_vs_r.csv | 同上 |
-| 图 7 帧间散度 vs 光子预期 | figs/delta_vs_snr.csv | `tmp/rust-pairs/f15_summary/delta_vs_snr.csv`（105 个帧对） |
-| 图 8 拖影标注图 | figs/trail_annotated.png | `tmp/paper/motion/`（`measure_trail.py` 等四个脚本） |
-| 表 1 仪器层事实 | 正文 | FITS 头 + 首行遥测解码 |
-| 表 2 饱和判据影响 | 正文 | 两种 `--peak-ceiling` 下的 photometric-pairs 运行 |
-| 表 3 误差预算 | 正文 | 见 `doc/交付验收-最终包-1792273471314.md` 与各专题文档 |
+| 图 3 匹配滤波信噪比 | figs/snr_hist.csv | 同上，`snr` 列（非 `flux_snr`） |
+| 图 4/5/6 零点与残差 | figs/zp_vs_g.csv, res_vs_g.csv, zp_vs_r.csv | `tmp/rust-pairs/deep-20261017T142347Z/pairs.csv` |
+| 图 7 帧间散度 vs 光子预期 | figs/delta_vs_snr.csv | `tmp/rust-pairs/f15_summary/delta_vs_snr.csv` |
+| 图 8 拖影标注图 | figs/trail_annotated.png | `tmp/paper/motion/`（measure_trail.py 等） |
+| 表 2 饱和判据 | 正文 | 同一星表口径（在线 G≤15.5）的两次运行 |
+| 表 3 门限三档 | 正文 | `审计/thresholds.md` |
 
-生成脚本：`tmp/paper/mk_figs.py`、`tmp/paper/mk_zoom.py`（图数据），`tmp/paper/motion/*.py`（拖影）。
+## 三份审计（`审计/` 目录）
 
-## 不可声称项（与正文一致）
+| 文件 | 内容 |
+|---|---|
+| `thresholds.md` | 112 条门限逐条：值/位置/类型/出处/适用范围/改动后果 |
+| `summary.md` | 门限审计结论（46% 无出处、47 条 image-specific、三条改写建议） |
+| `logic_spec.md` | 实现逻辑规格（19 问，83 条代码引用，逐字回读核对） |
+| `discrepancies.md` | 代码与文档不一致清单（D1–D16） |
+| `paper_factcheck.md` | 论文 170 条断言核查（20 ❌ / 29 ⚠️ / 2 ❓ / 119 ✅） |
 
-- $g_{\rm emp}$ 不是 Gaia $G$、不是 $V$；波段声明为 450–750 nm 标称、响应未知。
+## 已在正文修正的主要错误（源自事实核查）
+
+1. 质量门参数（原写 FWHM [1.3,3.2]、椭率 ≤0.4 → 实为 0.8–12.0、0.65）；
+2. 定标星数 18,903 → **18,902**；留出散度 0.147 → **0.253**（原 0.140 是样本内）；
+3. 表 2 混用两条星表口径 → 改为同口径 A/B 两列（20.4013 → **20.4111**）；
+4. §4.4 混写三条运行 → 只描述交付配置，并注明深目录运行给出 20.4111、两者不可混比；
+5. 图 1 画的是全部 66,469 个候选（非 27,552）；3990–3993 区间为 **851** 个源（原 777 只含 3990/3991/3992）；
+6. 平台源平均削顶像素 3.1 → **1.19**；
+7. 图 3 绘的是匹配滤波 `snr`，与"5σ 截断"（`flux_snr`）无关 → 图注已更正；
+8. κ 分母 68.05 → **67.65**；PSF 比默认窄 50% → **36%**；饱和剔除 11.0% → **11.1%**；
+9. 拖影速度换算：1°/day → **0.0074 px**（原 0.09），1°/s → **640 px**（原 735）；
+10. 图 4 注："G≲14" → **G≥10.25**；"测亮" → **测暗**（方向反了）；
+11. 合并散度 0.0379 → **0.0370**（0.0489 保留图案，0.147 单帧），三者分别引用；
+12. "320σ" 补限定：搜索图峰值信噪比，非标准正态显著性。
+
+## 不可声称项
+
+- $g_{\rm emp}$ 不是 Gaia $G$、不是 $V$；波段 450–750 nm 标称、响应未知。
 - 无增益/平场/总响应曲线，绝对精度不可验证。
-- 拖影的通量为下界，峰值只给量级（饱和码与 4 倍读数并存的仪器异常）。
+- 拖影通量为下界，峰值只给量级。
 - 单帧不能定运动方向、真实速率与天体类别。
+- 112 条门限中 46% 无出处，47 条仅对本帧/本机成立。

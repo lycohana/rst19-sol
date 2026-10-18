@@ -3,64 +3,70 @@
 \providecommand*\HyPL@Entry[1]{}
 \HyPL@Entry{0<</S/D>>}
 \@writefile{toc}{\contentsline {section}{\numberline {1}引言}{1}{section.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2}数据与仪器层事实}{1}{section.2}\protected@file@percent }
-\newlabel{sec:data}{{2}{1}{数据与仪器层事实}{section.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}数据与仪器层事实}{2}{section.2}\protected@file@percent }
+\newlabel{sec:data}{{2}{2}{数据与仪器层事实}{section.2}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces 仪器层事实（可由文件核实）}}{2}{table.caption.1}\protected@file@percent }
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
 \newlabel{tab:inst}{{1}{2}{仪器层事实（可由文件核实）}{table.caption.1}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {3}恒星检测}{2}{section.3}\protected@file@percent }
 \newlabel{sec:detect}{{3}{2}{恒星检测}{section.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.1}背景与噪声估计}{2}{subsection.3.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}匹配滤波与候选提案}{2}{subsection.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}饱和判据：一个从原始像素发现的硬台阶}{2}{subsection.3.3}\protected@file@percent }
-\newlabel{sec:sat}{{3.3}{2}{饱和判据：一个从原始像素发现的硬台阶}{subsection.3.3}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces 第 1 帧峰值分布。(a) 全范围（对数坐标）；(b) 3990--3994\,DN 附近改用 5\,DN 线性分箱后，可以看到 3992\,DN 处的尖峰（881 个候选）与其上方的空白（$[3994,4100)$ 仅 1 个）。这说明存在与“满量程 65535”无关的读出/编码上限，而旧的 $20000$\,DN 饱和判据把它整个漏掉了。}}{3}{figure.caption.2}\protected@file@percent }
-\newlabel{fig:peak}{{1}{3}{第 1 帧峰值分布。(a) 全范围（对数坐标）；(b) 3990--3994\,DN 附近改用 5\,DN 线性分箱后，可以看到 3992\,DN 处的尖峰（881 个候选）与其上方的空白（$[3994,4100)$ 仅 1 个）。这说明存在与“满量程 65535”无关的读出/编码上限，而旧的 $20000$\,DN 饱和判据把它整个漏掉了。}{figure.caption.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces 饱和判据对经验零点的影响（第 1 帧）}}{3}{table.caption.3}\protected@file@percent }
-\newlabel{tab:sat}{{2}{3}{饱和判据对经验零点的影响（第 1 帧）}{table.caption.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}匹配滤波、候选提案与质量门}{2}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}饱和判据：一个从原始像素发现的硬台阶}{3}{subsection.3.3}\protected@file@percent }
+\newlabel{sec:sat}{{3.3}{3}{饱和判据：一个从原始像素发现的硬台阶}{subsection.3.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces 第 1 帧峰值分布。(a) 全范围（对数坐标）；(b) 3990--3994\,DN 附近改用 5\,DN 线性分箱后，可以看到 3992\,DN 处的尖峰（881 个候选）与其上方的空白（$[3994,4100)$ 仅 2 个）。这说明存在与“满量程 65535”无关的读出/编码上限，而旧的 $20000$\,DN 饱和判据把它整个漏掉了。}}{3}{figure.caption.2}\protected@file@percent }
+\newlabel{fig:peak}{{1}{3}{第 1 帧峰值分布。(a) 全范围（对数坐标）；(b) 3990--3994\,DN 附近改用 5\,DN 线性分箱后，可以看到 3992\,DN 处的尖峰（881 个候选）与其上方的空白（$[3994,4100)$ 仅 2 个）。这说明存在与“满量程 65535”无关的读出/编码上限，而旧的 $20000$\,DN 饱和判据把它整个漏掉了。}{figure.caption.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.4}检测统计}{3}{subsection.3.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {4}星等估算}{3}{section.4}\protected@file@percent }
-\newlabel{sec:mag}{{4}{3}{星等估算}{section.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}孔径测光与仪器星等}{3}{subsection.4.1}\protected@file@percent }
-\newlabel{eq:minst}{{3}{3}{孔径测光与仪器星等}{equation.3}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces FWHM 分布。质量门把宽于 3.2\,px 的混合/拖影源与窄于 1.3\,px 的热像元剔除，主峰与叠合 PSF（1.93\,px）重合。}}{4}{figure.caption.4}\protected@file@percent }
-\newlabel{fig:fwhm}{{2}{4}{FWHM 分布。质量门把宽于 3.2\,px 的混合/拖影源与窄于 1.3\,px 的热像元剔除，主峰与叠合 PSF（1.93\,px）重合。}{figure.caption.4}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces 质量通过源的信噪比分布。$\mathrm  {SNR}=5$ 处的截断即质量门位置；该处误差条由背景主导，故其可信度完全取决于第 \ref {sec:errbudget} 节的误差预算。}}{4}{figure.caption.5}\protected@file@percent }
-\newlabel{fig:snr}{{3}{4}{质量通过源的信噪比分布。$\mathrm {SNR}=5$ 处的截断即质量门位置；该处误差条由背景主导，故其可信度完全取决于第 \ref {sec:errbudget} 节的误差预算。}{figure.caption.5}{}}
-\newlabel{eq:err}{{4}{4}{孔径测光与仪器星等}{equation.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}经验零点}{4}{subsection.4.2}\protected@file@percent }
-\newlabel{eq:zp}{{5}{4}{经验零点}{equation.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}三重验证}{5}{subsection.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}结果}{5}{subsection.4.4}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces 分箱零点随参考星亮度的变化。$G\in [10,14]$ 内基本平坦（$\pm 0.03$\,mag），$G>14.2$ 后系统抬升，对应暗端的混合与选择效应；判据是“随 $G$ 有趋势而随信噪比无趋势”，故不是噪声整流所致。}}{5}{figure.caption.6}\protected@file@percent }
-\newlabel{fig:zp}{{4}{5}{分箱零点随参考星亮度的变化。$G\in [10,14]$ 内基本平坦（$\pm 0.03$\,mag），$G>14.2$ 后系统抬升，对应暗端的混合与选择效应；判据是“随 $G$ 有趋势而随信噪比无趋势”，故不是噪声整流所致。}{figure.caption.6}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces 残差随亮度的系统趋势。$G\lesssim 14$ 时 $|\text  {中位残差}|\le 0.03$\,mag；暗端的正残差意味着目标被系统测亮，故该区间只能带系统项引用。}}{5}{figure.caption.7}\protected@file@percent }
-\newlabel{fig:res}{{5}{5}{残差随亮度的系统趋势。$G\lesssim 14$ 时 $|\text {中位残差}|\le 0.03$\,mag；暗端的正残差意味着目标被系统测亮，故该区间只能带系统项引用。}{figure.caption.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}15 帧：随机项与共同系统项}{5}{subsection.4.5}\protected@file@percent }
-\newlabel{sec:frames}{{4.5}{5}{15 帧：随机项与共同系统项}{subsection.4.5}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces 零点随视场半径的变化：中心到边缘共 0.094\,mag。这是平场/渐晕的直接证据，也是当前最大的单项系统误差之一；仅用径向二次项只能扣除约 7\%。}}{6}{figure.caption.8}\protected@file@percent }
-\newlabel{fig:zprad}{{6}{6}{零点随视场半径的变化：中心到边缘共 0.094\,mag。这是平场/渐晕的直接证据，也是当前最大的单项系统误差之一；仅用径向二次项只能扣除约 7\%。}{figure.caption.8}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces 帧间差分散度与光子预期。低信噪比端两者重合，证明随机项已到光子极限；高信噪比端偏离 10 倍以上，来自平场、非线性与饱和尾部。}}{6}{figure.caption.9}\protected@file@percent }
-\newlabel{fig:delta}{{7}{6}{帧间差分散度与光子预期。低信噪比端两者重合，证明随机项已到光子极限；高信噪比端偏离 10 倍以上，来自平场、非线性与饱和尾部。}{figure.caption.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}误差预算}{7}{subsection.4.6}\protected@file@percent }
-\newlabel{sec:errbudget}{{4.6}{7}{误差预算}{subsection.4.6}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces 第 1 帧误差预算（除注明外为实测）}}{7}{table.caption.10}\protected@file@percent }
-\newlabel{tab:budget}{{3}{7}{第 1 帧误差预算（除注明外为实测）}{table.caption.10}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5}运动轨迹}{7}{section.5}\protected@file@percent }
-\newlabel{sec:motion}{{5}{7}{运动轨迹}{section.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}拖影的几何}{7}{subsection.5.1}\protected@file@percent }
-\newlabel{eq:trail}{{6}{7}{拖影的几何}{equation.6}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces 第 1 帧长拖影的 3 倍裁剪（红线为拟合脊线，青色叉为两端，黄色短线为垂直剖面取样位置，左下为北/东指向与 100\,px 标尺）。上端被画幅切断，故长度为下界。}}{8}{figure.caption.11}\protected@file@percent }
-\newlabel{fig:trail}{{8}{8}{第 1 帧长拖影的 3 倍裁剪（红线为拟合脊线，青色叉为两端，黄色短线为垂直剖面取样位置，左下为北/东指向与 100\,px 标尺）。上端被画幅切断，故长度为下界。}{figure.caption.11}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}形态判据：它是拖影而不是点像}{9}{subsection.5.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}测光与饱和}{9}{subsection.5.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}多帧关联}{9}{subsection.5.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}速率下界与可判定性}{9}{subsection.5.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces 饱和判据对经验零点的影响（第 1 帧，在线目录 $G\le 15.5$，两列同一运行谱系、可直接作差）}}{4}{table.caption.3}\protected@file@percent }
+\newlabel{tab:sat}{{2}{4}{饱和判据对经验零点的影响（第 1 帧，在线目录 $G\le 15.5$，两列同一运行谱系、可直接作差）}{table.caption.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces FWHM 分布。实现中的 FWHM 门是 $[0.8,12.0]$\,px，对实测 PSF（1.93\,px）近乎不设限，因此两条曲线的差异主要由信噪比门与伪影判据造成；图中宽于 4.6\,px 的长尾已在质量通过样本中消失，是因为它们被判为伪影（拖影由线状判据标记，而非 FWHM 门）。主峰与叠合 PSF 重合。}}{4}{figure.caption.4}\protected@file@percent }
+\newlabel{fig:fwhm}{{2}{4}{FWHM 分布。实现中的 FWHM 门是 $[0.8,12.0]$\,px，对实测 PSF（1.93\,px）近乎不设限，因此两条曲线的差异主要由信噪比门与伪影判据造成；图中宽于 4.6\,px 的长尾已在质量通过样本中消失，是因为它们被判为伪影（拖影由线状判据标记，而非 FWHM 门）。主峰与叠合 PSF 重合。}{figure.caption.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces 质量通过源的匹配滤波信噪比分布（注意：质量门的 5\,$\sigma $ 截断施加在孔径通量信噪比 \texttt  {flux\_snr} 上，而本图绘的是 \texttt  {snr} 列，两者定义不同，故此列在 5 附近并无截断）；该处误差条由背景主导，故其可信度完全取决于第 \ref {sec:errbudget} 节的误差预算。}}{4}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:snr}{{3}{4}{质量通过源的匹配滤波信噪比分布（注意：质量门的 5\,$\sigma $ 截断施加在孔径通量信噪比 \texttt {flux\_snr} 上，而本图绘的是 \texttt {snr} 列，两者定义不同，故此列在 5 附近并无截断）；该处误差条由背景主导，故其可信度完全取决于第 \ref {sec:errbudget} 节的误差预算。}{figure.caption.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}门限清单与来源}{4}{subsection.3.5}\protected@file@percent }
+\newlabel{sec:gates}{{3.5}{4}{门限清单与来源}{subsection.3.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces 门限的三档适用范围（完整清单见仓库 \texttt  {tmp/audit/thresholds.md}）}}{5}{table.caption.6}\protected@file@percent }
+\newlabel{tab:gates}{{3}{5}{门限的三档适用范围（完整清单见仓库 \texttt {tmp/audit/thresholds.md}）}{table.caption.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6}指向解与星表匹配}{5}{subsection.3.6}\protected@file@percent }
+\newlabel{sec:astrom}{{3.6}{5}{指向解与星表匹配}{subsection.3.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}星等估算}{6}{section.4}\protected@file@percent }
+\newlabel{sec:mag}{{4}{6}{星等估算}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}孔径测光与仪器星等}{6}{subsection.4.1}\protected@file@percent }
+\newlabel{eq:minst}{{3}{6}{孔径测光与仪器星等}{equation.3}{}}
+\newlabel{eq:err}{{4}{6}{孔径测光与仪器星等}{equation.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}经验零点}{6}{subsection.4.2}\protected@file@percent }
+\newlabel{eq:zp}{{5}{6}{经验零点}{equation.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}三重验证}{6}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}结果}{6}{subsection.4.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces 分箱零点随参考星亮度的变化。$G\in [10,14]$ 内基本平坦（$\pm 0.03$\,mag），$G>14.2$ 后系统抬升，对应暗端的混合与选择效应；判据是“随 $G$ 有趋势而随信噪比无趋势”，故不是噪声整流所致。}}{7}{figure.caption.7}\protected@file@percent }
+\newlabel{fig:zp}{{4}{7}{分箱零点随参考星亮度的变化。$G\in [10,14]$ 内基本平坦（$\pm 0.03$\,mag），$G>14.2$ 后系统抬升，对应暗端的混合与选择效应；判据是“随 $G$ 有趋势而随信噪比无趋势”，故不是噪声整流所致。}{figure.caption.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces 残差随亮度的系统趋势。$G\ge 10.25$ 时 $|\text  {中位残差}|\le 0.03$\,mag，而 $G=9.25$ 与 $9.75$ 处分别为 $-0.150$ 与 $-0.131$\,mag；暗端的正残差意味着 $\ensuremath {g_{\mathrm  {emp}}}$ 偏大、即目标被系统\textbf  {测暗}，故该区间只能带系统项引用。}}{7}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:res}{{5}{7}{残差随亮度的系统趋势。$G\ge 10.25$ 时 $|\text {中位残差}|\le 0.03$\,mag，而 $G=9.25$ 与 $9.75$ 处分别为 $-0.150$ 与 $-0.131$\,mag；暗端的正残差意味着 $\gemp $ 偏大、即目标被系统\textbf {测暗}，故该区间只能带系统项引用。}{figure.caption.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}15 帧：随机项与共同系统项}{7}{subsection.4.5}\protected@file@percent }
+\newlabel{sec:frames}{{4.5}{7}{15 帧：随机项与共同系统项}{subsection.4.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces 零点随视场半径的变化：中心到边缘共 0.094\,mag。这是平场/渐晕的直接证据，也是当前最大的单项系统误差之一；仅用径向二次项只能扣除约 7\%。}}{8}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:zprad}{{6}{8}{零点随视场半径的变化：中心到边缘共 0.094\,mag。这是平场/渐晕的直接证据，也是当前最大的单项系统误差之一；仅用径向二次项只能扣除约 7\%。}{figure.caption.9}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces 帧间差分散度与光子预期。低信噪比端两者重合，证明随机项已到光子极限；高信噪比端偏离 10 倍以上，来自平场、非线性与饱和尾部。}}{8}{figure.caption.10}\protected@file@percent }
+\newlabel{fig:delta}{{7}{8}{帧间差分散度与光子预期。低信噪比端两者重合，证明随机项已到光子极限；高信噪比端偏离 10 倍以上，来自平场、非线性与饱和尾部。}{figure.caption.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}误差预算}{9}{subsection.4.6}\protected@file@percent }
+\newlabel{sec:errbudget}{{4.6}{9}{误差预算}{subsection.4.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces 第 1 帧误差预算（除注明外为实测）}}{9}{table.caption.11}\protected@file@percent }
+\newlabel{tab:budget}{{4}{9}{第 1 帧误差预算（除注明外为实测）}{table.caption.11}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}运动轨迹}{9}{section.5}\protected@file@percent }
+\newlabel{sec:motion}{{5}{9}{运动轨迹}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}拖影的几何}{9}{subsection.5.1}\protected@file@percent }
+\newlabel{eq:trail}{{6}{9}{拖影的几何}{equation.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces 第 1 帧长拖影的 3 倍裁剪（红线为拟合脊线，青色叉为两端，黄色短线为垂直剖面取样位置，左下为北/东指向与 100\,px 标尺）。上端被画幅切断，故长度为下界。}}{10}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:trail}{{8}{10}{第 1 帧长拖影的 3 倍裁剪（红线为拟合脊线，青色叉为两端，黄色短线为垂直剖面取样位置，左下为北/东指向与 100\,px 标尺）。上端被画幅切断，故长度为下界。}{figure.caption.12}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}形态判据：它是拖影而不是点像}{11}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}测光与饱和}{11}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}多帧关联}{11}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}速率下界与可判定性}{12}{subsection.5.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}讨论}{12}{section.6}\protected@file@percent }
+\newlabel{sec:discuss}{{6}{12}{讨论}{section.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}结论}{12}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {A}复现命令}{12}{appendix.A}\protected@file@percent }
 \bibcite{gaia23}{1}
-\@writefile{toc}{\contentsline {section}{\numberline {6}讨论}{10}{section.6}\protected@file@percent }
-\newlabel{sec:discuss}{{6}{10}{讨论}{section.6}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {7}结论}{10}{section.7}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {A}复现命令}{10}{appendix.A}\protected@file@percent }
 \bibcite{riello21}{2}
 \bibcite{passband}{3}
 \bibcite{montegriffo}{4}
@@ -71,4 +77,4 @@
 \bibcite{hogg}{9}
 \bibcite{sip}{10}
 \bibcite{aavso}{11}
-\gdef \@abspage@last{11}
+\gdef \@abspage@last{13}
