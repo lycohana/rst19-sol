@@ -244,6 +244,10 @@ path = "src/bin/rst19-feature-evidence-axes.rs"
 name = "rst19-astrometry-blind"
 path = "src/bin/rst19-astrometry-blind.rs"
 
+[[bin]]
+name = "rst19-glrt"
+path = "src/bin/rst19-glrt.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
