@@ -1,0 +1,730 @@
+{
+  "meta": {
+    "lane": "perf-engineering",
+    "topics": [
+      "G: threshold calibration",
+      "H: speed benchmarks",
+      "I: injection-recovery",
+      "J: subpixel localization",
+      "K: Rust/system implementations"
+    ],
+    "verified_on": "2026-10-19",
+    "verification": "metadata via OpenAlex / arXiv API / crates.io API; link reachability via HTTP GET (status ok = 200; blocked-bot = 403/405/timeout on publisher page, DOI confirmed via metadata APIs)",
+    "entry_count": 35,
+    "source_files": [
+      "tmp/lit/lit_perf.md"
+    ]
+  },
+  "entries": [
+    {
+      "id": "G1",
+      "section": "G",
+      "authors": "Vio, R.; Andreani, P.",
+      "year": 2016,
+      "title": "On the Correct Estimate of the Probability of False Detection of the Matched Filter in Weak-Signal Detection Problems",
+      "venue": "A&A 589, A20",
+      "links": [
+        {
+          "url": "https://arxiv.org/abs/1602.02392",
+          "status": "ok"
+        },
+        {
+          "url": "https://doi.org/10.1051/0004-6361/201527128",
+          "status": "blocked-bot"
+        }
+      ],
+      "idea": "匹配滤波只在信号位置已知时最优；位置未知时按高斯尾部算 PFA 会严重低估虚警，应用噪声峰值幅度 PDF (PAM) 定义阈值。",
+      "quant": "给出 1D/2D/3D 通用峰值-PDF 求 PFA 方法并用于真实 ALMA 2D 干涉图；摘要无单一数字。",
+      "use": "论证 nσ 不是可移植阈值的核心引文；阈值应建立在随机场峰值统计上。",
+      "caveat": "面向高斯、各向同性、平滑随机场。"
+    },
+    {
+      "id": "G2",
+      "section": "G",
+      "authors": "Vio, R.; Verges, C.; Andreani, P.",
+      "year": 2017,
+      "title": "The correct estimate of the probability of false detection of the matched filter in the detection of weak signals. II. Specific probability of false alarm",
+      "venue": "A&A 604, A115",
+      "links": [
+        {
+          "url": "https://arxiv.org/abs/1705.03285",
+          "status": "ok"
+        }
+      ],
+      "idea": "PFA 只给全图出现假峰的概率，无法回答单次检测可信度；提出 SPFA 把全局阈值换算为逐检测可靠度。",
+      "quant": "在 ALMA/ATCA 干涉图上给出逐源检测可靠度；摘要无单一数字。",
+      "use": "支持报告每个检测的可靠度而非单一全局 nσ。",
+      "caveat": "同上，高斯平稳噪声假设。"
+    },
+    {
+      "id": "G3",
+      "section": "G",
+      "authors": "Vio, R.; Andreani, P.; Biggs, A.; Hayatsu, N.",
+      "year": 2019,
+      "title": "Correct estimate of the probability of false detection of the matched filter in weak-signal detection problems. III. Peak distribution method versus the Gumbel distribution method",
+      "venue": "A&A 627, A103",
+      "links": [
+        {
+          "url": "https://arxiv.org/abs/1907.01465",
+          "status": "ok"
+        },
+        {
+          "url": "https://doi.org/10.1051/0004-6361/201834854",
+          "status": "blocked-bot"
+        }
+      ],
+      "idea": "相关高斯随机场的极值统计可用峰值幅度 PDF (PAM) 或 Gumbel 极值分布 (GDM)；两法数值结果几乎一致，PAM 更灵活且能自检适用条件。",
+      "quant": "数值实验 + ALMA 实测：两法结果 almost identical（正文表述）；PAM 适用条件可检验。",
+      "use": "Gumbel 在图像检测中如何使用的直接可引条目，并给出模型选择依据。",
+      "caveat": "GDM 依赖极值渐近，样本/搜索域有限时需 PAM 校验。"
+    },
+    {
+      "id": "G4",
+      "section": "G",
+      "authors": "Zackay, B.; Ofek, E. O.; Gal-Yam, A.",
+      "year": 2016,
+      "title": "Proper Image Subtraction - Optimal Transient Detection, Photometry, and Hypothesis Testing",
+      "venue": "ApJ 830, 27",
+      "links": [
+        {
+          "url": "https://doi.org/10.3847/0004-637X/830/1/27",
+          "status": "ok"
+        },
+        {
+          "url": "https://arxiv.org/abs/1601.02655",
+          "status": "ok"
+        }
+      ],
+      "idea": "推导背景噪声主导极限下相关噪声的最优检测/测光统计量，并证明差分像残差为不相关白噪声、是后续检验的充分统计量。",
+      "quant": "给出检测显著性与通量的闭式表达；白化后残差按高斯白噪声解读（定理，非单一数字）。",
+      "use": "论证相关噪声下必须先白化再谈 nσ；频域匹配滤波的理论依据。",
+      "caveat": "要求配准良好、采样充分。"
+    },
+    {
+      "id": "G5",
+      "section": "G",
+      "authors": "Bertin, E.; Arnouts, S.",
+      "year": 1996,
+      "title": "SExtractor: Software for source extraction",
+      "venue": "A&AS 117, 393",
+      "links": [
+        {
+          "url": "https://www.astromatic.net/software/sextractor",
+          "status": "ok"
+        },
+        {
+          "url": "https://doi.org/10.1051/aas:1996164",
+          "status": "blocked-bot"
+        }
+      ],
+      "idea": "阈值 sigma × 最小连通面积 (DETECT_THRESH/DETECT_MINAREA) + 多阈值反卷积去 blend 的工程范式，成为光学检测事实标准。",
+      "quant": "给出阈值化与去 blend 的参数体系与默认值（具体数值以发行版文档为准，本次未逐字核对）。",
+      "use": "nσ + 面积 工程阈值约定的来源；现代实现的对照基线。",
+      "caveat": "默认参数面向背景平坦、噪声近白的天图像。"
+    },
+    {
+      "id": "G6",
+      "section": "G",
+      "authors": "King, I. R.",
+      "year": 1983,
+      "title": "Accuracy of measurement of star images on a pixel array",
+      "venue": "PASP 95, 163",
+      "links": [
+        {
+          "url": "https://doi.org/10.1086/131139",
+          "status": "ok"
+        }
+      ],
+      "idea": "在最小二乘拟合已知 PSF 的框架下给出等效噪声面积经验规则：测光噪声由与 PSF/像素尺度相关的等效面积决定，而非星像覆盖的像素数。",
+      "quant": "摘要给出 equivalent noise area 的近似规则 + 更严格结果表格，并显式纳入像素尺寸相对像尺寸的影响。",
+      "use": "相关噪声/重采样后光圈噪声该乘多大系数的可引公式来源。",
+      "caveat": "以已知 PSF 剖面为前提。"
+    },
+    {
+      "id": "G7",
+      "section": "G",
+      "authors": "Adler, R. J.; Taylor, J. E.",
+      "year": 2007,
+      "title": "Random Fields and Geometry",
+      "venue": "Springer Monographs in Mathematics",
+      "links": [
+        {
+          "url": "https://doi.org/10.1007/978-0-387-48116-6",
+          "status": "ok"
+        }
+      ],
+      "idea": "光滑随机场高阈值的期望峰数/欧拉示性数理论：超出 ν 的极大值个数依 exp(-ν²/2) 衰减，前置系数由搜索域体积与相关长度决定。",
+      "quant": "给出 E[峰数>ν] 的通用 Euler characteristic 展开式（教科书结论，本条为公式来源引用，未逐字核对页码）。",
+      "use": "解释同一 nσ 在不同相关长度下虚警数不同的理论落点。",
+      "caveat": "需随机场足够光滑（二阶可微）。"
+    },
+    {
+      "id": "H1",
+      "section": "H",
+      "authors": "Hu, L. et al.",
+      "year": 2022,
+      "title": "Image Subtraction in Fourier Space",
+      "venue": "ApJ 936, 157",
+      "links": [
+        {
+          "url": "https://doi.org/10.3847/1538-4357/ac7394",
+          "status": "ok"
+        },
+        {
+          "url": "https://arxiv.org/abs/2109.09334",
+          "status": "ok"
+        },
+        {
+          "url": "https://ar5iv.labs.arxiv.org/html/2109.09334",
+          "status": "ok"
+        }
+      ],
+      "idea": "用 δ 函数基在频域分解差分核，使减影完全可并行（利 GPU）并容纳 PSF/光度/天光的空间变化。",
+      "quant": "4K 图（2046x4094 DECam CCD）单次减影约 4 s（server I）/约 1 s（server II）；PyTorchDIA 约 30 s/约 10 s；摘要称约一个数量级提速；SFFT 对核尺寸不敏感。",
+      "use": "4K 量级 + FFT 路线的真实耗时锚点。",
+      "caveat": "需空间变化的核拟合，预处理成本另计。"
+    },
+    {
+      "id": "H2",
+      "section": "H",
+      "authors": "Hu, L. et al.",
+      "year": 2026,
+      "title": "A GPU-Accelerated Transient Detection Pipeline for DECam Time-Domain Surveys",
+      "venue": "arXiv:2603.08593",
+      "links": [
+        {
+          "url": "https://arxiv.org/abs/2603.08593",
+          "status": "ok"
+        }
+      ],
+      "idea": "SFFT 差分 + CNN real-bogus + 候选过滤的端到端 GPU 流水线。",
+      "quant": "每张 DECam 曝光端到端约 50 s（已标定像到告警）；real-bogus 完备度约 99%，伪源剔除约 96%。反推约 10 Mpix/s（本报告推算）。",
+      "use": "最接近 4096² 量级整链耗时的公开数字。",
+      "caveat": "DECam 单曝光含 62 个 CCD，需按片折算。"
+    },
+    {
+      "id": "H3",
+      "section": "H",
+      "authors": "Masci, F. J. et al.",
+      "year": 2019,
+      "title": "The Zwicky Transient Facility: Data Processing, Products, and Archive",
+      "venue": "PASP 131, 018003",
+      "links": [
+        {
+          "url": "https://doi.org/10.1088/1538-3873/aae8ac",
+          "status": "ok"
+        },
+        {
+          "url": "https://arxiv.org/abs/1902.01872",
+          "status": "ok"
+        }
+      ],
+      "idea": "ZTF 科学数据系统（实时差分 + 机器学习筛选 + 归档）的完整工程描述。",
+      "quant": "600 Mpix 相机、约 3760 deg²/hr；告警典型 13 分钟内（95 分位）；S/N>=10 时天测 45-85 mas；亮星测光重复性 8-25 mmag；定标优于 2%。",
+      "use": "巡天级检测吞吐与延迟的公开基线。",
+      "caveat": "指标含归档与分类环节，非纯检测耗时。"
+    },
+    {
+      "id": "H4",
+      "section": "H",
+      "authors": "Jurić, M. et al.",
+      "year": 2015,
+      "title": "The LSST Data Management System",
+      "venue": "ADASS XXV (arXiv:1512.07914)",
+      "links": [
+        {
+          "url": "https://arxiv.org/abs/1512.07914",
+          "status": "ok"
+        }
+      ],
+      "idea": "LSST DM 总体架构：实时告警流 + 多次数据发布，强调通用可扩展处理栈。",
+      "quant": "平均 15 TB/夜；10 年 11 次数据发布。",
+      "use": "处理管线的数据量级官方口径。",
+      "caveat": "2015 年架构论文，实现细节后续有变。"
+    },
+    {
+      "id": "H5",
+      "section": "H",
+      "authors": "Ivezić, Ž. et al.",
+      "year": 2019,
+      "title": "LSST: From Science Drivers to Reference Design and Anticipated Data Products",
+      "venue": "ApJ 873, 111",
+      "links": [
+        {
+          "url": "https://doi.org/10.3847/1538-4357/ab042c",
+          "status": "ok"
+        }
+      ],
+      "idea": "LSST 系统总设计文档，含相机规模、巡天节奏与数据产品量级。",
+      "quant": "3.2 Gpix、9.6 deg² 视场；单滤光片 3 夜约 10,000 deg²；单次 5σ 深度 r 约 24.5、coadd 约 27.5；约 32 万亿次测量/400 亿天体。",
+      "use": "把 4096² 单片放进每天上千片的量级做工程设计。",
+      "caveat": "列为设计指标，非实测吞吐。"
+    },
+    {
+      "id": "H6",
+      "section": "H",
+      "authors": "Barbary, K.",
+      "year": 2016,
+      "title": "SEP: Source Extractor as a library",
+      "venue": "JOSS 1, 58",
+      "links": [
+        {
+          "url": "https://doi.org/10.21105/joss.00058",
+          "status": "ok"
+        }
+      ],
+      "idea": "把 SExtractor 检测/测光算法抽成 C 库加 Python 绑定，免去外部进程与磁盘 I/O。",
+      "quant": "JOSS 摘要未给性能数字（仅声明算法与 SExtractor 一致）——无定量。",
+      "use": "复用算法但去掉 I/O 与进程开销的工程路线参照。",
+      "caveat": "非性能论文，不能作为速度证据。"
+    },
+    {
+      "id": "H7",
+      "section": "H",
+      "authors": "FFTW project (benchFFT)",
+      "year": 2005,
+      "title": "FFT Benchmark Results",
+      "venue": "fftw.org/speed",
+      "links": [
+        {
+          "url": "http://www.fftw.org/speed/",
+          "status": "ok"
+        }
+      ],
+      "idea": "公开的 FFT 实现横评与测量口径。",
+      "quant": "口径 mflops = 5*N*log2(N)/(单次 FFT 微秒数)/2（实数 FFT）；页面给出各平台实测曲线。",
+      "use": "自测 4K 实数 FFT 是否值得走 FFT 卷积的可复算基准口径。",
+      "caveat": "机器较老，只借口径不借绝对值。"
+    },
+    {
+      "id": "I1",
+      "section": "I",
+      "authors": "Kessler, R. et al.",
+      "year": 2015,
+      "title": "The Difference Imaging Pipeline for the Transient Search in the Dark Energy Survey",
+      "venue": "AJ 150, 172",
+      "links": [
+        {
+          "url": "https://doi.org/10.1088/0004-6256/150/6/172",
+          "status": "ok"
+        },
+        {
+          "url": "https://arxiv.org/abs/1507.05137",
+          "status": "ok"
+        }
+      ],
+      "idea": "把假 SN Ia 注入真实图像并跑同一条检测链，以回收率标定效率，用 50% 完备度深度作为报告口径。",
+      "quant": "浅场单历元 50% 完备度深度 23.5、深场 24.5；SN Ia 效率降到 1/2 处 z 约 0.7 / 约 1.1；每 deg² 每观测 130 个检测，其中 25% 为伪源。",
+      "use": "完备度曲线 + 50% 深度的可引范例。",
+      "caveat": "差分成像场景，与叠加图像检测的阈值语义不同。"
+    },
+    {
+      "id": "I2",
+      "section": "I",
+      "authors": "Bernardinelli, P. H. et al.",
+      "year": 2024,
+      "title": "The DECam Ecliptic Exploration Project (DEEP). III. Survey Characterization and Simulation Methods",
+      "venue": "AJ (DOI 10.3847/1538-3881/ad1527)",
+      "links": [
+        {
+          "url": "https://doi.org/10.3847/1538-3881/ad1527",
+          "status": "ok"
+        }
+      ],
+      "idea": "注入合成天体种群并用与真实检测完全相同的处理链回收，同时标定按星等与按移动速率的完备度。",
+      "quant": "各指向组峰值完备度平均 80%；在 m=26.22 处降至峰值的 25%（即 20%）。",
+      "use": "完备度须给曲线与转折点的现代报告规范范例。",
+      "caveat": "移动天体场景，外加速率维。"
+    },
+    {
+      "id": "I3",
+      "section": "I",
+      "authors": "LSST Dark Energy Science Collaboration",
+      "year": 2021,
+      "title": "Effects of overlapping sources on cosmic shear estimation: Statistical sensitivity and pixel-noise bias",
+      "venue": "JCAP (arXiv:2103.02078)",
+      "links": [
+        {
+          "url": "https://arxiv.org/abs/2103.02078",
+          "status": "ok"
+        }
+      ],
+      "idea": "Fisher 形式化框架定量评估 blending：不仅是噪声上升，更是源间统计相关导致的有效样本损失。",
+      "quant": "约 62% 星系像素内至少 1% 通量来自重叠源；blending 使 N_eff 下降约 18%；r 波段 N_eff 上限 39.4 gal/arcmin²。",
+      "use": "blending 系统性改变完备度与有效样本量的定量依据。",
+      "caveat": "面向弱透镜形状测量，通量完备度需自行迁移。"
+    },
+    {
+      "id": "I4",
+      "section": "I",
+      "authors": "Vera C. Rubin Observatory Team",
+      "year": 2026,
+      "title": "The Vera C. Rubin Observatory Data Preview 1",
+      "venue": "arXiv:2603.23786",
+      "links": [
+        {
+          "url": "https://arxiv.org/abs/2603.23786",
+          "status": "ok"
+        }
+      ],
+      "idea": "Rubin 首次数据发布（LSSTComCam，1792 曝光），同时公布各波段 5σ 点源深度口径与合成源注入做法。",
+      "quant": "约 15 deg²、7 场；PSF FWHM 中位 1.14″（最锐 0.58″）；最深场 coadd 5σ 点源深度 u=24.55,g=26.18,r=25.96,i=25.71,z=25.07,y=23.1；约 230 万天体；约 3.5 TB。",
+      "use": "当下最新的深度定义与注入检验官方范式。",
+      "caveat": "依赖官方 notebook 与管线文档才能复现注入流程。"
+    },
+    {
+      "id": "I5",
+      "section": "I",
+      "authors": "CADC / WIRWolf documentation",
+      "year": 2010,
+      "title": "Depth profile: artificial-star injection and completeness depth",
+      "venue": "CADC WIRWolf docs",
+      "links": [
+        {
+          "url": "https://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/en/wirwolf/docs/depthprof.html",
+          "status": "ok"
+        }
+      ],
+      "idea": "把完备度深度操作化：按星等阶梯注入人工星、用生产检测器回收、拟合回收率曲线、取 50% 处为深度。",
+      "quant": "流程文档，无单一数字。",
+      "use": "方法章节与 CI 回归基线的操作规程引用。",
+      "caveat": "文档非同行评议。"
+    },
+    {
+      "id": "J1",
+      "section": "J",
+      "authors": "Winick, K. A.",
+      "year": 1986,
+      "title": "Cramér-Rao lower bounds on the performance of charge-coupled-device optical position estimators",
+      "venue": "JOSA A 3, 1809",
+      "links": [
+        {
+          "url": "https://doi.org/10.1364/josaa.3.001809",
+          "status": "blocked-bot"
+        }
+      ],
+      "idea": "方像素 CCD + 高斯光斑 + 泊松噪声下给出位置估计的二维 CRB 与 ML 估计量，采样比决定精度上限。",
+      "quant": "使 CRB 最小的像素/像尺寸比：一维 1 到 2，二维 1.5 到 2.5（宽 S/N 范围内）。",
+      "use": "质心 vs 拟合精度的数学天花板；解释欠采样 + 整数峰为何掉精度。",
+      "caveat": "出版方页面拒绝自动抓取，需浏览器访问。"
+    },
+    {
+      "id": "J2",
+      "section": "J",
+      "authors": "Hechenblaikner, G.",
+      "year": 2023,
+      "title": "Unbiased centroiding of point targets close to the Cramér-Rao limit",
+      "venue": "JOSA A (DOI 10.1364/josaa.507588); open version arXiv:2307.09557",
+      "links": [
+        {
+          "url": "https://arxiv.org/abs/2307.09557",
+          "status": "ok"
+        },
+        {
+          "url": "https://doi.org/10.1364/josaa.507588",
+          "status": "blocked-bot"
+        }
+      ],
+      "idea": "CoG 类估计量的系统偏差来自 PSF 采样过粗与 ROI 截断；提出几乎无偏的估计量并给出方差解析式。",
+      "quant": "光子散粒噪声 + 像素噪声 + 残余系统误差三项方差分解并 Monte-Carlo 验证；与迭代加权 CoG、阈值 CoG、迭代最小二乘、2D 高斯回归比较精度与速度。",
+      "use": "支撑质心类实现自带系统偏差、必须做偏差校正与 ROI 选择。",
+      "caveat": "点目标、小 ROI 场景最优。"
+    },
+    {
+      "id": "J3",
+      "section": "J",
+      "authors": "Stone, R. C.",
+      "year": 1989,
+      "title": "A comparison of digital centering algorithms",
+      "venue": "AJ 97, 1227",
+      "links": [
+        {
+          "url": "https://doi.org/10.1086/115066",
+          "status": "blocked-bot"
+        }
+      ],
+      "idea": "合成星像上比较五类一维定心算法：高斯拟合与中值法好、矩法与导数搜索法差；亮背景下阈值截断矩法最好。",
+      "quant": "覆盖宽观测条件的系统对比（摘要无单一数值），并讨论 USNO 7-inch 子午仪实时处理。",
+      "use": "说明质心（矩法）与拟合不等价，且背景/阈值强烈影响定心。",
+      "caveat": "出版方页面 405，需浏览器访问；结论针对一维剖面。"
+    },
+    {
+      "id": "J4",
+      "section": "J",
+      "authors": "Anderson, J.; King, I. R.",
+      "year": 2000,
+      "title": "Toward High-Precision Astrometry with WFPC2. I. Deriving an Accurate Point-Spread Function",
+      "venue": "PASP 112, 1360",
+      "links": [
+        {
+          "url": "https://doi.org/10.1086/316632",
+          "status": "ok"
+        }
+      ],
+      "idea": "高精度天体测量要求 PSF 建到像素相位级别；PSF 建模误差与像素相位效应是定心系统误差主因。",
+      "quant": "给出 PSF 模型与像素相位校正后的精度量级（本次仅核到元数据，未逐字核对数值）。",
+      "use": "解释整数峰 vs 质心这类实现差异为何引入与像素相位相关系统偏差。",
+      "caveat": "HST/WFPC2 语境，地面欠采样需再检验。"
+    },
+    {
+      "id": "J5",
+      "section": "J",
+      "authors": "Stetson, P. B.",
+      "year": 1987,
+      "title": "DAOPHOT: A computer program for crowded-field stellar photometry",
+      "venue": "PASP 99, 191",
+      "links": [
+        {
+          "url": "https://doi.org/10.1086/131977",
+          "status": "ok"
+        }
+      ],
+      "idea": "先建 PSF 模型再以 PSF 拟合同时解位置与流量（ALLSTAR），配套人工星注入（ADDSTAR）做回收评估。",
+      "quant": "给出拥挤场 PSF 拟合与孔径测光的误差行为框架（本次仅核到元数据；ADDSTAR 注入流程由该文确立）。",
+      "use": "注入-回收与 PSF 拟合两条线索的共同源头。",
+      "caveat": "经典实现，现代非线性最小二乘实现更优。"
+    },
+    {
+      "id": "K1",
+      "section": "K",
+      "authors": "RustFFT contributors",
+      "year": 2025,
+      "title": "rustfft 6.4.1 - high-performance FFT library in pure Rust",
+      "venue": "crates.io / docs.rs",
+      "links": [
+        {
+          "url": "https://docs.rs/rustfft/latest/rustfft/",
+          "status": "ok"
+        },
+        {
+          "url": "https://github.com/ejmahler/RustFFT",
+          "status": "ok"
+        },
+        {
+          "url": "https://crates.io/crates/rustfft",
+          "status": "ok"
+        }
+      ],
+      "idea": "纯 Rust FFT，任意长度、运行时算法选择（FftPlanner）、SIMD 与多线程。",
+      "quant": "版本 6.4.1，累计下载 32.66M，2025-09-18 更新。",
+      "use": "Rust 侧频域卷积/匹配滤波底座。",
+      "caveat": "与 FFTW 的倍数需自行实测（见 H7 口径）。"
+    },
+    {
+      "id": "K2",
+      "section": "K",
+      "authors": "HEnquist",
+      "year": 2025,
+      "title": "realfft 3.5.0 - real-to-complex FFT on top of rustfft",
+      "venue": "crates.io / GitHub",
+      "links": [
+        {
+          "url": "https://github.com/HEnquist/realfft",
+          "status": "ok"
+        },
+        {
+          "url": "https://docs.rs/realfft",
+          "status": "ok"
+        }
+      ],
+      "idea": "实数输入 FFT 封装，省掉一半冗余计算——图像卷积正好只吃实数。",
+      "quant": "版本 3.5.0，累计下载 18.70M。",
+      "use": "大图卷积的首选入口。",
+      "caveat": "仍需自行零填充与尺寸选择。"
+    },
+    {
+      "id": "K3",
+      "section": "K",
+      "authors": "rust-ndarray contributors",
+      "year": 2026,
+      "title": "ndarray 0.17.2 - n-dimensional arrays for Rust",
+      "venue": "crates.io / docs.rs",
+      "links": [
+        {
+          "url": "https://docs.rs/ndarray",
+          "status": "ok"
+        },
+        {
+          "url": "https://github.com/rust-ndarray/ndarray",
+          "status": "ok"
+        }
+      ],
+      "idea": "Rust 侧 numpy ndarray 等价层，图像栈与切片的自然容器。",
+      "quant": "版本 0.17.2，累计下载 134.26M。",
+      "use": "图像栈数据结构与并行迭代。",
+      "caveat": "无内置天文语义（WCS/单位）。"
+    },
+    {
+      "id": "K4",
+      "section": "K",
+      "authors": "Simon RW",
+      "year": 2026,
+      "title": "fitsio 0.21.10 - FITS file handling for Rust",
+      "venue": "crates.io / docs.rs",
+      "links": [
+        {
+          "url": "https://docs.rs/fitsio",
+          "status": "ok"
+        },
+        {
+          "url": "https://github.com/simonrw/rust-fitsio",
+          "status": "ok"
+        }
+      ],
+      "idea": "Rust 的 FITS 读写（绑定 cfitsio），覆盖图像与表 HDU。",
+      "quant": "版本 0.21.10，累计下载 140k（比通用 crate 低约 3 个数量级）。",
+      "use": "Rust 与天文生态的唯一务实接口层。",
+      "caveat": "生态小，长期维护风险需评估。"
+    },
+    {
+      "id": "K5",
+      "section": "K",
+      "authors": "rayon-rs",
+      "year": 2026,
+      "title": "rayon 1.12.0 - data parallelism library",
+      "venue": "crates.io / docs.rs",
+      "links": [
+        {
+          "url": "https://docs.rs/rayon",
+          "status": "ok"
+        },
+        {
+          "url": "https://github.com/rayon-rs/rayon",
+          "status": "ok"
+        }
+      ],
+      "idea": "工作窃取线程池，par_iter 把像素循环铺满多核。",
+      "quant": "版本 1.12.0，累计下载 607.00M。",
+      "use": "按行/按 tile 切分的最省事并行方案。",
+      "caveat": "注意内存带宽瓶颈，非线程越多越快。"
+    },
+    {
+      "id": "K6",
+      "section": "K",
+      "authors": "image-rs",
+      "year": 2026,
+      "title": "imageproc 0.27.0 - image processing operations",
+      "venue": "crates.io / docs.rs",
+      "links": [
+        {
+          "url": "https://docs.rs/imageproc",
+          "status": "ok"
+        },
+        {
+          "url": "https://github.com/image-rs/imageproc",
+          "status": "ok"
+        }
+      ],
+      "idea": "通用图像滤波、形态学与连通域/轮廓。",
+      "quant": "版本 0.27.0，累计下载 14.12M。",
+      "use": "检测后的形态学清洗与连通域统计。",
+      "caveat": "非天文库，无背景估计/测光。"
+    },
+    {
+      "id": "K7",
+      "section": "K",
+      "authors": "Lokathor",
+      "year": 2026,
+      "title": "wide 1.7.1 - portable SIMD types",
+      "venue": "crates.io / docs.rs",
+      "links": [
+        {
+          "url": "https://docs.rs/wide",
+          "status": "ok"
+        },
+        {
+          "url": "https://github.com/Lokathor/wide",
+          "status": "ok"
+        }
+      ],
+      "idea": "可移植 SIMD（f32x8 等），跨 x86/ARM 向量化逐像素运算。",
+      "quant": "版本 1.7.1，累计下载 83.19M。",
+      "use": "阈值比较、加权和等热点循环的向量化。",
+      "caveat": "需手写 SIMD 逻辑并做对齐/尾部处理。"
+    },
+    {
+      "id": "K8",
+      "section": "K",
+      "authors": "light-curve project",
+      "year": 2026,
+      "title": "light-curve-feature 0.20.0 - feature extractor from noisy time series",
+      "venue": "crates.io / GitHub",
+      "links": [
+        {
+          "url": "https://crates.io/crates/light-curve-feature",
+          "status": "ok"
+        },
+        {
+          "url": "https://github.com/light-curve/light-curve-feature",
+          "status": "ok"
+        }
+      ],
+      "idea": "Rust 实现的时序特征提取，证明时域天文社区确实用 Rust 承担计算密集的特征层。",
+      "quant": "版本 0.20.0，累计下载 180k。",
+      "use": "Rust 可承担哪一层的现实证据（特征层可，编排层不必）。",
+      "caveat": "面向光变曲线，不含图像处理。"
+    },
+    {
+      "id": "K9",
+      "section": "K",
+      "authors": "saurvs (astro-rust)",
+      "year": 2026,
+      "title": "astro 2.0.0 - advanced algorithms for astronomy",
+      "venue": "crates.io / GitHub",
+      "links": [
+        {
+          "url": "https://crates.io/crates/astro",
+          "status": "ok"
+        },
+        {
+          "url": "https://github.com/saurvs/astro-rust",
+          "status": "ok"
+        }
+      ],
+      "idea": "Rust 天文基础算法集合（坐标、时间、星历等）。",
+      "quant": "版本 2.0.0，累计下载 196k。",
+      "use": "Rust 管线的基础算法层。",
+      "caveat": "无图像检测与测光；成熟度远低于 Astropy。"
+    },
+    {
+      "id": "K10",
+      "section": "K",
+      "authors": "FFTW project (benchFFT)",
+      "year": 2005,
+      "title": "FFT Benchmark Results (measurement protocol)",
+      "venue": "fftw.org/speed",
+      "links": [
+        {
+          "url": "http://www.fftw.org/speed/",
+          "status": "ok"
+        }
+      ],
+      "idea": "同一口径下比较 FFT 实现，避免引用二手倍数。",
+      "quant": "mflops = 5*N*log2(N)/(微秒数)/2；页面给出各平台实测曲线。",
+      "use": "rustfft 与 FFTW 对比时的自测口径。",
+      "caveat": "参考机器较老。"
+    },
+    {
+      "id": "K11",
+      "section": "K",
+      "authors": "本报告检索结论",
+      "year": 2026,
+      "title": "Negative result: no official Rust component in the Rubin/LSST stack",
+      "venue": "crates.io + arXiv 检索（2026-10-19）",
+      "links": [
+        {
+          "url": "https://crates.io/search?q=lsst",
+          "status": "ok"
+        },
+        {
+          "url": "https://github.com/rubin-dp0/tutorial-notebooks",
+          "status": "ok"
+        }
+      ],
+      "idea": "Rubin/LSST 科学管线以 C++/Python 为主，未发现官方 Rust 组件或 crate。",
+      "quant": "检索结果为空集（0 个匹配的官方 crate）。",
+      "use": "Rust 实现与 Rubin 生态只能通过 FITS 文件 + 命令行/服务层对接。",
+      "caveat": "负面结论有时效性，需随生态更新复核。"
+    }
+  ]
+}
