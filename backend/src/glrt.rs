@@ -1703,6 +1703,12 @@ pub struct Detection {
     /// Lambda of the fine stage, when it ran and was accepted.
     pub fine_lambda: Option<f64>,
     pub refined: bool,
+    /// Fraction of along-ridge samples above half the ridge median.
+    pub duty: f64,
+    /// Robust relative scatter of those samples.
+    pub scatter: f64,
+    /// Uniform segment verdict: duty >= 0.85 and scatter <= 0.25.
+    pub uniform: bool,
 }
 
 pub struct GlrtResult {
@@ -1755,6 +1761,9 @@ impl GlrtResult {
                     "refined": d.refined,
                     "coarse_lambda": round4(d.coarse_lambda),
                     "fine_lambda": d.fine_lambda.map(round4),
+                    "duty": round4(d.duty),
+                    "scatter": round4(d.scatter),
+                    "uniform": d.uniform,
                 })
             })
             .collect();
@@ -2095,8 +2104,13 @@ pub fn run_array(opts: &Options, image: &[f64], h: usize, w: usize) -> Result<Gl
         max_length: (1.6 * max_length).max(64.0),
     };
     let fine_cfg = if opts.refine { Some(opts.fine) } else { None };
+    // The uniformity test must look at the plain frame: the whitening is a high-pass
+    // filter and gives a bright uniform trail negative lobes, which would fake a low
+    // duty cycle. Keep a lightly smoothed copy for morphology only.
+    let plain_map = smoothed(&residual, h, w, sigma_psf);
     let (mut detections, refine_trials) = detect(
         &stats,
+        &plain_map,
         h,
         w,
         &library,
@@ -2681,8 +2695,66 @@ fn ridge_extent(
 /// search. Returns the detections and the largest number of fine trials that any
 /// single candidate absorbed: the multiplicity the refined threshold pays for.
 #[allow(clippy::too_many_arguments)]
+/// Along-ridge duty cycle and relative scatter of the PSF-smoothed frame.
+///
+/// A uniform trail gives duty ~ 1 and scatter ~ 0.1; a knot chain gives duty well
+/// below 1; a star gives a low duty with a large scatter. The test is sharp in PA,
+/// so it must be evaluated at the fitted orientation.
+fn along_profile(g: &[f32], h: usize, w: usize, x: f64, y: f64, len: f64, pa_deg: f64) -> (f64, f64, bool) {
+    // Sample the whole in-frame ridge, not a window centred on the detection: the
+    // Lambda ridge is flat along the axis, so the reported position can sit near one
+    // end, and a centred window then measures only part of the trail.
+    let th = pa_deg.to_radians();
+    let (ct, st) = (th.cos(), th.sin());
+    let reach = len.max(32.0) * 2.0 + 64.0;
+    let n = (reach as usize).min(3072);
+    let half = 0.5 * reach;
+    let step = reach / n as f64;
+    let mut vals: Vec<f64> = Vec::with_capacity(2 * n + 1);
+    for k in 0..=(2 * n) {
+        let t = -half + k as f64 * step;
+        let xi = (x + t * ct).round() as isize;
+        let yi = (y + t * st).round() as isize;
+        if xi < 0 || yi < 0 || xi >= w as isize || yi >= h as isize {
+            continue;
+        }
+        vals.push(g[yi as usize * w + xi as usize] as f64);
+    }
+    if vals.len() < 16 {
+        return (0.0, 0.0, false);
+    }
+    // Keep only the contiguous stretch above 15% of the peak, so the empty sky either
+    // side of the trail does not count towards the duty cycle.
+    let peak = vals.iter().cloned().fold(0.0f64, f64::max);
+    if !(peak > 0.0) {
+        return (0.0, 0.0, false);
+    }
+    let cut = 0.15 * peak;
+    let mut keep: Vec<f64> = Vec::with_capacity(vals.len());
+    for v in vals.iter() {
+        if *v >= cut {
+            keep.push(*v);
+        }
+    }
+    let vals = if keep.len() >= 16 { keep } else { vals };
+    let mut sorted = vals.clone();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    let med = sorted[sorted.len() / 2];
+    if !(med > 0.0) {
+        return (0.0, 0.0, false);
+    }
+    let above: Vec<f64> = vals.iter().copied().filter(|v| *v > 0.5 * med).collect();
+    let duty = above.len() as f64 / vals.len() as f64;
+    let mut dev: Vec<f64> = above.iter().map(|v| (v - med).abs()).collect();
+    dev.sort_by(|a, b| a.total_cmp(b));
+    let scatter = 1.4826 * dev[dev.len() / 2] / med;
+    let uniform = duty >= 0.85 && scatter <= 0.25;
+    (duty, scatter, uniform)
+}
+
 fn detect(
     stats: &FrameStats,
+    plain: &[f32],
     h: usize,
     w: usize,
     library: &Library,
@@ -2819,6 +2891,9 @@ fn detect(
             coarse_lambda: coarse_z,
             fine_lambda: None,
             refined: false,
+            duty: 0.0,
+            scatter: 0.0,
+            uniform: false,
         };
         if let Some(cfg) = fine {
             if rank < max_refinements {
@@ -2849,6 +2924,18 @@ fn detect(
                 }
             }
         }
+        let (duty, scatter, uniform) = along_profile(
+            plain,
+            h,
+            w,
+            det.x,
+            det.y,
+            det.length_px.max(8.0),
+            det.pa_deg,
+        );
+        det.duty = duty;
+        det.scatter = scatter;
+        det.uniform = uniform;
         out.push(det);
     }
     out.sort_by(|a, b| b.lambda.total_cmp(&a.lambda));
