@@ -175,7 +175,9 @@ fn parse_args(args: &[String]) -> Result<SourceAuditArgs> {
 
 /// Run source detection and write every Rust source-audit artifact.
 pub fn run_desktop(args: &[String]) -> Result<Value> {
-    let args = parse_args(args)?;
+    let (trail_catalog, args) = crate::trail_catalog::take_flag(args)?;
+    let args = parse_args(&args)?;
+    let started = std::time::Instant::now();
     let frame = fits::read_fits(&args.fits_path, false)?;
     let mask = fits::auxiliary_mask(frame.height, frame.width)?;
     let detection = detection::detect_sources(
@@ -193,6 +195,15 @@ pub fn run_desktop(args: &[String]) -> Result<Value> {
         args.spatial_psf_per_class,
         args.spatial_psf_grid_size,
     )?;
+    if trail_catalog {
+        crate::trail_catalog::report(
+            &args.fits_path,
+            &args.out_dir,
+            args.detection.measurement.psf_fwhm,
+            started.elapsed().as_secs_f64(),
+            false,
+        );
+    }
     Ok(json!({
         "output":args.out_dir,
         "candidate_count":detection.candidate_count,

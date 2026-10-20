@@ -141,6 +141,7 @@ pub mod spatial_injection;
 pub mod statistics;
 pub mod statistics32;
 pub mod temporal_code;
+pub mod trail_catalog;
 pub mod wcs_fit;
 pub mod wcs_validation;
 
