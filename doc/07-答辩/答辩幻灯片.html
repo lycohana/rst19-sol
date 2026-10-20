@@ -2,170 +2,185 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>RST19 星图研究 · 答辩幻灯片</title>
+<title>RST19 · 答辩</title>
 <style>
   :root{
-    --ink:#101820; --ink2:#3c4a56; --line:#d7dee6; --bg:#fbfcfd;
-    --accent:#0b6bcb; --accent2:#b3261e; --ok:#1a7f4b; --warn:#b26a00;
+    --ink:#0f172a; --muted:#475569; --faint:#94a3b8; --line:#e2e8f0;
+    --accent:#1d4ed8; --red:#b91c1c; --ok:#15803d; --paper:#ffffff; --soft:#f8fafc;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:#11151a;font-family:"Source Han Sans SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif}
-  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
-  .slide{
-    width:1280px;height:720px;background:var(--bg);color:var(--ink);
-    padding:38px 56px 30px;position:absolute;display:none;flex-direction:column;
-    box-shadow:0 18px 60px rgba(0,0,0,.55);border-radius:6px;overflow:hidden;
-  }
+  html,body{margin:0;height:100%;background:#0b1220;font-family:"Source Han Sans SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+  #stage{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden}
+  #deck{width:1280px;height:720px;position:relative;transform-origin:center center}
+  .slide{position:absolute;inset:0;background:var(--paper);color:var(--ink);padding:44px 60px 34px;display:none;flex-direction:column;border-radius:4px;overflow:hidden}
   .slide.active{display:flex}
-  h1{font-size:30px;line-height:1.25;margin:0 0 6px;font-weight:700;letter-spacing:.2px}
-  h1 .num{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:10px}
-  .thesis{font-size:17px;color:var(--ink2);margin:2px 0 14px;padding-left:12px;border-left:4px solid var(--accent);line-height:1.45}
-  .grid{display:grid;gap:14px;flex:1;min-height:0}
-  .g2{grid-template-columns:1fr 1fr}
-  .g3{grid-template-columns:1fr 1fr 1fr}
-  .card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 16px;min-height:0;overflow:hidden}
-  .card h3{margin:0 0 8px;font-size:15px;color:var(--accent);font-weight:700}
-  .card p{margin:0 0 7px;font-size:14px;line-height:1.55;color:var(--ink)}
-  .big{font-size:30px;font-weight:750;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1}
-  .mid{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
-  .u{color:var(--ink2);font-size:13px;font-weight:400}
-  ul{margin:4px 0 0 18px;padding:0}
-  li{font-size:14px;line-height:1.6;margin-bottom:4px}
-  .ok{color:var(--ok);font-weight:700}
-  .no{color:var(--accent2);font-weight:700}
-  .wn{color:var(--warn);font-weight:700}
-  table{border-collapse:collapse;width:100%;font-size:13px}
-  th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
-  th{color:var(--ink2);font-weight:600;background:#f2f6fa}
-  td.n{font-variant-numeric:tabular-nums;text-align:right}
-  .foot{font-size:11px;color:#8b98a5;margin-top:8px;border-top:1px solid var(--line);padding-top:6px;display:flex;justify-content:space-between}
-  .kpi{display:flex;gap:18px;align-items:baseline}
-  .kpi div{flex:1}
-  .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:999px;background:#e8f0fb;color:var(--accent);margin-left:6px}
-  .tag.red{background:#fdeceb;color:var(--accent2)}
-  .tag.green{background:#e8f5ee;color:var(--ok)}
-  .cover{justify-content:center;align-items:flex-start;background:linear-gradient(135deg,#0d1b2a 0%,#12324f 55%,#0b6bcb 130%);color:#fff}
-  .cover h1{font-size:44px;color:#fff;margin-bottom:10px}
-  .cover .sub{font-size:19px;color:#cfe1f5;margin-bottom:26px}
-  .cover .pts{font-size:15px;line-height:1.9;color:#e8f2fb}
-  .cover .badge{font-size:13px;color:#9fc3e8;margin-top:26px}
-  .progress{position:absolute;left:0;top:0;height:3px;background:var(--accent);width:0}
-  .pager{position:absolute;right:14px;bottom:10px;font-size:12px;color:#8b98a5;font-variant-numeric:tabular-nums}
-  .notes{display:none;position:absolute;left:0;right:0;bottom:0;background:#0d1b2a;color:#dfe9f3;font-size:13px;line-height:1.5;padding:10px 16px;max-height:38%;overflow:auto}
+  .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  h1{font-size:33px;line-height:1.22;margin:0;font-weight:750;letter-spacing:-.2px}
+  .thesis{font-size:17.5px;color:var(--muted);line-height:1.5;margin:12px 0 18px;padding-left:14px;border-left:3px solid var(--accent)}
+  .body{flex:1;display:grid;gap:16px;min-height:0}
+  .c2{grid-template-columns:1fr 1fr}
+  .c3{grid-template-columns:1fr 1fr 1fr}
+  .c2u{grid-template-columns:1.35fr 1fr}
+  .c2l{grid-template-columns:1fr 1.35fr}
+  .panel{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:16px 18px;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between}
+  .panel > :nth-child(2){margin-top:0}
+  .panel p:last-child, .panel ul:last-child, .panel table:last-child{margin-bottom:0}
+  .panel .fill{flex:1;min-height:0;display:flex;align-items:flex-end}
+  .panel h3{margin:0 0 10px;font-size:14px;color:var(--accent);font-weight:750;letter-spacing:.02em}
+  .panel p{margin:0 0 9px;font-size:15.5px;line-height:1.72}
+  .panel p:last-child{margin-bottom:0}
+  .panel p.kpi, .kpi{font-size:38px;font-weight:780;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.05;margin:2px 0 6px}
+  .kpi small{font-size:15px;font-weight:600;color:var(--muted);letter-spacing:0}
+  .num{font-variant-numeric:tabular-nums}
+  .ok{color:var(--ok);font-weight:750}
+  .bad{color:var(--red);font-weight:750}
+  .warn{color:#b45309;font-weight:750}
+  .mono{font-family:Consolas,"Cascadia Mono",ui-monospace,monospace;font-size:13px}
+  ul{margin:2px 0 0 17px;padding:0}
+  li{font-size:15.5px;line-height:1.7;margin-bottom:6px}
+  li:last-child{margin-bottom:0}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:650;background:#eef3f9}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .foot{margin-top:14px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:11px;color:var(--faint)}
+  .fig{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:100%}
+  .fig img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;border:1px solid var(--line)}
+  .fig .cap{font-size:11.5px;color:var(--faint);text-align:center}
+  .cover{background:radial-gradient(1200px 600px at 12% 8%,#1e3a8a 0%,#0b1220 62%);color:#fff;padding:0}
+  .cover .inner{display:grid;grid-template-columns:1.5fr .8fr;height:100%}
+  .cover .left{padding:70px 0 60px 64px;display:flex;flex-direction:column;justify-content:center}
+  .cover h1{font-size:46px;color:#fff;letter-spacing:-1px;line-height:1.16}
+  .cover .sub{font-size:18px;color:#bfdbfe;margin-top:14px}
+  .cover .pts{margin-top:34px;font-size:15.5px;line-height:2;color:#e2e8f0}
+  .cover .meta{margin-top:38px;font-size:12.5px;color:#93c5fd;letter-spacing:.04em}
+  .cover .right{position:relative;overflow:hidden}
+  .cover .right img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.92;mask-image:linear-gradient(90deg,transparent 0%,#000 28%)}
+  .big{font-size:44px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+  .tagline{font-size:12px;color:var(--muted);margin-top:4px}
+  .rule{height:3px;width:64px;background:var(--accent);border-radius:2px;margin:14px 0 0}
+  .pager{position:absolute;right:22px;bottom:12px;font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .sec{position:absolute;left:60px;bottom:12px;font-size:11px;color:var(--faint);letter-spacing:.08em}
+  .notes{display:none;position:absolute;left:0;right:0;bottom:0;background:#0f172a;color:#e2e8f0;font-size:13px;line-height:1.55;padding:12px 18px;max-height:40%;overflow:auto}
   .notes.on{display:block}
-  .formula{font-family:"Cambria Math",Georgia,serif;font-size:15px;background:#f7f9fc;border-left:3px solid var(--accent);padding:8px 10px;margin:6px 0;line-height:1.75}
-  .hl{background:#fff3cd;padding:0 3px;border-radius:3px}
-  .mono{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px}
   @media print{
     html,body{background:#fff}
-    #stage{position:static;display:block}
-    .slide{position:relative;display:flex !important;transform:none !important;box-shadow:none;border-radius:0;page-break-after:always;break-after:page;margin:0}
-    .progress,.pager{display:none}
+    #stage{position:static;display:block;overflow:visible}
+    #deck{transform:none !important;width:auto;height:auto}
+    .slide{position:relative;display:flex !important;page-break-after:always;break-after:page;border-radius:0}
     .notes{display:none !important}
   }
   @page{size:1280px 720px;margin:0}
 </style>
 </head>
-<body>
-<div id="stage"></div>
-
-<!-- ============ 1 封面 ============ -->
+<body><div id="stage"><div id="deck">
+<!-- 1 cover -->
 <section class="slide cover">
-  <h1>从原始像素到可引用的星等与运动目标</h1>
-  <div class="sub">RST19 天基宽波段星图：检测 · 经验星等 · 拖影与运动轨迹</div>
-  <div class="pts">
-    ◆ 三个必须分开的误差：检测、通量、指向，各自有实测判据<br>
-    ◆ 一个统一检测框架：点源与拖影是同一假设族的两个极限<br>
-    ◆ 两条真实运动目标，两种结论：一条可测，一条必须多帧
+  <div class="inner">
+    <div class="left">
+      <div style="font-size:12px;letter-spacing:.22em;color:#93c5fd;margin-bottom:18px">RST19 · 星图研究工作台</div>
+      <h1>从原始像素到<br>可引用的星等与运动目标</h1>
+      <div class="sub">天基宽波段星图的检测、经验零点与拖影判别</div>
+      <div class="pts">
+        ① 三个误差必须分开：检测、通量、指向<br>
+        ② 一个统一框架：点源是线段核的零长度极限<br>
+        ③ 两条真实目标，两种结论：一条可测，一条必须多帧
+      </div>
+      <div class="meta">方案陈述 7′ · 程序演示 3′ · 评委提问 3′　|　所有数字可由仓库命令重跑</div>
+    </div>
+    <div class="right"><img src="figs/trail.png" alt="事件 A 的长拖影"></div>
   </div>
-  <div class="badge">7 分钟陈述 · 3 分钟演示 · 3 分钟提问　|　所有数字可由仓库命令重跑</div>
 </section>
 
-<!-- ============ 2 问题 ============ -->
+<!-- 2 问题 -->
 <section class="slide">
-  <h1><span class="num">01</span>问题：把“看起来合理”变成“可以被否证”</h1>
-  <div class="thesis">同一幅图上的每颗星，要同时回答三个问题：它在哪、它有多亮、这个亮度凭什么可信。任何一环没有独立检验，结果就不可引用。</div>
-  <div class="grid g3">
-    <div class="card"><h3>检测：阈值有多严？</h3>
-      <p>常用 <span class="hl">nσ</span> 分割。但同一 4σ 在 4096² 帧上意味着 <span class="mono">≈531</span> 个噪声峰（白噪声），相关长度 3&nbsp;px 时只有 <span class="mono">59</span> 个。</p>
-      <p class="no">不写清噪声相关长度，“4σ”没有意义。</p>
+  <div class="eyebrow">01 · 问题</div>
+  <h1>把“看起来合理”变成“可以被否证”</h1>
+  <div class="thesis">同一幅图上的每颗星要同时回答：在哪、多亮、这个亮度凭什么可信。任一环缺少独立检验，结果就不可引用。</div>
+  <div class="body c3">
+    <div class="panel"><h3>检测：阈值到底多严？</h3>
+      <p>常用 <span class="mono">nσ</span> 分割，但它的严格程度取决于噪声相关长度与搜索规模。</p>
+      <p class="kpi">531 <small>个假峰/帧</small></p>
+      <p>白噪声 4096² 在 4σ 上；同一 4σ 在 l=3&nbsp;px 的相关噪声里只有 <b>59</b> 个。</p>
     </div>
-    <div class="card"><h3>通量：零点从哪来？</h3>
-      <p>仪器星等 <span class="mono">m_inst = −2.5·log₁₀(F)</span> 没有零点，换增益／孔径就变。</p>
-      <p>必须借外部星表拟合经验零点，并给出<span class="hl">三重验证</span>。</p>
+    <div class="panel"><h3>通量：零点从哪来？</h3>
+      <p><span class="mono">m_inst = −2.5·log₁₀ F</span> 没有零点，换增益或孔径就变。</p>
+      <p>必须借外部星表拟合经验零点，并给出 <b>三重验证</b>。</p>
+      <p class="bad">目标源 g_emp 不能写成 Gaia G，更不能写成 V。</p>
     </div>
-    <div class="card"><h3>指向：凭什么对上号？</h3>
-      <p>主头无 WCS、无 GAIN、无 FILTER。指向只能靠盲解＋匹配迭代，且必须有<span class="hl">零假设对照</span>。</p>
-      <p class="no">没有对照的单帧板解曾给出 7 个匹配的“解”。</p>
+    <div class="panel"><h3>指向：凭什么对上号？</h3>
+      <p>主头无 WCS / GAIN / FILTER，只能盲解 + 匹配迭代。</p>
+      <p>判决必须带<b>零假设对照</b>；早期一个没有对照的单帧板解给出 7 个匹配的“解”，实测与噪声不可区分。</p>
     </div>
   </div>
-  <div class="foot"><span>§1 引言</span><span>数据：15 帧 4096² 天基连续观测</span></div>
-  <div class="notes">讲法：先establish"三个误差必须分开"，再说明本项目每一环都有独立判据。强调 531 vs 59 这组数字——它后面会被用来否证我们自己的直觉。</div>
+  <div class="sec">§1 引言</div><div class="pager">2 / 21</div>
+  <div class="notes">先立规矩：三个误差分开。531 vs 59 这组数字后面会用来否证我们自己的直觉。</div>
 </section>
 
-<!-- ============ 3 数据 ============ -->
+<!-- 3 数据 -->
 <section class="slide">
-  <h1><span class="num">02</span>数据：能被文件本身核实的仪器层事实</h1>
-  <div class="thesis">所有后续结论都建立在“这些事实可以复核”之上；不能核实的量（增益、平场、响应曲线）一律标 UNKNOWN，绝不填典型值。</div>
-  <div class="grid g2">
-    <div class="card"><h3>可观测量</h3>
+  <div class="eyebrow">02 · 数据</div>
+  <h1>只写能被文件核实的事实</h1>
+  <div class="thesis">不能核实的量（增益、平场、响应曲线）一律标 UNKNOWN，绝不填典型值——这是后面所有精度的前提。</div>
+  <div class="body c2u">
+    <div class="panel"><h3>仪器层事实</h3>
       <table>
         <tr><th>项</th><th>值</th></tr>
-        <tr><td>阵列 / 位深</td><td class="n">4096² / BITPIX 16</td></tr>
+        <tr><td>阵列 / 位深</td><td class="n">4096² · BITPIX 16</td></tr>
         <tr><td>曝光</td><td class="n">1.5 s（非标准卡片，单位 ms）</td></tr>
         <tr><td>时间跨度</td><td class="n">21.014 s（间隔 1.473/1.529 s 交替）</td></tr>
-        <tr><td>头部</td><td class="n">26 卡；无 WCS/GAIN/FILTER/TSYS</td></tr>
+        <tr><td>头部</td><td class="n">26 卡；无 WCS / GAIN / FILTER / TSYS</td></tr>
         <tr><td>遥测区</td><td class="n">第 0 行前 104 像元非图像</td></tr>
       </table>
     </div>
-    <div class="card"><h3>两个必须处理的编码效应</h3>
-      <p><b>低端削顶：</b>值为 0 的像元 <span class="mid">73 780</span> 个，高斯预期约 15 200（4.9 倍）→ 0 值像元不能当噪声样本。</p>
-      <p><b>硬饱和台阶：</b>3990–3993 DN 堆积，紧邻区间几乎为空（见图）。<span class="tag red">与满量程 65535 无关</span></p>
-      <p>这两条不改，后面的噪声图与亮端残差都会错。</p>
+    <div class="panel"><h3>两个必须处理的编码效应</h3>
+      <p><b>低端削顶：</b>0 值像元 <span class="kpi">73 780</span>，高斯预期约 15 200（4.9 倍）→ 不能当噪声样本。</p>
+      <p><b>硬饱和台阶：</b>3990–3993 DN 堆积、紧邻区间近乎为空。</p>
+      <p class="bad">这两条不改，噪声图与亮端残差都会错。</p>
     </div>
   </div>
-  <div class="foot"><span>§2 数据与仪器层事实</span><span>表 1</span></div>
-  <div class="notes">如果评委问"为什么强调仪器层"，回答：因为没有 WCS/GAIN，所有精度都必须从数据内部自己标定，所以先把可核实的边界说清。</div>
+  <div class="sec">§2 数据与仪器层事实</div><div class="pager">3 / 21</div>
+  <div class="notes">强调：没有 WCS/GAIN，所有精度都得从数据内部自标定，所以先划清可核实边界。</div>
 </section>
 
-<!-- ============ 4 检测 ============ -->
+<!-- 4 检测 -->
 <section class="slide">
-  <h1><span class="num">03</span>检测：66 469 个候选，27 552 个可用</h1>
-  <div class="thesis">匹配滤波提案 + 形态质量门。但必须诚实说明：实测的形状门几乎不拒绝任何真实点源，真正起作用的是信噪比门与伪影判据。</div>
-  <div class="grid g3">
-    <div class="card"><h3>候选与通过</h3>
-      <p class="big">66 469 → 27 552</p>
-      <p class="u">4σ 提案；通过率 41.4%</p>
-      <p>PSF 实测 <span class="mono">FWHM 1.93 px</span>（200 颗星叠合）。</p>
+  <div class="eyebrow">03 · 恒星检测</div>
+  <h1>66 469 个候选，27 552 个可用</h1>
+  <div class="thesis">匹配滤波提案 + 形态质量门。但必须诚实：实测的形状门几乎不拒绝任何真实点源，真正起作用的是信噪比门与伪影判据。</div>
+  <div class="body c3">
+    <div class="panel"><h3>候选 → 通过</h3>
+      <p class="kpi">66 469 → 27 552</p>
+      <p>4σ 提案，通过率 41.4%；点源 PSF 实测 <b>FWHM 1.93 px</b>（200 颗星叠合）。</p>
     </div>
-    <div class="card"><h3>形状门的真实情况</h3>
-      <p>实现默认：FWHM ∈ [0.8, 12.0] px、椭率 ≤ 0.65。</p>
-      <p>相对 1.93 px 即 <span class="no">−59% / +522%</span>。</p>
-      <p>存活样本 FWHM 最大 4.56、椭率最大 0.647 —— <span class="hl">门没有咬住任何真实点源</span>。</p>
+    <div class="panel"><h3>形状门的真实情况</h3>
+      <p>实现默认 FWHM ∈ [0.8, 12.0] px、椭率 ≤ 0.65；相对 1.93 px 即 <span class="bad">−59% / +522%</span>。</p>
+      <p>存活样本 FWHM 最大 4.56、椭率最大 0.647 → 门没有咬住真实点源。</p>
     </div>
-    <div class="card"><h3>真正起作用的两道门</h3>
-      <p>① 孔径通量信噪比 ≥ 5（存活最小值 5.0008）；</p>
-      <p>② 18 项伪影旗标黑名单：宽源 <span class="mono">BROAD</span>、拖影 <span class="mono">LINE_ARTIFACT</span>、混合 <span class="mono">UNRESOLVED_BLEND</span>。</p>
-      <p>这条自我披露后面会变成改进项。</p>
+    <div class="panel"><h3>真正起作用的两道门</h3>
+      <ul>
+        <li>孔径通量信噪比 ≥ 5（存活最小值 5.0008）</li>
+        <li>18 项伪影旗标黑名单：<span class="mono">BROAD</span> / <span class="mono">LINE_ARTIFACT</span> / <span class="mono">UNRESOLVED_BLEND</span></li>
+      </ul>
+      <p class="tagline">这条自我披露在方法篇里变成改进项。</p>
     </div>
   </div>
-  <div class="foot"><span>§3 恒星检测</span><span>与门限审计（112 条，46% 无出处）</span></div>
-  <div class="notes">这里主动承认形状门空转，是答辩加分项：说明我们不是只会报好数字，而是把判据逐条审计过。</div>
+  <div class="sec">§3 恒星检测</div><div class="pager">4 / 21</div>
+  <div class="notes">主动承认形状门空转，是加分项：说明判据被逐条审计过（112 条，46% 无出处）。</div>
 </section>
 
-<!-- ============ 5 3992 台阶 ============ -->
+<!-- 5 3992 -->
 <section class="slide">
-  <h1><span class="num">04</span>一个从原始像素发现的判据错误</h1>
-  <div class="thesis">峰值直方图在 3990–3993 DN 出现尖峰，而 [3994, 4100) 几乎为空：这不是满量程饱和，而是探测器/编码的硬上限。据此把饱和判据从 20 000 DN 改成 3 990 DN。</div>
-  <div class="grid g2">
-    <div class="card"><h3>证据</h3>
-      <p>[3990, 3994) 区间：<span class="mid">881</span> 个候选（峰值恰为 3992 的 363 个）。</p>
-      <p>[3994, 4100)：<span class="mid">1</span> 个。</p>
-      <p>原始像素层面同样成立：3990–3993 有 2 639 个像元，[3994,4000) 仅 4 个。</p>
-      <div style="margin-top:6px"><svg viewBox="0 0 520 150" width="100%" height="150" role="img" aria-label="peak histogram near 3992 DN"><line x1="26" y1="126" x2="494" y2="126" stroke="#c9d3dc"/><rect x="28.0" y="125.9" width="35.0" height="0.1" fill="#0b6bcb"/><rect x="67.0" y="125.9" width="35.0" height="0.1" fill="#0b6bcb"/><rect x="106.0" y="125.9" width="35.0" height="0.1" fill="#0b6bcb"/><rect x="145.0" y="125.6" width="35.0" height="0.4" fill="#0b6bcb"/><rect x="184.0" y="125.9" width="35.0" height="0.1" fill="#0b6bcb"/><rect x="223.0" y="125.4" width="35.0" height="0.6" fill="#0b6bcb"/><rect x="262.0" y="16.0" width="35.0" height="110.0" fill="#b3261e"/><text x="280" y="13" font-size="10" fill="#b3261e" text-anchor="middle">881</text><text x="26" y="142" font-size="10" fill="#3c4a56">3960</text><text x="494" y="142" font-size="10" fill="#3c4a56" text-anchor="end">4020 DN</text><text x="299" y="142" font-size="10" fill="#b3261e" text-anchor="middle">3992</text></svg></div>
-      <p class="u">峰值直方图（5 DN/bin）：3992 处 881 个候选，右侧几乎归零。</p>
+  <div class="eyebrow">04 · 一个判据错误</div>
+  <h1>从直方图的空白区间反推饱和阈值</h1>
+  <div class="thesis">峰值在 3990–3993 DN 堆积，而 [3994, 4100) 几乎为空：这不是满量程饱和，而是探测器/编码的硬上限。判据因此从 20 000 DN 改为 3 990 DN。</div>
+  <div class="body c2">
+    <div class="panel"><h3>证据（5 DN/bin）</h3>
+      <div style="height:170px;flex:none"><svg viewBox="0 0 560 150" width="100%" height="150" preserveAspectRatio="none"><line x1="8" y1="128" x2="552" y2="128" stroke="#cbd5e1"/><rect x="9.0" y="127.9" width="43.3" height="0.1" fill="#1d4ed8" opacity="0.8"/><rect x="54.3" y="127.9" width="43.3" height="0.1" fill="#1d4ed8" opacity="0.8"/><rect x="99.7" y="127.9" width="43.3" height="0.1" fill="#1d4ed8" opacity="0.8"/><rect x="145.0" y="127.7" width="43.3" height="0.3" fill="#1d4ed8" opacity="0.8"/><rect x="190.3" y="127.9" width="43.3" height="0.1" fill="#1d4ed8" opacity="0.8"/><rect x="235.7" y="127.4" width="43.3" height="0.6" fill="#1d4ed8" opacity="0.8"/><rect x="281.0" y="26.0" width="43.3" height="102.0" fill="#b91c1c" opacity="1"/><text x="325" y="22" font-size="11" fill="#b91c1c" text-anchor="middle">881</text><text x="8" y="144" font-size="10" fill="#64748b">3960</text><text x="552" y="144" font-size="10" fill="#64748b" text-anchor="end">4020 DN</text><text x="325" y="144" font-size="10" fill="#b91c1c" text-anchor="middle">3992</text></svg></div>
+      <p style="margin-top:8px">[3990, 3994)：<b>881</b> 个候选（峰值恰为 3992 的 363 个）；[3994, 4100)：<b>1</b> 个。</p>
+      <p>原始像素同样成立：3990–3993 有 2 639 像元，[3994,4000) 仅 4 个。</p>
     </div>
-    <div class="card"><h3>改判据后的后果</h3>
+    <div class="panel"><h3>改判据的后果（同口径两列）</h3>
       <table>
         <tr><th>量</th><th class="n">20 000 DN</th><th class="n">3 990 DN</th></tr>
         <tr><td>零点 ZP</td><td class="n">20.4013</td><td class="n">20.4111</td></tr>
@@ -173,167 +188,168 @@
         <tr><td>亮端残差 (G 9.5–10)</td><td class="n">−0.131</td><td class="n">−0.049</td></tr>
         <tr><td>定标下限</td><td class="n">G = 8.00</td><td class="n">G = 9.48</td></tr>
       </table>
-      <p class="u">代价：亮端样本被迫丢弃 11.1%；收益：亮端残差缩小到原来的 38%。</p>
+      <p class="tagline">代价：亮端样本丢弃 11.1%；收益：亮端残差缩到原来的 38%。</p>
     </div>
   </div>
-  <div class="foot"><span>§3.3 饱和判据</span><span>同口径两列，可直接作差</span></div>
-  <div class="notes">这是"数据驱动改判据"的最佳例子：判据不是拍脑袋，而是从直方图的空白区间反推出来的。</div>
+  <div class="sec">§3.3 饱和判据</div><div class="pager">5 / 21</div>
+  <div class="notes">判据不是拍脑袋：是从直方图空白区间反推的。这张图是全篇最能说明"数据驱动"的一页。</div>
 </section>
 
-<!-- ============ 6 星等 ============ -->
+<!-- 6 星等 -->
 <section class="slide">
-  <h1><span class="num">05</span>星等：把通量钉到 Gaia G 尺度上</h1>
-  <div class="thesis">仪器星等只说明“数了多少 ADU”；经验星等才有可比性，但它的可信度来自标定链，而不是小数位数。</div>
-  <div class="grid g2">
-    <div class="card"><h3>两条公式，不能互称</h3>
-      <div class="formula">m_inst = −2.5·log₁₀ F　　　g_emp = m_inst + ZP + C·(BP−RP)</div>
-      <p><b>检测层</b>误差含 κ²Nσ² + 背景项 + F/g；<b>强制测光层</b>再乘 π/2 中位数方差因子并按像素覆盖加权。</p>
-      <p class="no">同一符号在两层不是同一个量。</p>
+  <div class="eyebrow">05 · 经验星等</div>
+  <h1>把通量钉到 Gaia G 尺度上</h1>
+  <div class="thesis">仪器星等只说明“数了多少 ADU”；经验星等才有可比性，而它的可信度来自标定链，不是小数位数。</div>
+  <div class="body c2">
+    <div class="panel"><h3>两条公式，不能互称</h3>
+      <p class="mono">m_inst = −2.5·log₁₀ F</p>
+      <p class="mono">g_emp = m_inst + ZP + C·(BP−RP)</p>
+      <p>检测层误差含 κ²Nσ² + 背景项 + F/g；<b>强制测光层</b>再乘 π/2 中位数方差因子并按像素覆盖加权。</p>
+      <p class="bad">同一符号在两层不是同一个量。</p>
     </div>
-    <div class="card"><h3>交付配置的实测</h3>
-      <p class="big">ZP = 20.4232 <span class="u">± 0.0005</span></p>
-      <p>18 902 颗定标星；样本内散度 <span class="mono">0.140</span>，<b>留出散度 0.253</b>；C = −0.0852 ± 0.0016。</p>
-      <p>目标源 <span class="mono">g_emp = 14.3498</span>，仅带一个旗标：颜色未知。</p>
+    <div class="panel"><h3>交付配置的实测</h3>
+      <p class="kpi">ZP 20.4232 <small>± 0.0005</small></p>
+      <p>18 902 颗定标星；样本内散度 0.140，<b>留出散度 0.253</b>；C = −0.0852 ± 0.0016。</p>
+      <p>目标源 <b>g_emp = 14.3498</b>，仅带一个旗标：颜色未知。</p>
+      <p class="tagline">复现：rst19-photometric-pairs --peak-ceiling 3990</p>
     </div>
   </div>
-  <div class="foot"><span>§4 星等估算</span><span>表：误差预算（9 项）</span></div>
-  <div class="notes">强调留出散度 0.253 而不是样本内 0.140——评委常问"你的散度是不是过拟合"，这里主动给出更差的那个数。</div>
+  <div class="sec">§4 星等估算</div><div class="pager">6 / 21</div>
+  <div class="notes">主动给更差的数（留出 0.253），评委就不会追着问过拟合。</div>
 </section>
 
-<!-- ============ 7 三重验证 ============ -->
+<!-- 7 三重验证 -->
 <section class="slide">
-  <h1><span class="num">06</span>三重验证：为什么这个零点可以被引用</h1>
-  <div class="thesis">一套零点要有三种独立的“不同意”方式：随机留出、空间分块、逐帧差分。第三种完全不依赖外部星表，是最强的内部检验。</div>
-  <div class="grid g3">
-    <div class="card"><h3>① 5 折留出</h3>
-      <p class="mid">0.253 mag</p>
-      <p>比样本内散度大 1.8 倍——这才是对新数据的外推误差。</p>
+  <div class="eyebrow">06 · 验证</div>
+  <h1>三重验证：三种“不同意”的方式</h1>
+  <div class="thesis">随机留出、空间分块、逐帧差分。第三种完全不依赖外部星表，是最强的内部检验。</div>
+  <div class="body c3">
+    <div class="panel"><h3>① 5 折留出</h3>
+      <p class="kpi">0.253 <small>mag</small></p>
+      <p>比样本内 0.140 大 1.8 倍——这才是对新数据的外推误差。</p>
     </div>
-    <div class="card"><h3>② 8×8 空间分块</h3>
-      <p class="mid">0.023 mag</p>
-      <p>64 块零点的散布；同时暴露了 <span class="hl">0.094 mag</span> 的中心→边缘平场梯度。</p>
+    <div class="panel"><h3>② 8×8 空间分块</h3>
+      <p class="kpi">0.023 <small>mag</small></p>
+      <p>64 块零点散布；同时暴露中心→边缘 <b>0.094 mag</b> 的平场梯度。</p>
     </div>
-    <div class="card"><h3>③ 逐帧差分（无需星表）</h3>
-      <p class="mid">0.97</p>
-      <p>Δm 散度 ÷ 光子预期 = 0.97（SNR 5–10）→ <span class="ok">随机项已达光子极限</span>。</p>
-      <p class="u">105 个帧对、2 386 393 个样本</p>
+    <div class="panel"><h3>③ 逐帧差分（无需星表）</h3>
+      <p class="kpi">0.97</p>
+      <p>Δm 散度 ÷ 光子预期（SNR 5–10）→ <span class="ok">随机项已达光子极限</span>。</p>
+      <p class="tagline">105 个帧对 · 2 386 393 个样本</p>
     </div>
   </div>
-  <div class="foot"><span>§4.3–4.5 验证</span><span>逐帧差分只用源表，不牵涉 Gaia</span></div>
-  <div class="notes">第三条最容易被忽略但最有说服力：它证明随机误差不是标定带来的，而是光子统计决定的下限。</div>
+  <div class="sec">§4.3–4.5</div><div class="pager">7 / 21</div>
+  <div class="notes">第三条最有说服力：证明随机误差不是标定造成的，而是光子统计下限。</div>
 </section>
 
-<!-- ============ 8 15帧 ============ -->
+<!-- 8 15帧 -->
 <section class="slide">
-  <h1><span class="num">07</span>15 帧：哪些误差会随帧数下降，哪些不会</h1>
-  <div class="thesis">随机项按 1/√N 下降，系统图案不下降。把两者分开报，才不会把 0.0379 说成绝对精度。</div>
-  <div class="grid g2">
-    <div class="card"><h3>会下降的（随机）</h3>
-      <p>单帧散度 0.147 mag → 扣掉固定图案后随机部分 0.1435 → 合并 <span class="mid">0.0370</span> mag（15 帧）。</p>
+  <div class="eyebrow">07 · 15 帧</div>
+  <h1>哪些误差随帧数下降，哪些不会</h1>
+  <div class="thesis">随机项按 1/√N 下降，系统图案不下降。把两者分开报，才不会把 0.0370 说成绝对精度。</div>
+  <div class="body c2">
+    <div class="panel"><h3>会下降（随机）</h3>
+      <p>单帧 0.147 → 扣图案后随机部分 0.1435 → 15 帧合并 <span class="kpi">0.0370</span></p>
       <p>k 帧平均增益与 1/√k 吻合（SNR&lt;50 内偏差 ≤6%）。</p>
     </div>
-    <div class="card"><h3>不会下降的（系统）</h3>
-      <p>8×8 固定图案 <span class="mid">0.032</span> mag，跨帧相关 0.947；15 帧零点峰峰值 2.86 mmag。</p>
-      <p>合并后下限 <span class="mid">0.0489</span> mag。</p>
-      <p class="no">0.0370 / 0.0489 / 0.147 三者必须分别引用。</p>
+    <div class="panel"><h3>不会下降（系统）</h3>
+      <p>8×8 固定图案 <b>0.032</b> mag，跨帧相关 0.947；15 帧零点峰峰值 2.86 mmag。</p>
+      <p>合并后下限 <span class="kpi">0.0489</span></p>
+      <p class="bad">0.0370 / 0.0489 / 0.147 必须分别引用。</p>
     </div>
   </div>
-  <div class="foot"><span>§4.5</span><span>误差预算表另列 9 项系统项</span></div>
-  <div class="notes">评委最爱问"你把 15 帧叠加能到多少"。答案：随机到 0.037，但地板是 0.049——因为图案不随帧数改善。</div>
+  <div class="sec">§4.5</div><div class="pager">8 / 21</div>
+  <div class="notes">评委常问"15 帧叠加能到多少"：随机 0.037，地板 0.049，因为图案不随帧数改善。</div>
 </section>
 
-<!-- ============ 9 运动 A/B ============ -->
+<!-- 9 运动 -->
 <section class="slide">
-  <h1><span class="num">08</span>运动：两个真实事件，两种结论</h1>
-  <div class="thesis">同一个 15 帧序列里有两个运动目标。一个是均匀拖影，可用单帧测量；另一个是离散团块链，单帧形态判据应当拒绝它，必须靠多帧轨迹。</div>
-  <div class="grid g2">
-    <div class="card"><h3>事件 A：均匀长拖影（第 1 帧）</h3>
-      <p>脊线残差 0.125 px（592 行）；长度 <span class="mid">594 px</span>（上端出画幅，为下界）；PA <span class="mid">96.61°</span>（真值 96.70°）。</p>
-      <p>角速度下界 <span class="mono">≥0.933°/s</span>。</p>
-      <p class="u">只在 1 帧可见：以该速率穿越画幅只需 ≤10.3 s。</p>
+  <div class="eyebrow">08 · 运动目标</div>
+  <h1>两个真值事件，两种结论</h1>
+  <div class="thesis">同一条 15 帧序列里有两个运动目标：均匀拖影可单帧测量；离散团块链必须靠多帧轨迹——判据必须说出区别。</div>
+  <div class="body c2l">
+    <div class="panel"><h3>事件 A：均匀长拖影（第 1 帧）</h3>
+      <p>脊线残差 0.125 px（592 行）；长度 <b>594 px</b>（上端出画幅，为下界）；PA <b>96.61°</b>（真值 96.70°）。</p>
+      <p>角速度下界 <b>≥0.933°/s</b>；以该速率穿越画幅只需 ≤10.3 s，故仅 1 帧可见。</p>
+      <p class="tagline">下方为产品目录中的首条记录：duty 0.99、Λ 21 826</p>
     </div>
-    <div class="card"><h3>事件 B：团块链（第 9–15 帧）</h3>
-      <p>7 点轨迹拟合：vx=28.0、vy=−25.4 px/s → <span class="mid">0.0885°/s</span>，残差 3.7 px。</p>
-      <p>沿轴采样为孤立亮点（1231, 1252, 795, 566…，间隔约 6 px 空白）。</p>
-      <p class="no">均匀线段核 80% 采样落在背景 → 单帧不应判为拖影。</p>
+    <div class="fig"><img src="figs/trail.png" alt="事件 A"><div class="cap">3× 裁剪：拟合脊线、两端、北东指向与 100 px 标尺</div></div>
+  </div>
+  <div class="sec">§5.2–5.4</div><div class="pager">9 / 21</div>
+  <div class="notes">这一页是全场的反直觉高潮：看起来都是拖影，一个能单帧测、一个不能。</div>
+</section>
+
+<!-- 10 创新一 -->
+<section class="slide">
+  <div class="eyebrow">09 · 方法创新</div>
+  <h1>点源是线段核长度趋于零的极限</h1>
+  <div class="thesis">现行管线里点源与拖影是两套流程：拖影被切成碎片后当伪影丢弃。写成同一族，就能共享同一把尺子与同一套虚警率。</div>
+  <div class="body c2">
+    <div class="panel"><h3>模型与统计量</h3>
+      <p class="mono">d(x) = A·[PSF ∗ K_θ](x) + n(x)</p>
+      <p class="mono">K_θ = δ（点源）或 单位线段(L, φ)</p>
+      <p class="mono">z(x;θ) = Σ K̃(y−x)·d̃(y) / √Σ K̃²</p>
+      <p>Λ = max_θ z；<b>LR = z(最优线核) − z(点核)</b> 直接回答“更像线还是更像点”。</p>
+    </div>
+    <div class="panel"><h3>与已有工作的边界</h3>
+      <p>条纹匹配滤波已有最优解（Nir, Zackay &amp; Ofek 2018，快速 Radon）。<b>我们不声称发明它。</b></p>
+      <p>差异四点：点源写成同族极限 → 可比较的 LR；阈值＝每帧虚警数；实测协方差白化；沿脊线 duty/scatter 判据。</p>
+      <p class="tagline">169 个假设：7 长度 × 24 方向 + 点核</p>
     </div>
   </div>
-  <div class="foot"><span>§5 运动轨迹</span><span>面密度上限：&lt;10.5 deg⁻²h⁻¹（95% CL，2 事件）</span></div>
-  <div class="notes">这一页是全场的"反直觉"高潮：看起来都是拖影，但一个能单帧测、一个不能。判据必须能说出区别。</div>
+  <div class="sec">§2 方法</div><div class="pager">10 / 21</div>
+  <div class="notes">主动提 Nir 2018，显示我们知道边界。创新不在"发明匹配滤波"，在"统一+标定+白化+形态判据"。</div>
 </section>
 
-<!-- ============ 10 创新：统一假设族 ============ -->
+<!-- 11 阈值 -->
 <section class="slide">
-  <h1><span class="num">09</span>创新一：点源是线段核长度趋于零的极限</h1>
-  <div class="thesis">现行管线里，点源与拖影是两套流程：拖影被切成碎片后当伪影丢弃。把它们写成同一族，就能用同一把尺子比较、共享同一套虚警率。</div>
-  <div class="grid g2">
-    <div class="card"><h3>模型</h3>
-      <div class="formula">d(x) = A·[PSF ∗ K_θ](x) + n(x)，K_θ = δ（点）或 单位线段(L, φ)</div>
-      <div class="formula">z(x;θ) = Σ ẽ_K(y−x)·d̃(y) ／ √Σ ẽ_K²　（白化后）</div>
-      <p>Λ = max_θ z；<b>LR = z(最优线核) − z(点核)</b> —— 直接回答“更像线还是更像点”。</p>
+  <div class="eyebrow">10 · 可指定虚警</div>
+  <h1>阈值从“nσ”改成“每帧允许几个虚警”</h1>
+  <div class="thesis">Λ 是平滑随机场的上确界，尾部服从 Gumbel。给定允许虚警数即可反解阈值；假设数与精化次数都必须计入。</div>
+  <div class="body c3">
+    <div class="panel"><h3>标定曲线（1024²，37 假设）</h3>
+      <div class="fill" style="height:100%;max-height:230px"><svg viewBox="0 0 520 180" width="100%" height="180"><line x1="44" y1="130" x2="500" y2="130" stroke="#cbd5e1"/><line x1="44" y1="18" x2="44" y2="130" stroke="#cbd5e1"/><polyline points="44.0,50.1 116.5,65.3 196.0,81.9 268.5,97.1 348.0,113.7 420.5,128.9 500.0,145.6" fill="none" stroke="#1d4ed8" stroke-width="2.5"/><circle cx="44.0" cy="50.1" r="3.2" fill="#1d4ed8"/><circle cx="116.5" cy="65.3" r="3.2" fill="#1d4ed8"/><circle cx="196.0" cy="81.9" r="3.2" fill="#1d4ed8"/><circle cx="268.5" cy="97.1" r="3.2" fill="#1d4ed8"/><circle cx="348.0" cy="113.7" r="3.2" fill="#1d4ed8"/><circle cx="420.5" cy="128.9" r="3.2" fill="#1d4ed8"/><circle cx="500.0" cy="145.6" r="3.2" fill="#1d4ed8"/><line x1="44" y1="101.5" x2="500" y2="101.5" stroke="#b91c1c" stroke-dasharray="5 4"/><text x="494" y="95.5" font-size="10" fill="#b91c1c" text-anchor="end">实测 5.88σ</text><text x="38" y="134" font-size="10" fill="#475569" text-anchor="end">5.5σ</text><text x="38" y="26" font-size="10" fill="#475569" text-anchor="end">7.0σ</text><text x="44" y="146" font-size="10" fill="#475569" text-anchor="middle">1</text><text x="348" y="146" font-size="10" fill="#475569" text-anchor="middle">100</text><text x="500" y="146" font-size="10" fill="#475569" text-anchor="middle">1000</text></svg></div>
+      <p class="tagline">每帧 1 个 → 6.57σ；10 个 → 6.14σ；100 个 → 5.72σ</p>
     </div>
-    <div class="card"><h3>与已有工作的边界</h3>
-      <p>条纹匹配滤波<sup>[Nir+2018]</sup>已有最优解；本文<b>不声称发明它</b>。</p>
-      <p>差异四点：① 点源写成同族极限，得到可比较的 LR；② 阈值由极值分布给出；③ 用实测协方差白化；④ 沿脊线 duty/scatter 形态判据。</p>
-      <p class="u">每一条都有对应的实测证据（后两页）。</p>
+    <div class="panel"><h3>实测复核</h3>
+      <p>峰幅分布外推 <b>5.88σ</b>；跑 20 帧实测 <span class="ok">0.89 ± 1.17</span> 个虚警/帧。</p>
+      <p class="bad">字面公式给 9.00σ（重复计数 N_eff）→ 实测 0 个虚警，过于保守。</p>
+    </div>
+    <div class="panel"><h3>多重性必须付</h3>
+      <p>精化把每候选试验数 169 → 4 312，阈值抬高</p>
+      <p class="kpi">+1.655σ</p>
+      <p class="bad">不付这笔代价＝偷偷放宽虚警率。</p>
     </div>
   </div>
-  <div class="foot"><span>§2 方法</span><span>169 个假设：7 长度 × 24 方向 + 点核</span></div>
-  <div class="notes">这一页要主动提 Nir 2018，显示我们读过文献、知道边界在哪。创新点不是"发明匹配滤波"，而是"统一+标定+白化+形态判据"。</div>
+  <div class="sec">§2.3–2.4</div><div class="pager">11 / 21</div>
+  <div class="notes">6.57σ 的来历：Gumbel 拟合 + 假设数 + 允许虚警数，全可复算；并有 20 帧实测复核。</div>
 </section>
 
-<!-- ============ 11 阈值 ============ -->
+<!-- 12 否证 -->
 <section class="slide">
-  <h1><span class="num">10</span>创新二：阈值从“nσ”改成“每帧允许几个虚警”</h1>
-  <div class="thesis">Λ 是平滑随机场的上确界，尾部服从 Gumbel。给定允许虚警数就能反解阈值；搜索多少个假设、精化多少次，都必须计入。</div>
-  <div class="grid g3">
-    <div class="card"><h3>标定结果（1024²，37 假设）</h3>
-      <p class="big">6.57σ</p><p class="u">每帧 1 个虚警</p>
-      <p>10 个 → 6.14σ；100 个 → 5.72σ。</p>
+  <div class="eyebrow">11 · 自我否证</div>
+  <h1>被自己的实验打掉的三条直觉</h1>
+  <div class="thesis">方法论文里最值钱的不只是正结果。这三条原本写进设计稿，实测后被否证，全部保留在论文里。</div>
+  <div class="body c2l">
+    <div class="panel"><h3>① N/l² 假峰表（错）</h3>
+      <p>原断言：相关噪声让 4σ 假峰按 1/l² 下降。</p>
+      <p>实测 538 / 515 / 468 / 358，预测 531 / 133 / 59 / 21。</p>
+      <p class="bad">比值 1.01 → 16.8，完全否证。</p>
+      <p class="tagline">相关只改独立分辨单元数（影响 Gumbel 位置），不改固定阈值下的超越计数。</p>
     </div>
-    <div class="card"><h3>实测复核</h3>
-      <p>峰幅分布外推 <span class="mid">5.88σ</span>，跑 20 帧实测 <span class="ok">0.89 ± 1.17</span> 个虚警/帧。</p>
-      <p class="no">字面公式会给 9.00σ（重复计数 N_eff）——实测 0 个虚警，过于保守。</p>
-    </div>
-    <div class="card"><h3>多重性必须付</h3>
-      <p>精化把每候选试验数从 169 提到 4 312，阈值抬高</p>
-      <p class="mid">+1.655σ</p>
-      <p class="u">不付这笔代价＝偷偷放宽虚警率。</p>
-    </div>
+    <div class="fig"><svg viewBox="0 0 520 170" width="100%" height="170"><rect x="40" y="22.509090909090915" width="48.5" height="117.49090909090908" fill="#1d4ed8" opacity="0.85"/><rect x="90.5" y="24.058181818181822" width="48.5" height="115.94181818181818" fill="#b91c1c" opacity="0.55"/><text x="88.5" y="156" font-size="11" fill="#475569" text-anchor="middle">l=1</text><text x="64.25" y="16.509090909090915" font-size="10" fill="#1d4ed8" text-anchor="middle">539</text><text x="116.75" y="18.058181818181822" font-size="10" fill="#b91c1c" text-anchor="middle">531</text><rect x="153" y="27.59272727272726" width="48.5" height="112.40727272727274" fill="#1d4ed8" opacity="0.85"/><rect x="203.5" y="111.02545454545455" width="48.5" height="28.974545454545456" fill="#b91c1c" opacity="0.55"/><text x="201.5" y="156" font-size="11" fill="#475569" text-anchor="middle">l=2</text><text x="177.25" y="21.59272727272726" font-size="10" fill="#1d4ed8" text-anchor="middle">515</text><text x="229.75" y="105.02545454545455" font-size="10" fill="#b91c1c" text-anchor="middle">133</text><rect x="266" y="37.869090909090914" width="48.5" height="102.13090909090909" fill="#1d4ed8" opacity="0.85"/><rect x="316.5" y="127.12727272727273" width="48.5" height="12.872727272727273" fill="#b91c1c" opacity="0.55"/><text x="314.5" y="156" font-size="11" fill="#475569" text-anchor="middle">l=3</text><text x="290.25" y="31.869090909090914" font-size="10" fill="#1d4ed8" text-anchor="middle">468</text><text x="342.75" y="121.12727272727273" font-size="10" fill="#b91c1c" text-anchor="middle">59</text><rect x="379" y="61.91272727272727" width="48.5" height="78.08727272727273" fill="#1d4ed8" opacity="0.85"/><rect x="429.5" y="135.35272727272726" width="48.5" height="4.647272727272727" fill="#b91c1c" opacity="0.55"/><text x="427.5" y="156" font-size="11" fill="#475569" text-anchor="middle">l=5</text><text x="403.25" y="55.91272727272727" font-size="10" fill="#1d4ed8" text-anchor="middle">358</text><text x="455.75" y="129.35272727272726" font-size="10" fill="#b91c1c" text-anchor="middle">21</text></svg><div class="cap">蓝：实测 4σ 假峰；红：原预测。l 越大，偏差越大。</div></div>
   </div>
-  <div class="foot"><span>§2.3–2.4</span><span>白噪声实测 std(z)=0.9986–1.0004</span></div>
-  <div class="notes">如果评委问"6.57σ 怎么来的"，答案是：Gumbel 拟合 + 假设数 + 允许虚警数，全部可复算；并且有 20 帧的实测复核。</div>
+  <div class="sec">§4.2</div><div class="pager">12 / 21</div>
+  <div class="notes">另外两条：Gumbel 重复计数（9.00σ vs 实测 0）与"不白化 std(z) 1.72→2.50"。三条都是我们自己的错误。</div>
 </section>
 
-<!-- ============ 12 相关噪声否证 ============ -->
+<!-- 13 结果 -->
 <section class="slide">
-  <h1><span class="num">11</span>被自己的实验否证的三条直觉</h1>
-  <div class="thesis">方法论文里最值钱的不只是正结果。这三条我们原本写进设计稿，后来被实测打掉，全部保留在论文里。</div>
-  <div class="grid g3">
-    <div class="card"><h3>① N/l² 假峰表（错）</h3>
-      <p>我们曾断言相关噪声让 4σ 假峰按 1/l² 下降。</p>
-      <p>实测（l=1/2/3/5）：<span class="mid">538/515/468/358</span>，预测 531/133/59/21。</p>
-      <p class="no">比值 1.01 → 16.8，完全否证。</p>
-    </div>
-    <div class="card"><h3>② Gumbel 重复计数（错）</h3>
-      <p>μ ≈ √(2 ln N_eff) 已经包含整场最大值；再除一次 N_FA 等于算两遍。</p>
-      <p>字面公式给 9.00σ，实测虚警 0 个。</p>
-    </div>
-    <div class="card"><h3>③ “阈值越高越安全”（错）</h3>
-      <p>不白化时 std(z) 从 1 升到 <span class="mid">1.72–2.50</span>，同一 4σ 的假峰从 433 涨到 <span class="no">10⁵</span> 量级。</p>
-      <p>白化后 std(z) 才回到 0.9986–1.0004。</p>
-    </div>
-  </div>
-  <div class="foot"><span>§4.2 相关噪声</span><span>数据：4096² × 8 次实现</span></div>
-  <div class="notes">这一页专治"你们是不是只挑好看的结果"。三条都是我们自己的错误，且有数字。</div>
-</section>
-
-<!-- ============ 13 结果 ============ -->
-<section class="slide">
-  <h1><span class="num">12</span>结果：统一框架在两个真值事件上的表现</h1>
-  <div class="thesis">事件 A 被完整测量；事件 B 被形态判据正确拒绝。两个结果都成立，因为它们回答的是不同的问题。</div>
-  <div class="grid g2">
-    <div class="card"><h3>事件 A 的六项读数</h3>
+  <div class="eyebrow">12 · 结果</div>
+  <h1>统一框架在两个真值事件上的表现</h1>
+  <div class="thesis">A 被完整测量，B 被形态判据正确拒绝。两个结论都成立，因为它们回答的是不同的问题。</div>
+  <div class="body c2u">
+    <div class="panel"><h3>事件 A 的六项读数</h3>
       <table>
         <tr><th>量</th><th class="n">值</th><th>说明</th></tr>
         <tr><td>L̂</td><td class="n">594.0 px</td><td>下界（真值 ≥597）</td></tr>
@@ -343,237 +359,228 @@
         <tr><td>duty / scatter</td><td class="n">0.987 / 0.061</td><td>判为均匀</td></tr>
         <tr><td>垂距</td><td class="n">0.0 px</td><td>落在脊线上</td></tr>
       </table>
+      <p class="tagline">1 087 个长候选中仅 9 个通过均匀性检验</p>
     </div>
-    <div class="card"><h3>事件 B 与选择性</h3>
-      <p>B 在单帧里不以长候选出现；最近的点源解 duty=0.529、scatter=10.3 → <span class="no">非均匀</span>。</p>
-      <p>第 1 帧 1 087 个长候选中只有 <span class="mid">9</span> 个通过均匀性检验。</p>
-      <p class="u">产品化后去重：同一条拖影的 39 个沿轴位置合并为 3 条。</p>
-    </div>
+    <div class="fig"><img src="figs/frame_A.png" alt="A 原图"><div class="cap">原图裁剪 140×600</div></div>
   </div>
-  <div class="foot"><span>§4.4–4.6</span><span>P 值式判据：duty ≥0.85 且 scatter ≤0.25</span></div>
-  <div class="notes">把"长度是下界"讲清楚：上端被画幅切断，所以只能说 ≥597 px；这不是精度问题，是可识别性问题。</div>
+  <div class="sec">§4.4–4.6</div><div class="pager">13 / 21</div>
+  <div class="notes">"长度是下界"要讲清：上端被画幅切断，只能说 ≥597 px；这是可识别性问题，不是精度问题。</div>
 </section>
 
-<!-- ============ 14 产品化 ============ -->
+<!-- 14 产品化 -->
 <section class="slide">
-  <h1><span class="num">13</span>落地：不是论文里的一个数字，是 exe 里的一个开关</h1>
-  <div class="thesis">拖影目录已作为附加产物接入既有单帧管线：点源目录与测光结果一字未变，只是多一份 JSON。</div>
-  <div class="grid g2">
-    <div class="card"><h3>接入方式</h3>
+  <div class="eyebrow">13 · 落地</div>
+  <h1>不是论文里的数字，是 exe 里的开关</h1>
+  <div class="thesis">拖影目录作为附加产物接入既有单帧管线：点源目录与测光结果一字未变，只是多一份 JSON。</div>
+  <div class="body c2">
+    <div class="panel"><h3>接入方式</h3>
       <ul>
-        <li>GUI“单图分析”不启动独立程序，而是 worker 进程内调库 → 接入点必须在库层；</li>
-        <li>开关 <span class="mono">--trail-catalog on|off</span>，默认开；关掉零文件零耗时；</li>
+        <li>GUI“单图分析”不启动独立程序，而由 worker 进程内调库 → 接入点在库层；</li>
+        <li>开关 <span class="mono">--trail-catalog on|off</span>，默认开；关闭零文件零耗时；</li>
         <li>失败只告警不中断，既有产物字段未动。</li>
       </ul>
     </div>
-    <div class="card"><h3>打包后的实测</h3>
+    <div class="panel"><h3>打包后的实测</h3>
       <table>
         <tr><th>场景</th><th>结果</th></tr>
         <tr><td>开</td><td class="n">21 文件（含目录），3 条拖影</td></tr>
         <tr><td>关</td><td class="n">20 文件，无目录</td></tr>
         <tr><td>点源表</td><td class="n">逐字节相同</td></tr>
-        <tr><td>测光</td><td class="n">ZP 20.4232 / g_emp 14.3498（差 3×10⁻⁵）</td></tr>
+        <tr><td>测光</td><td class="n">ZP 20.4232 / g_emp 14.3498</td></tr>
       </table>
+      <p class="tagline">包 1792490193151：verify_skipped = false</p>
     </div>
   </div>
-  <div class="foot"><span>§3.4 产品化接入</span><span>包 1792490193151：verify_skipped=false</span></div>
-  <div class="notes">这一页回答"你们的东西能用吗"。答案：能，而且开关可关，不影响已验证的星等链。</div>
+  <div class="sec">§3.4 产品化接入</div><div class="pager">14 / 21</div>
+  <div class="notes">回答"你们的东西能用吗"：能，且可关，不影响已验证的星等链。</div>
 </section>
 
-<!-- ============ 15 诚实边界 ============ -->
+<!-- 15 边界 -->
 <section class="slide">
-  <h1><span class="num">14</span>诚实边界：三条不能声称、三条已知缺陷</h1>
-  <div class="thesis">答辩最容易被问倒的不是“你做了什么”，而是“你不知道什么”。这一页把不知道的全部写清。</div>
-  <div class="grid g2">
-    <div class="card"><h3>不能声称</h3>
+  <div class="eyebrow">14 · 诚实边界</div>
+  <h1>三条不能声称，三条已知缺陷</h1>
+  <div class="thesis">答辩最容易被问倒的不是“你做了什么”，而是“你不知道什么”。</div>
+  <div class="body c2">
+    <div class="panel"><h3>不能声称</h3>
       <ul>
         <li>g_emp <b>不是</b> Gaia G、不是 V：波段 450–750 nm 标称、响应 UNKNOWN；</li>
-        <li>无增益/平场/响应曲线 → 绝对精度<b>不可验证</b>；</li>
-        <li>拖影通量与峰值只给<b>下界/量级</b>（截断码与 4 倍读数并存的仪器异常）。</li>
+        <li>无增益/平场/响应曲线 → 绝对精度不可验证；</li>
+        <li>拖影通量与峰值只给下界/量级（截断码与 4 倍读数并存的仪器异常）。</li>
       </ul>
     </div>
-    <div class="card"><h3>已知缺陷</h3>
+    <div class="panel"><h3>已知缺陷</h3>
       <ul>
         <li>长度对角度栅格敏感：L=597 px 需 Δφ≲0.16°（≈2200 方向），需 Radon 引擎；</li>
-        <li>团块链目标无专用假设族，只给出判据边界；</li>
-        <li>平脊上<b>沿轴位置不可识别</b>：只有垂直距离是测出来的。</li>
+        <li>团块链目标无专用假设族，只给判据边界；</li>
+        <li>平脊上沿轴位置不可识别：只有垂直距离是测出来的。</li>
       </ul>
     </div>
   </div>
-  <div class="foot"><span>§5.2 / §6</span><span>门限审计：112 条中 46% 无出处，47 条仅对本帧成立</span></div>
-  <div class="notes">主动讲缺陷，评委会更信任前面的数字。特别强调"沿轴位置不可识别"——这是结构性的，不是 bug。</div>
+  <div class="sec">§5.2 / §6</div><div class="pager">15 / 21</div>
+  <div class="notes">主动讲缺陷，评委会更信任前面的数字。</div>
 </section>
 
-<!-- ============ 16 结论 ============ -->
+<!-- 16 结论 -->
 <section class="slide">
-  <h1><span class="num">15</span>结论</h1>
-  <div class="thesis">三句话说完。</div>
-  <div class="grid g3">
-    <div class="card"><h3>一</h3>
-      <p>在这台相机上，<b>经验零点可以被引用</b>：ZP 20.4232，留出 0.253，三重验证，逐帧差分达光子极限。</p>
-    </div>
-    <div class="card"><h3>二</h3>
-      <p>点源与拖影可以放进<b>同一假设族</b>，阈值可指定为“每帧几个虚警”，且这条链已进入产品。</p>
-    </div>
-    <div class="card"><h3>三</h3>
-      <p>判据必须能<b>说出边界</b>：均匀拖影可单帧测，团块链必须多帧；长度是下界，沿轴位置不可识别。</p>
-    </div>
+  <div class="eyebrow">15 · 结论</div>
+  <h1>三句话</h1>
+  <div class="thesis">每一句都有对应的实测页与可复现命令。</div>
+  <div class="body c3">
+    <div class="panel"><h3>一</h3><p>在这台相机上，<b>经验零点可以被引用</b>：ZP 20.4232、留出 0.253、三重验证，逐帧差分达光子极限。</p></div>
+    <div class="panel"><h3>二</h3><p>点源与拖影可放进<b>同一假设族</b>，阈值可指定为“每帧几个虚警”，且这条链已进入产品。</p></div>
+    <div class="panel"><h3>三</h3><p>判据必须<b>说出边界</b>：均匀拖影可单帧测，团块链必须多帧；长度是下界，沿轴位置不可识别。</p></div>
   </div>
-  <div class="foot"><span>谢谢 · 接下来 3 分钟现场演示</span><span>预留 3 分钟提问</span></div>
-  <div class="notes">结尾不要拖，直接进演示。</div>
+  <div class="sec">谢谢 · 进入演示</div><div class="pager">16 / 21</div>
+  <div class="notes">不要拖，直接进演示。</div>
 </section>
 
-<!-- ============ 17 演示 ============ -->
+<!-- 17 演示 -->
 <section class="slide">
-  <h1><span class="num">▶</span>现场演示（3 分钟）</h1>
-  <div class="thesis">演示目标：同样的 exe，勾选开关后多出一份拖影目录，而星等结果一字不变。</div>
-  <div class="grid g2">
-    <div class="card"><h3>操作步骤（30 s）</h3>
+  <div class="eyebrow">▶ 现场演示 3′</div>
+  <h1>同一条 exe：多一份目录，星等不变</h1>
+  <div class="thesis">演示目标只有一句：勾上开关就有拖影目录，关掉就没有，而点源表与星等一字不变。</div>
+  <div class="body c2">
+    <div class="panel"><h3>操作（约 30 s）</h3>
       <ul>
-        <li>左侧选中第 1 帧 <span class="mono">20260330163205413_9901.fits</span>；</li>
-        <li>预设任务 → <b>单帧分析与研究表</b>；</li>
-        <li>勾选 <b>拖影目录（GLRT，约 +15 s）</b>；</li>
-        <li>运行整套任务（约 88 s，进度条可见）。</li>
+        <li>左侧选中第 1 帧 <span class="mono">…163205413_9901.fits</span></li>
+        <li>预设任务 → <b>单帧分析与研究表</b></li>
+        <li>勾选 <b>拖影目录（GLRT，约 +15 s）</b></li>
+        <li>运行整套任务（约 88 s）</li>
       </ul>
     </div>
-    <div class="card"><h3>预期输出（照这个核对）</h3>
+    <div class="panel"><h3>照此核对</h3>
       <ul>
-        <li><span class="mono">02-rst19-sources/</span> 下 <b>21 个文件</b>；</li>
-        <li><span class="mono">trail_catalog.json</span>：<b>3 条</b>，首条 <b>L=594 px、PA=96.61°、duty=0.99</b>；</li>
-        <li><span class="mono">source_catalog.csv</span>：66 469 候选 / 27 552 通过（与关闭时逐字节相同）；</li>
-        <li>切到测光套件 → ZP 20.4232 / g_emp 14.3498。</li>
+        <li><span class="mono">02-rst19-sources/</span> 共 <b>21</b> 个文件</li>
+        <li><span class="mono">trail_catalog.json</span>：<b>3</b> 条，首条 <b>594 px / 96.61° / duty 0.99</b></li>
+        <li><span class="mono">source_catalog.csv</span>：66 469 / 27 552，与关闭时逐字节相同</li>
+        <li>切到测光套件 → ZP 20.4232 / g_emp 14.3498</li>
       </ul>
     </div>
   </div>
-  <div class="foot"><span>备用：若现场卡顿，直接打开已保存的 run 目录讲解</span><span>包 1792490193151</span></div>
-  <div class="notes">演示要点：先展示"关"（20 文件）、再展示"开"（21 文件 + 3 条），对比最有说服力。若机器慢，直接展示预跑结果并说明耗时。</div>
+  <div class="sec">备用：现场卡顿则直接打开已保存 run 目录</div><div class="pager">17 / 21</div>
+  <div class="notes">先展示"关"（20 文件），再展示"开"（21 文件 + 3 条），对比最有说服力。</div>
 </section>
 
-<!-- ============ 18 Q&A 1 ============ -->
+<!-- 18 Q1 -->
 <section class="slide">
-  <h1><span class="num">Q1</span>科学问题预判：你的零点凭什么可信？</h1>
-  <div class="thesis">回答结构：独立验证 → 系统项清单 → 明确边界。</div>
-  <div class="grid g2">
-    <div class="card"><h3>三重独立验证</h3>
+  <div class="eyebrow">Q1 · 科学性</div>
+  <h1>你的零点凭什么可信？</h1>
+  <div class="thesis">回答结构：独立验证 → 系统项清单 → 明确边界。三个数字，一句边界。</div>
+  <div class="body c2">
+    <div class="panel"><h3>三重独立验证</h3>
       <ul>
-        <li>5 折留出：<b>0.253 mag</b>（比样本内 0.140 大 1.8 倍，这才是外推误差）；</li>
-        <li>8×8 分块：<b>0.023 mag</b>；</li>
-        <li>逐帧差分（不依赖星表）：Δm/光子预期 = <b>0.97</b>。</li>
+        <li>5 折留出 <b>0.253 mag</b>（比样本内 0.140 大 1.8 倍）</li>
+        <li>8×8 分块 <b>0.023 mag</b></li>
+        <li>逐帧差分（不依赖星表）<b>0.97</b> × 光子预期</li>
       </ul>
     </div>
-    <div class="card"><h3>系统项与边界</h3>
+    <div class="panel"><h3>系统项与边界</h3>
       <ul>
-        <li>平场梯度 0.094 mag、色项 ±0.14、暗端 +0.11、κ=1.18；</li>
-        <li>颜色未知 → 目标源只能标 <span class="mono">g_emp</span>，不能标 G/V；</li>
-        <li>无增益 → 亮端误差条偏小，已列为已知缺陷。</li>
-      </ul>
-    </div>
-  </div>
-  <div class="foot"><span>追问预案：如果问“为什么不用合成测光标准星” → 本相机无滤光片，只能借 Gaia 做经验零点</span><span></span></div>
-  <div class="notes">保持简短：三个数字 + 一句边界。</div>
-</section>
-
-<!-- ============ 19 Q&A 2 ============ -->
-<section class="slide">
-  <h1><span class="num">Q2</span>科学问题预判：4σ 到底够不够？</h1>
-  <div class="thesis">回答结构：阈值必须随搜索规模与噪声相关长度变化，否则“严格程度”未知。</div>
-  <div class="grid g3">
-    <div class="card"><h3>同一 4σ 的含义</h3>
-      <p>白噪声 4096²：<span class="mid">531</span> 个假峰/帧。</p>
-      <p>l=3 px 相关噪声：<span class="mid">59</span> 个。</p>
-      <p class="u">差 9 倍，取决于相关长度。</p>
-    </div>
-    <div class="card"><h3>正确做法</h3>
-      <p>用极值分布把阈值换算成“每帧允许几个虚警”：</p>
-      <p class="mid">6.57σ ↔ 1 个/帧</p>
-      <p>并把精化多重性计入（+1.655σ）。</p>
-    </div>
-    <div class="card"><h3>实测复核</h3>
-      <p>预测 5.88σ；跑 20 帧实测 <span class="ok">0.89 ± 1.17</span>。</p>
-      <p class="u">这条对我们自己不利也照写。</p>
-    </div>
-  </div>
-  <div class="foot"><span>追问预案：“那你们现在用的 4σ 会漏多少？” → 尚未做注入-回收完备度曲线，已列为下一步</span><span></span></div>
-  <div class="notes">不要吹"我们阈值最优"，只说"我们的阈值可以被指定与复核"。</div>
-</section>
-
-<!-- ============ 20 Q&A 3 ============ -->
-<section class="slide">
-  <h1><span class="num">Q3</span>创新性问题预判：Nir+2018 已经做了，你的新在哪？</h1>
-  <div class="thesis">诚实承认边界，然后给出四条可检验的差异。</div>
-  <div class="grid g2">
-    <div class="card"><h3>先承认</h3>
-      <p>“用 PSF 展宽的线段模板做匹配滤波检测条纹”本身已有最优解（Nir, Zackay &amp; Ofek 2018，快速 Radon，快 2–3 个数量级）。<b>我们不声称发明它。</b></p>
-    </div>
-    <div class="card"><h3>四条差异（都有实测）</h3>
-      <ul>
-        <li>点源写成同族 L→0 极限 → 可比较的 <b>LR</b>；</li>
-        <li>阈值＝每帧虚警数（Gumbel + 多重性）；</li>
-        <li>实测协方差白化（不白化 std(z) 1.7→2.5）；</li>
-        <li>沿脊线 duty/scatter 判据（1087 长候选→9）。</li>
+        <li>平场 0.094、色项 ±0.14、暗端 +0.11、κ=1.18</li>
+        <li>颜色未知 → 只能标 g_emp，不能标 G/V</li>
+        <li>无增益 → 亮端误差条偏小（已列缺陷）</li>
       </ul>
     </div>
   </div>
-  <div class="foot"><span>追问预案：“和 StreakDet / CNN 比呢？” → 文献无同口径基准，我们给出速度—完备度—虚警率三元口径作为贡献</span><span></span></div>
-  <div class="notes">这题最容易翻车。先承认，再给四条可检验差异，最后指出文献里的空白（没有统一基准）。</div>
+  <div class="sec">追问：为何不用合成标准星？→ 本相机无滤光片，只能借 Gaia 做经验零点</div><div class="pager">18 / 21</div>
+  <div class="notes">保持简短：三个数字 + 一句边界，不要展开。</div>
 </section>
 
-<!-- ============ 21 备份：公式与数据 ============ -->
+<!-- 19 Q2 -->
 <section class="slide">
-  <h1><span class="num">备份</span>关键公式与复现命令</h1>
-  <div class="grid g2">
-    <div class="card"><h3>公式</h3>
-      <div class="formula">m_inst = −2.5 log₁₀ F；g_emp = m_inst + ZP + C(BP−RP)</div>
-      <div class="formula">σ_F² = κ²Nσ² + (N²/N_eff)σ² + F/g + N·RN²</div>
-      <div class="formula">L = ω·t_exp / s；ω ≥ L/t_exp</div>
-      <div class="formula">duty = #{v>0.5·med}/#v；scatter = 1.4826·MAD/med</div>
+  <div class="eyebrow">Q2 · 科学性</div>
+  <h1>4σ 到底够不够？</h1>
+  <div class="thesis">阈值必须随搜索规模与噪声相关长度变化，否则“严格程度”未知。</div>
+  <div class="body c3">
+    <div class="panel"><h3>同一 4σ 的含义</h3>
+      <p>白噪声 4096²：<b>531</b> 个假峰/帧</p>
+      <p>l = 3 px 相关噪声：<b>59</b> 个</p>
+      <p class="tagline">差 9 倍，取决于相关长度</p>
     </div>
-    <div class="card"><h3>复现（仓库根目录）</h3>
+    <div class="panel"><h3>正确做法</h3>
+      <p>用极值分布把阈值换算成“每帧允许几个虚警”</p>
+      <p class="kpi">6.57σ <small>↔ 1 个/帧</small></p>
+      <p>并把精化多重性计入（+1.655σ）</p>
+    </div>
+    <div class="panel"><h3>实测复核</h3>
+      <p>预测 5.88σ；20 帧实测 <span class="ok">0.89 ± 1.17</span></p>
+      <p class="tagline">对我们不利也照写</p>
+    </div>
+  </div>
+  <div class="sec">追问：你们漏多少？→ 完备度曲线尚未做，已列下一步</div><div class="pager">19 / 21</div>
+  <div class="notes">不吹"阈值最优"，只说"可指定、可复核"。</div>
+</section>
+
+<!-- 20 Q3 -->
+<section class="slide">
+  <div class="eyebrow">Q3 · 创新性</div>
+  <h1>Nir+2018 已经做了，你新在哪？</h1>
+  <div class="thesis">先承认边界，再给四条可检验的差异。</div>
+  <div class="body c2">
+    <div class="panel"><h3>先承认</h3>
+      <p>“用 PSF 展宽的线段模板做匹配滤波检测条纹”已有最优解（Nir, Zackay &amp; Ofek 2018，快速 Radon，快 2–3 个数量级）。</p>
+      <p class="bad">我们不声称发明它。</p>
+    </div>
+    <div class="panel"><h3>四条差异（都有实测）</h3>
+      <ul>
+        <li>点源写成同族 L→0 极限 → 可比较的 <b>LR</b></li>
+        <li>阈值＝每帧虚警数（Gumbel + 多重性）</li>
+        <li>实测协方差白化（不白化 std(z) 1.7→2.5）</li>
+        <li>沿脊线 duty/scatter 判据（1 087 长候选 → 9）</li>
+      </ul>
+    </div>
+  </div>
+  <div class="sec">追问：与 StreakDet/CNN 比？→ 文献无同口径基准，我们把三元基准本身作为贡献</div><div class="pager">20 / 21</div>
+  <div class="notes">最容易翻车的一题：先承认，再给可检验差异，最后指出文献空白。</div>
+</section>
+
+<!-- 21 备份 -->
+<section class="slide">
+  <div class="eyebrow">备份</div>
+  <h1>公式与复现命令</h1>
+  <div class="body c2">
+    <div class="panel"><h3>公式</h3>
+      <p class="mono">m_inst = −2.5 log₁₀ F ； g_emp = m_inst + ZP + C(BP−RP)</p>
+      <p class="mono">σ_F² = κ²Nσ² + (N²/N_eff)σ² + F/g + N·RN²</p>
+      <p class="mono">L = ω·t_exp / s ； ω ≥ L/t_exp</p>
+      <p class="mono">duty = #{v &gt; 0.5·med}/#v ； scatter = 1.4826·MAD/med</p>
+    </div>
+    <div class="panel"><h3>复现</h3>
       <p class="mono">rst19-sources &lt;fits&gt; --psf-fwhm 3 --threshold-sigma 4 --min-flux-snr 5 --proposal-mode hybrid</p>
       <p class="mono">rst19-glrt --image &lt;fits&gt; --psf-fwhm 1.93 --lengths 16,32,64,128,256,512,1024 --angles 24 --whiten on --threshold-fa 1</p>
-      <p class="mono">rst19-astrometry-blind --sources … --catalog …</p>
       <p class="mono">rst19-photometric-pairs --gaia … --scale 8.43575 --rotation 266.9552 --peak-ceiling 3990</p>
     </div>
   </div>
-  <div class="foot"><span>所有数字可由上述命令重跑</span><span></span></div>
-  <div class="notes">放最后，被问到细节时翻出来。</div>
+  <div class="sec">所有数字可由上述命令重跑</div><div class="pager">21 / 21</div>
+  <div class="notes">被问到细节时翻到这里。</div>
 </section>
-
+</div></div>
 <script>
-  const slides = Array.from(document.querySelectorAll('.slide'));
-  const stage = document.getElementById('stage');
-  slides.forEach((s, i) => {
-    s.dataset.index = i;
-    const p = document.createElement('div'); p.className = 'pager'; p.textContent = (i + 1) + ' / ' + slides.length; s.appendChild(p);
-    const bar = document.createElement('div'); bar.className = 'progress'; s.appendChild(bar);
-  });
+  const deck = document.getElementById('deck');
+  const slides = Array.from(deck.querySelectorAll('.slide'));
   let cur = 0;
-  function show(n) {
+  function show(n){
     cur = Math.max(0, Math.min(slides.length - 1, n));
-    slides.forEach((s, i) => {
-      s.classList.toggle('active', i === cur);
-      const bar = s.querySelector('.progress'); if (bar) bar.style.width = ((i + 1) / slides.length * 100) + '%';
-    });
-    history.replaceState(null, '', '#' + (cur + 1));
+    slides.forEach((s,i)=>s.classList.toggle('active', i===cur));
+    history.replaceState(null,'','#'+(cur+1));
   }
-  document.addEventListener('keydown', e => {
-    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(cur + 1); }
-    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(cur - 1); }
-    else if (e.key === 'Home') show(0);
-    else if (e.key === 'End') show(slides.length - 1);
-    else if (e.key === 'n' || e.key === 'N') { const n = slides[cur].querySelector('.notes'); if (n) n.classList.toggle('on'); }
+  function fit(){
+    const s = Math.min(window.innerWidth/1280, window.innerHeight/720);
+    deck.style.transform = 'scale('+s+')';
+  }
+  document.addEventListener('keydown', e=>{
+    if(['ArrowRight',' ','PageDown'].includes(e.key)){e.preventDefault();show(cur+1);}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();show(cur-1);}
+    else if(e.key==='Home'){show(0);}
+    else if(e.key==='End'){show(slides.length-1);}
+    else if(e.key==='n'||e.key==='N'){const n=slides[cur].querySelector('.notes'); if(n) n.classList.toggle('on');}
   });
-  document.addEventListener('click', e => {
+  deck.addEventListener('click', e=>{
     const x = e.clientX / window.innerWidth;
-    if (x > 0.7) show(cur + 1); else if (x < 0.3) show(cur - 1);
+    if(x>0.72) show(cur+1); else if(x<0.28) show(cur-1);
   });
-  // fit to viewport
-  function fit() {
-    const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
-    slides.forEach(el => { el.style.transform = 'scale(' + s + ')'; el.style.transformOrigin = 'center center'; });
-  }
-  window.addEventListener('resize', fit); fit();
-  show(parseInt(location.hash.slice(1) || '1', 10) - 1);
+  window.addEventListener('resize', fit);
+  fit();
+  show(parseInt(location.hash.slice(1)||'1',10)-1);
 </script>
-</body>
-</html>
+</body></html>
