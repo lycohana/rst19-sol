@@ -1,0 +1,234 @@
+{
+  "errors": [],
+  "slides": [
+    {
+      "page": 1,
+      "title": "从像素结构到可核查的测量结果",
+      "overflow": [],
+      "images": [
+        {
+          "src": "figs/frame_A.png",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "page": 2,
+      "title": "同一星图包含不同的信号形态",
+      "overflow": [],
+      "images": [
+        {
+          "src": "figs/frame_A.png",
+          "loaded": true
+        },
+        {
+          "src": "figs/frame_B.png",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "page": 3,
+      "title": "两条处理分支，共享同一观测输入",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 4,
+      "title": "真实像素如何转化为背景扣除图",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 5,
+      "title": "卷积响应由像素与核权重逐项相乘得到",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 6,
+      "title": "净通量由 65 个孔径像素的贡献累加得到",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 7,
+      "title": "质量通过是筛选结果，不等于恒星真值",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 8,
+      "title": "异常高码值的集中分布需要显式处理",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 9,
+      "title": "零点与色项属于两种不同的拟合模型",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 10,
+      "title": "形式误差、拟合散度与留出误差回答不同问题",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 11,
+      "title": "方向与长度变化会改变同一拖影的响应",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 12,
+      "title": "白化与匹配滤波构成 GLRT 响应",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 13,
+      "title": "阈值随搜索规模与精化次数改变",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 14,
+      "title": "相关噪声实验否定简单的 N/l² 假峰预测",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 15,
+      "title": "沿脊线检验限制均匀线段模型的适用性",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 16,
+      "title": "事件 A：方向可测，长度保留下界解释",
+      "overflow": [],
+      "images": [
+        {
+          "src": "figs/frame_A.png",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "page": 17,
+      "title": "单帧形态与多历元运动提供互补证据",
+      "overflow": [],
+      "images": [
+        {
+          "src": "figs/moving_contact.png",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "page": 18,
+      "title": "共线去重逐条判断真实候选是否属于同一脊线",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 19,
+      "title": "以测量定义与证据范围约束研究结论",
+      "overflow": [],
+      "images": []
+    },
+    {
+      "page": 20,
+      "title": "每一项定量结论均保留来源",
+      "overflow": [],
+      "images": []
+    }
+  ],
+  "numerical": {
+    "convolutionMaxAbsError": 2.842170943040401e-14,
+    "kernelCenterMaxAbsError": 5.684341886080801e-13,
+    "photometryAbsError": 0,
+    "photometryMInst": -6.073371182309154,
+    "thresholdCounts": [
+      {
+        "threshold": 2,
+        "count": 41
+      },
+      {
+        "threshold": 3,
+        "count": 25
+      },
+      {
+        "threshold": 4,
+        "count": 21
+      },
+      {
+        "threshold": 5,
+        "count": 19
+      },
+      {
+        "threshold": 6,
+        "count": 16
+      },
+      {
+        "threshold": 7,
+        "count": 13
+      },
+      {
+        "threshold": 8,
+        "count": 12
+      }
+    ],
+    "dedupFinalCount": 6,
+    "traceHypotheses": 73,
+    "mapSampleMaxAbsError": 6.394884621840902e-14
+  },
+  "checks": {
+    "keyboard": true,
+    "toc": true,
+    "thresholdChangesCount": true,
+    "step": true,
+    "realPlayback": true,
+    "kernelSelect": true,
+    "notes": true,
+    "paused": true,
+    "motionToggleStops": true,
+    "reducedMotion": true,
+    "noDecorativeAnimations": true
+  },
+  "pdf": "doc/07-答辩/答辩幻灯片.pdf",
+  "offline_file_url_test": true,
+  "local_references_checked": [
+    "figs/frame_A.png",
+    "figs/frame_A.png",
+    "figs/frame_B.png",
+    "figs/frame_A.png",
+    "figs/moving_contact.png"
+  ],
+  "pdf_page_count": 20,
+  "pdf_rendered_pages_checked": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20
+  ],
+  "verification_scope": "Browser numerical agreement, layout and interaction; newly exported Rust crop computations; retained full-frame records"
+}

@@ -1,0 +1,525 @@
+{
+  "generated_date": "2026-10-20",
+  "source_revision": "11cc421830c377ddd2598c2704f1c4a49e58995a",
+  "working_tree": "pre-existing modifications; current file hashes recorded separately from retained runs",
+  "scope": "Retained full-frame results plus newly captured numerical experiments on real FITS crops; no full-frame algorithm rerun",
+  "inputs": [
+    {
+      "path": "doc/07-答辩/figs/frame_A.png",
+      "sha256": "fb2aa709467651aedd942c3bfa24fe074dc6a7b89bfee25eb7ed3e79c82bd718"
+    },
+    {
+      "path": "doc/07-答辩/figs/frame_B.png",
+      "sha256": "8ef113d15b1d7c262e0d017da0eb982d3188494b03117cbd99870c2cc8812c51"
+    },
+    {
+      "path": "doc/05-论文答辩/latex-论文/figs/research/moving_contact.png",
+      "sha256": "864110f486911d83409bd5d7f7ed3ced3408d1a40cfa49e847cbb61baad8ee25"
+    },
+    {
+      "path": "doc/05-论文答辩/latex-论文/evidence/computed_results.json",
+      "sha256": "3920692905326c6eae3124b9e97c91c3823acd14e409e90bfb12b8f72bb6abac"
+    },
+    {
+      "path": "tmp/uni_A3/glrt.json",
+      "sha256": "e585b0ad4110df47295b1a41f563f949cae3948c86b0ddd54b353db713438968"
+    },
+    {
+      "path": "tmp/flag_on/02-rst19-sources/trail_catalog.json",
+      "sha256": "595116843b609e6335d27b759ef82d5dc1c871d376fd784d381b300a2488eedb"
+    },
+    {
+      "path": "tmp/glrt_val/h0_correlated.json",
+      "sha256": "5e8e36e0dc4b247eb9452cff15fd44bcd1e7874a9ccf6d2b38c5e905cf60c0c6"
+    },
+    {
+      "path": "tmp/glrt_val/h0_white.json",
+      "sha256": "9ce5f510d7cd864fa4736d039d8b5d56bc04d8fb8e4f1442f5482c83c51686e6"
+    },
+    {
+      "path": "backend/src/detection.rs",
+      "sha256": "445c2bb2c91db673a09107a2756534d61de4d84dc0f696451d2d4f0fc6fadad2"
+    },
+    {
+      "path": "backend/src/filtering.rs",
+      "sha256": "e445fed14d3903894399a2caa21693c2d6a916e961a13e239157b19c715cc9ab"
+    },
+    {
+      "path": "backend/src/measurement.rs",
+      "sha256": "cc3e33aa73a402b0aa4c5565b330daa858ee0da49b908e96b46aef0c4a55bf40"
+    },
+    {
+      "path": "backend/src/empirical_photometry.rs",
+      "sha256": "9586e055c71ad1a68e4d4081b6a31f1cbffa89be4ff5d6d70788ad7d4c545b4e"
+    },
+    {
+      "path": "backend/src/glrt.rs",
+      "sha256": "0bb647dc9b3de578f5177c105148013464edccb443b11e9788f43e6198ac845c"
+    },
+    {
+      "path": "backend/src/trail_catalog.rs",
+      "sha256": "a267f9e8cfa0491deb7075ca914a07ba787b05ebcae4d23620901298520c47e8"
+    },
+    {
+      "path": "backend/src/source_audit.rs",
+      "sha256": "952df7fbf2d5ae118c507e4f62dbf0eab3dba7a5c86195d9c9fea10a15d03477"
+    },
+    {
+      "path": "desktop/src/ui.rs",
+      "sha256": "48c3238c6559088e0be61e4b8a6bdc3d4da5d55f2b04e4fc7387ee57c63fe0d2"
+    },
+    {
+      "path": "desktop/src/task_suites.rs",
+      "sha256": "056c5a8ec7a73bf6ad45c6bd27eb8b7b696bc0950be4956ae41b9e05d0efef8c"
+    },
+    {
+      "path": "backend/src/sequence_registration.rs",
+      "sha256": "3926edfe2f67492513df54d7a4450afdd75f9bf74b6f1639140c8ff0ee6978aa"
+    },
+    {
+      "path": "backend/src/sequence_assignment.rs",
+      "sha256": "3fdb73a5dd5111e36fabc0626fdc58f99e7bcc6c121b78164d7625efbc5f9175"
+    },
+    {
+      "path": "backend/src/sequence_motion.rs",
+      "sha256": "7711ef7266644d802ec200a5da77e5a0e995013b7d76f34ea43b642c88940f57"
+    },
+    {
+      "path": "backend/src/sequence_motion_recovery.rs",
+      "sha256": "262da5822ae94d52382ab108717d0dfdcf9197add2a0e6fbc6625898ef4cccc9"
+    },
+    {
+      "path": "tools/glrt_validate/ref_glrt.py",
+      "sha256": "1fffb9a9c528f0484b289c8466f085b56cb94869f516f3bc1b6bb43eb9f43678"
+    },
+    {
+      "path": "tmp/flag_on/02-rst19-sources/source_catalog.csv",
+      "sha256": "0b2e48107164b9738428746fc98d2e488152d161f60ed3fe00aa7bdf4a5da0ef"
+    },
+    {
+      "path": "tmp/flag_off/02-rst19-sources/source_catalog.csv",
+      "sha256": "0b2e48107164b9738428746fc98d2e488152d161f60ed3fe00aa7bdf4a5da0ef"
+    }
+  ],
+  "results": {
+    "source_count": 66469,
+    "quality_count": 27552,
+    "photometry": {
+      "zero_point": {
+        "in_sample_scatter_mag": 0.1417140144259543,
+        "n": 18985,
+        "n_clipped": 3145,
+        "n_inliers": 18985,
+        "residual_scaled_standard_error": 0.0008311139913182912,
+        "sigma": 0.0004992162846207803,
+        "sigma_scope": "formal conditional WLS; does not include spatial/common systematics",
+        "value": 20.423197241862642
+      },
+      "color_term": {
+        "in_sample_scatter_mag": 0.1401410107818891,
+        "n": 18979,
+        "n_clipped": 3058,
+        "n_inliers": 18979,
+        "sigma": 0.001569886744162212,
+        "value": -0.08520130202190587
+      },
+      "holdout": {
+        "colour_term_lower_holdout_rmse_not_significance_test": true,
+        "kfold": 5,
+        "order0": {
+          "chi_square": 52617.342370281214,
+          "holdout_fold_sigma": [
+            0.3232159036894276,
+            0.3008210250247566,
+            0.31258861386455067,
+            0.33746415736106444,
+            0.3108046718731188
+          ],
+          "holdout_n": 22037,
+          "holdout_n_all": 22037,
+          "holdout_sigma_all_points_mag": 0.32653877413660465,
+          "holdout_sigma_mag": 0.32653877413660465,
+          "holdout_sigma_normalized": 4.569839760130743,
+          "in_sample_scatter_mag": 0.14171488626634987,
+          "n_clipped": 3053,
+          "n_inliers": 18984,
+          "n_used": 18984,
+          "zero_point": 20.423196627802472,
+          "zero_point_error": 0.0004992175235738231
+        },
+        "order1": {
+          "chi_square": 50950.61013778257,
+          "holdout_fold_sigma": [
+            0.32257489918661125,
+            0.3001093898315105,
+            0.3116984541036579,
+            0.3367262593906237,
+            0.3104207532915926
+          ],
+          "holdout_n": 22037,
+          "holdout_n_all": 22037,
+          "holdout_sigma_all_points_mag": 0.3257700891037227,
+          "holdout_sigma_mag": 0.3257700891037227,
+          "holdout_sigma_normalized": 4.558092683506829,
+          "in_sample_scatter_mag": 0.1401410107818891,
+          "n_clipped": 3058,
+          "n_inliers": 18979,
+          "n_used": 18979,
+          "zero_point": 20.500818469770394,
+          "zero_point_error": 0.001520749281895342
+        },
+        "sigma_out_improvement_mag": 0.0007686850328819661,
+        "sigma_out_note": "all colour-complete held-out stars; no global inlier preselection or test-residual filtering",
+        "sigma_out_order0_mag": 0.32653877413660465,
+        "sigma_out_order1_mag": 0.3257700891037227,
+        "sigma_out_ratio": 0.9976459609278732
+      },
+      "target": {
+        "aperture_pixels": 50.25,
+        "background": 20.0,
+        "catalog_flux": 219.0,
+        "catalog_flux_error": 42.851250899928104,
+        "catalog_noise": 4.896160392365757,
+        "catalog_peak": 45.0,
+        "catalog_snr": 4.901800201934058,
+        "detection_id": "63263",
+        "extrapolation_flags": [
+          "COLOR_UNKNOWN_NO_COUNTERPART"
+        ],
+        "flux": 268.75,
+        "flux_error": 53.74710580556842,
+        "g_emp": 14.349826059553488,
+        "g_emp_note": "order-0 zero point used because target colour is unknown; independent of gain availability; not an absolute-accuracy claim",
+        "image_x": 2929.8555143839876,
+        "image_y": 3915.2170822163916,
+        "magnitude_instrumental": -6.073371182309154,
+        "noise": 6.590684501130135,
+        "peak": 68.0,
+        "quality_class": "quality",
+        "quality_passed": true,
+        "saturated": false,
+        "sigma_magnitude_instrumental": 0.2171283079929512
+      },
+      "spatial_blocks": {
+        "blocks_used": 64,
+        "grid": 8,
+        "leave_one_block_out_max_abs_offset_mag": 0.0550648781612173,
+        "leave_one_block_out_sigma_out_spread_mag": 0.023020460961672734
+      }
+    },
+    "peak_counts_all": {
+      "3990": 75,
+      "3991": 351,
+      "3992": 379,
+      "3993": 75
+    },
+    "prototype": {
+      "detection": {
+        "L_px": 594.0,
+        "coarse_lambda": 7923.1081,
+        "duty": 0.9867,
+        "fine_lambda": 21562.0817,
+        "lambda": 21562.0817,
+        "lr": 20200.1728,
+        "pa_deg": 96.6129,
+        "rank": 1,
+        "refined": true,
+        "scatter": 0.0606,
+        "sigma_x_px": 6.7e-05,
+        "uniform": true,
+        "x": 1550.1865,
+        "y": 30.5927
+      },
+      "meta": {
+        "gumbel": {
+          "beta": 0.1977,
+          "mu": 2.6818
+        },
+        "image": "doc/00-项目资料/原始数据/20260330163205413_9901.fits",
+        "kernels": {
+          "lengths_px": [
+            16.0,
+            32.0,
+            64.0,
+            128.0,
+            256.0,
+            512.0,
+            1024.0
+          ],
+          "n_angles": 24,
+          "n_hypotheses": 169,
+          "n_hypotheses_total": 4481
+        },
+        "meta": {
+          "calib_size": 1024,
+          "edge_normalisation": "kernel norm uses only the in-frame samples (position dependent)",
+          "engine": "line",
+          "lambda_floor": 2.5,
+          "margin_px": 22,
+          "n_eff_definition": "interior pixels / correlation area of the calibrated Lambda field",
+          "noise_blocks_used": 98,
+          "pa_deg_definition": "atan2(dy, dx) of the segment axis in pixel index coordinates, mod 180 deg",
+          "refine_inflation": 1.6547,
+          "refine_trials": 4312,
+          "std_lambda": 192.8513,
+          "std_z_point": 23.235,
+          "timings_s": [
+            [
+              "background_noise",
+              0.257
+            ],
+            [
+              "whiten",
+              0.746
+            ],
+            [
+              "matched_filter",
+              9.404
+            ],
+            [
+              "interior_stats",
+              0.047
+            ],
+            [
+              "calibration",
+              0.849
+            ],
+            [
+              "detections",
+              2.58
+            ],
+            [
+              "total",
+              13.883
+            ]
+          ]
+        },
+        "n_eff": 1119390.0,
+        "noise_correlation_length_px": 2.0351,
+        "refinement": {
+          "L_step_frac": 1.05,
+          "crop_px": 1536,
+          "enabled": true,
+          "phi_half_range_deg": 5.0,
+          "phi_step_deg": 0.25,
+          "refined_detections": 178,
+          "threshold_inflation": 1.6547,
+          "thresholds_coarse": {
+            "fa_1": 5.4357,
+            "fa_10": 4.9804,
+            "fa_100": 4.5251
+          },
+          "trials": 4312,
+          "trials_definition": "fine trials absorbed by the single most refined candidate"
+        },
+        "shape": [
+          4096,
+          4096
+        ],
+        "sigma_adu": 7.8228,
+        "thresholds": {
+          "fa_1": 7.0904,
+          "fa_10": 6.6351,
+          "fa_100": 6.1799
+        }
+      }
+    },
+    "production_trail_catalog": {
+      "n_hypotheses": 169,
+      "n_long_candidates": 1064,
+      "n_trails": 3,
+      "psf_fwhm": 2.1513,
+      "thresholds": {
+        "fa_1": 7.0884,
+        "fa_10": 6.63,
+        "fa_100": 6.1716
+      },
+      "timings_s": {
+        "detection": 74.4,
+        "trail_catalog": 14.9
+      },
+      "trails": [
+        {
+          "L_px": 594.0,
+          "duty": 0.99,
+          "lambda": 21825.9868,
+          "lr": 20411.9694,
+          "pa_deg": 96.6149,
+          "scatter": 0.0576,
+          "x": 1550.2058,
+          "y": 30.5949
+        },
+        {
+          "L_px": 703.9135,
+          "duty": 0.8824,
+          "lambda": 114.893,
+          "lr": 114.4048,
+          "pa_deg": 44.1998,
+          "scatter": 0.1712,
+          "x": 3753.8198,
+          "y": 2517.8938
+        },
+        {
+          "L_px": 616.0189,
+          "duty": 1.0,
+          "lambda": 96.7769,
+          "lr": 96.8497,
+          "pa_deg": 135.1882,
+          "scatter": 0.2362,
+          "x": 275.7899,
+          "y": 197.2487
+        }
+      ]
+    },
+    "correlated_noise": [
+      {
+        "l": 1.0,
+        "kind": "boxcar",
+        "n_real": 8,
+        "peaks_above_4sigma_mean": 538.5,
+        "peaks_above_4sigma_std": 14.726070176973314,
+        "peaks_above_4sigma_min": 521,
+        "peaks_above_4sigma_max": 562,
+        "pixels_above_4sigma_mean": 538.625,
+        "peaks_above_5sigma_mean": 4.875,
+        "std_mean": 1.0000000670552254,
+        "z_point_std_mean": 0.9998953193426132,
+        "z_point_std_min": 0.9995308518409729,
+        "z_point_std_max": 1.0003674030303955,
+        "z_peaks_above_4sigma_mean": 433.125,
+        "prediction_neff": 531.3552652224896,
+        "prediction_neff_5sigma": 4.809215338156773,
+        "ratio_peaks_over_prediction": 1.0134462481980275,
+        "ratio_pixels_over_prediction": 1.013681495702252,
+        "n_eff_implied_by_peaks": 17002806.61040792
+      },
+      {
+        "l": 2.0,
+        "kind": "boxcar",
+        "n_real": 8,
+        "peaks_above_4sigma_mean": 515.25,
+        "peaks_above_4sigma_std": 19.26321438834725,
+        "peaks_above_4sigma_min": 480,
+        "peaks_above_4sigma_max": 536,
+        "pixels_above_4sigma_mean": 531.625,
+        "peaks_above_5sigma_mean": 5.625,
+        "std_mean": 0.9999997615814209,
+        "z_point_std_mean": 1.7147711515426636,
+        "z_point_std_min": 1.71448814868927,
+        "z_point_std_max": 1.715305209159851,
+        "z_peaks_above_4sigma_mean": 63601.625,
+        "prediction_neff": 132.8388163056224,
+        "prediction_neff_5sigma": 1.2023038345391932,
+        "ratio_peaks_over_prediction": 3.8787608496492756,
+        "ratio_pixels_over_prediction": 4.002030541862777,
+        "n_eff_implied_by_peaks": 16268702.146727355
+      },
+      {
+        "l": 3.0,
+        "kind": "boxcar",
+        "n_real": 8,
+        "peaks_above_4sigma_mean": 468.125,
+        "peaks_above_4sigma_std": 34.05641328317305,
+        "peaks_above_4sigma_min": 417,
+        "peaks_above_4sigma_max": 512,
+        "pixels_above_4sigma_mean": 534.125,
+        "peaks_above_5sigma_mean": 5.25,
+        "std_mean": 0.9999999776482582,
+        "z_point_std_mean": 2.1269370019435883,
+        "z_point_std_min": 2.126420497894287,
+        "z_point_std_max": 2.1275675296783447,
+        "z_peaks_above_4sigma_mean": 105055.375,
+        "prediction_neff": 59.03947391360995,
+        "prediction_neff_5sigma": 0.534357259795197,
+        "ratio_peaks_over_prediction": 7.929017129878023,
+        "ratio_pixels_over_prediction": 9.046913269951613,
+        "n_eff_implied_by_peaks": 14780759.22840707
+      },
+      {
+        "l": 5.0,
+        "kind": "boxcar",
+        "n_real": 8,
+        "peaks_above_4sigma_mean": 357.875,
+        "peaks_above_4sigma_std": 25.210187849926296,
+        "peaks_above_4sigma_min": 324,
+        "peaks_above_4sigma_max": 398,
+        "pixels_above_4sigma_mean": 507.25,
+        "peaks_above_5sigma_mean": 4.375,
+        "std_mean": 1.0000001341104507,
+        "z_point_std_mean": 2.4983557760715485,
+        "z_point_std_min": 2.4973268508911133,
+        "z_point_std_max": 2.4994008541107178,
+        "z_peaks_above_4sigma_mean": 91168.375,
+        "prediction_neff": 21.254210608899584,
+        "prediction_neff_5sigma": 0.1923686135262709,
+        "ratio_peaks_over_prediction": 16.837840114850007,
+        "ratio_pixels_over_prediction": 23.86585930354919,
+        "n_eff_implied_by_peaks": 11299683.223212134
+      }
+    ],
+    "on_off_source_catalog_byte_identical": true
+  },
+  "science_corrections": [
+    "Holdout uses all colour-complete held-out samples: 0.32654 / 0.32577 mag",
+    "M0 zero point 20.4232 and M1 zero point 20.5008 must remain separate",
+    "along_profile filters values by amplitude without enforcing a contiguous interval",
+    "Lambda and LR are implemented response statistics, not astrophysical identity significance",
+    "Pixel index PA is not celestial PA",
+    "Standalone PSF 1.93 and production PSF 2.1513 runs are separate"
+  ],
+  "numerical_animation": {
+    "trace_path": "evidence/science-traces.json",
+    "sha256": "08933fde5a078bfd6920a29996e27ba585df1fda6bdbede25c791e65bfcc48bf",
+    "provenance": {
+      "scope": "New numerical exports from source copies; original Rust files unchanged",
+      "frame": "doc/00-项目资料/原始数据/20260330163205413_9901.fits",
+      "frame_sha256": "6d6926a0546a5e2d28c6e76762bf72127ff3f0e37b589993eb381881bfe0acc6",
+      "source_bindings": [
+        {
+          "path": "backend/src/glrt.rs",
+          "sha256": "0bb647dc9b3de578f5177c105148013464edccb443b11e9788f43e6198ac845c"
+        },
+        {
+          "path": "backend/src/filtering.rs",
+          "sha256": "e445fed14d3903894399a2caa21693c2d6a916e961a13e239157b19c715cc9ab"
+        },
+        {
+          "path": "backend/src/statistics.rs",
+          "sha256": "ff81c3be85b1b2ae4c19a10c12e68b10a49c1d7f07b6139080baef59b00139b0"
+        },
+        {
+          "path": "backend/src/empirical_photometry.rs",
+          "sha256": "9586e055c71ad1a68e4d4081b6a31f1cbffa89be4ff5d6d70788ad7d4c545b4e"
+        }
+      ],
+      "linked_libraries": [
+        {
+          "path": "backend/target/release/deps/librst19_core-a5e700c821403a02.rlib",
+          "sha256": "efc76354192c92394f393b5b28dfac31aa99674639c71e7f6ca35bb9bf3aa6da"
+        },
+        {
+          "path": "backend/target/release/deps/libserde-f1201d439b5b810b.rlib",
+          "sha256": "5c9c831e7aaeee33c6d10d5a689695691ac0b4c0cfffe45bce5e981384ba1246"
+        },
+        {
+          "path": "backend/target/release/deps/libserde_json-4d5a7d68324aca4e.rlib",
+          "sha256": "589df1f0da623ff8264ed0d29fde6444b06898797faa63b54a1e54cd7a5632ab"
+        },
+        {
+          "path": "backend/target/release/deps/libsha2-277e7a5c97868067.rlib",
+          "sha256": "75b945c81c0f1432fb1b32b2ed52ff2ae5e726813cf61d0309586268f2c15736"
+        },
+        {
+          "path": "backend/target/release/deps/libcsv-bd2d4e4d6bb3c4af.rlib",
+          "sha256": "8ee70bcde6c90de2ac8c789c8651b559b865910c54f3ecc1022c407851facbc6"
+        }
+      ],
+      "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
+      "exporter_sha256": "66c6423c373ef8de8802ce9419ccad789aaa228f4016d9dcc64168c8c911a5b6",
+      "compiled_capture_sha256": "a88ca89a1645580b31ed5f47492e6dafec687c22edb5a822f4d257c97e60a18d",
+      "capture_source_sha256": "8852c1bd1079da4853291fce587e2346c5eb7ea0fe917346f03c01004da80a08",
+      "dedup_input_sha256": "e585b0ad4110df47295b1a41f563f949cae3948c86b0ddd54b353db713438968"
+    },
+    "ornamental_animations": "removed"
+  }
+}

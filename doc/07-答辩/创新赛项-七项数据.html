@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>RST19 · 答辩</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#475569; --faint:#94a3b8; --line:#e2e8f0;
+    --accent:#1d4ed8; --red:#b91c1c; --ok:#15803d; --paper:#ffffff; --soft:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0b1220;font-family:"Source Han Sans SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+  #stage{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden}
+  #deck{width:1280px;height:720px;position:relative;transform-origin:center center}
+  .slide{position:absolute;inset:0;background:var(--paper);color:var(--ink);padding:40px 60px 58px;display:none;flex-direction:column;justify-content:center;border-radius:4px;overflow:hidden}
+  .slide.active{display:flex}
+  .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  h1{font-size:33px;line-height:1.22;margin:0;font-weight:750;letter-spacing:-.2px}
+  .thesis{font-size:17.5px;color:var(--muted);line-height:1.5;margin:12px 0 18px;padding-left:14px;border-left:3px solid var(--accent)}
+  .body{display:grid;gap:16px;margin-top:4px;align-items:start}
+  .c2{grid-template-columns:1fr 1fr}
+  .c3{grid-template-columns:1fr 1fr 1fr}
+  .c2u{grid-template-columns:1.35fr 1fr}
+  .c2l{grid-template-columns:1fr 1.35fr}
+  .panel{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:22px 24px;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start}
+  .panel > :nth-child(2){margin-top:0}
+  .panel p:last-child, .panel ul:last-child, .panel table:last-child{margin-bottom:0}
+  .panel .fill{flex:1;min-height:0;display:flex;align-items:flex-end}
+  .panel h3{margin:0 0 12px;font-size:15px;color:var(--accent);font-weight:750;letter-spacing:.02em}
+  .panel p{margin:0 0 10px;font-size:17px;line-height:1.8}
+  .panel p:last-child{margin-bottom:0}
+  .panel p.kpi, .kpi{font-size:42px;font-weight:780;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.05;margin:2px 0 6px}
+  .kpi small{font-size:15px;font-weight:600;color:var(--muted);letter-spacing:0}
+  .num{font-variant-numeric:tabular-nums}
+  .ok{color:var(--ok);font-weight:750}
+  .bad{color:var(--red);font-weight:750}
+  .warn{color:#b45309;font-weight:750}
+  .mono{font-family:Consolas,"Cascadia Mono",ui-monospace,monospace;font-size:13px}
+  ul{margin:2px 0 0 17px;padding:0}
+  li{font-size:16.5px;line-height:1.8;margin-bottom:6px}
+  li:last-child{margin-bottom:0}
+  table{border-collapse:collapse;width:100%;font-size:14.5px}
+  th,td{border-bottom:1px solid var(--line);padding:8px 9px;text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:650;background:#eef3f9}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .takeaway{margin-top:18px;margin-bottom:4px;background:#eef4ff;border-left:4px solid var(--accent);padding:14px 18px;font-size:16px;line-height:1.6;color:#0f172a;border-radius:0 8px 8px 0}
+  .foot{margin-top:14px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:11px;color:var(--faint)}
+  .fig{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+  .fig img{max-width:100%;max-height:470px;width:auto;height:auto;object-fit:contain;border-radius:6px;border:1px solid var(--line)}
+  .fig .cap{font-size:11.5px;color:var(--faint);text-align:center}
+  .cover{background:radial-gradient(1200px 600px at 12% 8%,#1e3a8a 0%,#0b1220 62%);color:#fff;padding:0}
+  .cover .inner{display:grid;grid-template-columns:1.5fr .8fr;height:100%}
+  .cover .left{padding:70px 0 60px 64px;display:flex;flex-direction:column;justify-content:center}
+  .cover h1{font-size:46px;color:#fff;letter-spacing:-1px;line-height:1.16}
+  .cover .sub{font-size:18px;color:#bfdbfe;margin-top:14px}
+  .cover .pts{margin-top:34px;font-size:15.5px;line-height:2;color:#e2e8f0}
+  .cover .meta{margin-top:38px;font-size:12.5px;color:#93c5fd;letter-spacing:.04em}
+  .cover .right{position:relative;overflow:hidden}
+  .cover .right img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.92;mask-image:linear-gradient(90deg,transparent 0%,#000 28%)}
+  .big{font-size:44px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+  .tagline{font-size:12px;color:var(--muted);margin-top:4px}
+  .rule{height:3px;width:64px;background:var(--accent);border-radius:2px;margin:14px 0 0}
+  .pager{position:absolute;right:22px;bottom:12px;font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .sec{position:absolute;left:60px;bottom:12px;font-size:11px;color:var(--faint);letter-spacing:.08em}
+  .notes{display:none;position:absolute;left:0;right:0;bottom:0;background:#0f172a;color:#e2e8f0;font-size:13px;line-height:1.55;padding:12px 18px;max-height:40%;overflow:auto}
+  .notes.on{display:block}
+  @media print{
+    html,body{background:#fff}
+    #stage{position:static;display:block;overflow:visible}
+    #deck{transform:none !important;width:auto;height:auto}
+    .slide{position:relative;display:flex !important;page-break-after:always;break-after:page;border-radius:0}
+    .notes{display:none !important}
+  }
+  @page{size:1280px 720px;margin:0}
+</style>
+</head>
+<body><div id="stage"><div id="deck"><section class="slide cover">
+  <div class="inner">
+    <div class="left">
+      <div style="font-size:12px;letter-spacing:.22em;color:#93c5fd;margin-bottom:18px">创新赛项 · 30 分</div>
+      <h1>从图像中提取的七项<br>可用态势感知数据</h1>
+      <div class="sub">Seven Operationally Usable Data Products Extracted from Fifteen Consecutive Frames</div>
+      <div class="pts">
+        ① 单帧曲率测距：一条拖影反演距离 461 km<br>
+        ② 曝光内光变：4.9 ms 时间分辨，判别姿态稳定性<br>
+        ③ 速率—星等包络：曝光翻倍，动目标反而变暗 0.75 mag<br>
+        ④ 尺寸阶梯：覆盖 1–6.5 cm 致命碎片窗口<br>
+        ⑤ 偶然符合预算：关联帧数下界的概率依据<br>
+        ⑥ 叠加深场实测 0.66 mag（否证 1.9）<br>
+        ⑦ 码值带修正：回收 425 颗亮星
+      </div>
+    </div>
+    <div class="right"><img src="figs/trail.png" alt="第 1 帧长拖影"></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">创新 · 总览</div>
+  <h1>七项数据与评分对应</h1>
+  <div class="thesis">评分要求“≥4 项创新有效分析数据”，本文给出 7 项；每项均标明来源、方法与所改变的具体决策。</div>
+  <div class="body c3">
+    <div class="panel"><h3>数据产品</h3>
+      <ul><li>单帧曲率测距</li><li>曝光内光变曲线</li><li>速率—星等探测包络</li><li>碎片尺寸阶梯与扫描节拍</li><li>偶然符合率预算</li><li>多帧叠加深场实测</li><li>码值带修正与亮星回收</li></ul>
+    </div>
+    <div class="panel"><h3>所改变的具体决策</h3>
+      <ul><li>目标距离量级由单帧给出</li><li>姿态稳定性由单帧判别</li><li>阈值按拖影档位分设</li><li>观测策略：加帧不加曝光</li><li>关联帧数下界 k=6（工程 8）</li><li>叠加增益不再按 √N 估计</li><li>饱和判据改为窄带掩膜</li></ul>
+    </div>
+    <div class="panel"><h3>评分覆盖</h3>
+      <ul><li>创新分析（15 分）：7 项 ≥ 4 项，满分档</li><li>实用性（10 分）：7 项均指向值班或任务设计参数</li><li>科学性（5 分）：每项给出方法与不确定度</li></ul>
+    </div>
+  </div>
+  <div class="takeaway">七项均可在本仓库命令下逐条复算，脚本随作品提交。</div>
+  <div class="sec">Overview</div><div class="pager">2 / 9</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">创新 1 · 测距</div>
+  <h1>单帧曲率测距：由拖影弯曲反演距离</h1>
+  <div class="thesis">拖影的曲率来自曝光期间视线方向的转动；由脊线二次项可得最近点时刻与距离量级，无需多帧关联。</div>
+  <div class="body c2">
+    <div class="panel"><h3>方法</h3>
+      <p>对脊线做二次拟合 x(y) = a₀ + a₁y + a₂y²，取 a₂ 得弧矢 s ≈ a₂·L²/8。</p>
+      <p>弧矢与角速度比联系：α = ω/v = 8s/L²；最近点 u = ω·t_CA；距离 Δ = v/ω。</p>
+      <p>全部输入仅来自单帧像素。</p>
+    </div>
+    <div class="panel"><h3>数值</h3>
+      <p>a₂ = −5.375×10⁻⁷ ± 2.27×10⁻⁷；s = −0.046 ± 0.020 px。</p>
+      <p>α = 6.7×10⁻⁶ ± 2.8×10⁻⁶；u = 0.0127 ± 0.0054。</p>
+      <p class="kpi">Δ = 461–485 km</p>
+      <p>t_CA = 0.78 ± 0.33 s，位于本次 1.5 s 曝光之内。</p>
+    </div>
+  </div>
+  <div class="takeaway">决策：单站单帧即可给出目标距离量级，用于快速分类与测轨初值。</div>
+  <div class="sec">Innovation 1</div><div class="pager">3 / 9</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">创新 2 · 时域</div>
+  <h1>曝光内光变曲线：单帧的时间分辨能力</h1>
+  <div class="thesis">沿拖影方向的位置对应曝光内的时间；由此可在单帧内获得毫秒级光变曲线，用于判别姿态稳定性。</div>
+  <div class="body c2">
+    <div class="panel"><h3>方法与分辨率</h3>
+      <p>时间分辨 t_res = 1.93·T_exp/L（1.93 为 PSF 的 FWHM）。</p>
+      <p>事件 A（L = 594 px）：t_res = <b>4.9 ms</b>，Nyquist <b>103 Hz</b>。</p>
+      <p>事件 B：t_res ≈ 50 ms。</p>
+    </div>
+    <div class="panel"><h3>结果</h3>
+      <p>A：30 行分箱轮廓离散 1.2%，去趋势 rms 3.8%（光子极限 0.38%）⇒ 调制度 3σ 上限 11%，判为无翻滚。</p>
+      <p>B：流量 116 087 → 164 003 DN，即 <b>+0.375 mag / 7.53 s</b>；独立 60×60 定框复核 +0.373 mag（一致 0.4%）。</p>
+      <p>飞掠距离项仅 0.025 mag ⇒ 内禀占 93% ⇒ 非三轴稳定，P_rot ≳ 15 s。</p>
+    </div>
+  </div>
+  <div class="takeaway">决策：仅凭单帧拖影即可判别卫星姿态稳定性，区分稳定平台与翻滚碎片。</div>
+  <div class="sec">Innovation 2</div><div class="pager">4 / 9</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">创新 3 · 包络</div>
+  <h1>速率—星等探测包络</h1>
+  <div class="thesis">探测极限随目标在曝光期间的位移而下降；4800 次注入给出该依赖关系，并给出与直觉相反的曝光策略结论。</div>
+  <div class="body c2">
+    <div class="panel"><h3>包络</h3>
+      <table>
+        <tr><th>曝光内拖影 L (px)</th><th class="n">5σ 极限 (mag)</th></tr>
+        <tr><td>1（准静态）</td><td class="n">14.83</td></tr>
+        <tr><td>57（事件 B）</td><td class="n">12.64</td></tr>
+        <tr><td>90（快速）</td><td class="n">12.29</td></tr>
+      </table>
+      <p>退化 2.5 mag；注入-恢复 4800 次，600 位置 × 8 长度档。</p>
+    </div>
+    <div class="panel"><h3>与直觉相反的结论</h3>
+      <p>曝光时间翻倍：静态目标 <b>+0.375 mag</b>，动目标 <b>−0.75 mag</b>。</p>
+      <p>故对动目标应“加帧不加曝光”：6.3 倍帧数可换 +1 mag。</p>
+      <p>阈值亦应按档位分设：L ≥ 24 px 时采用 ≥7σ。</p>
+    </div>
+  </div>
+  <div class="takeaway">决策：动目标观测以帧数换深度；单帧阈值随拖影长度分档。</div>
+  <div class="sec">Innovation 3</div><div class="pager">5 / 9</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">创新 4 · 尺寸</div>
+  <h1>碎片尺寸阶梯与扫描节拍</h1>
+  <div class="thesis">由极限星等与假设反照率可换算可测最小尺寸；结合视场与曝光节拍可给出值班可用的扫描周期。</div>
+  <div class="body c2">
+    <div class="panel"><h3>可测尺寸（500 km，A = 0.2）</h3>
+      <p>最小可测：<b>1.21 cm</b>（α = 0°，漫反射）至 <b>2.14 cm</b>（α = 90°）。</p>
+      <p>1 cm 目标仅在 ≤ 233 km 可测：500 km 层完全不可见。</p>
+      <p>饱和边界 m = 10.95 等 ⇒ <b>6.48 cm</b>；≥10 cm 目标过曝，需 HDR 双增益。</p>
+      <p>结论：本载荷覆盖“1–6.5 cm、未编目但致命”的碎片窗口。</p>
+    </div>
+    <div class="panel"><h3>扫描节拍与完备度</h3>
+      <p>500 km 层 10 cm 目标全扫：<b>215 指向 / 16.1 min</b>（含 3 s 换向）⇒ 每夜 33 遍。</p>
+      <p>50% 完备度：点源 15.1；L = 6 px 15.9；20 px 14.6；58 px 12.8；160 px 12.3。</p>
+      <p>峰值检测改为沿迹匹配滤波可白得 <b>+1.5 mag</b>。</p>
+    </div>
+  </div>
+  <div class="takeaway">决策：给出“能看见多大碎片”与“多久扫一遍”两个值班参数。</div>
+  <div class="sec">Innovation 4</div><div class="pager">6 / 9</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">创新 5 · 关联</div>
+  <h1>偶然符合率预算</h1>
+  <div class="thesis">多帧关联的可靠性取决于偶然链的概率；由实测伪峰密度可给出关联帧数的下界。</div>
+  <div class="body c2">
+    <div class="panel"><h3>实测伪峰密度</h3>
+      <p>5σ 阈值下伪峰 1.0–2.2×10⁴ 个/帧，较高斯预期高 2–4×10³ 倍（相关噪声与残余结构所致）。</p>
+      <p>据此计算 k 帧关联的偶然链期望数：</p>
+      <table>
+        <tr><th>关联帧数 k</th><th class="n">偶然链 / 序列</th></tr>
+        <tr><td>3</td><td class="n">10 – 73 条</td></tr>
+        <tr><td>6</td><td class="n">3×10⁻⁴ – 1.6×10⁻²</td></tr>
+        <tr><td>8</td><td class="n">≤ 6×10⁻⁵</td></tr>
+      </table>
+    </div>
+    <div class="panel"><h3>结论与用途</h3>
+      <p>最小关联帧数取 <b>6</b>，工程取 <b>8</b>。</p>
+      <p>事件 B 由 7 帧关联，伪迹概率 ≤ 10⁻³，可排除偶然成因。</p>
+      <p>单帧告警门限须 ≥ 6.58σ：4σ 在整夜累积下将给出 1.3×10⁶ 次假警。</p>
+    </div>
+  </div>
+  <div class="takeaway">决策：关联帧数与告警门限由概率预算确定，而非经验取值。</div>
+  <div class="sec">Innovation 5</div><div class="pager">7 / 9</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">创新 6 · 叠加</div>
+  <h1>多帧叠加深度的实测与上限</h1>
+  <div class="thesis">叠加深度不能用 √N 估计；15 帧实测只有 0.66 mag，其原因是存在不随帧数下降的固定结构。</div>
+  <div class="body c2l">
+    <div class="panel"><h3>实测</h3>
+      <p>单帧 σ = 7.413 DN，15 帧中值叠加后 σ = <b>3.163 DN</b>，比值 <b>2.34</b>；白噪声预期 3.87。</p>
+      <p>反解不随帧数下降的固定结构 <b>2.52 DN</b>（占单帧噪声 34%），lag-1 自相关 <b>+0.80</b>（白场对照 +0.002）。</p>
+      <p>注入-恢复 50% 完备度：118 DN（15.68 等）→ 64 DN（16.34 等），即 <b>0.66 mag</b>。</p>
+      <p class="bad">若声称 1.9 mag，需噪声下降 5.8 倍，超过 √15 = 3.87 倍的理论上限——可直接否证。</p>
+    </div>
+    <div class="panel"><h3>决策与限制</h3>
+      <p>多帧叠加的深度增益须实测标定，不能按帧数外推。</p>
+      <p>固定结构来源于成团天光或平坦场图样，而非探测器噪声；如需进一步提高深度，须先扣除该结构。</p>
+    </div>
+  </div>
+  <div class="takeaway">决策：叠加深度按实测给出，并在报告中说明其物理上限。</div>
+  <div class="sec">Innovation 6</div><div class="pager">8 / 9</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">创新 7 · 数据质量</div>
+  <h1>码值带修正与亮星回收</h1>
+  <div class="thesis">全帧存在宽 8 DN 的码值聚集带；它既非饱和上限，也不局限于拖影。将判据由截断电平改为窄带掩膜可回收亮星。</div>
+  <div class="body c2">
+    <div class="panel"><h3>全帧像素级证据</h3>
+      <table>
+        <tr><th>检查</th><th class="n">结果</th></tr>
+        <tr><td>[3988, 3996) 像元</td><td class="n">2 658</td></tr>
+        <tr><td>[3996, 4000) 像元</td><td class="n">0</td></tr>
+        <tr><td>&gt; 4000 像元</td><td class="n">2 522</td></tr>
+        <tr><td>全帧最大值</td><td class="n">32 750 DN</td></tr>
+        <tr><td>该带落在拖影 6 px 内</td><td class="n">18.5%</td></tr>
+      </table>
+      <p>该带像元分布于全帧（x 8–4091、y 1–4093），峰值落在带内的源 883 个，带之上 582 个。</p>
+    </div>
+    <div class="panel"><h3>修正与收益</h3>
+      <p>判据由“峰值 ≥ 3 990 DN 即剔除”改为“掩膜 [3988, 3996) 窄带”。</p>
+      <p>可回收 <b>425</b> 个峰值 4 000–20 000 DN 的亮星，定标下限由 G = 9.48 恢复至约 <b>G ≈ 8.0</b>。</p>
+      <p class="tagline">成因未明（候选：ADC 分段、遥测叠加、压缩伪迹），本文只主张现象与影响，不主张机制。</p>
+    </div>
+  </div>
+  <div class="takeaway">决策：数据质量判据由截断电平改为窄带掩膜，直接增加可用于定标的亮星。</div>
+  <div class="sec">Innovation 7</div><div class="pager">9 / 9</div>
+</section></div></div>
+<script>
+  const deck = document.getElementById('deck');
+  const slides = Array.from(deck.querySelectorAll('.slide'));
+  let cur = 0;
+  function show(n){
+    cur = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s,i)=>s.classList.toggle('active', i===cur));
+    history.replaceState(null,'','#'+(cur+1));
+  }
+  function fit(){
+    const s = Math.min(window.innerWidth/1280, window.innerHeight/720);
+    deck.style.transform = 'scale('+s+')';
+  }
+  document.addEventListener('keydown', e=>{
+    if(['ArrowRight',' ','PageDown'].includes(e.key)){e.preventDefault();show(cur+1);}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();show(cur-1);}
+    else if(e.key==='Home'){show(0);}
+    else if(e.key==='End'){show(slides.length-1);}
+    else if(e.key==='n'||e.key==='N'){const n=slides[cur].querySelector('.notes'); if(n) n.classList.toggle('on');}
+  });
+  deck.addEventListener('click', e=>{
+    const x = e.clientX / window.innerWidth;
+    if(x>0.72) show(cur+1); else if(x<0.28) show(cur-1);
+  });
+  window.addEventListener('resize', fit);
+  fit();
+  show(parseInt(location.hash.slice(1)||'1',10)-1);
+</script>
+</body></html>

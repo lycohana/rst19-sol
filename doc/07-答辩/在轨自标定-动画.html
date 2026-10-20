@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>在轨自标定 · 动画演示</title>
+<style>
+  :root{--ink:#e8eef6;--muted:#93a4b8;--cyan:#38e1ff;--orange:#ffb057;--red:#ff5d5d;--bg:#0a1018;}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:"Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif}
+  #wrap{max-width:1080px;margin:0 auto;padding:22px 20px 40px}
+  h1{font-size:22px;margin:0 0 6px;font-weight:700}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:14px;line-height:1.6}
+  canvas{width:100%;height:auto;display:block;border-radius:10px;background:#070c12;border:1px solid #16202c}
+  .bar{display:flex;gap:10px;align-items:center;margin:12px 0 6px;flex-wrap:wrap}
+  button{background:#12202e;color:var(--ink);border:1px solid #22344a;border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer}
+  button:hover{background:#17293a}
+  .clock{font-variant-numeric:tabular-nums;color:var(--cyan);font-size:14px;margin-left:auto}
+  .legend{display:flex;gap:18px;font-size:12.5px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .note{font-size:12.5px;color:var(--muted);line-height:1.7;margin-top:14px;border-left:3px solid #22344a;padding-left:12px}
+  .k{color:var(--ink);font-weight:700}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>在轨自标定：从“地面定标场 + 人工”到“每轨自动”</h1>
+  <div class="sub">一台相机拍 8 帧同一星场（约 21 秒），就能算出自己的增益、平场、指向与噪声；每轨更新一次。下方为两年时间的压缩演示（退化幅度已放大以便观察）。</div>
+  <canvas id="cv" width="1040" height="740"></canvas>
+  <div class="bar">
+    <button id="play">⏸ 暂停</button>
+    <button id="speed">速度 ×1</button>
+    <button id="reset">↺ 重播</button>
+    <span class="clock" id="clock">第 0 天</span>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:#38e1ff"></span>每轨自标定（≈90 min 一次）</span>
+    <span><span class="dot" style="background:#ffb057"></span>地面定标场（≈每 180 天一次）</span>
+    <span><span class="dot" style="background:#e8eef6"></span>真实值（在轨退化）</span>
+    <span><span class="dot" style="background:#ff5d5d"></span>未察觉的偏差</span>
+  </div>
+  <div class="note">
+    <span class="k">口径来自本项目实测：</span>增益 0.40 e⁻/ADU（自标定精度 ±15%，已标在读数里）；低频平场 0.094 mag（±0.010）；指向残差 0.37 px；噪声 7.41→8.90 DN。图中虚线/点画的是<b>估计值</b>，不画 ±15% 误差带以免遮挡真值曲线。
+    动画设定：增益两年内由 0.40 退化到 0.31，第 400 天发生一次平场污染事件（梯度 +0.04 mag）。
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const q = new URLSearchParams(location.search);
+let t = q.has('t') ? parseFloat(q.get('t')) : 0;
+let playing = !q.has('paused');
+let speed = 1;
+const T_END = 730, DAYS_PER_SEC = 18;
+const G0 = 0.40, G_END = 0.31, EVENT_DAY = 400, FLAT0 = 0.094, FLAT_JUMP = 0.040;
+
+function trueGain(d){
+  const cur = G0 + (G_END-G0)*Math.pow(d/T_END, 1.7);   // accelerating on-orbit degradation
+  return cur - 0.008*Math.exp(-Math.pow((d-EVENT_DAY)/60,2));
+}
+function trueFlat(d){ return FLAT0 + (d>=EVENT_DAY ? FLAT_JUMP*(1-Math.exp(-(d-EVENT_DAY)/20)) : 0); }
+function selfCalGain(d){
+  const j = 0.006*Math.sin(d*2.7) + 0.003*Math.sin(d*9.3);
+  return trueGain(d)*(1+j);
+}
+const TRAD_DAYS = [0,180,360,540,720];
+function interp(fn, d){
+  if (d <= TRAD_DAYS[0]) return fn(TRAD_DAYS[0]);
+  const last = TRAD_DAYS[TRAD_DAYS.length-1];
+  if (d >= last) return fn(last);
+  let i=0; while (d > TRAD_DAYS[i+1]) i++;
+  const a=TRAD_DAYS[i], b=TRAD_DAYS[i+1], w=(d-a)/(b-a);
+  return fn(a)*(1-w)+fn(b)*w;
+}
+const tradGain = d => interp(trueGain, d);
+const tradFlat = d => interp(trueFlat, d);
+
+const P1 = {x:20, y:14, w:W-40, h:150};
+const P2 = {x:78, y:230, w:W-150, h:250};
+const P3 = {x:78, y:560, w:W-150, h:120};
+
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+function panel(x,y,w,h){ctx.fillStyle='#0d1520';ctx.strokeStyle='#16202c';roundRect(x,y,w,h,10);ctx.fill();ctx.stroke();}
+
+function drawConstellation(){
+  const {x,y,w,h}=P1; panel(x,y,w,h);
+  ctx.fillStyle='#93a4b8'; ctx.font='13px system-ui';
+  ctx.fillText('星座：40 台相机各自独立自标定，每轨一次', x+16, y+26);
+  const cols=10, rows=4;
+  const orbit = Math.floor(t*24/1.5), activeIdx = orbit % (cols*rows);
+  for (let r=0;r<rows;r++) for (let c=0;c<cols;c++){
+    const idx=r*cols+c, px=x+40+c*40, py=y+58+r*24;
+    const active = idx===activeIdx;
+    ctx.beginPath(); ctx.arc(px,py,active?5.5:3.0,0,7);
+    ctx.fillStyle=active?'#38e1ff':'#28405a'; ctx.fill();
+    if(active){ ctx.beginPath(); ctx.arc(px,py,11,0,7); ctx.strokeStyle='rgba(56,225,255,0.4)'; ctx.stroke(); }
+  }
+  const bx = x+w-290;
+  ctx.fillStyle='#38e1ff'; ctx.font='12.5px system-ui';
+  ctx.fillText('已完成 ' + (orbit+1).toLocaleString() + ' 次自标定', bx, y+26);
+  ctx.font='12.5px Consolas, monospace'; ctx.fillStyle='#8fa6bd';
+  ctx.fillText('本轨输出', bx, y+50);
+  ctx.fillStyle='#e8eef6';
+  ctx.fillText('增益 g    = ' + selfCalGain(t).toFixed(3) + ' ± ' + (selfCalGain(t)*0.15).toFixed(3) + ' e-/ADU', bx, y+70);
+  ctx.fillText('平场梯度 = ' + trueFlat(t).toFixed(3) + ' ± 0.010 mag', bx, y+90);
+  ctx.fillText('指向残差 = 0.37 px', bx, y+110);
+  ctx.fillText('噪声     = ' + (7.41+1.49*(0.5+0.5*Math.sin(t/37))).toFixed(2) + ' DN', bx, y+130);
+}
+
+const mapX = d => P2.x + (d/T_END)*P2.w;
+const mapY = v => P2.y + P2.h - (v-0.29)/(0.42-0.29)*P2.h;
+
+function drawGainPanel(){
+  const {x,y,w,h}=P2; panel(x-30, y-46, w+60, h+92);
+  ctx.fillStyle='#93a4b8'; ctx.font='13px system-ui';
+  ctx.fillText('转换增益随在轨时间的变化：两种标定方式的差别', x-14, y-22);
+
+  ctx.strokeStyle='#22344a'; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y+h); ctx.lineTo(x+w,y+h); ctx.stroke();
+  ctx.font='11px Consolas';
+  for (const v of [0.30,0.34,0.38,0.42]){
+    const yy=mapY(v);
+    ctx.strokeStyle='#141d28'; ctx.beginPath(); ctx.moveTo(x,yy); ctx.lineTo(x+w,yy); ctx.stroke();
+    ctx.fillStyle='#5f7488'; ctx.fillText(v.toFixed(2), x-42, yy+4);
+  }
+  for (const d of [0,180,360,540,720]){
+    const xx=mapX(d);
+    ctx.strokeStyle='#141d28'; ctx.beginPath(); ctx.moveTo(xx,y); ctx.lineTo(xx,y+h); ctx.stroke();
+    ctx.fillStyle='#5f7488'; ctx.fillText(d+' 天', xx-14, y+h+16);
+  }
+
+  // blind zone
+  ctx.beginPath();
+  for (let d=0; d<=t; d+=2) ctx.lineTo(mapX(d), mapY(trueGain(d)));
+  for (let d=t; d>=0; d-=2) ctx.lineTo(mapX(d), mapY(tradGain(d)));
+  ctx.closePath(); ctx.fillStyle='rgba(255,93,93,0.16)'; ctx.fill();
+
+  // self-cal dots (drawn first, thin)
+  for (let d=0; d<=t; d+=0.0625){
+    ctx.beginPath(); ctx.arc(mapX(d), mapY(selfCalGain(d)), 1.1, 0, 7);
+    ctx.fillStyle='rgba(56,225,255,0.55)'; ctx.fill();
+  }
+
+  // traditional
+  ctx.beginPath();
+  for (let d=0; d<=t; d+=2){ const xx=mapX(d),yy=mapY(tradGain(d)); d?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy); }
+  ctx.strokeStyle='#ffb057'; ctx.lineWidth=2.2; ctx.setLineDash([7,4]); ctx.stroke(); ctx.setLineDash([]);
+  for (const d of TRAD_DAYS){ if (d<=t){ ctx.beginPath(); ctx.arc(mapX(d),mapY(trueGain(d)),4.5,0,7); ctx.fillStyle='#ffb057'; ctx.fill(); } }
+
+  // truth on top
+  ctx.beginPath();
+  for (let d=0; d<=t; d+=2){ const xx=mapX(d),yy=mapY(trueGain(d)); d?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy); }
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=2.6; ctx.stroke();
+  if (t>=EVENT_DAY){
+    const xx=mapX(EVENT_DAY);
+    ctx.strokeStyle='#ff5d5d'; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(xx,y); ctx.lineTo(xx,y+h); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#ff5d5d'; ctx.font='11.5px system-ui';
+    ctx.fillText('第 400 天：平场污染事件', xx+8, y+16);
+  }
+  ctx.strokeStyle='rgba(56,225,255,0.5)';
+  ctx.beginPath(); ctx.moveTo(mapX(t),y); ctx.lineTo(mapX(t),y+h); ctx.stroke();
+
+  // captions inside panel
+  const cap = t < 170 ? '① 刚做完地面定标，两者一致'
+    : t < 360 ? '② 下一次地面窗口还没到：偏差开始累积（红色区域）'
+    : t < 470 ? '③ 污染事件发生：自标定 90 分钟内发现，地面要等到第 540 天'
+    : '④ 自标定始终贴着真实值，地面流程期间偏差达最大';
+  ctx.fillStyle='#9fb2c6'; ctx.font='12.5px system-ui';
+  ctx.fillText(cap, x+8, y-6);
+}
+
+function drawErrorPanel(){
+  const {x,y,w,h}=P3; panel(x-30, y-46, w+60, h+86);
+  ctx.fillStyle='#93a4b8'; ctx.font='13px system-ui';
+  ctx.fillText('当前定标误差（越小越好，% 为相对真值的偏差）', x-14, y-24);
+
+  const gT=trueGain(t);
+  const eSelf=Math.abs(selfCalGain(t)-gT)/gT*100;
+  const eTrad=Math.abs(tradGain(t)-gT)/gT*100;
+  const fT=trueFlat(t), fSelf=fT*0.985, fTrad=tradFlat(t);
+  const efS=Math.abs(fSelf-fT)/fT*100, efT=Math.abs(fTrad-fT)/fT*100;
+  const barW=w-300, x0=x+140;
+  const rows=[
+    {label:'增益 · 每轨自标定', v:eSelf, color:'#38e1ff'},
+    {label:'增益 · 地面定标场', v:eTrad, color:'#ffb057'},
+  ];
+  rows.forEach((r,i)=>{
+    const yy=y+10+i*38;
+    ctx.fillStyle='#8fa6bd'; ctx.font='12.5px system-ui'; ctx.fillText(r.label, x, yy+4);
+    ctx.fillStyle='#16202c'; roundRect(x0,yy-10,barW,18,4); ctx.fill();
+    const ww=Math.max(2,Math.min(barW, r.v/40*barW));
+    ctx.fillStyle=r.color; roundRect(x0,yy-10,ww,18,4); ctx.fill();
+    ctx.fillStyle='#e8eef6'; ctx.font='12px Consolas'; ctx.fillText(r.v.toFixed(1)+' %', x0+barW+12, yy+4);
+  });
+  ctx.fillStyle='#8fa6bd'; ctx.font='12.5px system-ui';
+  ctx.fillText('平场梯度误差', x, y+94);
+  ctx.fillStyle='#e8eef6'; ctx.font='12px Consolas';
+  ctx.fillText('自标定 '+efS.toFixed(1)+' %　｜　地面 '+efT.toFixed(1)+' %', x0, y+94);
+}
+
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(playing){ t+=dt*DAYS_PER_SEC*speed; if(t>T_END){t=T_END;playing=false;document.getElementById('play').textContent='▶ 播放';} }
+  ctx.clearRect(0,0,W,H);
+  drawConstellation(); drawGainPanel(); drawErrorPanel();
+  document.getElementById('clock').textContent='第 '+t.toFixed(0)+' 天　（第 '+Math.floor(t*24/1.5).toLocaleString()+' 轨）';
+  requestAnimationFrame(frame);
+}
+document.getElementById('play').onclick=e=>{ if(t>=T_END)t=0; playing=!playing; e.target.textContent=playing?'⏸ 暂停':'▶ 播放'; };
+document.getElementById('speed').onclick=e=>{ speed=speed===1?4:(speed===4?16:1); e.target.textContent='速度 ×'+speed; };
+document.getElementById('reset').onclick=()=>{ t=0; playing=true; document.getElementById('play').textContent='⏸ 暂停'; };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
