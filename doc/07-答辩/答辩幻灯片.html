@@ -22,7 +22,7 @@
   .c3{grid-template-columns:1fr 1fr 1fr}
   .c2u{grid-template-columns:1.35fr 1fr}
   .c2l{grid-template-columns:1fr 1.35fr}
-  .panel{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:20px 22px;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;align-self:start}
+  .panel{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:22px 24px;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start}
   .panel > :nth-child(2){margin-top:0}
   .panel p:last-child, .panel ul:last-child, .panel table:last-child{margin-bottom:0}
   .panel .fill{flex:1;min-height:0;display:flex;align-items:flex-end}
@@ -46,7 +46,7 @@
   .takeaway{margin-top:18px;margin-bottom:4px;background:#eef4ff;border-left:4px solid var(--accent);padding:14px 18px;font-size:16px;line-height:1.6;color:#0f172a;border-radius:0 8px 8px 0}
   .foot{margin-top:14px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:11px;color:var(--faint)}
   .fig{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
-  .fig img{max-width:100%;max-height:400px;width:auto;height:auto;object-fit:contain;border-radius:6px;border:1px solid var(--line)}
+  .fig img{max-width:100%;max-height:470px;width:auto;height:auto;object-fit:contain;border-radius:6px;border:1px solid var(--line)}
   .fig .cap{font-size:11.5px;color:var(--faint);text-align:center}
   .cover{background:radial-gradient(1200px 600px at 12% 8%,#1e3a8a 0%,#0b1220 62%);color:#fff;padding:0}
   .cover .inner{display:grid;grid-template-columns:1.5fr .8fr;height:100%}
@@ -78,133 +78,88 @@
   <div class="inner">
     <div class="left">
       <div style="font-size:12px;letter-spacing:.22em;color:#93c5fd;margin-bottom:18px">RST19 · 天基星图处理研究</div>
-      <h1>天基宽波段星图的恒星检测、<br>经验星等标定与运动目标判别</h1>
-      <div class="sub">Stellar Detection, Empirical Photometric Calibration and Moving-Object Discrimination</div>
+      <h1>面向仪器参数不完备条件的<br>恒星检测与经验星等标定方法</h1>
+      <div class="sub">A Detection and Empirical Calibration Method for Space-Based Imagery with Incomplete Instrument Parameters</div>
       <div class="pts">
-        研究对象：4096² 像元、1.5 s 曝光的 15 帧连续观测序列<br>
-        研究内容：检测判据、经验零点及其不确定度、拖影与运动目标判别<br>
-        方法特征：判据由实测分布反推，结论由独立检验约束
+        方法：判据由实测分布反推；点源与拖影纳入统一假设族<br>
+        依据：三项缺陷均由本数据实测确认，而非文献推断<br>
+        成果：ZP 20.4232 ± 0.0005；拖影长度 594 px；单帧 23.6 s
       </div>
       <div class="meta">方案陈述 7 min · 程序演示 3 min · 答辩质询 3 min</div>
     </div>
     <div class="right"><img src="figs/trail.png" alt="第 1 帧长拖影"></div>
   </div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">目录</div>
-  <h1>报告结构</h1>
-  <div class="thesis">全文按“问题—数据—方法—结果—结论”组织；每一节均给出可复算的判据与数值。</div>
+  <div class="eyebrow">总览</div>
+  <h1>研究方案：方法—依据—成果</h1>
+  <div class="thesis">本文以“缺陷由数据确认 → 针对缺陷设计判据 → 以独立检验约束结论”为组织逻辑，三个环节一一对应。</div>
   <div class="body c3">
-    <div class="panel"><h3>一 · 背景与方法</h3><ul><li>研究背景与问题界定</li><li>国内外研究现状</li><li>研究目标与技术路线</li></ul></div>
-    <div class="panel"><h3>二 · 数据与结果</h3><ul><li>观测数据与仪器层参数</li><li>检测与质量筛选</li><li>经验零点及其不确定度</li><li>多历元一致性</li><li>运动目标判别</li></ul></div>
-    <div class="panel"><h3>三 · 结论</h3><ul><li>创新点</li><li>结论与展望</li><li>参考文献与备答</li></ul></div>
+    <div class="panel"><h3>一 · 我们采用的方法</h3>
+      <ul><li>匹配滤波检测与伪影黑名单</li><li>饱和判据由像素分布反推</li><li>加权最小二乘经验零点</li><li>统一假设族与广义似然比</li><li>极值分布阈值标定</li><li>沿脊线形态判据</li></ul>
+    </div>
+    <div class="panel"><h3>二 · 采用该方法的依据</h3>
+      <ul><li>形态门对 1.93 px 的 PSF 无约束力（实测）</li><li>3992 DN 处存在硬饱和台阶（实测）</li><li>nσ 的严格程度随相关长度差 9 倍（实测）</li><li>拖影被切为 97 段后丢弃（实测）</li></ul>
+    </div>
+    <div class="panel"><h3>三 · 由此获得的成果</h3>
+      <ul><li>ZP = 20.4232 ± 0.0005，留出 0.253 mag</li><li>逐帧差分散度 0.97 × 光子预期</li><li>拖影 L = 594 px、PA = 96.61°、21 562σ</li><li>单帧 23.6 s，测光结果不变</li></ul>
+    </div>
   </div>
-  <div class="takeaway">未经验证的量一律标注为 UNKNOWN，不作为推断依据。</div>
-  <div class="sec">Outline</div><div class="pager">2 / 23</div>
+  <div class="takeaway">方法与依据均给出可复算的数值，成果均给出适用范围。</div>
+  <div class="sec">Overview</div><div class="pager">2 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">一 · 研究背景</div>
-  <h1>问题界定：三类误差的分离</h1>
-  <div class="thesis">恒星星等的可用性取决于检测、通量测量与指向解算三类误差能否分别约束；任一环节缺乏独立检验，所得星等即不具备可引用性。</div>
+  <div class="eyebrow">一 · 动机</div>
+  <h1>采用本方法的依据：三处实测缺陷</h1>
+  <div class="thesis">下述三项均由本数据实测确认；它们共同决定了本文必须自建判据，而不能沿用经验参数。</div>
   <div class="body c3">
-    <div class="panel"><h3>检测阈值</h3><p>常用 nσ 分割，其严格程度依赖噪声相关长度与搜索规模：同一 4σ 在 4096² 白噪声上对应约 <b>531</b> 个假峰，在相关长度 3 px 的噪声中对应 <b>59</b> 个。</p><p>故未标注相关长度的 nσ 不具备明确统计含义。</p></div>
-    <div class="panel"><h3>通量零点</h3><p>仪器星等 m_inst = −2.5 log₁₀F 不含零点，随增益与孔径改变。</p><p>须以外部星表拟合经验零点，并以独立样本检验其外推能力。</p></div>
-    <div class="panel"><h3>指向解算</h3><p>数据头缺 WCS、GAIN、FILTER 字段，指向须由盲解与星表匹配迭代确定。</p><p>判决须包含零假设对照，否则无法区分真实解与偶然匹配。</p></div>
+    <div class="panel"><h3>缺陷一 · 形态门无约束力</h3>
+      <p>实现取 FWHM ∈ [0.8, 12.0] px；相对实测 PSF（1.93 px）相当于 −59% / +522%。</p>
+      <p>存活样本 FWHM 最大 4.56、椭率最大 0.647，表明该门未筛选任何真实点源。</p>
+    </div>
+    <div class="panel"><h3>缺陷二 · 阈值无统计含义</h3>
+      <p>4σ 在 4096² 白噪声上对应约 531 个假峰；在相关长度 3 px 的噪声中仅 59 个。</p>
+      <p>未标注相关长度与搜索规模时，nσ 的严格程度不可知。</p>
+    </div>
+    <div class="panel"><h3>缺陷三 · 拖影非一等对象</h3>
+      <p>第 1 帧长拖影被切为 97 段，全部标为伪影并剔除；点源目录中不存在该对象。</p>
+      <p>由此导致跨历元关联失效：15 帧点源关联给出的运动目标数为 0。</p>
+    </div>
   </div>
-  <div class="takeaway">研究定位：在仪器参数不完备条件下建立可复算、可证伪的星等与运动目标判据。</div>
-  <div class="sec">§1 研究背景</div><div class="pager">3 / 23</div>
+  <div class="takeaway">三项缺陷分别对应后文的三类方法：判据反推、阈值标定与统一假设族。</div>
+  <div class="sec">§1 动机</div><div class="pager">3 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">一 · 研究现状</div>
-  <h1>国内外研究现状与本文定位</h1>
-  <div class="thesis">点源检测、条纹检测与多历元检测已各有成熟方法，但三者判据相互独立，缺少统一的对象模型与虚警率口径。</div>
+  <div class="eyebrow">二 · 方法</div>
+  <h1>方法一：检测与质量筛选</h1>
+  <div class="thesis">采用匹配滤波提案，并以孔径通量信噪比与伪影黑名单作为有效判据；形态门保留但不作为主要依据。</div>
   <div class="body c2">
-    <div class="panel"><h3>表 1　代表性工作</h3>
-      <table>
-        <tr><th>方向</th><th>代表工作</th><th>要点</th></tr>
-        <tr><td>点源检测</td><td>Stetson 1987；Bertin &amp; Arnouts 1996</td><td>阈值分割与形态筛选，阈值取经验 nσ</td></tr>
-        <tr><td>条纹检测</td><td>Nir, Zackay &amp; Ofek 2018</td><td>线段模板匹配滤波为最优统计量；快速 Radon</td></tr>
-        <tr><td>阈值理论</td><td>Bardeen et al. 1986；Benjamini &amp; Hochberg 1995</td><td>随机场超越数与多重检验控制</td></tr>
-        <tr><td>多历元检测</td><td>Shao et al. 2014；Liu et al. 2013</td><td>移位叠加与 DP-TBD；GPD 定 CFAR</td></tr>
-      </table>
+    <div class="panel"><h3>做法</h3>
+      <ul><li>提案：高斯核与高斯差分匹配滤波，阈值 4σ；</li><li>有效判据：孔径通量信噪比 ≥ 5（存活最小 5.0008）；</li><li>伪影黑名单 18 项：BROAD、LINE_ARTIFACT、UNRESOLVED_BLEND、SPIKE 等；</li><li>形态门保留默认值，但不作为主要筛选依据。</li></ul>
     </div>
-    <div class="panel"><h3>本文定位</h3>
-      <p>本文不提出新的匹配滤波形式，工作重点为三点：</p>
-      <ul><li>将点源表述为线段核的零长度极限，建立统一对象模型与形态统计量；</li><li>以随机场极值分布将阈值表述为“每帧允许虚警数”，并计入多重性；</li><li>在真实天基数据上给出速度、完备度与虚警率的同口径结果。</li></ul>
+    <div class="panel"><h3>采用该做法的理由</h3>
+      <p>形态门参数与本相机 PSF 不匹配（见第 3 页缺陷一），若以其为主要判据，等于以未标定的阈值决定样本。</p>
+      <p>信噪比门与伪影判据均有明确物理含义，且伪影判据的错误方向是保守的（漏检而非误检）。</p>
+      <p class="tagline">第 1 帧结果：候选 66 469，质量通过 27 552（41.4%）。</p>
     </div>
   </div>
-  <div class="takeaway">与已有工作的差异集中于对象模型的统一性、阈值的可指定性与基准口径的一致性。</div>
-  <div class="sec">§1.2 研究现状</div><div class="pager">4 / 23</div>
+  <div class="takeaway">判据的取舍以“是否具有可核查的物理含义”为准。</div>
+  <div class="sec">§2.1 检测</div><div class="pager">4 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">一 · 技术路线</div>
-  <h1>研究目标与技术路线</h1>
-  <div class="thesis">研究目标为：在无 WCS、无增益、无响应曲线的条件下给出可复算的星等与运动目标判据，并量化其不确定度。</div>
-  <div class="body c2">
-    <div class="panel"><h3>表 2　技术路线</h3>
-      <table>
-        <tr><th>步骤</th><th>输入</th><th>输出</th></tr>
-        <tr><td>① 图像预处理</td><td>原始 FITS</td><td>背景、噪声、掩膜</td></tr>
-        <tr><td>② 检测与筛选</td><td>预处理图像</td><td>候选与质量标记</td></tr>
-        <tr><td>③ 指向解算</td><td>检测表 + Gaia DR3</td><td>板解与匹配残差</td></tr>
-        <tr><td>④ 经验零点</td><td>匹配表 + 参考星等</td><td>ZP、色项、留出误差</td></tr>
-        <tr><td>⑤ 运动判别</td><td>单帧与多历元</td><td>拖影目录与角速度</td></tr>
-      </table>
-    </div>
-    <div class="panel"><h3>检验原则</h3>
-      <ul><li>检测：随机场虚警率检验；</li><li>指向：位移与镜像零假设对照；</li><li>零点：留出、分块与逐帧差分三重检验；</li><li>运动：单帧形态判据与多历元轨迹互证。</li></ul>
-      <p>各步骤检验相互独立，避免结论之间形成循环依赖。</p>
-    </div>
-  </div>
-  <div class="takeaway">技术路线的核心约束为：每一结论均可由仓库命令单独复现。</div>
-  <div class="sec">§1.3 技术路线</div><div class="pager">5 / 23</div>
-</section>
-<section class="slide">
-  <div class="eyebrow">二 · 观测数据</div>
-  <h1>观测数据与仪器层参数</h1>
-  <div class="thesis">表 3 列出可由文件本身核实的参数；无法核实者（增益、平场、响应曲线）标为 UNKNOWN。</div>
-  <div class="body c2u">
-    <div class="panel"><h3>表 3　仪器层参数</h3>
-      <table>
-        <tr><th>参数</th><th>取值</th></tr>
-        <tr><td>阵列 / 位深</td><td class="n">4096² · BITPIX 16</td></tr>
-        <tr><td>单帧曝光</td><td class="n">1.5 s（非标准卡片，单位 ms）</td></tr>
-        <tr><td>序列跨度</td><td class="n">21.014 s（间隔 1.473 / 1.529 s 交替）</td></tr>
-        <tr><td>头部字段</td><td class="n">26 卡；无 WCS / GAIN / FILTER / TSYS</td></tr>
-        <tr><td>遥测占用</td><td class="n">第 0 行前 104 像元</td></tr>
-      </table>
-    </div>
-    <div class="panel"><h3>编码效应</h3>
-      <p>零值像元 <b>73 780</b> 个，为高斯预期（约 15 200）的 4.9 倍，表明低端存在削顶，零值像元不可用于噪声估计。</p>
-      <p>峰值分布在 3990–3993 DN 出现堆积且紧邻区间近乎为空，构成硬饱和台阶（见 4.2 节）。</p>
-    </div>
-  </div>
-  <div class="takeaway">数据条件要求以内部统计替代缺失的仪器参数。</div>
-  <div class="sec">§2 观测数据</div><div class="pager">6 / 23</div>
-</section>
-<section class="slide">
-  <div class="eyebrow">二 · 检测</div>
-  <h1>恒星检测与质量控制</h1>
-  <div class="thesis">采用匹配滤波提案与形态质量门，第 1 帧由 66 469 个候选得到 27 552 个质量通过源；实测表明形态门的筛选作用有限。</div>
-  <div class="body c3">
-    <div class="panel"><h3>检测结果</h3><p class="kpi">66 469 → 27 552</p><p>4σ 提案，通过率 41.4%。点扩散函数实测 FWHM = <b>1.93 px</b>（200 颗星叠合剖面）。</p></div>
-    <div class="panel"><h3>形态门的实际作用</h3><p>实现取 FWHM ∈ [0.8, 12.0] px、椭率 ≤ 0.65；相对 1.93 px 相当于 −59% / +522%。</p><p>存活样本 FWHM 最大 4.56、椭率最大 0.647，表明该门未对真实点源形成有效约束。</p></div>
-    <div class="panel"><h3>有效判据</h3><p>实际起作用者为孔径通量信噪比 ≥ 5（存活最小 5.0008），以及 18 项伪影旗标黑名单（BROAD、LINE_ARTIFACT、UNRESOLVED_BLEND 等）。</p><p>该结论构成方法改进项的依据。</p></div>
-  </div>
-  <div class="takeaway">形态门参数与实测 PSF 不匹配，其筛选效果须在结论中如实说明。</div>
-  <div class="sec">§3 检测</div><div class="pager">7 / 23</div>
-</section>
-<section class="slide">
-  <div class="eyebrow">二 · 判据修正</div>
-  <h1>饱和判据的修正及其影响</h1>
-  <div class="thesis">峰值直方图在 3990–3993 DN 出现堆积而紧邻区间为空，据此将饱和判据由 20 000 DN 修正为 3 990 DN，亮端系统残差随之下降。</div>
+  <div class="eyebrow">二 · 方法</div>
+  <h1>方法二：饱和判据由像素分布反推</h1>
+  <div class="thesis">峰值分布在 3990–3993 DN 堆积而紧邻区间为空，据此将饱和判据由 20 000 DN 修正为 3 990 DN。</div>
   <div class="body c2">
     <div class="panel"><h3>图 1　峰值分布（5 DN/bin）</h3>
       <div style="height:170px;flex:none"><svg viewBox="0 0 560 150" width="100%" height="150" preserveAspectRatio="none"><line x1="8" y1="128" x2="552" y2="128" stroke="#cbd5e1"/><rect x="9.0" y="127.9" width="43.3" height="0.1" fill="#1d4ed8" opacity="0.8"/><rect x="54.3" y="127.9" width="43.3" height="0.1" fill="#1d4ed8" opacity="0.8"/><rect x="99.7" y="127.9" width="43.3" height="0.1" fill="#1d4ed8" opacity="0.8"/><rect x="145.0" y="127.7" width="43.3" height="0.3" fill="#1d4ed8" opacity="0.8"/><rect x="190.3" y="127.9" width="43.3" height="0.1" fill="#1d4ed8" opacity="0.8"/><rect x="235.7" y="127.4" width="43.3" height="0.6" fill="#1d4ed8" opacity="0.8"/><rect x="281.0" y="26.0" width="43.3" height="102.0" fill="#b91c1c" opacity="1"/><text x="325" y="20" font-size="11" fill="#b91c1c" text-anchor="middle">881</text><text x="8" y="144" font-size="10" fill="#64748b">3960</text><text x="552" y="144" font-size="10" fill="#64748b" text-anchor="end">4020 DN</text><text x="325" y="144" font-size="10" fill="#b91c1c" text-anchor="middle">3992</text></svg></div>
-      <p>[3990, 3994) 区间 881 个候选（峰值等于 3992 者 363 个）；[3994, 4100) 仅 1 个。</p>
-      <p>原始像素层面一致：3990–3993 共 2 639 像元，[3994, 4000) 仅 4 个。</p>
+      <p>[3990, 3994) 区间 881 个候选（峰值等于 3992 者 363 个）；[3994, 4100) 仅 1 个；原始像素层面 3990–3993 共 2 639 像元。</p>
     </div>
-    <div class="panel"><h3>表 4　判据修正的定量影响</h3>
+    <div class="panel"><h3>表 1　判据修正的定量影响</h3>
       <table>
         <tr><th>量</th><th class="n">20 000 DN</th><th class="n">3 990 DN</th></tr>
         <tr><td>零点 ZP</td><td class="n">20.4013</td><td class="n">20.4111</td></tr>
@@ -212,107 +167,133 @@
         <tr><td>亮端残差（G 9.5–10）</td><td class="n">−0.131</td><td class="n">−0.049</td></tr>
         <tr><td>定标下限</td><td class="n">G = 8.00</td><td class="n">G = 9.48</td></tr>
       </table>
-      <p>代价为亮端样本剔除 11.1%，收益为亮端残差降至原值的 38%。</p>
+      <p>亮端样本剔除 11.1%，亮端残差降至原值的 38%。</p>
     </div>
   </div>
-  <div class="takeaway">判据由数据分布反推，而非取自仪器标称值。</div>
-  <div class="sec">§4.2 饱和判据</div><div class="pager">8 / 23</div>
+  <div class="takeaway">该判据不取自仪器标称值，而由数据分布直接确定。</div>
+  <div class="sec">§2.2 饱和判据</div><div class="pager">5 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">二 · 测光</div>
-  <h1>孔径测光与误差模型</h1>
-  <div class="thesis">检测层与强制测光层采用不同的通量方差表达式，二者不可互称；本文经验零点由后者给出。</div>
+  <div class="eyebrow">二 · 方法</div>
+  <h1>方法三：经验零点标定</h1>
+  <div class="thesis">以 Gaia DR3 为参考做加权最小二乘拟合，同时给出零点、色项与留出误差；三者共同界定结果的可用范围。</div>
   <div class="body c2">
-    <div class="panel"><h3>通量与误差</h3><p>F = Σ_i w_i (I_i − B̂)，m_inst = −2.5 log₁₀F。</p><p>检测层：σ_F² = κ²Nσ_pix² + (N²/N_eff)σ_pix² + F/g + N·RN²。</p><p>强制测光层在此基础上引入 π/2 中位数方差因子并按像素覆盖加权。</p></div>
-    <div class="panel"><h3>测量口径</h3><ul><li>孔径中心取整数峰位置，报告坐标为 PSF 加权质心；</li><li>检测层环带为 [r+2, r+4]，测光层环带独立取 6/10 px；</li><li>噪声膨胀因子实测 κ = 1.18（孔径散度 80.06 对白噪声模型 67.65 ADU）。</li></ul></div>
-  </div>
-  <div class="takeaway">误差模型的分层是本研究的必要前提，亦为与常规测光管线的差异之一。</div>
-  <div class="sec">§4.3 测光</div><div class="pager">9 / 23</div>
-</section>
-<section class="slide">
-  <div class="eyebrow">二 · 零点</div>
-  <h1>经验零点及其不确定度</h1>
-  <div class="thesis">以 Gaia DR3 为参考，18 902 颗定标星给出 ZP = 20.4232 ± 0.0005；留出散度 0.253 mag 为外推误差的估计值。</div>
-  <div class="body c2">
-    <div class="panel"><h3>标定结果</h3><p class="kpi">ZP 20.4232 <small>± 0.0005</small></p><p>样本内散度 0.140 mag；留出散度 <b>0.253 mag</b>；色项 C = −0.0852 ± 0.0016。</p><p>目标源 g_emp = 14.3498，旗标仅“颜色未知”。</p></div>
-    <div class="panel"><h3>适用条件</h3><ul><li>参考尺度为 Gaia G（Vega），结果记为 g_emp，不得记为 G；</li><li>通带名义 450–750 nm，响应曲线未知，不得等效为 V 或 R；</li><li>零点仅在相同星表口径内可比：改用 G ≤ 15.5 目录时为 20.4111。</li></ul></div>
-  </div>
-  <div class="takeaway">零点不确定度以外推误差表述，而非拟合残差。</div>
-  <div class="sec">§4.4 经验零点</div><div class="pager">10 / 23</div>
-</section>
-<section class="slide">
-  <div class="eyebrow">二 · 误差预算</div>
-  <h1>系统误差识别与误差预算</h1>
-  <div class="thesis">表 5 给出各项系统误差量级及其是否随历元数改善；平场梯度与未标定色项为主导项。</div>
-  <div class="body c2l">
-    <div class="panel"><h3>表 5　误差预算（第 1 帧）</h3>
-      <table>
-        <tr><th>来源</th><th class="n">量级 (mag)</th><th>随历元改善</th></tr>
-        <tr><td>光子噪声</td><td class="n">0.002–0.044</td><td>是（1/√N）</td></tr>
-        <tr><td>平场 / 渐晕</td><td class="n">0.094</td><td>否</td></tr>
-        <tr><td>8×8 固定图案</td><td class="n">0.032</td><td>否</td></tr>
-        <tr><td>未标定色项</td><td class="n">±0.14</td><td>否</td></tr>
-        <tr><td>暗端混合</td><td class="n">+0.11</td><td>否</td></tr>
-        <tr><td>缺增益（泊松项）</td><td class="n">0.003–0.008</td><td>否</td></tr>
-      </table>
+    <div class="panel"><h3>做法</h3>
+      <p>模型：g_emp = m_inst + ZP + C·(BP−RP)。</p>
+      <p>权重：w = 1/(σ_inst² + σ_G²)；先做 3×MAD 稳健剔除，再加权求解，协方差由设计矩阵给出。</p>
+      <p>检验：5 折留出、8×8 空间分块、逐帧差分（不依赖星表）。</p>
     </div>
-    <div class="panel"><h3>主导项分析</h3><p>平场梯度由零点随视场半径的变化直接测得：中心 20.418、边缘 20.324，差 0.094 mag。</p><p>色项无法扣除，因目标源缺少 BP−RP；该限制使结果仅能以 g_emp 表述。</p><p>增益缺失使亮端误差条偏小，已列为已知缺陷。</p></div>
+    <div class="panel"><h3>采用该做法的理由</h3>
+      <p>仪器星等不含零点，且本相机无滤光片与响应曲线，无法由理论计算零点。</p>
+      <p>留出误差而非拟合残差才反映外推能力：样本内 0.140 mag，留出 <b>0.253 mag</b>。</p>
+      <p class="tagline">18 902 颗定标星；C = −0.0852 ± 0.0016。</p>
+    </div>
   </div>
-  <div class="takeaway">系统项不随历元数改善，多历元叠加不能降低该部分不确定度。</div>
-  <div class="sec">§4.5 误差预算</div><div class="pager">11 / 23</div>
+  <div class="takeaway">零点的不确定度以外推误差表述，并附明确的适用条件。</div>
+  <div class="sec">§2.3 零点</div><div class="pager">6 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">二 · 一致性</div>
-  <h1>多历元一致性检验</h1>
-  <div class="thesis">逐帧差分不依赖外部星表，为最强的内部检验：随机项在 SNR ≤ 7 处已达光子极限，而固定图案不随历元数改善。</div>
-  <div class="body c3">
-    <div class="panel"><h3>逐帧差分</h3><p class="kpi">0.97</p><p>相邻帧 Δm 散度与光子预期之比（SNR 5–10）：105 个帧对、2 386 393 个样本。</p></div>
-    <div class="panel"><h3>随机项合并</h3><p>单帧 0.147 mag → 扣除图案后 0.1435 → 15 帧 <b>0.0370 mag</b>。</p><p>k 帧平均增益与 1/√k 一致（SNR &lt; 50 内偏差 ≤ 6%）。</p></div>
-    <div class="panel"><h3>系统项下限</h3><p>8×8 固定图案 0.032 mag，跨帧相关 0.947；15 帧零点峰峰值 2.86 mmag。</p><p>含图案的合并下限 <b>0.0489 mag</b>。</p></div>
-  </div>
-  <div class="takeaway">0.0370、0.0489 与 0.147 mag 含义不同，引用时须分别说明。</div>
-  <div class="sec">§4.6 多历元</div><div class="pager">12 / 23</div>
-</section>
-<section class="slide">
-  <div class="eyebrow">三 · 方法</div>
-  <h1>统一假设族与广义似然比检验</h1>
-  <div class="thesis">将点源表述为线段核长度趋于零的极限，可在同一假设族内同时完成检测与形态判别。</div>
+  <div class="eyebrow">二 · 方法</div>
+  <h1>方法四：统一假设族与广义似然比</h1>
+  <div class="thesis">将点源表述为线段核长度趋于零的极限，使检测与形态判别在同一假设族内完成。</div>
   <div class="body c2">
-    <div class="panel"><h3>模型</h3><p>d(x) = A·[PSF ∗ K_θ](x) + n(x)，K_θ 取 δ（点源）或单位线段 (L, φ)。</p><p>白化后统计量 z(x;θ) = Σ K̃(y−x)·d̃(y) / √Σ K̃²。</p><p>Λ = max_θ z；LR = z(最优线核) − z(点核)。</p></div>
-    <div class="panel"><h3>假设族与判据</h3><ul><li>假设族：7 个长度（16–1024 px）× 24 方向，加点核，共 169 个；</li><li>LR 用于形态判别，替代经验性的轴比与长度阈值；</li><li>沿脊线占空比 duty 与相对散度 scatter 用于区分均匀拖影与团块链。</li></ul></div>
+    <div class="panel"><h3>做法</h3>
+      <p>d(x) = A·[PSF ∗ K_θ](x) + n(x)，K_θ 取 δ 或单位线段 (L, φ)。</p>
+      <p>白化统计量 z(x;θ) = Σ K̃(y−x)·d̃(y) / √Σ K̃²；Λ = max_θ z。</p>
+      <p>形态统计量 LR = z(最优线核) − z(点核)；假设族 7 长度 × 24 方向 + 点核 = 169。</p>
+    </div>
+    <div class="panel"><h3>采用该做法的理由</h3>
+      <p>现管线中点源与拖影属两套流程，判据不可比，且拖影在点源目录中不存在（见第 3 页缺陷三）。</p>
+      <p>统一后，两类目标共享同一阈值与同一虚警率口径；形态判别由似然比给出，替代经验性的轴比与长度阈值。</p>
+      <p class="tagline">该表述不改变匹配滤波形式，仅改变对象模型的组织方式。</p>
+    </div>
   </div>
-  <div class="takeaway">该表述不改变匹配滤波本身，而改变对象模型与判据的组织方式。</div>
-  <div class="sec">§5.1 方法</div><div class="pager">13 / 23</div>
+  <div class="takeaway">统一假设族是后续阈值标定与形态判据的前提。</div>
+  <div class="sec">§2.4 假设族</div><div class="pager">7 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">三 · 阈值</div>
-  <h1>检测阈值的统计标定</h1>
-  <div class="thesis">将阈值表述为“每帧允许虚警数”，由随机场极值分布反解；假设数与精化次数以并集界计入。</div>
+  <div class="eyebrow">二 · 方法</div>
+  <h1>方法五：检测阈值的统计标定</h1>
+  <div class="thesis">以随机场极值分布将阈值表述为“每帧允许虚警数”，并以并集界计入精化引入的多重性。</div>
   <div class="body c3">
-    <div class="panel"><h3>图 2　阈值与虚警数关系</h3><div class="fill" style="height:100%;max-height:220px"><svg viewBox="0 0 520 180" width="100%" height="180"><line x1="44" y1="130" x2="500" y2="130" stroke="#cbd5e1"/><line x1="44" y1="18" x2="44" y2="130" stroke="#cbd5e1"/><polyline points="44.0,50.1 116.5,65.3 196.0,81.9 268.5,97.1 348.0,113.7 420.5,128.9 500.0,145.6" fill="none" stroke="#1d4ed8" stroke-width="2.5"/><circle cx="44.0" cy="50.1" r="3.2" fill="#1d4ed8"/><circle cx="116.5" cy="65.3" r="3.2" fill="#1d4ed8"/><circle cx="196.0" cy="81.9" r="3.2" fill="#1d4ed8"/><circle cx="268.5" cy="97.1" r="3.2" fill="#1d4ed8"/><circle cx="348.0" cy="113.7" r="3.2" fill="#1d4ed8"/><circle cx="420.5" cy="128.9" r="3.2" fill="#1d4ed8"/><circle cx="500.0" cy="145.6" r="3.2" fill="#1d4ed8"/><line x1="44" y1="101.5" x2="500" y2="101.5" stroke="#b91c1c" stroke-dasharray="5 4"/><text x="494" y="95.5" font-size="10" fill="#b91c1c" text-anchor="end">实测 5.88σ</text><text x="38" y="134" font-size="10" fill="#475569" text-anchor="end">5.5σ</text><text x="38" y="26" font-size="10" fill="#475569" text-anchor="end">7.0σ</text><text x="44" y="146" font-size="10" fill="#475569" text-anchor="middle">1</text><text x="348" y="146" font-size="10" fill="#475569" text-anchor="middle">100</text><text x="500" y="146" font-size="10" fill="#475569" text-anchor="middle">1000</text></svg></div><p>每帧 1 个虚警对应 6.57σ；10 个对应 6.14σ；100 个对应 5.72σ。</p></div>
-    <div class="panel"><h3>实测检验</h3><p>峰幅分布外推阈值 5.88σ；以该阈值运行 20 帧，实测虚警 0.89 ± 1.17 个/帧。</p><p>若按字面公式（重复计入 N_eff）得 9.00σ，实测虚警为 0，表明该写法过于保守。</p></div>
-    <div class="panel"><h3>多重性</h3><p>精化使单候选试验数由 169 增至 4 312，阈值相应抬高 +1.655σ。</p><p>未计入该项等价于放宽预设虚警率。</p></div>
+    <div class="panel"><h3>图 2　阈值与虚警数关系</h3><div class="fill" style="height:100%;max-height:210px"><svg viewBox="0 0 520 180" width="100%" height="180"><line x1="44" y1="130" x2="500" y2="130" stroke="#cbd5e1"/><line x1="44" y1="18" x2="44" y2="130" stroke="#cbd5e1"/><polyline points="44.0,50.1 116.5,65.3 196.0,81.9 268.5,97.1 348.0,113.7 420.5,128.9 500.0,145.6" fill="none" stroke="#1d4ed8" stroke-width="2.5"/><circle cx="44.0" cy="50.1" r="3.2" fill="#1d4ed8"/><circle cx="116.5" cy="65.3" r="3.2" fill="#1d4ed8"/><circle cx="196.0" cy="81.9" r="3.2" fill="#1d4ed8"/><circle cx="268.5" cy="97.1" r="3.2" fill="#1d4ed8"/><circle cx="348.0" cy="113.7" r="3.2" fill="#1d4ed8"/><circle cx="420.5" cy="128.9" r="3.2" fill="#1d4ed8"/><circle cx="500.0" cy="145.6" r="3.2" fill="#1d4ed8"/><line x1="44" y1="101.5" x2="500" y2="101.5" stroke="#b91c1c" stroke-dasharray="5 4"/><text x="494" y="95.5" font-size="10" fill="#b91c1c" text-anchor="end">实测 5.88σ</text><text x="38" y="134" font-size="10" fill="#475569" text-anchor="end">5.5σ</text><text x="38" y="26" font-size="10" fill="#475569" text-anchor="end">7.0σ</text><text x="44" y="146" font-size="10" fill="#475569" text-anchor="middle">1</text><text x="348" y="146" font-size="10" fill="#475569" text-anchor="middle">100</text><text x="500" y="146" font-size="10" fill="#475569" text-anchor="middle">1000</text></svg></div><p>每帧 1 个虚警对应 6.57σ；10 个对应 6.14σ；100 个对应 5.72σ。</p></div>
+    <div class="panel"><h3>做法</h3><p>对白噪声场拟合极值分布，得位置与尺度参数；由目标虚警数反解阈值。</p><p>精化使单候选试验数由 169 增至 4 312，阈值相应抬高 <b>+1.655σ</b>。</p></div>
+    <div class="panel"><h3>采用该做法的理由</h3><p>nσ 的严格程度随相关长度与搜索规模改变（531 对 59，见第 3 页缺陷二）。</p><p>本方法使严格程度成为可指定量：预测 5.88σ，20 帧实测 0.89 ± 1.17 个虚警。</p></div>
   </div>
-  <div class="takeaway">阈值严格程度由预设虚警数确定，而非由经验常数确定。</div>
-  <div class="sec">§5.2 阈值</div><div class="pager">14 / 23</div>
+  <div class="takeaway">阈值的严格程度由预设虚警数确定，而非由经验常数确定。</div>
+  <div class="sec">§2.5 阈值</div><div class="pager">8 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">三 · 方法检验</div>
-  <h1>三项原设想的实验否证</h1>
-  <div class="thesis">本节列出研究过程中被实测否定的三项判断；其结论与正面结果一并计入。</div>
+  <div class="eyebrow">二 · 方法</div>
+  <h1>方法六：沿脊线形态判据</h1>
+  <div class="thesis">在拟合脊线上计算占空比与相对散度，用于区分均匀拖影与离散团块链。</div>
+  <div class="body c2">
+    <div class="panel"><h3>做法</h3>
+      <p>duty = #{v > 0.5·med}/#v，scatter = 1.4826·MAD(v)/med；判为均匀当且仅当 duty ≥ 0.85 且 scatter ≤ 0.25。</p>
+      <p>采样覆盖整条帧内脊线，而非以检出点为中心的窗口（因平脊上沿轴位置不可识别）。</p>
+      <p>计算在未白化的 PSF 平滑帧上进行，避免高通滤波产生负瓣。</p>
+    </div>
+    <div class="panel"><h3>采用该做法的理由</h3>
+      <p>均匀线段核在团块链上约 80% 的采样落于背景，Λ 与长度估计均不可靠。</p>
+      <p>该判据将“模型是否适用”显式化：第 1 帧 1 087 个长候选中仅 9 个通过。</p>
+    </div>
+  </div>
+  <div class="takeaway">形态判据的作用是界定模型适用范围，而非提高检出数量。</div>
+  <div class="sec">§2.6 形态判据</div><div class="pager">9 / 19</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">二 · 方法检验</div>
+  <h1>方法有效性的独立检验：三项否证</h1>
+  <div class="thesis">设计过程中的三项判断被本团队实测否定；它们的修正直接决定了方法的形式。</div>
   <div class="body c2l">
-    <div class="panel"><h3>否证一：假峰数按 N/l² 下降</h3><p>实测（l = 1/2/3/5 px）为 538 / 515 / 468 / 358 个；原预测 531 / 133 / 59 / 21，比值 1.01 → 16.84。</p><p>相关长度改变的是独立分辨单元数（影响极值分布位置参数），而非固定阈值下的超越计数。</p></div>
+    <div class="panel"><h3>否证一：假峰数按 N/l² 下降</h3>
+      <p>实测（l = 1/2/3/5 px）：538 / 515 / 468 / 358；原预测 531 / 133 / 59 / 21，比值 1.01 → 16.84。</p>
+      <p>相关长度改变的是独立分辨单元数，而非固定阈值下的超越计数。</p>
+      <p class="tagline">另二项：极值公式重复计入 N_eff（得 9.00σ，实测虚警 0）；未白化时 std(z) 由 1 升至 1.72–2.50。</p>
+    </div>
     <div class="fig"><svg viewBox="0 0 520 170" width="100%" height="170"><rect x="40" y="22.509090909090915" width="48.5" height="117.49090909090908" fill="#1d4ed8" opacity="0.85"/><rect x="90.5" y="24.058181818181822" width="48.5" height="115.94181818181818" fill="#b91c1c" opacity="0.55"/><text x="88.5" y="156" font-size="11" fill="#475569" text-anchor="middle">l=1</text><text x="64.25" y="16.509090909090915" font-size="10" fill="#1d4ed8" text-anchor="middle">539</text><text x="116.75" y="18.058181818181822" font-size="10" fill="#b91c1c" text-anchor="middle">531</text><rect x="153" y="27.59272727272726" width="48.5" height="112.40727272727274" fill="#1d4ed8" opacity="0.85"/><rect x="203.5" y="111.02545454545455" width="48.5" height="28.974545454545456" fill="#b91c1c" opacity="0.55"/><text x="201.5" y="156" font-size="11" fill="#475569" text-anchor="middle">l=2</text><text x="177.25" y="21.59272727272726" font-size="10" fill="#1d4ed8" text-anchor="middle">515</text><text x="229.75" y="105.02545454545455" font-size="10" fill="#b91c1c" text-anchor="middle">133</text><rect x="266" y="37.869090909090914" width="48.5" height="102.13090909090909" fill="#1d4ed8" opacity="0.85"/><rect x="316.5" y="127.12727272727273" width="48.5" height="12.872727272727273" fill="#b91c1c" opacity="0.55"/><text x="314.5" y="156" font-size="11" fill="#475569" text-anchor="middle">l=3</text><text x="290.25" y="31.869090909090914" font-size="10" fill="#1d4ed8" text-anchor="middle">468</text><text x="342.75" y="121.12727272727273" font-size="10" fill="#b91c1c" text-anchor="middle">59</text><rect x="379" y="61.91272727272727" width="48.5" height="78.08727272727273" fill="#1d4ed8" opacity="0.85"/><rect x="429.5" y="135.35272727272726" width="48.5" height="4.647272727272727" fill="#b91c1c" opacity="0.55"/><text x="427.5" y="156" font-size="11" fill="#475569" text-anchor="middle">l=5</text><text x="403.25" y="55.91272727272727" font-size="10" fill="#1d4ed8" text-anchor="middle">358</text><text x="455.75" y="129.35272727272726" font-size="10" fill="#b91c1c" text-anchor="middle">21</text></svg><div class="cap">图 3　实测（蓝）与原预测（红）假峰数对比</div></div>
   </div>
-  <div class="takeaway">另二项：极值公式重复计入 N_eff；未白化时 std(z) 由 1 升至 1.72–2.50。</div>
-  <div class="sec">§5.3 方法检验</div><div class="pager">15 / 23</div>
+  <div class="takeaway">三项否证均写入方法稿，作为方法设计的依据与限制。</div>
+  <div class="sec">§2.7 检验</div><div class="pager">10 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">四 · 结果</div>
-  <h1>结果 I：均匀拖影的测量</h1>
-  <div class="thesis">第 1 帧长拖影被解为长度 594 px（帧内下界）、方位角 96.61°、显著性 21 562σ，与独立像素分析一致。</div>
+  <div class="eyebrow">三 · 成果</div>
+  <h1>成果一：检测与经验星等</h1>
+  <div class="thesis">在仪器参数不完备条件下，零点由 18 902 颗定标星给出，并以三重检验约束其外推误差。</div>
+  <div class="body c3">
+    <div class="panel"><h3>检测</h3><p class="kpi">66 469 → 27 552</p><p>候选与质量通过；通过率 41.4%；PSF 实测 FWHM 1.93 px。</p></div>
+    <div class="panel"><h3>零点</h3><p class="kpi">20.4232 <small>± 0.0005</small></p><p>样本内散度 0.140 mag；<b>留出 0.253 mag</b>；色项 −0.0852 ± 0.0016。</p></div>
+    <div class="panel"><h3>三重检验</h3><p>留出 0.253；分块 0.023；逐帧差分与光子预期之比 <b>0.97</b>。</p><p>目标源 g_emp = 14.3498。</p></div>
+  </div>
+  <div class="takeaway">零点仅在相同星表口径与同一通带声明下可比。</div>
+  <div class="sec">§3.1 成果</div><div class="pager">11 / 19</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">三 · 成果</div>
+  <h1>成果二：多历元一致性与误差下限</h1>
+  <div class="thesis">随机项随历元数下降至 0.0370 mag，而固定图案使合并下限止于 0.0489 mag。</div>
+  <div class="body c3">
+    <div class="panel"><h3>随机项</h3><p class="kpi">0.0370 <small>mag</small></p><p>单帧 0.147 → 扣除图案后 0.1435 → 15 帧合并；k 帧增益与 1/√k 一致（偏差 ≤6%）。</p></div>
+    <div class="panel"><h3>系统项</h3><p class="kpi">0.0489 <small>mag</small></p><p>8×8 固定图案 0.032 mag，跨帧相关 0.947；15 帧零点峰峰值 2.86 mmag。</p></div>
+    <div class="panel"><h3>误差预算</h3><p>平场 0.094、色项 ±0.14、暗端 +0.11、κ = 1.18。</p><p>系统项不随历元数改善。</p></div>
+  </div>
+  <div class="takeaway">0.147、0.0370 与 0.0489 mag 含义不同，引用时须分别说明。</div>
+  <div class="sec">§3.2 成果</div><div class="pager">12 / 19</div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">三 · 成果</div>
+  <h1>成果三：均匀拖影的测量</h1>
+  <div class="thesis">第 1 帧长拖影被解为长度 594 px（帧内下界）、PA = 96.61°、显著性 21 562σ，与独立像素分析一致。</div>
   <div class="body c2u">
-    <div class="panel"><h3>表 6　事件 A 的测量结果</h3>
+    <div class="panel"><h3>表 2　事件 A 的测量结果</h3>
       <table>
         <tr><th>量</th><th class="n">测量值</th><th>核对</th></tr>
         <tr><td>长度 L̂</td><td class="n">594.0 px</td><td>帧内下界（真值 ≥ 597）</td></tr>
@@ -325,93 +306,96 @@
     </div>
     <div class="fig"><img src="figs/frame_A.png" alt="事件 A 原图裁剪"><div class="cap">图 4　事件 A 原图裁剪（140 × 600 像元）</div></div>
   </div>
-  <div class="takeaway">1 087 个长候选中仅 9 个通过均匀性判据，表明该判据具有选择性。</div>
-  <div class="sec">§6.1 结果</div><div class="pager">16 / 23</div>
+  <div class="takeaway">1 087 个长候选中仅 9 个通过均匀性判据，表明判据具有选择性。</div>
+  <div class="sec">§3.3 成果</div><div class="pager">13 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">四 · 结果</div>
-  <h1>结果 II：形态判据的适用边界</h1>
+  <div class="eyebrow">三 · 成果</div>
+  <h1>成果四：判据的适用边界</h1>
   <div class="thesis">第 9–15 帧的运动目标沿轴呈离散团块链，均匀线段模型不适用；其运动属性由多历元轨迹独立确认。</div>
   <div class="body c2">
-    <div class="panel"><h3>团块链的观测特征</h3><p>沿轴采样（PA = 132°）：28, 22, 19, 24, 62, 53, 347, 669, 1231, 1252, 795, 566, 236, 176, 132, 45, 39, 36, 33, 17, 14 DN；背景约 25 DN，σ = 7.6。</p><p>亮点间隔约 6 px，均匀线段核约 80% 的采样落于背景，故 Λ 仅达数百。</p></div>
-    <div class="panel"><h3>判据与多历元结果</h3><ul><li>最近点源解：L̂ = 14.6 px，duty = 0.529，scatter = 10.3，判为非均匀；</li><li>7 点轨迹拟合：vx = 28.0、vy = −25.4 px/s，即 0.0885°/s，残差 3.7 px；</li><li>结论：单帧形态判据不适用于团块链目标，其运动属性须由多历元确认。</li></ul></div>
+    <div class="panel"><h3>观测特征</h3>
+      <p>沿轴采样（PA = 132°）：28, 22, 19, 24, 62, 53, 347, 669, 1231, 1252, 795, 566, 236, 176, 132, 45, 39, 36, 33, 17, 14 DN；背景约 25 DN，σ = 7.6。</p>
+      <p>亮点间隔约 6 px，均匀核约 80% 采样落于背景，Λ 仅达数百。</p>
+    </div>
+    <div class="panel"><h3>判据结果与多历元验证</h3>
+      <ul><li>最近点源解：L̂ = 14.6 px，duty = 0.529，scatter = 10.3，判为非均匀；</li><li>7 点轨迹拟合：vx = 28.0、vy = −25.4 px/s，即 0.0885°/s，残差 3.7 px；</li><li>结论：单帧形态判据不适用于团块链，其运动属性须由多历元确认。</li></ul>
+    </div>
   </div>
   <div class="takeaway">该结果界定方法的适用范围，而非方法失效的证据。</div>
-  <div class="sec">§6.2 结果</div><div class="pager">17 / 23</div>
+  <div class="sec">§3.4 成果</div><div class="pager">14 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">四 · 实现</div>
-  <h1>工程实现与可复现性</h1>
-  <div class="thesis">拖影目录作为附加产物接入既有单帧管线；点源目录与测光结果保持不变，可经开关启用或停用。</div>
+  <div class="eyebrow">三 · 成果</div>
+  <h1>成果五：与既有管线的对照及工程落地</h1>
+  <div class="thesis">在保持点源目录与测光结果不变的前提下，新增拖影目录作为附加产物；单帧耗时由 73.1 s 增至 87.9 s。</div>
   <div class="body c2">
-    <div class="panel"><h3>接入方式</h3><ul><li>图形界面以进程内库调用方式执行，接入点位于库层而非独立可执行文件；</li><li>开关为 --trail-catalog on|off，默认启用；停用时无附加文件与额外耗时；</li><li>异常仅告警，不中断既有步骤，既有产物字段不变。</li></ul></div>
-    <div class="panel"><h3>表 7　打包版本实测结果</h3>
+    <div class="panel"><h3>表 3　与既有管线的对照</h3>
       <table>
-        <tr><th>条件</th><th>结果</th></tr>
-        <tr><td>启用</td><td class="n">21 个文件，目录含 3 条</td></tr>
-        <tr><td>停用</td><td class="n">20 个文件，无目录</td></tr>
-        <tr><td>点源表</td><td class="n">逐字节一致</td></tr>
-        <tr><td>测光结果</td><td class="n">ZP 20.4232 / g_emp 14.3498</td></tr>
+        <tr><th>指标</th><th>既有管线</th><th>本方法</th></tr>
+        <tr><td>阈值口径</td><td class="n">4σ / SNR ≥ 5</td><td class="n">每帧虚警数（实测 0.89）</td></tr>
+        <tr><td>拖影</td><td class="n">切为 97 段后剔除</td><td class="n">一等对象，3 条</td></tr>
+        <tr><td>形态判据</td><td class="n">FWHM 门（无约束力）</td><td class="n">duty/scatter（9/1 087）</td></tr>
+        <tr><td>测光结果</td><td class="n">ZP 20.4232</td><td class="n">一致（差 3×10⁻⁵）</td></tr>
       </table>
+    </div>
+    <div class="panel"><h3>工程落地</h3>
+      <ul><li>接入点为库层（图形界面以进程内调用执行），非独立可执行文件；</li><li>开关 --trail-catalog on|off，默认启用；停用无附加文件与耗时；</li><li>启用时该步 21 个文件，停用时 20 个，点源表逐字节一致。</li></ul>
     </div>
   </div>
   <div class="takeaway">新增能力以附加产物形式交付，不改变已验证的星等链路。</div>
-  <div class="sec">§7 实现</div><div class="pager">18 / 23</div>
+  <div class="sec">§3.5 成果</div><div class="pager">15 / 19</div>
 </section>
+
 <section class="slide">
-  <div class="eyebrow">五 · 创新点</div>
+  <div class="eyebrow">四 · 创新点</div>
   <h1>创新点</h1>
-  <div class="thesis">三项工作均可由独立实验检验，且已在真实天基数据上给出定量结果。</div>
+  <div class="thesis">三项工作分别对应上文的方法与成果，且均可由独立实验检验。</div>
   <div class="body c3">
-    <div class="panel"><h3>一 · 对象模型的统一</h3><p>将点源表述为线段核的零长度极限，使点源与拖影共享同一假设族与统计量，形态判别由似然比 LR 给出。</p><p>验证：1 087 个长候选中 9 个通过均匀性判据。</p></div>
-    <div class="panel"><h3>二 · 阈值的可指定性</h3><p>以随机场极值分布将阈值表述为每帧允许虚警数，并以并集界计入精化多重性（+1.655σ）。</p><p>验证：预测 5.88σ，20 帧实测 0.89 ± 1.17 个虚警。</p></div>
-    <div class="panel"><h3>三 · 基准口径的一致性</h3><p>在同一数据上同时给出速度、完备度与虚警率，并将拖影作为一等对象输出。</p><p>验证：单帧 23.6 s，目录 3 条，测光结果不变。</p></div>
+    <div class="panel"><h3>一 · 对象模型的统一</h3><p>点源表述为线段核的零长度极限，检测与形态判别共用一个统计量。</p><p>验证：长候选 1 087 个中 9 个判为均匀拖影。</p></div>
+    <div class="panel"><h3>二 · 阈值的可指定性</h3><p>阈值由极值分布反解，可指定每帧虚警数，并以并集界计入多重性。</p><p>验证：预测 5.88σ，实测 0.89 ± 1.17。</p></div>
+    <div class="panel"><h3>三 · 判据的可核查性</h3><p>全部判据标注来源：数据反推、统计定义或经验调参；后者在方法稿中逐条列出（112 条中 46% 无出处）。</p><p>验证：审计表随论文公开。</p></div>
   </div>
-  <div class="takeaway">本文不声称提出新的匹配滤波形式；差异在于对象模型、阈值表述与基准口径。</div>
-  <div class="sec">§8 创新点</div><div class="pager">19 / 23</div>
+  <div class="takeaway">本文不声称提出新的匹配滤波形式；差异在于对象模型、阈值表述与判据的可核查性。</div>
+  <div class="sec">§4 创新点</div><div class="pager">16 / 19</div>
 </section>
+
 <section class="slide">
   <div class="eyebrow">五 · 结论</div>
   <h1>结论与展望</h1>
-  <div class="thesis">在仪器参数不完备的条件下，本文给出可复算的星等与运动目标判据，并明确其适用边界。</div>
+  <div class="thesis">在仪器参数不完备条件下，本文给出的判据可复算、可证伪，并明确了各自的适用边界。</div>
   <div class="body c2">
-    <div class="panel"><h3>结论</h3><ul><li>经验零点 ZP = 20.4232，留出误差 0.253 mag，三重检验一致；</li><li>检测阈值可表述为每帧虚警数，实测与预测相符；</li><li>均匀拖影可单帧测量；团块链目标须多历元确认；长度仅给下界。</li></ul></div>
-    <div class="panel"><h3>展望</h3><ul><li>引入 Radon 变换以实现长度无偏估计；</li><li>增补团块链假设族，扩展形态判据的适用范围；</li><li>获取增益、平场与响应曲线，将绝对精度由经验转为可标定。</li></ul></div>
+    <div class="panel"><h3>结论</h3><ul><li>零点 ZP = 20.4232 ± 0.0005，留出 0.253 mag，三重检验一致；</li><li>阈值可表述为每帧虚警数，实测与预测相符；</li><li>均匀拖影可单帧测量（594 px、96.61°、21 562σ）；团块链须多历元确认；长度仅给下界。</li></ul></div>
+    <div class="panel"><h3>展望</h3><ul><li>引入 Radon 变换实现长度无偏估计；</li><li>增补团块链假设族以扩展形态判据适用范围；</li><li>获取增益、平场与响应曲线，使绝对精度由经验转为可标定。</li></ul></div>
   </div>
-  <div class="takeaway">后续工作的首要约束仍为仪器参数；参数缺失时，本文结论应连同其限定条件一并引用。</div>
-  <div class="sec">§9 结论</div><div class="pager">20 / 23</div>
+  <div class="takeaway">后续工作的首要约束仍为仪器参数；参数缺失时结论应连同限定条件一并引用。</div>
+  <div class="sec">§5 结论</div><div class="pager">17 / 19</div>
 </section>
-<section class="slide">
-  <div class="eyebrow">参考文献</div>
-  <h1>主要参考文献</h1>
-  <div class="body c2">
-    <div class="panel"><h3>方法与统计</h3><ul><li>Stetson P. B. 1987, PASP, 99, 191</li><li>Bertin E., Arnouts S. 1996, A&amp;AS, 117, 393</li><li>Nir G., Zackay B., Ofek E. O. 2018, AJ, 156, 229</li><li>Bardeen J. M. et al. 1986, ApJ, 304, 15</li><li>Benjamini Y., Hochberg Y. 1995, JRSS-B, 57, 289</li></ul></div>
-    <div class="panel"><h3>数据与多历元</h3><ul><li>Vallenari A. et al. 2023, A&amp;A, 674, A1</li><li>Riello M. et al. 2021, A&amp;A, 649, A3</li><li>Vio R., Andreani P. 2016, A&amp;A, 589, A20</li><li>Shao M. et al. 2014, ApJ, 782, 1</li><li>Liu W. et al. 2013, IET RSN, 7, 663</li></ul></div>
-  </div>
-  <div class="takeaway">完整清单与可访问链接见《方法稿》第 8 节。</div>
-  <div class="sec">References</div><div class="pager">21 / 23</div>
-</section>
+
 <section class="slide">
   <div class="eyebrow">程序演示 3 min</div>
   <h1>程序演示流程</h1>
   <div class="thesis">演示目的：验证启用拖影目录后，点源目录与测光结果保持一致，仅新增一份目录文件。</div>
   <div class="body c2">
-    <div class="panel"><h3>操作步骤</h3><ol style="margin:0 0 0 18px;padding:0;font-size:16.5px;line-height:1.9"><li>选择第 1 帧（…163205413_9901.fits）；</li><li>预设任务选择“单帧分析与研究表”；</li><li>启用“拖影目录（GLRT，约 +15 s）”；</li><li>运行整套任务，预计耗时约 88 s。</li></ol></div>
-    <div class="panel"><h3>预期输出</h3><ul><li>02-rst19-sources 目录共 21 个文件；</li><li>trail_catalog.json 含 3 条记录，首条 L = 594 px、PA = 96.61°、duty = 0.99；</li><li>source_catalog.csv 为 66 469 / 27 552，与停用时逐字节一致；</li><li>切换至测光套件可得 ZP 20.4232、g_emp 14.3498。</li></ul></div>
+    <div class="panel"><h3>操作步骤</h3><ol style="margin:0 0 0 18px;padding:0;font-size:16.5px;line-height:1.9"><li>选择第 1 帧（…163205413_9901.fits）；</li><li>预设任务选择“单帧分析与研究表”；</li><li>启用“拖影目录（GLRT，约 +15 s）”；</li><li>运行整套任务，预计 88 s。</li></ol></div>
+    <div class="panel"><h3>预期输出</h3><ul><li>02-rst19-sources 共 21 个文件；</li><li>trail_catalog.json 含 3 条，首条 L = 594 px、PA = 96.61°、duty = 0.99；</li><li>source_catalog.csv 为 66 469 / 27 552，与停用时逐字节一致；</li><li>测光套件：ZP 20.4232、g_emp 14.3498。</li></ul></div>
   </div>
-  <div class="takeaway">若现场运行受限，可直接打开已保存的运行目录说明产物结构。</div>
-  <div class="sec">Demo</div><div class="pager">22 / 23</div>
+  <div class="takeaway">若现场运行受限，可直接打开已保存运行目录说明产物结构。</div>
+  <div class="sec">Demo</div><div class="pager">18 / 19</div>
 </section>
+
 <section class="slide">
   <div class="eyebrow">备答</div>
   <h1>预设问题与应答要点</h1>
   <div class="body c3">
-    <div class="panel"><h3>问一 · 零点可靠性</h3><p>留出误差 0.253 mag；分块散布 0.023 mag；逐帧差分与光子预期之比 0.97。系统项见表 5；颜色与增益缺失已在结论中限定。</p></div>
-    <div class="panel"><h3>问二 · 阈值依据</h3><p>阈值由极值分布反解，可按每帧虚警数指定；预测 5.88σ，20 帧实测 0.89 ± 1.17。完备度曲线尚未完成，列为后续工作。</p></div>
-    <div class="panel"><h3>问三 · 与已有工作差异</h3><p>匹配滤波形式为已有成果（Nir et al. 2018）。本文差异为对象模型统一、阈值可指定、实测协方差白化与形态判据，均给出定量检验。</p></div>
+    <div class="panel"><h3>问一 · 零点可靠性</h3><p>留出 0.253；分块 0.023；逐帧差分 0.97 × 光子预期。系统项见表 1 与误差预算；颜色与增益缺失已在结论中限定。</p></div>
+    <div class="panel"><h3>问二 · 阈值依据</h3><p>阈值由极值分布反解，可按每帧虚警数指定；预测 5.88σ，实测 0.89 ± 1.17。完备度曲线尚未完成，列为后续工作。</p></div>
+    <div class="panel"><h3>问三 · 与已有工作差异</h3><p>匹配滤波形式为已有成果（Nir et al. 2018）；本文差异为对象模型统一、阈值可指定与判据可核查，均给出定量检验。</p></div>
   </div>
   <div class="takeaway">三项应答遵循同一原则：结论须附带判据、数值与适用边界。</div>
-  <div class="sec">Q&amp;A</div><div class="pager">23 / 23</div>
+  <div class="sec">Q&amp;A</div><div class="pager">19 / 19</div>
 </section></div></div>
 <script>
   const deck = document.getElementById('deck');
