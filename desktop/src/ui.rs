@@ -1,10 +1,11 @@
 use crate::backend::{Backend, Job};
+use crate::task_suites::Suite;
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Vec2};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -43,6 +44,7 @@ struct JobProgress {
     fraction: Option<f32>,
     recent_steps: VecDeque<String>,
     started_at: Instant,
+    suite_step: Option<(usize, usize)>,
 }
 
 impl JobProgress {
@@ -52,6 +54,7 @@ impl JobProgress {
             fraction: None,
             recent_steps: VecDeque::from(["任务已启动，等待算法输出".into()]),
             started_at: Instant::now(),
+            suite_step: None,
         }
     }
 
@@ -60,10 +63,23 @@ impl JobProgress {
         if line.is_empty() {
             return;
         }
+        if let Some((step, total)) = line
+            .strip_prefix("套组步骤 ")
+            .and_then(|s| s.split_once(" · "))
+            .and_then(|(counts, _)| counts.split_once('/'))
+            .and_then(|(s, t)| Some((s.parse::<usize>().ok()?, t.parse::<usize>().ok()?)))
+        {
+            if step > 0 && total >= step {
+                self.suite_step = Some((step, total));
+                self.fraction = Some((step - 1) as f32 / total as f32);
+            }
+        }
 
         let step = match parse_progress_line(line) {
             Some((fraction, description)) => {
-                self.fraction = Some(fraction);
+                self.fraction = Some(self.suite_step.map_or(fraction, |(step, total)| {
+                    ((step - 1) as f32 + fraction) / total as f32
+                }));
                 format!("{:.0}% · {description}", fraction * 100.0)
             }
             None => line.to_owned(),
@@ -105,6 +121,11 @@ fn compact_log_line(line: &str) -> String {
 
 fn job_label(request: &Value) -> String {
     match request["operation"].as_str() {
+        Some("suite") => request["suite"]
+            .as_str()
+            .and_then(|s| Suite::parse(s).ok())
+            .map(|s| s.label().to_owned())
+            .unwrap_or_else(|| "预设套组".into()),
         Some("tool") => request["tool"]
             .as_str()
             .map(|name| title(name).to_owned())
@@ -142,6 +163,20 @@ pub struct Desktop {
     job_progress: Option<JobProgress>,
     tools: Vec<Tool>,
     selected_tool: usize,
+    suite: Option<Suite>,
+    advanced_tools: bool,
+    suite_catalog: String,
+    builtin_catalog: Option<String>,
+    coverage: Option<Value>,
+    coverage_key: String,
+    coverage_error: Option<String>,
+    run_refusal: Option<String>,
+    boresight_cache: HashMap<PathBuf, Option<(f64, f64)>>,
+    suite_peak_ceiling: f64,
+    suite_noise_inflation: f64,
+    /// Run the GLRT trail catalog after detection (one extra JSON, about 15 s).
+    suite_trail_catalog: bool,
+    suite_gain: String,
     values: HashMap<String, String>,
     toggles: HashMap<String, bool>,
     search: String,
@@ -182,6 +217,27 @@ fn text_value(value: &Value) -> String {
         _ => value.to_string(),
     }
 }
+/// Exactly one bundled CSV under assets/gaia is pre-filled; an empty field still means network.
+fn builtin_catalog(root: &Path) -> String {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(root.join("assets/gaia"))
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|value| value.eq_ignore_ascii_case("csv"))
+        })
+        .collect();
+    match found.len() {
+        1 => found.remove(0).to_string_lossy().into_owned(),
+        _ => String::new(),
+    }
+}
+
 fn title(name: &str) -> &str {
     match name {
         "rst19" => "单帧星点检测",
@@ -320,25 +376,54 @@ impl Desktop {
         let mut smoke = None;
         let mut smoke_analysis = false;
         let mut data_override = None;
+        let mut output_override = None;
+        let mut initial_suite = Suite::Single;
+        // Explicit --gaia-catalog (including an empty value) always wins over the bundled catalog.
+        let mut initial_catalog: Option<String> = None;
+        let mut advanced_tools = false;
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--smoke-screenshot" => smoke = args.next().map(PathBuf::from),
                 "--data-dir" => data_override = args.next(),
+                "--output-dir" => output_override = args.next(),
                 "--smoke-analysis" => smoke_analysis = true,
+                "--gaia-catalog" => initial_catalog = Some(args.next().unwrap_or_default()),
+                "--task-suite" => {
+                    if let Some(id) = args.next() {
+                        initial_suite = Suite::parse(&id).unwrap_or(Suite::Single);
+                    }
+                }
+                "--smoke-advanced-tools" => advanced_tools = true,
                 _ => {}
             }
         }
+        let bundled = initial_catalog
+            .is_none()
+            .then(|| builtin_catalog(&project));
         let mut app = Self {
             backend,
             job: None,
             job_progress: None,
             tools: vec![],
             selected_tool: 0,
+            suite: Some(initial_suite),
+            advanced_tools,
+            suite_catalog: initial_catalog.unwrap_or_else(|| bundled.clone().unwrap_or_default()),
+            builtin_catalog: bundled.filter(|path| !path.is_empty()),
+            coverage: None,
+            coverage_key: String::new(),
+            coverage_error: None,
+            run_refusal: None,
+            boresight_cache: HashMap::new(),
+            suite_peak_ceiling: 3990.0,
+            suite_noise_inflation: 1.0,
+            suite_trail_catalog: true,
+            suite_gain: String::new(),
             values: HashMap::new(),
             toggles: HashMap::new(),
             search: String::new(),
             data_dir: data_override.unwrap_or(data_dir),
-            output_dir,
+            output_dir: output_override.unwrap_or(output_dir),
             frames: vec![],
             selected_frame: None,
             preview_mode: "raw".into(),
@@ -394,6 +479,20 @@ impl Desktop {
             .collect();
         self.frames.sort();
         self.selected_frame = self.frames.first().cloned();
+        if self.values.contains_key("data_dir") {
+            self.values.insert("data_dir".into(), self.data_dir.clone());
+        }
+        for key in ["fits", "fits_path", "frame_path"] {
+            if self.values.contains_key(key) {
+                self.values.insert(
+                    key.into(),
+                    self.selected_frame
+                        .as_ref()
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                );
+            }
+        }
     }
 
     fn select_tool(&mut self, index: usize) {
@@ -427,8 +526,12 @@ impl Desktop {
             return;
         }
         let progress_label = job_label(&request);
-        let single_frame_job = request["operation"] == "tool" && request["tool"] == "rst19";
-        let sequence_job = request["operation"] == "tool" && request["tool"] == "rst19-sequence";
+        let single_frame_job = (request["operation"] == "tool" && request["tool"] == "rst19")
+            || (request["operation"] == "suite"
+                && matches!(request["suite"].as_str(), Some("single" | "photometry")));
+        let sequence_job = (request["operation"] == "tool" && request["tool"] == "rst19-sequence")
+            || (request["operation"] == "suite"
+                && matches!(request["suite"].as_str(), Some("sequence" | "mosaic")));
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -478,6 +581,218 @@ impl Desktop {
     fn preview(&mut self) {
         if let Some(path) = &self.selected_frame {
             self.start(json!({"operation":"preview", "path":path, "mode":self.preview_mode}));
+        }
+    }
+
+    fn frame_boresight(&mut self, path: &Path) -> Option<(f64, f64)> {
+        if let Some(known) = self.boresight_cache.get(path) {
+            return *known;
+        }
+        let pointing = rst19_core::fits::read_fits(path, false)
+            .ok()
+            .and_then(|frame| frame.auxiliary)
+            .map(|auxiliary| (auxiliary.ra_deg(), auxiliary.dec_deg()))
+            .filter(|(ra, dec)| ra.is_finite() && dec.is_finite());
+        self.boresight_cache.insert(path.to_owned(), pointing);
+        pointing
+    }
+
+    /// Recompute the coverage report only when the catalog/frame pair changed.
+    fn ensure_coverage(&mut self) {
+        let catalog = self.suite_catalog.trim().to_owned();
+        let key = match (&self.selected_frame, self.suite == Some(Suite::Photometry)) {
+            (Some(frame), true) if !catalog.is_empty() => {
+                format!("{catalog}|{}", frame.display())
+            }
+            _ => String::new(),
+        };
+        if key.is_empty() {
+            self.coverage = None;
+            self.coverage_error = None;
+            self.coverage_key.clear();
+            return;
+        }
+        if key == self.coverage_key {
+            return;
+        }
+        self.coverage_key = key;
+        self.coverage = None;
+        self.coverage_error = None;
+        self.run_refusal = None;
+        let Some(frame) = self.selected_frame.clone() else {
+            return;
+        };
+        let Some((ra, dec)) = self.frame_boresight(&frame) else {
+            self.coverage_error = Some("当前帧没有可用的 RA/Dec 指向".into());
+            return;
+        };
+        let request = json!({"operation":"catalog-coverage","catalog":catalog,"ra":ra,"dec":dec});
+        match self
+            .backend
+            .as_ref()
+            .map_err(Clone::clone)
+            .and_then(|backend| backend.call(request))
+        {
+            Ok(report) => self.coverage = Some(report),
+            Err(error) => self.coverage_error = Some(error),
+        }
+    }
+
+    /// The refusal message when the selected catalog cannot cover the field, if any.
+    fn coverage_block(&mut self) -> Option<String> {
+        if self.suite != Some(Suite::Photometry) || self.suite_catalog.trim().is_empty() {
+            return None;
+        }
+        self.ensure_coverage();
+        let report = self.coverage.as_ref()?;
+        if report["status"] != "NotCovered" {
+            return None;
+        }
+        Some(
+            report["message"]
+                .as_str()
+                .unwrap_or("该星表不覆盖当前天区，请留空联网或换星表")
+                .to_owned(),
+        )
+    }
+
+    fn select_suite(&mut self, suite: Suite) {
+        if let Some(index) = self.tools.iter().position(|t| t.name == suite.primary()) {
+            self.select_tool(index);
+            self.suite = Some(suite);
+        }
+    }
+
+    fn run_selected(&mut self) {
+        if let Some(blocked) = self.coverage_block() {
+            self.status = format!("{blocked} · 任务未启动");
+            self.logs = blocked.clone();
+            self.run_refusal = Some(format!("{blocked} · 任务未启动"));
+            return;
+        }
+        self.run_refusal = None;
+        let tool = &self.tools[self.selected_tool];
+        let args = match arguments(tool, &self.values, &self.toggles) {
+            Ok(args) => args,
+            Err(e) => {
+                self.status = e;
+                return;
+            }
+        };
+        let request = if let Some(suite) = self.suite {
+            let mut source_args = vec![];
+            if matches!(suite, Suite::Single | Suite::Photometry) {
+                if let Some(source) = self.tools.iter().find(|t| t.name == "rst19-sources") {
+                    let mut values = HashMap::new();
+                    let mut toggles = HashMap::new();
+                    for field in &source.fields {
+                        let value = if field.key == "fits_path" {
+                            args.first().cloned().unwrap_or_default()
+                        } else if field.key.ends_with("out_dir") {
+                            String::new()
+                        } else {
+                            self.values
+                                .get(&field.key)
+                                .cloned()
+                                .unwrap_or_else(|| text_value(&field.default))
+                        };
+                        values.insert(field.key.clone(), value);
+                        toggles.insert(
+                            field.key.clone(),
+                            self.toggles
+                                .get(&field.key)
+                                .copied()
+                                .unwrap_or(field.default.as_bool().unwrap_or(false)),
+                        );
+                    }
+                    source_args = match arguments(source, &values, &toggles) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            self.status = e;
+                            return;
+                        }
+                    };
+                    // The trail catalog is produced inside the detection step, so the switch
+                    // rides along with the source arguments instead of a separate tool.
+                    source_args.push(if self.suite_trail_catalog {
+                        "--trail-catalog=on".to_string()
+                    } else {
+                        "--trail-catalog=off".to_string()
+                    });
+                }
+            }
+            let gain = if self.suite_gain.trim().is_empty() {
+                None
+            } else {
+                match self.suite_gain.trim().parse::<f64>() {
+                    Ok(g) if g.is_finite() && g > 0.0 => Some(g),
+                    _ => {
+                        self.status = "Gain 必须为正数，单位 e-/ADU；未知时留空".into();
+                        return;
+                    }
+                }
+            };
+            json!({"operation":"suite","suite":suite.id(),"args":args,"source_args":source_args,"catalog":self.suite_catalog,"mode":self.preview_mode,
+                "peak_ceiling":self.suite_peak_ceiling,"noise_inflation":self.suite_noise_inflation,"gain":gain})
+        } else {
+            json!({"operation":"tool","tool":tool.name,"args":args,"mode":self.preview_mode})
+        };
+        self.start(request);
+    }
+
+    fn advanced_tool_window(&mut self, ctx: &egui::Context) {
+        let mut open = self.advanced_tools;
+        let mut selected = None;
+        egui::Window::new("高级研究工具")
+            .open(&mut open)
+            .default_width(680.0)
+            .default_height(500.0)
+            .show(ctx, |ui| {
+                ui.label(
+                    "完整工具目录 · 选择单项工具后，在右侧设置参数并运行。常用流程请使用预设套组。",
+                );
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.search)
+                        .hint_text("搜索名称或功能")
+                        .desired_width(f32::INFINITY),
+                );
+                ui.separator();
+                ui.add_enabled_ui(self.job.is_none(), |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("advanced-tool-list")
+                        .show(ui, |ui| {
+                            for (index, tool) in self.tools.iter().enumerate().filter(|(_, t)| {
+                                self.search.is_empty()
+                                    || t.name.contains(&self.search)
+                                    || t.description.contains(&self.search)
+                                    || title(&t.name).contains(&self.search)
+                            }) {
+                                ui.horizontal(|ui| {
+                                    if ui
+                                        .selectable_label(
+                                            self.suite.is_none() && self.selected_tool == index,
+                                            title(&tool.name),
+                                        )
+                                        .clicked()
+                                    {
+                                        selected = Some(index);
+                                    }
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(&tool.description).small().weak(),
+                                        )
+                                        .wrap(),
+                                    );
+                                });
+                            }
+                        });
+                });
+            });
+        self.advanced_tools = open;
+        if let Some(index) = selected {
+            self.select_tool(index);
+            self.suite = None;
+            self.advanced_tools = false;
         }
     }
 
@@ -544,6 +859,9 @@ impl Desktop {
                             });
                             self.tools = tools;
                             self.select_tool(0);
+                            if let Some(suite) = self.suite {
+                                self.select_suite(suite);
+                            }
                             let native_count = self.tools.iter().filter(|tool| tool.native).count();
                             self.environment = format!(
                                 "Rust 原生 UI · {native_count}/{} 项研究工具",
@@ -552,9 +870,10 @@ impl Desktop {
                             self.status = "环境已就绪".into();
                             if self.smoke.is_some() {
                                 if self.smoke_analysis {
-                                    match arguments(&self.tools[0], &self.values, &self.toggles) {
-                                        Ok(args) => self.start(json!({"operation":"tool", "tool":"rst19", "args":args})),
-                                        Err(e) => self.status = e,
+                                    self.run_selected();
+                                    // A refused run still needs a rendered frame for the acceptance screenshot.
+                                    if self.job.is_none() {
+                                        self.preview();
                                     }
                                 } else {
                                     self.preview();
@@ -597,9 +916,17 @@ impl Desktop {
                     self.sequence = p["result"].clone();
                     self.analysis = Value::Null;
                     self.analysis_path = None;
+                    if let Some(path) = p["view_frame"].as_str() {
+                        self.selected_frame = Some(PathBuf::from(path));
+                    }
                 }
                 self.payload = p.clone();
-                self.status = "任务完成 · 产物已保存".into();
+                self.status = if p["suite"]["status"] == "failed" {
+                    "套组已停止 · 已完成结果保留，详情见证据与日志"
+                } else {
+                    "任务完成 · 产物已保存"
+                }
+                .into();
             }
         }
         if self.job.is_some() {
@@ -707,9 +1034,29 @@ impl Desktop {
                 if let Some(magnitude) =
                     self.analysis["faintest_detected"]["instrumental_magnitude"].as_f64()
                 {
-                    ui.label(format!("最暗质量源 m_inst {magnitude:.3}"));
+                    ui.label(format!("仪器星等 m_inst {magnitude:.3}（未加经验零点）"));
                 }
             });
+            let photometry = crate::photometry_summary::summary(&self.analysis, &self.payload);
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(
+                    if photometry.available { CYAN } else { GOLD },
+                    &photometry.text,
+                )
+                .on_hover_text(&photometry.details);
+                if self.payload["suite"]["status"] == "failed" {
+                    if ui.small_button("查看失败原因").clicked() {
+                        self.tab = 2;
+                    }
+                } else if self.payload["photometry"].is_null()
+                    && ui.small_button("切换到测光套组").clicked()
+                {
+                    self.select_suite(Suite::Photometry);
+                }
+            });
+            if photometry.available {
+                ui.label(egui::RichText::new(&photometry.details).small().weak());
+            }
             let trails = &self.analysis["single_frame_trails"];
             if let Some(error) = trails["error"].as_str() {
                 ui.colored_label(GOLD, format!("单帧曝光线形提取失败：{error}"));
@@ -718,16 +1065,16 @@ impl Desktop {
                     ui.colored_label(
                         Color32::from_rgb(255, 154, 92),
                         format!(
-                            "曝光线形 {} · 实线 {} · 线模型待复核 {} · 几何待复核 {}",
+                            "曝光线形 {} · 实线 {} · 线模型待复核 {} · 连续短线待复核 {} · 排除 {} · 去重 {}",
                             trails["displayed_count"],
                             trails["solid_count"],
                             trails["review_count"],
-                            trails["geometry_review_count"]
+                            trails["geometry_review_count"], trails["rejected_count"], trails["suppressed_count"]
                         ),
                     );
                     ui.label(
                         egui::RichText::new(
-                            "橙：线模型 · 紫：几何候选，模型未通过；放大后显示实测长度",
+                            "橙：线模型 · 紫：连续细长、优于单星/双星；不确认运动",
                         )
                         .small(),
                     );
@@ -772,10 +1119,10 @@ impl Desktop {
             if self.sequence.is_null() {
                 ui.add_enabled(
                     self.motion,
-                    egui::Checkbox::new(&mut self.geometry_review, "几何待复核"),
+                    egui::Checkbox::new(&mut self.geometry_review, "连续短线待复核"),
                 )
                 .on_hover_text(
-                    "默认保留短线几何提案；紫色虚线可能是双星、椭圆星像或伪影，悬停查看模型原因。",
+                    "仅保留连续细长且优于单星、双星模型的待复核星像；双星模型胜出及重复片段只保留审计。平滑椭圆与运动曝光仍需跨帧区分。",
                 );
             }
             ui.label(egui::RichText::new("滚轮缩放 · 拖动平移 · 点击查看源").small());
@@ -1051,6 +1398,7 @@ impl Desktop {
 
 impl eframe::App for Desktop {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        self.advanced_tool_window(ctx);
         self.poll(ctx);
         egui::TopBottomPanel::top("header").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -1062,6 +1410,9 @@ impl eframe::App for Desktop {
                         .color(Color32::from_rgb(145, 166, 201)),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("高级研究工具…").clicked() {
+                        self.advanced_tools = true;
+                    }
                     if let Some(job) = &mut self.job {
                         if ui.button("取消任务").clicked() {
                             job.cancel();
@@ -1109,7 +1460,7 @@ impl eframe::App for Desktop {
                     ui.label(format!("{} 帧 FITS", self.frames.len()));
                     egui::ScrollArea::vertical()
                         .id_salt("frames")
-                        .max_height(210.0)
+                        .max_height((ui.available_height() - 50.0).max(210.0))
                         .show(ui, |ui| {
                             let mut picked = None;
                             for (i, frame) in self.frames.iter().enumerate() {
@@ -1144,39 +1495,16 @@ impl eframe::App for Desktop {
                         });
                 });
                 ui.separator();
-                ui.heading("分析工具");
-                ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("搜索研究工具"));
-                ui.add_enabled_ui(self.job.is_none(), |ui| {
-                    egui::ScrollArea::vertical()
-                        .id_salt("tools")
-                        .show(ui, |ui| {
-                            let mut selected = None;
-                            for (index, tool) in self.tools.iter().enumerate().filter(|(_, t)| {
-                                self.search.is_empty()
-                                    || t.name.contains(&self.search)
-                                    || t.description.contains(&self.search)
-                            }) {
-                                let label = format!(
-                                    "{} · {}",
-                                    if tool.native { "Rust" } else { "待迁移" },
-                                    title(&tool.name)
-                                );
-                                if ui
-                                    .selectable_label(self.selected_tool == index, label)
-                                    .on_hover_text(&tool.description)
-                                    .clicked()
-                                {
-                                    selected = Some(index);
-                                }
-                            }
-                            if let Some(index) = selected {
-                                self.select_tool(index);
-                            }
-                        });
-                });
+                ui.label(
+                    egui::RichText::new(
+                        "选择观测帧；在右侧选择预设套组。\n单项研究工具已收纳到顶部菜单。",
+                    )
+                    .small()
+                    .weak(),
+                );
             });
         egui::SidePanel::right("parameters").default_width(340.0).width_range(300.0..=550.0).show(ctx, |ui| {
-            ui.heading("任务参数");
+            ui.heading(if self.suite.is_some() {"预设任务"} else {"单项研究工具"});
             if self.tools.is_empty() {
                 ui.label(&self.status);
                 if self.job.is_none() && ui.button("重新检查环境").clicked() {
@@ -1185,16 +1513,54 @@ impl eframe::App for Desktop {
                 return;
             }
             let tool = self.tools[self.selected_tool].clone();
-            ui.label(egui::RichText::new(title(&tool.name)).strong().color(CYAN));
-            ui.label(&tool.description);
+            ui.add_enabled_ui(self.job.is_none(),|ui| {
+                if let Some(suite)=self.suite {
+                    let mut picked=suite;
+                    egui::ComboBox::from_id_salt("task-suite").selected_text(suite.label()).width(ui.available_width()-20.0).show_ui(ui,|ui| {
+                        for choice in Suite::ALL {ui.selectable_value(&mut picked,choice,choice.label());}
+                    });
+                    if picked!=suite {self.select_suite(picked);}
+                    ui.label(egui::RichText::new(picked.route()).small().color(CYAN));
+                } else {
+                    ui.label(egui::RichText::new(title(&tool.name)).strong().color(CYAN));
+                    if ui.small_button("返回预设套组").clicked(){self.select_suite(Suite::Single);}
+                }
+            });
+            // Selection may have changed above; use its current field contract.
+            let tool = self.tools[self.selected_tool].clone();
+            if self.suite.is_none() {ui.label(&tool.description);}
             ui.add_enabled_ui(self.job.is_none(), |ui| {
-                if ui.add_sized([ui.available_width(), 36.0], egui::Button::new("运行分析").fill(Color32::from_rgb(28, 77, 98))).clicked() {
-                    match arguments(&tool, &self.values, &self.toggles) {
-                        Ok(args) => self.start(json!({"operation":"tool", "tool":tool.name, "args":args, "mode":self.preview_mode})),
-                        Err(e) => self.status = e,
-                    }
+                if ui.add_sized([ui.available_width(), 36.0], egui::Button::new(if self.suite.is_some(){"运行整套任务"}else{"运行单项工具"}).fill(Color32::from_rgb(28, 77, 98))).clicked() {
+                    self.run_selected();
                 }
                 egui::ScrollArea::vertical().id_salt("fields").show(ui, |ui| {
+                    if self.suite==Some(Suite::Photometry) {
+                        self.ensure_coverage();
+                        ui.label("Gaia 星表（可选）");
+                        ui.horizontal(|ui| {ui.text_edit_singleline(&mut self.suite_catalog);if ui.small_button("选择…").clicked(){if let Some(p)=rfd::FileDialog::new().add_filter("CSV",&["csv"]).pick_file(){self.suite_catalog=p.to_string_lossy().into_owned();}}});
+                        ui.label(egui::RichText::new("留空时将联网获取 Gaia 星表；选本地 CSV 可离线运行。标定未通过时保留原因与单帧结果。").small().weak());
+                        if self.builtin_catalog.as_deref() == Some(self.suite_catalog.trim()) {
+                            ui.label(egui::RichText::new("内置星表（仅覆盖 RA 129.53/Dec −1.85 的 9.78° 视场；清空则联网）").small().weak());
+                        }
+                        if let Some(report) = &self.coverage {
+                            let color = match report["status"].as_str().unwrap_or("") {
+                                "Full" => Color32::from_rgb(96, 200, 120),
+                                "Partial" => Color32::from_rgb(230, 190, 80),
+                                _ => Color32::from_rgb(235, 96, 96),
+                            };
+                            ui.label(egui::RichText::new(report["message"].as_str().unwrap_or("")).small().color(color));
+                        } else if let Some(error) = &self.coverage_error {
+                            ui.label(egui::RichText::new(format!("覆盖检查未执行：{error}")).small().color(Color32::from_rgb(230, 190, 80)));
+                        }
+                        if let Some(refusal) = &self.run_refusal {
+                            ui.label(egui::RichText::new(format!("运行已拒绝：{refusal}")).small().strong().color(Color32::from_rgb(235, 96, 96)));
+                        }
+                        ui.horizontal(|ui|{ui.label("异常峰值排除 ≥ ADU");ui.add(egui::DragValue::new(&mut self.suite_peak_ceiling).range(1.0..=65535.0));});
+                        ui.horizontal(|ui|{ui.label("孔径噪声膨胀 κ");ui.add(egui::DragValue::new(&mut self.suite_noise_inflation).range(1.0..=10.0).speed(0.01));});
+                        ui.horizontal(|ui|{ui.label("Gain / e-/ADU");ui.text_edit_singleline(&mut self.suite_gain);});
+                        ui.checkbox(&mut self.suite_trail_catalog, "拖影目录（GLRT，约 +15 s）");
+                        ui.label(egui::RichText::new("3990 是此数据的保守异常码阈值。κ=1 表示未实测修正；Gain 未知请留空。输出为 Gaia G 参考的经验星等，绝对精度未验证。盲解含完整搜索对照，运行较久。").small().weak());
+                    }
                     ui.label("结果保存目录");
                     ui.horizontal(|ui| {
                         ui.add(egui::TextEdit::singleline(&mut self.output_dir).desired_width(230.0));
@@ -1291,6 +1657,12 @@ impl eframe::App for Desktop {
                     });
                 }
                 2 => {
+                    if self.payload["suite"].is_object() {
+                        egui::CollapsingHeader::new("套组步骤与产物索引").default_open(true).show(ui,|ui| { evidence_tree(ui,"suite",&self.payload["suite"]); });
+                    }
+                    if self.payload["photometry"].is_object() {
+                        egui::CollapsingHeader::new("Gaia 板解与测光状态").default_open(true).show(ui,|ui| { evidence_tree(ui,"photometry",&self.payload["photometry"]); });
+                    }
                     ui.label("保留完整输出字段、标定状态与证据来源；可从任务目录获取 JSON。");
                     let result = self.payload.get("result").filter(|r| !r.is_null()).unwrap_or(&self.payload);
                     egui::ScrollArea::both().show(ui, |ui| { evidence_tree(ui, "result", result); });
@@ -1327,7 +1699,12 @@ impl eframe::App for Desktop {
             }
         });
         if let Some(path) = self.smoke.clone() {
-            if self.started.elapsed() > Duration::from_secs(180) {
+            let timeout = if self.smoke_analysis && self.suite == Some(Suite::Photometry) {
+                3600
+            } else {
+                180
+            };
+            if self.started.elapsed() > Duration::from_secs(timeout) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
             if self.job.is_none()
@@ -1443,6 +1820,20 @@ fn artifacts(ui: &mut egui::Ui, dir: &std::path::Path, depth: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn suite_progress_maps_step_percentages_without_jumping_backwards() {
+        let mut progress = JobProgress::new("套组");
+        progress.record("套组步骤 1/3 · rst19-sequence");
+        progress.record("90.0% · 关联完成");
+        assert!((progress.fraction.unwrap() - 0.3).abs() < 1e-6);
+        progress.record("套组步骤 2/3 · rst19-mosaic");
+        progress.record("10.0% · 合成开始");
+        assert!((progress.fraction.unwrap() - 1.1 / 3.0).abs() < 1e-6);
+        progress.record("套组步骤 3/3 · rst19-innovation");
+        progress.record("100.0% · 全部完成");
+        assert_eq!(progress.fraction, Some(1.0));
+    }
 
     #[test]
     fn progress_panel_uses_reported_percentages_and_keeps_recent_steps() {
